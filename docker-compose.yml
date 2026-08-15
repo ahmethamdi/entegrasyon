@@ -1,0 +1,87 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: entegrasyon-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - .:/var/www/html
+    environment:
+      PHP_IDE_CONFIG: serverName=entegrasyon
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - entegrasyon
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: entegrasyon-nginx
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - entegrasyon
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: entegrasyon-postgres
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT_HOST:-5433}:5432"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-entegrasyon}
+      POSTGRES_USER: ${DB_USERNAME:-entegrasyon}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      # Testler ayrı veritabanında koşar; init script onu da yaratır.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-entegrasyon} -d ${DB_DATABASE:-entegrasyon}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - entegrasyon
+
+  redis:
+    image: redis:7-alpine
+    container_name: entegrasyon-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT_HOST:-6380}:6379"
+    # Kuyruk işleri kalıcı olmalı: appendonly açık, noeviction zorunlu.
+    # Varsayılan allkeys-lru politikası bellek baskısı altında kuyruk
+    # işlerini sessizce siler (Mimari Karar Dokümanı v2.2 · §15).
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - entegrasyon
+
+volumes:
+  postgres-data:
+  redis-data:
+
+networks:
+  entegrasyon:
+    driver: bridge
