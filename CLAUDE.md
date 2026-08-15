@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 62 test yeşil olmalı
+docker compose exec app php artisan test      # 94 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -76,12 +76,28 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 
 ## Kurulu olan
 
-`app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging
+`app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-16 domain tablosu, 16 model, 62 test. Stok çekirdeği (`ApplyMovement`,
-`LockInventoryRows`) ve P0 testleri T1/T2/T11/T12 yazıldı. Ayrıntı için
-memory'deki "Repo Durumu" dosyasına bak.
+22 domain tablosu, 21 model, 94 test. Stok çekirdeği (`ApplyMovement`,
+`LockInventoryRows`), outbox relay ve fan-out tüketicisi yazıldı.
+P0 testleri T1/T2/T3/T11/T12 ve T7/T8 yeşil. Ayrıntı için memory'deki
+"Repo Durumu" dosyasına bak.
+
+## Zaman damgası tuzağı — `now()` yerine `clock_timestamp()`
+
+`outbox_events` zaman damgaları **saniye hassasiyetlidir**
+(`datetime_precision = 0`): `19:56:25.7`'de yazılan olayın `available_at`
+değeri `19:56:26`'ya **yuvarlanır** — yazıldığı andan bir saniyeye kadar
+ileride olabilir.
+
+PostgreSQL'de `now()` transaction'ın **başlama anını** döndürür ve iç
+savepoint'ler dahil donmuş kalır. İkisi birleşince taze bir olay, donmuş
+`now()`'a göre "geleceğe planlanmış" görünür ve o turda hiç alınmaz.
+
+Bu yüzden relay sorgusu `available_at <= clock_timestamp()` kullanır.
+Transaction içinde çalışan ve "şu ana kadar hazır olanlar" arayan **her**
+sorgu aynı kuralı izlemelidir.
 
 ## Stok testi yazarken
 
@@ -102,10 +118,13 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-Adapter iş mantığı, outbox relay, inbox işleme, sipariş alımı, senkron motoru,
+Adapter iş mantığı (`AdapterRegistry`, yetenek arayüzleri), `PushInventory` işi,
+`InventoryBatchBuilder`, `SyncResultRecorder`, inbox işleme, sipariş alımı,
 mutabakat, kimlik doğrulama ekranları.
 
 ## Sıradaki adım
 
-Outbox relay + fan-out tüketicisi, ya da sipariş alımı (`LockInventoryRows` +
-`ApplyMovement` üzerine). Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
+Doküman §19'daki sınıf sırasına göre 13–14: `AdapterRegistry` (container'da
+**`bind`**, asla `singleton`) ve yetenek arayüzleri. Ardından faz 1.6 tabloları
+(`inbox_messages`, `orders`, `order_lines`, `order_events`) ve T4/T9.
+Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
