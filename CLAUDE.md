@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 112 test yeşil olmalı
+docker compose exec app php artisan test      # 128 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -79,10 +79,30 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-22 domain tablosu, 21 model, 112 test. Stok çekirdeği (`ApplyMovement`,
-`LockInventoryRows`), outbox relay, fan-out tüketicisi ve adapter mimarisi
-(`AdapterRegistry` + 7 yetenek arayüzü) yazıldı. P0 testleri T1/T2/T3/T11/T12
-ve T7/T8 yeşil. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
+27 domain tablosu, 26 model, 128 test. Stok çekirdeği (`ApplyMovement`,
+`LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
+(`AdapterRegistry` + 7 yetenek arayüzü) ve sipariş alımı (`IngestChannelOrder`,
+`ApplyOrderReturn`, `ApplyOrderCancellation`) yazıldı. P0 testleri
+T1/T2/T3/T9/T11/T12 ve T7/T8 yeşil. Ayrıntı için memory'deki "Repo Durumu"
+dosyasına bak.
+
+## Sipariş kuralları
+
+- **Sipariş asla reddedilmez veya geri alınmaz.** Pazaryeri onu kabul
+  etmiştir; bu otoriter gerçektir. Stok yetmezse bakiye negatife düşer ve
+  satır `OVERSOLD` işaretlenir + `OVERSELL_DETECTED` denetim olayı yazılır.
+- **Eşleşmemiş SKU siparişi kaybettirmez**: `order_lines.variant_id` NULL
+  olabilir, satır `PENDING` kalır, stok düşülmez. Sipariş kaybetmek stok
+  tutarsızlığından kötüdür.
+- **Tipe göre ayrı yollar**: `created` yeni sipariş yaratır; iptal/iade/
+  güncelleme mevcut siparişi bulur ve `order_events` üzerinden işlenir. Hepsi
+  tek yola girseydi güncellemeler `ON CONFLICT DO NOTHING` ile yutulurdu.
+- **İdempotency çıpaları**: sipariş → `(channel_connection_id, external_id)`;
+  iptal/iade → `order_events (order_id, type, external_ref)` kısmi tekilliği.
+  Hareket anahtarı **olay + satır** kimliğinden türer (`MovementKey::returnOf`)
+  — yalnızca olaya bağlansaydı çok kalemli iadede ikinci kalem yutulurdu.
+- Çok-SKU yazan **her** yol (`IngestChannelOrder`, `ApplyOrderReturn`,
+  `ApplyOrderCancellation`) `LockInventoryRows` kullanır. Bu testle korunur.
 
 ## Adapter kuralları
 
@@ -145,8 +165,8 @@ registry davranışını sınıyor.
 
 ## Sıradaki adım
 
-Faz 1.6 tabloları (`inbox_messages`, `orders`, `order_lines` — `stock_status`,
-`order_events` — `external_ref` tekilliği, `fulfillments`) ve sipariş alımı:
-`IngestChannelOrder` + `OrderEventRouter`. P0 testi **T9** (çok kalemli iade +
-eşzamanlı sipariş → deadlock yok). Doküman §18 testlerin **önce** yazılmasını
-şart koşuyor.
+Gelen hat: `IngestInboxMessage` + `ProcessInboxMessage` + `OrderEventRouter`
+(tipe göre dağıtım) ve `WebhookController` (HMAC doğrulama **ham gövde**
+üzerinden, JSON ayrıştırmadan önce). Ardından `PushInventory` +
+`InventoryBatchBuilder` ile giden yol tamamlanır ve dikey dilim kapanır.
+Doküman §18 testlerin **önce** yazılmasını şart koşuyor.

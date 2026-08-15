@@ -38,6 +38,26 @@ final class MovementKey
         return "return:{$orderEventId}";
     }
 
+    /**
+     * Çok kalemli iade: olay + satır.
+     *
+     * Tek bir kanal olayı birden fazla kalemi iade edebilir. Anahtar yalnızca
+     * olay kimliğine bağlansaydı ikinci kalem ON CONFLICT DO NOTHING ile
+     * yutulur ve o kalemin stoğu geri gelmezdi. Satır kimliği eklenerek her
+     * kalem kendi hareketini alır; olay kimliği ise aynı iadenin ikinci kez
+     * işlenmesini hâlâ engeller.
+     */
+    public static function returnOf(string $orderEventId, string $orderLineId): string
+    {
+        return "return:{$orderEventId}:{$orderLineId}";
+    }
+
+    /** Çok kalemli iptal — returnOf ile aynı gerekçe. */
+    public static function cancellationOf(string $orderEventId, string $orderLineId): string
+    {
+        return "cancel:{$orderEventId}:{$orderLineId}";
+    }
+
     public static function reservation(string $reservationId): string
     {
         return "reservation:{$reservationId}";
