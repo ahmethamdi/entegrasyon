@@ -3,22 +3,31 @@
 declare(strict_types=1);
 
 use App\Domain\Messaging\Console\OutboxRelayCommand;
+use App\Domain\Messaging\Console\RecoverPendingInbox;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Webhook rotaları web grubunda DEĞİL: CSRF muaf ve oturumsuz.
+        // Muafiyetin bedeli HMAC doğrulamasıyla ödenir (§11).
+        then: function (): void {
+            Route::middleware('api')
+                ->group(base_path('routes/webhooks.php'));
+        },
     )
     // Domain klasörlerindeki komutlar otomatik keşfedilmez; Laravel yalnızca
     // app/Console/Commands altını tarar. Modüler yapıda açık kayıt gerekir.
     ->withCommands([
         OutboxRelayCommand::class,
+        RecoverPendingInbox::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

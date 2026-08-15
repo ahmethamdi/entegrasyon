@@ -1,0 +1,499 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Feature\Messaging;
+
+use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Identity\Actions\CreateTenant;
+use App\Domain\Identity\Models\Tenant;
+use App\Domain\Identity\Models\User;
+use App\Domain\Inventory\Actions\ApplyMovement;
+use App\Domain\Inventory\Actions\LockInventoryRows;
+use App\Domain\Inventory\Enums\MovementType;
+use App\Domain\Inventory\Support\MovementKey;
+use App\Domain\Messaging\Actions\IngestInboxMessage;
+use App\Domain\Messaging\Jobs\ProcessInboxMessage;
+use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Enums\StockStatus;
+use App\Domain\Orders\Models\Order;
+use App\Domain\Orders\Models\OrderLine;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\Uid\UuidV7;
+use Tests\Concerns\AssertsLedgerIntegrity;
+use Tests\Support\Channels\FakeOrderAdapter;
+use Tests\TestCase;
+
+/**
+ * Gelen hat: webhook → inbox → router → sipariş alımı.
+ *
+ * Mimari Karar Dokümanı v2.2 · §6 · Inbox, §1 · Kararlar 23, 24, §11.
+ */
+final class InboundPipelineTest extends TestCase
+{
+    use AssertsLedgerIntegrity;
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        FakeOrderAdapter::reset();
+    }
+
+    // ─────────────────────────────────────────────── webhook güvenliği
+
+    /** Geçersiz imza REDDEDİLİR ve hiçbir kayıt yazılmaz. */
+    #[Test]
+    public function invalid_signature_is_rejected_without_recording(): void
+    {
+        [, $connection] = $this->makeContext();
+
+        FakeOrderAdapter::$signatureValid = false;
+
+        $response = $this->postJson("/webhooks/{$connection->id}", ['type' => 'created']);
+
+        $response->assertStatus(401);
+
+        $this->assertSame(0, $this->asSystem(fn () => InboxMessage::query()->count()));
+    }
+
+    /** Geçerli imza 202 döner ve mesajı kaydeder. */
+    #[Test]
+    public function valid_webhook_is_recorded_and_returns_202(): void
+    {
+        Queue::fake();
+
+        [$tenant, $connection] = $this->makeContext();
+
+        $response = $this->postJson(
+            "/webhooks/{$connection->id}",
+            ['type' => 'created', 'external_order_id' => 'ORD-1'],
+            ['X-Fake-Delivery-Id' => 'DLV-1', 'X-Fake-Topic' => 'order.created'],
+        );
+
+        $response->assertStatus(202);
+
+        $message = $this->asSystem(fn () => InboxMessage::query()->firstOrFail());
+
+        $this->assertSame('DLV-1', $message->external_event_id);
+        $this->assertSame('order.created', $message->event_type);
+        $this->assertSame('pending', $message->status);
+        $this->assertTrue($message->signature_valid);
+        $this->assertSame($tenant->id, $message->tenant_id);
+
+        Queue::assertPushed(ProcessInboxMessage::class, 1);
+    }
+
+    /** Var olmayan bağlantı 404 döner. */
+    #[Test]
+    public function unknown_connection_returns_404(): void
+    {
+        $response = $this->postJson('/webhooks/'.(string) new UuidV7, ['type' => 'created']);
+
+        $response->assertStatus(404);
+    }
+
+    /**
+     * AYNI webhook iki kez gelirse İKİNCİ KEZ İŞLENMEZ.
+     *
+     * Birincil tekilleştirme: (channel_connection_id, external_event_id).
+     */
+    #[Test]
+    public function duplicate_delivery_id_is_deduplicated_and_not_requeued(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $body = ['type' => 'created', 'external_order_id' => 'ORD-1'];
+        $headers = ['X-Fake-Delivery-Id' => 'DLV-SAME'];
+
+        $this->postJson("/webhooks/{$connection->id}", $body, $headers)->assertStatus(202);
+        $this->postJson("/webhooks/{$connection->id}", $body, $headers)->assertStatus(202);
+
+        $this->assertSame(1, $this->asSystem(fn () => InboxMessage::query()->count()));
+
+        // Tekrar gelen webhook kuyruğa İKİNCİ kez girmez.
+        Queue::assertPushed(ProcessInboxMessage::class, 1);
+    }
+
+    /**
+     * Olay kimliği YOKSA son çare devreye girer: hash + saatlik pencere.
+     */
+    #[Test]
+    public function messages_without_event_id_deduplicate_by_hash(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $body = ['type' => 'created', 'external_order_id' => 'ORD-2'];
+
+        // Delivery-Id başlığı YOK.
+        $this->postJson("/webhooks/{$connection->id}", $body)->assertStatus(202);
+        $this->postJson("/webhooks/{$connection->id}", $body)->assertStatus(202);
+
+        $this->assertSame(1, $this->asSystem(fn () => InboxMessage::query()->count()));
+
+        $message = $this->asSystem(fn () => InboxMessage::query()->firstOrFail());
+        $this->assertNull($message->external_event_id);
+    }
+
+    /** Farklı yükler ayrı kayıt üretir — hash farklıdır. */
+    #[Test]
+    public function different_payloads_are_recorded_separately(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $this->postJson("/webhooks/{$connection->id}", ['type' => 'created', 'external_order_id' => 'A']);
+        $this->postJson("/webhooks/{$connection->id}", ['type' => 'created', 'external_order_id' => 'B']);
+
+        $this->assertSame(2, $this->asSystem(fn () => InboxMessage::query()->count()));
+    }
+
+    /** Aynı olay kimliği FARKLI bağlantılarda ayrışır. */
+    #[Test]
+    public function same_event_id_across_connections_is_not_deduplicated(): void
+    {
+        Queue::fake();
+
+        [, $connectionA] = $this->makeContext();
+        [, $connectionB] = $this->makeContext();
+
+        $headers = ['X-Fake-Delivery-Id' => 'DLV-SHARED'];
+
+        $this->postJson("/webhooks/{$connectionA->id}", ['type' => 'created'], $headers);
+        $this->postJson("/webhooks/{$connectionB->id}", ['type' => 'created'], $headers);
+
+        $this->assertSame(2, $this->asSystem(fn () => InboxMessage::query()->count()));
+    }
+
+    // ─────────────────────────────────────────────── koşullu geçiş
+
+    /**
+     * Aynı mesaj iki kez kuyruğa girerse TEK işleyici seçilir.
+     *
+     * UPDATE ... WHERE status = 'pending' koşullu geçişi kazananı belirler;
+     * kaybeden kopya erken çıkar ve sipariş iki kez işlenmez.
+     */
+    #[Test]
+    public function conditional_transition_selects_a_single_processor(): void
+    {
+        [$tenant, $connection, $variant, $warehouseId] = $this->makeContextWithStock(10);
+
+        $message = $this->recordMessage($connection, [
+            'type' => 'created',
+            'external_order_id' => 'ORD-DUP',
+            'lines' => [
+                ['external_line_id' => 'l1', 'sku' => $variant->sku, 'quantity' => 3],
+            ],
+        ]);
+
+        // İki kopya art arda çalışır.
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+
+        // Stok YALNIZCA bir kez düştü.
+        $this->assertSame(7, $this->onHand($tenant, $warehouseId, $variant->id));
+        $this->assertSame(1, $this->asSystem(fn () => Order::query()->count()));
+
+        $this->assertSame('processed', $message->fresh()->status);
+        $this->assertSame(1, $message->fresh()->attempt_count);
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /** İşlenmiş mesaj yeniden çalıştırılırsa erken çıkar. */
+    #[Test]
+    public function processed_message_is_not_reprocessed(): void
+    {
+        [$tenant, $connection, $variant, $warehouseId] = $this->makeContextWithStock(10);
+
+        $message = $this->recordMessage($connection, [
+            'type' => 'created',
+            'external_order_id' => 'ORD-ONCE',
+            'lines' => [['external_line_id' => 'l1', 'sku' => $variant->sku, 'quantity' => 2]],
+        ]);
+
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+        $this->assertSame(8, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+        $this->assertSame(8, $this->onHand($tenant, $warehouseId, $variant->id));
+    }
+
+    // ─────────────────────────────────────────────── yönlendirme
+
+    /** created olayı sipariş yaratır ve stok düşer. */
+    #[Test]
+    public function created_event_ingests_the_order(): void
+    {
+        [$tenant, $connection, $variant, $warehouseId] = $this->makeContextWithStock(10);
+
+        $message = $this->recordMessage($connection, [
+            'type' => 'created',
+            'external_order_id' => 'ORD-100',
+            'lines' => [['external_line_id' => 'l1', 'sku' => $variant->sku, 'quantity' => 4]],
+        ]);
+
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+
+        $order = $this->asTenant($tenant, fn () => Order::query()->firstOrFail());
+
+        $this->assertSame('ORD-100', $order->external_id);
+        $this->assertSame(6, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        $line = $this->asTenant($tenant, fn () => OrderLine::query()->firstOrFail());
+        $this->assertSame(StockStatus::APPLIED, $line->stock_status);
+        $this->assertSame($variant->id, $line->variant_id);
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /**
+     * İPTAL OLAYI SİPARİŞ YARATMA YOLUNA GİRMEZ.
+     *
+     * Karar 24: hepsi tek yola girseydi iptal ON CONFLICT DO NOTHING dalına
+     * düşer ve SESSİZCE YUTULURDU; stok hiç geri gelmezdi.
+     */
+    #[Test]
+    public function cancellation_event_restores_stock_instead_of_creating_an_order(): void
+    {
+        [$tenant, $connection, $variant, $warehouseId] = $this->makeContextWithStock(10);
+
+        // Önce sipariş.
+        $created = $this->recordMessage($connection, [
+            'type' => 'created',
+            'external_order_id' => 'ORD-200',
+            'lines' => [['external_line_id' => 'l1', 'sku' => $variant->sku, 'quantity' => 3]],
+        ]);
+
+        (new ProcessInboxMessage($tenant->id, $created->id))->handle();
+        $this->assertSame(7, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        // Sonra iptal — AYNI external_order_id.
+        $cancelled = $this->recordMessage($connection, [
+            'type' => 'cancelled',
+            'external_order_id' => 'ORD-200',
+            'external_ref' => 'CAN-1',
+            'lines' => [['external_line_id' => 'l1', 'quantity' => 3]],
+        ], eventId: 'DLV-CANCEL');
+
+        (new ProcessInboxMessage($tenant->id, $cancelled->id))->handle();
+
+        // Stok geri geldi ve İKİNCİ sipariş yaratılmadı.
+        $this->assertSame(10, $this->onHand($tenant, $warehouseId, $variant->id));
+        $this->assertSame(1, $this->asTenant($tenant, fn () => Order::query()->count()));
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /** İade olayı da stoğu geri getirir. */
+    #[Test]
+    public function return_event_restores_stock(): void
+    {
+        [$tenant, $connection, $variant, $warehouseId] = $this->makeContextWithStock(10);
+
+        $created = $this->recordMessage($connection, [
+            'type' => 'created',
+            'external_order_id' => 'ORD-300',
+            'lines' => [['external_line_id' => 'l1', 'sku' => $variant->sku, 'quantity' => 5]],
+        ]);
+
+        (new ProcessInboxMessage($tenant->id, $created->id))->handle();
+
+        $returned = $this->recordMessage($connection, [
+            'type' => 'returned',
+            'external_order_id' => 'ORD-300',
+            'external_ref' => 'RET-1',
+            'lines' => [['external_line_id' => 'l1', 'quantity' => 2]],
+        ], eventId: 'DLV-RETURN');
+
+        (new ProcessInboxMessage($tenant->id, $returned->id))->handle();
+
+        $this->assertSame(7, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        $line = $this->asTenant($tenant, fn () => OrderLine::query()->firstOrFail());
+        $this->assertSame(2, $line->quantity_returned);
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /**
+     * Sipariş bulunamayan olay YUTULMAZ ama patlamaz da.
+     *
+     * Mesaj işlenmiş sayılır; aksi halde kurtarma taraması onu sonsuza kadar
+     * yeniden dener. Eksik, uyarı günlüğüyle görünür kalır.
+     */
+    #[Test]
+    public function event_for_unknown_order_is_marked_processed(): void
+    {
+        [$tenant, $connection] = $this->makeContext();
+
+        $message = $this->recordMessage($connection, [
+            'type' => 'cancelled',
+            'external_order_id' => 'ORD-YOK',
+            'external_ref' => 'CAN-X',
+            'lines' => [['external_line_id' => 'l1', 'quantity' => 1]],
+        ]);
+
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+
+        $this->assertSame('processed', $message->fresh()->status);
+    }
+
+    /** Sipariş olayı olmayan mesaj işlenmiş sayılır. */
+    #[Test]
+    public function non_order_event_is_marked_processed(): void
+    {
+        [$tenant, $connection] = $this->makeContext();
+
+        FakeOrderAdapter::$parsesEvents = false;
+
+        $message = $this->recordMessage($connection, ['type' => 'product.updated']);
+
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+
+        $this->assertSame('processed', $message->fresh()->status);
+    }
+
+    // ─────────────────────────────────────────────── kurtarma
+
+    /** Takılı bekleyen mesaj yeniden kuyruğa alınır. */
+    #[Test]
+    public function recovery_requeues_stuck_pending_messages(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $message = $this->recordMessage($connection, ['type' => 'created']);
+
+        // Kayıt ile kuyruğa atma arasında süreç ölmüş gibi geriye alınır.
+        $this->asSystem(fn () => DB::table('inbox_messages')
+            ->where('id', $message->id)
+            ->update(['received_at' => now()->subMinutes(5)]));
+
+        $this->artisan('inbox:recover')->assertSuccessful();
+
+        Queue::assertPushed(ProcessInboxMessage::class, 1);
+    }
+
+    /** Taze mesaj kurtarma taramasına takılmaz. */
+    #[Test]
+    public function recovery_ignores_fresh_messages(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $this->recordMessage($connection, ['type' => 'created']);
+
+        $this->artisan('inbox:recover')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+    }
+
+    /** İşlenmiş mesaj kurtarılmaz. */
+    #[Test]
+    public function recovery_ignores_processed_messages(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $message = $this->recordMessage($connection, ['type' => 'created']);
+
+        $this->asSystem(fn () => DB::table('inbox_messages')
+            ->where('id', $message->id)
+            ->update(['status' => 'processed', 'received_at' => now()->subMinutes(5)]));
+
+        $this->artisan('inbox:recover')->assertSuccessful();
+
+        Queue::assertNothingPushed();
+    }
+
+    // ---------------------------------------------------------------- yardımcılar
+
+    /** @return array{0: Tenant, 1: ChannelConnection} */
+    private function makeContext(): array
+    {
+        $tenant = (new CreateTenant)->run(
+            name: 'Gelen '.uniqid(),
+            owner: User::factory()->create(),
+        );
+
+        $code = 'fake-orders';
+
+        $this->asSystem(fn () => ChannelType::query()->updateOrCreate(
+            ['code' => $code],
+            [
+                'name' => 'Sahte Sipariş Kanalı',
+                'kind' => 'marketplace',
+                'adapter_class' => FakeOrderAdapter::class,
+                'is_active' => true,
+            ],
+        ));
+
+        $connection = $this->asTenant($tenant, fn () => ChannelConnection::factory()
+            ->create(['channel_type_code' => $code]));
+
+        return [$tenant, $connection];
+    }
+
+    /** @return array{0: Tenant, 1: ChannelConnection, 2: Variant, 3: string} */
+    private function makeContextWithStock(int $stock): array
+    {
+        [$tenant, $connection] = $this->makeContext();
+
+        $warehouseId = $this->asTenant($tenant, fn () => $tenant->defaultWarehouse()->id);
+        $variant = $this->asTenant($tenant, fn () => Variant::factory()->create());
+
+        $this->asTenant($tenant, fn () => DB::transaction(function () use ($warehouseId, $variant, $stock): void {
+            (new LockInventoryRows)->run($warehouseId, [$variant->id]);
+
+            (new ApplyMovement)->run(
+                warehouseId: $warehouseId,
+                variantId: $variant->id,
+                type: MovementType::IMPORT,
+                quantity: $stock,
+                idempotencyKey: MovementKey::import((string) new UuidV7),
+                sourceType: 'import_row',
+            );
+        }));
+
+        return [$tenant, $connection, $variant, $warehouseId];
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function recordMessage(
+        ChannelConnection $connection,
+        array $payload,
+        ?string $eventId = null,
+    ): InboxMessage {
+        return (new IngestInboxMessage)->run(
+            connection: $connection,
+            source: 'webhook',
+            externalEventId: $eventId ?? 'DLV-'.uniqid(),
+            eventType: (string) ($payload['type'] ?? 'unknown'),
+            payload: json_encode($payload, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    private function onHand(Tenant $tenant, string $warehouseId, string $variantId): int
+    {
+        return (int) $this->asSystem(fn () => DB::table('inventory_levels')
+            ->where('tenant_id', $tenant->id)
+            ->where('warehouse_id', $warehouseId)
+            ->where('variant_id', $variantId)
+            ->value('on_hand'));
+    }
+}

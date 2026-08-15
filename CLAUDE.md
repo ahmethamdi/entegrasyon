@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 128 test yeşil olmalı
+docker compose exec app php artisan test      # 145 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -79,12 +79,29 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 128 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 145 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
-(`AdapterRegistry` + 7 yetenek arayüzü) ve sipariş alımı (`IngestChannelOrder`,
-`ApplyOrderReturn`, `ApplyOrderCancellation`) yazıldı. P0 testleri
-T1/T2/T3/T9/T11/T12 ve T7/T8 yeşil. Ayrıntı için memory'deki "Repo Durumu"
-dosyasına bak.
+(`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
+`ApplyOrderReturn`, `ApplyOrderCancellation`) ve gelen hat (webhook → inbox →
+`OrderEventRouter`) yazıldı. P0 testleri T1/T2/T3/T9/T11/T12 ve T7/T8 yeşil.
+Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
+
+## Gelen hat kuralları
+
+- **HMAC ham gövde üzerinden**, JSON ayrıştırmadan **önce**. Ayrıştırıp
+  yeniden serileştirmek baytları değiştirir ve imza tutmaz. Doğrulanmamış
+  webhook = sahte sipariş enjeksiyonu.
+- Webhook rotaları `web` grubunda **değil**: CSRF muaf ve oturumsuz. Muafiyetin
+  bedeli imza doğrulamasıyla ödenir ve o zorunludur.
+- **Her durumda 202** — kanal 2xx dışını başarısızlık sayıp yeniden gönderir.
+- `ProcessInboxMessage` `UPDATE ... WHERE status = 'pending'` **koşullu
+  geçişiyle** tek işleyiciyi seçer; kaybeden kopyalar erken çıkar.
+- Tekilleştirme çifttir: birincil `external_event_id`, son çare
+  `payload_hash + dedupe_window`. Hash yolu saat sınırında bölünür, bu yüzden
+  yeni kanal eklerken **olay kimliği aramak ilk iş**.
+- `"bu satır yeni mi"` sorusu **zaman damgasıyla cevaplanmaz** — `insertOrIgnore`
+  sonrası kendi ürettiğin uuid'in geri gelip gelmediğine bak. Zaman damgaları
+  saniye hassasiyetlidir.
 
 ## Sipariş kuralları
 
@@ -157,16 +174,16 @@ testin sonunda çağrılır.
 
 `ChannelHttpClient` (istek yürütme + `api_calls` yazımı), `ChannelRateLimiter`,
 `CircuitBreaker`, gerçek adapter'lar (WooCommerce, Trendyol), `PushInventory`,
-`InventoryBatchBuilder`, `SyncResultRecorder`, inbox işleme, sipariş alımı,
-mutabakat, kimlik doğrulama ekranları.
+`InventoryBatchBuilder`, `SyncResultRecorder`, `UpdateOrderSnapshot`,
+`UpdateFulfillment`, mutabakat, kimlik doğrulama ekranları.
 
-Gerçek adapter yazılana kadar `tests/Support/Channels/FakeAdapter.php`
-registry davranışını sınıyor.
+Gerçek adapter yazılana kadar `tests/Support/Channels/` altındaki
+`FakeAdapter` (registry) ve `FakeOrderAdapter` (gelen hat) davranışı sınıyor.
 
 ## Sıradaki adım
 
-Gelen hat: `IngestInboxMessage` + `ProcessInboxMessage` + `OrderEventRouter`
-(tipe göre dağıtım) ve `WebhookController` (HMAC doğrulama **ham gövde**
-üzerinden, JSON ayrıştırmadan önce). Ardından `PushInventory` +
-`InventoryBatchBuilder` ile giden yol tamamlanır ve dikey dilim kapanır.
+Giden yol: `InventoryBatchBuilder` (**gruplama** yapar, fan-out yapmaz),
+`PushInventory` işi ve `SyncResultRecorder` (attempt + sync state + hata
+yazımı). Ardından gerçek `WooCommerceAdapter` ile dikey dilim kapanır.
+P0 testi **T4** (bir kanal 429 alır, diğerleri bağımsız tamamlanır).
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
