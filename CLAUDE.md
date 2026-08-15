@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 41 test yeşil olmalı
+docker compose exec app php artisan test      # 62 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -79,15 +79,33 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging
 `app/Support/`: Tenancy · Uuid · Logging
 
-16 domain tablosu, 16 model, 41 test. Ayrıntı için memory'deki
-"Repo Durumu" dosyasına bak.
+16 domain tablosu, 16 model, 62 test. Stok çekirdeği (`ApplyMovement`,
+`LockInventoryRows`) ve P0 testleri T1/T2/T11/T12 yazıldı. Ayrıntı için
+memory'deki "Repo Durumu" dosyasına bak.
+
+## Stok testi yazarken
+
+- **Açılış stoğu ledger üzerinden girer.** `InventoryLevel::create(['on_hand' => 5])`
+  ile seed etmek `on_hand = Σ on_hand_delta` eşitliğini bozar; seed IMPORT
+  hareketiyle yapılır. Hareket sayısı ve `version` beklentileri açılış
+  hareketlerini de sayar.
+- **Eşzamanlılık testi `RefreshDatabase` ile yazılamaz** — tek transaction
+  içinde kilit çekişmesi oluşmaz, test yanlış yeşile döner. `DatabaseTruncation`
+  + ayrı PDO bağlantısı gerekir; bloklanma `SET lock_timeout` ile kanıtlanır.
+- **`DatabaseTruncation` kendi setUp'ında boşaltır**, tearDown'da değil.
+  Commit edilen artık sonraki testlere sızar; `ConcurrentSaleTest::tearDown()`
+  içinde `truncateDatabaseTables()` çağrılır.
+
+Ledger ↔ projeksiyon eşitliği `tests/Concerns/AssertsLedgerIntegrity.php`
+içindeki `assertLedgerMatchesProjection()` ile doğrulanır — stok yazan her
+testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`ApplyMovement`, `LockInventoryRows`, adapter iş mantığı, outbox relay,
-inbox işleme, sipariş alımı, senkron motoru, mutabakat, kimlik doğrulama ekranları.
+Adapter iş mantığı, outbox relay, inbox işleme, sipariş alımı, senkron motoru,
+mutabakat, kimlik doğrulama ekranları.
 
 ## Sıradaki adım
 
-`ApplyMovement` + `LockInventoryRows` ve P0 testleri (T1, T2, T11, T12).
-Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
+Outbox relay + fan-out tüketicisi, ya da sipariş alımı (`LockInventoryRows` +
+`ApplyMovement` üzerine). Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
