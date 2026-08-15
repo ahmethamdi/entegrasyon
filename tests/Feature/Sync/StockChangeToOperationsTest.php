@@ -22,6 +22,7 @@ use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
 use Tests\Concerns\AssertsLedgerIntegrity;
@@ -40,6 +41,18 @@ final class StockChangeToOperationsTest extends TestCase
 {
     use AssertsLedgerIntegrity;
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Zincirin bu testte sınanan ucu PLANLAMADIR: operasyonların
+        // açılması. Gönderim ayrı bir aşamadır ve PushInventoryTest'te
+        // sınanır. Kuyruk sahte olmazsa sync sürücü PushInventory'yi derhal
+        // çalıştırır; kuyruk kancaları kiracı bağlamını temizler ve
+        // tüketicinin kalan turları bağlamsız kalır (P0 izolasyon koruması).
+        Queue::fake();
+    }
 
     /**
      * Bir satış üç kanalda üç senkron operasyonu doğurur.

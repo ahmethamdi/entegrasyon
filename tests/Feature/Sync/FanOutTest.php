@@ -15,10 +15,12 @@ use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Enums\SyncOperationStatus;
+use App\Domain\Sync\Jobs\PushInventory;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
 use Tests\TestCase;
@@ -37,6 +39,18 @@ use Tests\TestCase;
 final class FanOutTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Bu sınıf PLANLAMAYI sınar, gönderimi değil. Kuyruk sahte olmazsa
+        // sync sürücü PushInventory'yi derhal çalıştırır ve kuyruk kancaları
+        // kiracı bağlamını temizleyerek tüketicinin kalan turlarını bozar —
+        // P0 izolasyon korumasının doğru ama burada istenmeyen davranışı.
+        // Gerçek worker asenkrondur; gönderim PushInventoryTest'te sınanır.
+        Queue::fake();
+    }
 
     /**
      * T3 — tek olay, üç canlı listing → üç ayrı operasyon.
@@ -242,6 +256,82 @@ final class FanOutTest extends TestCase
 
         $this->assertCount(1, $operations);
         $this->assertSame($tenantA->id, $operations->first()->tenant_id);
+    }
+
+    /**
+     * Her açılan operasyon için AYRI bir iş kuyruğa girer.
+     *
+     * Fan-out yalnızca satır yazsaydı operasyonlar sonsuza kadar pending
+     * beklerdi; zincirin dışa yönü bu dispatch ile kapanır. İş başına bir
+     * operasyon: gruplama kuyrukta değil, InventoryBatchBuilder'da yapılır.
+     */
+    #[Test]
+    public function each_opened_operation_dispatches_its_own_push_job(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $this->listVariantOn($tenant, $variant, ['woocommerce', 'trendyol', 'shopify']);
+
+        $event = $this->inventoryChangedEvent($tenant, $variant, version: 21);
+
+        $this->asTenant($tenant, fn () => app(InventoryLevelChangedConsumer::class)->handle($event));
+
+        $operations = $this->asTenant($tenant, fn () => SyncOperation::query()->get());
+
+        $this->assertCount(3, $operations);
+
+        Queue::assertPushed(PushInventory::class, 3);
+
+        foreach ($operations as $operation) {
+            Queue::assertPushed(
+                PushInventory::class,
+                fn (PushInventory $job): bool => $job->operationId === $operation->id,
+            );
+        }
+    }
+
+    /**
+     * ESKİ sürümlü olay iş ÜRETMEZ — sürüm kapısı eler.
+     *
+     * Sıra dışı gelen bayat bir olay kuyruğa iş atarsa worker boş yere
+     * uyanır ve daha kötüsü, kapı yalnızca burada olsaydı eski sürüm
+     * kanala giderdi.
+     *
+     * NOT: aynı sürümün tekrarı iş ÜRETİR ve bu bilinçlidir — operasyon
+     * hâlâ pending'dir, tekrar dispatch teslim garantisini güçlendirir ve
+     * mutlak değer gönderildiği için zararsızdır.
+     */
+    #[Test]
+    public function stale_version_event_dispatches_no_job(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $this->listVariantOn($tenant, $variant, ['woocommerce']);
+
+        // v30 kapıdan geçer.
+        $this->asTenant($tenant, fn () => app(InventoryLevelChangedConsumer::class)->handle(
+            $this->inventoryChangedEvent($tenant, $variant, version: 30)
+        ));
+
+        // İlk turun işleri sayıma karışmasın.
+        Queue::fake();
+
+        // v29 sıra dışı geldi: desired_version (30) > 29 → kapı eler.
+        $event = $this->inventoryChangedEvent($tenant, $variant, version: 29);
+
+        $this->asTenant($tenant, fn () => app(InventoryLevelChangedConsumer::class)->handle($event));
+
+        Queue::assertNothingPushed();
+
+        // Kapıya takılsa bile olay TÜKETİLMİŞ damgalanır.
+        $this->assertNotNull($event->fresh()->consumed_at);
+        $this->assertSame(0, $event->fresh()->operations_planned);
+
+        // Bayat sürüm istenen duruma YAZILMADI.
+        $listing = $this->asTenant($tenant, fn () => Listing::query()
+            ->where('variant_id', $variant->id)->firstOrFail());
+
+        $this->assertSame(30, $this->stateFor($tenant, $listing->id)->desired_version);
     }
 
     // ---------------------------------------------------------------- yardımcılar

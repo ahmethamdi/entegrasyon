@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Support;
 
+use App\Domain\Sync\Models\SyncOperation;
+
 /**
  * Kanala gönderilecek stok yükü.
  *
@@ -18,11 +20,29 @@ namespace App\Domain\Sync\Support;
  */
 final readonly class InventoryPushBatch
 {
-    /** @param list<InventoryPushItem> $items */
+    /**
+     * @param  list<InventoryPushItem>  $items
+     * @param  list<SyncOperation>  $operations  Yükte temsil edilen operasyonlar
+     */
     public function __construct(
         public string $channelConnectionId,
         public array $items,
+        private array $operations = [],
     ) {}
+
+    /**
+     * Bu yükün sonucunun yazılacağı operasyonlar.
+     *
+     * Yük kalem listesi taşır, sonuç OPERASYON'a yazılır: bir çağrının
+     * başarısı N operasyonun durumunu birden ilerletir. SyncResultRecorder
+     * bu listeyi kullanır.
+     *
+     * @return list<SyncOperation>
+     */
+    public function operations(): array
+    {
+        return $this->operations;
+    }
 
     public function count(): int
     {

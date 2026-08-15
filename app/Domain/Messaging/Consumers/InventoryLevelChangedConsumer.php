@@ -8,6 +8,7 @@ use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Actions\OpenSyncOperation;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
+use App\Domain\Sync\Jobs\PushInventory;
 use App\Domain\Sync\Models\Listing;
 
 /**
@@ -47,7 +48,8 @@ final class InventoryLevelChangedConsumer
             ->live()
             ->get();
 
-        $planned = 0;
+        /** @var list<string> $pending Kuyruğa atılacak operasyon kimlikleri */
+        $pending = [];
 
         foreach ($listings as $listing) {
             // (2) Anlık yankı bastırma — bir ENİYİLEME, doğruluk kuralı değil.
@@ -69,9 +71,16 @@ final class InventoryLevelChangedConsumer
             );
 
             if ($operation !== null) {
-                // TODO: PushInventory::dispatch($operation->id)->onQueue('inventory:high')
-                //       — iş sınıfı henüz yazılmadı (faz 1.7).
-                $planned++;
+                // (4) Kimlik TOPLANIR, iş burada ATILMAZ.
+                //
+                //     Dispatch planlama bittikten SONRA yapılır. Gerekçe
+                //     kiracı bağlamıdır: kuyruk kancaları (Queue::looping,
+                //     JobProcessing) her iş sınırında bağlamı temizler ve
+                //     sync sürücüde iş DERHAL çalışır. Döngünün ortasında
+                //     atılırsa kalan listing'ler bağlamsız kalır ve
+                //     tenant-scoped sorgu istisna fırlatır — P0 izolasyon
+                //     korumasının doğru davranışı.
+                $pending[] = $operation->id;
             }
         }
 
@@ -85,7 +94,18 @@ final class InventoryLevelChangedConsumer
         //     Erken çıkışta da (hiç listing yok, hepsi kapıya takıldı)
         //     damgalanmak ZORUNDADIR: aksi halde seviye 1 bütünlük taraması
         //     olayı kayıp sanar ve sonsuza kadar yeniden yayınlar.
-        $event->markConsumed(operationsPlanned: $planned);
+        $event->markConsumed(operationsPlanned: count($pending));
+
+        // (5) İşler EN SON atılır — planlama ve damgalama bittikten sonra.
+        //
+        //     Operasyon başına AYRI iş: gruplama kuyrukta değil
+        //     InventoryBatchBuilder'da yapılır. Aynı bağlantıdaki diğer
+        //     operasyonlar ilk işin yükünde gittiyse kalan işler boş yükle
+        //     erken çıkar — ucuzdur ve teslim garantisini tek bir işe
+        //     bağlamaktan güvenlidir.
+        foreach ($pending as $operationId) {
+            PushInventory::dispatch($operationId)->onQueue('inventory:high');
+        }
     }
 
     /**
