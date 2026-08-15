@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 94 test yeşil olmalı
+docker compose exec app php artisan test      # 112 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -79,10 +79,27 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-22 domain tablosu, 21 model, 94 test. Stok çekirdeği (`ApplyMovement`,
-`LockInventoryRows`), outbox relay ve fan-out tüketicisi yazıldı.
-P0 testleri T1/T2/T3/T11/T12 ve T7/T8 yeşil. Ayrıntı için memory'deki
-"Repo Durumu" dosyasına bak.
+22 domain tablosu, 21 model, 112 test. Stok çekirdeği (`ApplyMovement`,
+`LockInventoryRows`), outbox relay, fan-out tüketicisi ve adapter mimarisi
+(`AdapterRegistry` + 7 yetenek arayüzü) yazıldı. P0 testleri T1/T2/T3/T11/T12
+ve T7/T8 yeşil. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
+
+## Adapter kuralları
+
+- `AdapterRegistry::for()` **her çağrıda yeni örnek** üretir. Container'da
+  `bind`, **asla `singleton`**; registry içinde önbellek **yasak**. Gerekçe
+  güvenlik: adapter bağlantı taşır, paylaşılan örnek kiracı A'nın kimlik
+  bilgisini kiracı B'nin işinde kullanır.
+- Adapter **yan etkisizdir**: veritabanına yazmaz, kuyruğa iş atmaz, durum
+  güncellemez. Girdi alır, kanalla konuşur, `AdapterResult` döner. Durumu
+  `SyncResultRecorder` yazar.
+- Yetenekler `instanceof Supports*` ile okunur; panelde `if type === '...'`
+  bloğu yazılmaz. `SupportsWebhooks` arayüzü **yoktur** — webhook yetenek
+  değil taşıma biçimidir.
+- Stok ve fiyat **mutlak değer** gönderilir, delta asla.
+- Hata sınıflandırmayı **adapter** yapar (`classifyError()`), ne yapılacağına
+  **çekirdek** karar verir (`RetryPolicy`). `VALIDATION` ve `AUTHENTICATION`
+  kalıcıdır, diğerleri geçici.
 
 ## Zaman damgası tuzağı — `now()` yerine `clock_timestamp()`
 
@@ -118,13 +135,18 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-Adapter iş mantığı (`AdapterRegistry`, yetenek arayüzleri), `PushInventory` işi,
+`ChannelHttpClient` (istek yürütme + `api_calls` yazımı), `ChannelRateLimiter`,
+`CircuitBreaker`, gerçek adapter'lar (WooCommerce, Trendyol), `PushInventory`,
 `InventoryBatchBuilder`, `SyncResultRecorder`, inbox işleme, sipariş alımı,
 mutabakat, kimlik doğrulama ekranları.
 
+Gerçek adapter yazılana kadar `tests/Support/Channels/FakeAdapter.php`
+registry davranışını sınıyor.
+
 ## Sıradaki adım
 
-Doküman §19'daki sınıf sırasına göre 13–14: `AdapterRegistry` (container'da
-**`bind`**, asla `singleton`) ve yetenek arayüzleri. Ardından faz 1.6 tabloları
-(`inbox_messages`, `orders`, `order_lines`, `order_events`) ve T4/T9.
-Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
+Faz 1.6 tabloları (`inbox_messages`, `orders`, `order_lines` — `stock_status`,
+`order_events` — `external_ref` tekilliği, `fulfillments`) ve sipariş alımı:
+`IngestChannelOrder` + `OrderEventRouter`. P0 testi **T9** (çok kalemli iade +
+eşzamanlı sipariş → deadlock yok). Doküman §18 testlerin **önce** yazılmasını
+şart koşuyor.
