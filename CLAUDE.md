@@ -79,12 +79,13 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 145 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 158 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
-`ApplyOrderReturn`, `ApplyOrderCancellation`) ve gelen hat (webhook → inbox →
-`OrderEventRouter`) yazıldı. P0 testleri T1/T2/T3/T9/T11/T12 ve T7/T8 yeşil.
-Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
+`ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
+`OrderEventRouter`) ve giden hat (`InventoryBatchBuilder`, `PushInventory`,
+`SyncResultRecorder`) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
+yeşil. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
 
 ## Gelen hat kuralları
 
@@ -173,17 +174,41 @@ testin sonunda çağrılır.
 ## Henüz yazılmadı
 
 `ChannelHttpClient` (istek yürütme + `api_calls` yazımı), `ChannelRateLimiter`,
-`CircuitBreaker`, gerçek adapter'lar (WooCommerce, Trendyol), `PushInventory`,
-`InventoryBatchBuilder`, `SyncResultRecorder`, `UpdateOrderSnapshot`,
-`UpdateFulfillment`, mutabakat, kimlik doğrulama ekranları.
+`CircuitBreaker`, gerçek adapter'lar (WooCommerce, Trendyol),
+`UpdateOrderSnapshot`, `UpdateFulfillment`, mutabakat, kimlik doğrulama
+ekranları.
 
 Gerçek adapter yazılana kadar `tests/Support/Channels/` altındaki
-`FakeAdapter` (registry) ve `FakeOrderAdapter` (gelen hat) davranışı sınıyor.
+`FakeAdapter` (registry), `FakeOrderAdapter` (gelen hat) ve
+`ProgrammableInventoryAdapter` (giden hat, kanal başına yanıt programlanır)
+davranışı sınıyor.
+
+## Giden hat kuralları
+
+- **Fan-out tüketicide, gruplama batch builder'da.** `InventoryBatchBuilder`
+  yalnızca birleştirir; operasyon sayısı **değişmez**. Her operasyon kendi
+  satırı, kendi durumu, kendi hatasıyla yaşar.
+- **Sonucu `SyncResultRecorder` yazar, adapter değil.** Yazma operasyon
+  bazlıdır: yükte olmayan operasyona dokunulmaz. Gruplamaya dahil olanlar
+  kendi deneme kayıtlarını alır, yoksa "hiç denenmedi" görünüp seviye 2
+  taramasına takılırlar.
+- **Başarıda da sürüm kapısı var**: `synced_version` geriye **alınmaz**. İki
+  iş yarışıp eski olan sonra bitebilir; geri sarma kanalda doğru veri
+  dururken satırı kirli gösterir.
+- **Boş yükte deneme AÇILMAZ.** `attempt_count = 0` kalması seviye 2
+  taramasının ("worker hiç çalışmadı") anlamını korur.
+- **Dispatch planlama bittikten SONRA.** Tüketici kimlikleri toplar, işleri
+  en sonda atar: kuyruk kancaları her iş sınırında kiracı bağlamını temizler
+  ve `sync` sürücüde iş derhal çalışır; döngü ortasında atılırsa kalan
+  listing'ler bağlamsız kalır.
+- **Planlamayı sınayan testler `Queue::fake()` kullanır.** Gerçek worker
+  asenkrondur; `sync` sürücü o modeli taklit etmez. Gönderim
+  `PushInventoryTest` içinde işler elle çağrılarak sınanır.
 
 ## Sıradaki adım
 
-Giden yol: `InventoryBatchBuilder` (**gruplama** yapar, fan-out yapmaz),
-`PushInventory` işi ve `SyncResultRecorder` (attempt + sync state + hata
-yazımı). Ardından gerçek `WooCommerceAdapter` ile dikey dilim kapanır.
-P0 testi **T4** (bir kanal 429 alır, diğerleri bağımsız tamamlanır).
+Gerçek `WooCommerceAdapter` + `ChannelHttpClient` (istek yürütme +
+`api_calls` yazımı + maskeleme) ile §19'daki dikey dilim kapanır: Woo'da
+sipariş → panelde stok düşer → 30 sn içinde Woo'ya geri yazılır.
+Ardından `ChannelRateLimiter` (Redis kova) ve `CircuitBreaker`.
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
