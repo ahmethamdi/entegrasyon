@@ -79,13 +79,16 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 158 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 182 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
-`OrderEventRouter`) ve giden hat (`InventoryBatchBuilder`, `PushInventory`,
-`SyncResultRecorder`) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
-yeşil. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
+`OrderEventRouter`), giden hat (`InventoryBatchBuilder`, `PushInventory`,
+`SyncResultRecorder`) ve **gerçek WooCommerce entegrasyonu**
+(`ChannelHttpClient`, `WooCommerceAdapter`, `WooOrderNormalizer`,
+`WooProductMapper`) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
+yeşil. **Dikey dilim kapalı** — `WooCommerceVerticalSliceTest` zinciri
+baştan sona yürütüyor. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
 
 ## Gelen hat kuralları
 
@@ -173,15 +176,14 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`ChannelHttpClient` (istek yürütme + `api_calls` yazımı), `ChannelRateLimiter`,
-`CircuitBreaker`, gerçek adapter'lar (WooCommerce, Trendyol),
-`UpdateOrderSnapshot`, `UpdateFulfillment`, mutabakat, kimlik doğrulama
-ekranları.
+`ChannelRateLimiter` (Redis kova), `CircuitBreaker`, `TrendyolAdapter`,
+`PushListing` işi, `UpdateOrderSnapshot`, `UpdateFulfillment`, mutabakat,
+`PruneApiCalls`, kimlik doğrulama ve panel ekranları.
 
-Gerçek adapter yazılana kadar `tests/Support/Channels/` altındaki
-`FakeAdapter` (registry), `FakeOrderAdapter` (gelen hat) ve
-`ProgrammableInventoryAdapter` (giden hat, kanal başına yanıt programlanır)
-davranışı sınıyor.
+Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
+almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
+`FakeOrderAdapter` (gelen hat), `ProgrammableInventoryAdapter` (giden hat,
+kanal başına yanıt programlanır — T4 bunu kullanır).
 
 ## Giden hat kuralları
 
@@ -205,10 +207,34 @@ davranışı sınıyor.
   asenkrondur; `sync` sürücü o modeli taklit etmez. Gönderim
   `PushInventoryTest` içinde işler elle çağrılarak sınanır.
 
+## Kanal entegrasyonu kuralları
+
+- **`api_calls` her çağrıda yazılır** — başarı, hata, ağ kopması. Ağ
+  hatasında da satır yazılır: sonuç **belirsizdir** ("istek gitti mi,
+  işlendi mi") ve tam bu yüzden iz gerekir.
+- **Günlükleme çağrıyı düşürmez.** Yan iştir; dolu disk tüm senkronu
+  durdurmamalı. Hata yutulur ve uygulama günlüğüne yazılır.
+- **`manage_stock` zorunlu.** Woo stok yönetimi kapalıyken `stock_quantity`
+  alanını **sessizce yok sayar**; senkron başarılı görünürken hiçbir şey
+  değişmez — teşhisi en zor hata sınıfı.
+- **Woo iptali `order.updated` topic'iyle gelir.** Bu yüzden
+  `WooOrderNormalizer` içinde **durum alanı topic'i EZER**. Yalnızca
+  topic'e bakılsaydı iptal bir güncelleme sanılır, stok geri **eklenmez**
+  ve bakiye kalıcı olarak eksik kalırdı.
+- **Webhook doğrulaması kiracı bağlamı olmadan çalışır.** İstek anonim
+  gelir ve kiracı ancak bağlantı bulunduktan sonra bilinir; kimlik bilgisi
+  açıkça `runAsSystem()` ile okunur. Bağlam beklenirse **meşru her webhook
+  sessizce reddedilir** ve kanal sonsuza kadar yeniden gönderir.
+- **Adapter başarısızlıkta istisna fırlatır**, `AdapterResult::failure()`
+  dönmez. Sınıflandırma ve yeniden deneme kararı `PushInventory`'deki tek
+  `try/catch`'te toplanır.
+- **`delist` silmez, taslağa çeker.** Silme geri alınamaz ve kanaldaki
+  yorumları, sıralamayı, SEO geçmişini de götürür.
+
 ## Sıradaki adım
 
-Gerçek `WooCommerceAdapter` + `ChannelHttpClient` (istek yürütme +
-`api_calls` yazımı + maskeleme) ile §19'daki dikey dilim kapanır: Woo'da
-sipariş → panelde stok düşer → 30 sn içinde Woo'ya geri yazılır.
-Ardından `ChannelRateLimiter` (Redis kova) ve `CircuitBreaker`.
+Doküman §12: **`ChannelRateLimiter`** (Redis kova, `rateLimitProfile()`
+sözleşmesi) ve **`CircuitBreaker`** (ardışık 10 hata → 5 dk duraklatma;
+`AUTHENTICATION` devreyi süresiz açar). Ardından `PushListing` işi ve
+panel ekranları — ilk görsel çıktı için zincir artık hazır.
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
