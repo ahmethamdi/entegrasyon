@@ -234,6 +234,11 @@ final class ApplyMovement
      * Yük, sürüm kapısının ihtiyaç duyduğu alanları taşır. Kanala gidecek
      * miktar burada HESAPLANMAZ ve SAKLANMAZ — kırpma giden dönüşümde,
      * OutboundQuantity içinde yapılır. Yük kanonik available'ı taşır.
+     *
+     * origin_connection_id TAŞINMAK ZORUNDA: fan-out tüketicisi anlık yankıyı
+     * bu alanla bastırır. Woo siparişinden doğan değişimi Woo'ya geri yazmak
+     * gereksiz bir tur ve gereksiz bir çakışma riskidir. Alan yükte yoksa
+     * tüketici hiçbir kanalı eleyemez ve kaynak kanal da hedef olur.
      */
     private function recordOutboxEvent(InventoryLevel $level, InventoryMovement $movement): void
     {
@@ -250,6 +255,10 @@ final class ApplyMovement
                 'version' => $level->version,
                 'movement_id' => $movement->id,
                 'movement_type' => $movement->type->value,
+                // Yankı bastırma çıpası — bir ENİYİLEME, doğruluk kuralı
+                // değil: kanal otorite dışına ÇIKARILMAZ, mutabakat onu da
+                // kontrol eder ve gerçek sürüklenmede onarım açar (§10).
+                'origin_connection_id' => $movement->channel_connection_id,
             ],
             tenantId: $level->tenant_id,
         );

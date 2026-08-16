@@ -13,6 +13,7 @@ use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Support\Logging\PayloadRedactor;
 use RuntimeException;
@@ -103,24 +104,22 @@ final class AdapterRegistry
     }
 
     /**
-     * Adapter'ın kullanacağı HTTP istemcisi.
+     * Adapter'ın kullanacağı HTTP istemcisi — bağlantıya özgü, YENİ örnek.
      *
-     * ChannelHttpClient henüz yazılmadı (istek yürütme + api_calls yazımı +
-     * rate limit). Yazıldığında burada kurulacak; adapter'lar kurucu imzası
-     * üzerinden onu alacak ve bu sınıf dışında bir değişiklik gerekmeyecek.
+     * İstemci bağlantıyı ve onun kimlik bilgilerini taşır; adapter gibi o da
+     * paylaşılamaz. Aynı gerekçe: paylaşılan bir istemci kiracı A'nın
+     * kimlik bilgisiyle kiracı B'nin isteğini imzalardı.
      *
-     * Şimdilik paylaşılabilir bağımlılıklar taşınıyor: ikisi de durumsuzdur
-     * ve container'da singleton'dur. Bağlantı da yükte yer alıyor — istemci
-     * yazıldığında onu bu alandan alacak ve imza değişmeyecek.
-     *
-     * @return array<string, mixed>
+     * ChannelRateLimiter henüz yazılmadı (Redis kova); yazıldığında dördüncü
+     * bağımlılık olarak buraya eklenecek ve bu sınıf dışında değişiklik
+     * gerekmeyecek.
      */
-    private function clientFor(ChannelConnection $connection): array
+    private function clientFor(ChannelConnection $connection): ChannelHttpClient
     {
-        return [
-            'connection' => $connection,
-            'vault' => app(CredentialVault::class),
-            'redactor' => app(PayloadRedactor::class),
-        ];
+        return new ChannelHttpClient(
+            connection: $connection,
+            vault: app(CredentialVault::class),
+            redactor: app(PayloadRedactor::class),
+        );
     }
 }
