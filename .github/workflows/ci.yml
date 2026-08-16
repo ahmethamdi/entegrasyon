@@ -56,6 +56,21 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-interaction --no-progress
 
+      # public/build .gitignore'dadır; checkout sonrası dizin YOKTUR.
+      # Blade sayfası render eden testler (ExampleTest → GET /) Vite
+      # manifest'ini okur ve manifest olmadan istisna fırlatır. Frontend
+      # ayrı bir job'da build ediliyor ama onun çıktısı buraya taşınmaz —
+      # job'lar ayrı runner'larda, ayrı dosya sisteminde çalışır.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
       - name: Prepare environment
         run: |
           cp .env.example .env
