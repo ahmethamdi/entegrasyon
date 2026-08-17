@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 355 test yeşil olmalı
+docker compose exec app php artisan test      # 374 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -94,7 +94,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-29 domain tablosu, 28 model, 355 test. Stok çekirdeği (`ApplyMovement`,
+29 domain tablosu, 28 model, 374 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -105,7 +105,8 @@ Reconciliation
 `CircuitBreaker`), **ürün aktarımı** (`PushListing`, `PublishListing`,
 `ContentHasher`, `ListingPayloadBuilder`) ve **panel** (kimlik doğrulama,
 `EstablishTenantContext`, senkron durumu ekranı, kanal bağlama akışı, ürün
-yönetimi, ürün/stok listesi, ürün→kanal gönderme ekranı) yazıldı. P0 testleri
+yönetimi, ürün/stok listesi, ürün→kanal gönderme ekranı, **sipariş listesi
+ve ayrıntısı**) yazıldı. P0 testleri
 T1/T2/T3/T4/T9/T11/T12 ve T7/T8 yeşil. **Dikey dilim kapalı ve PANELDEN
 sürülebilir** — `WooCommerceVerticalSliceTest` sipariş→stok→kanal zincirini,
 `PanelToChannelSliceTest` ürün→kanal zincirini yürütüyor. Ayrıntı için
@@ -231,8 +232,8 @@ testin sonunda çağrılır.
 ## Henüz yazılmadı
 
 `TrendyolAdapter`, `UpdateOrderSnapshot`, `UpdateFulfillment`,
-`PruneApiCalls`, sipariş listesi ekranı, mutabakat panel ekranı, ılık/soğuk
-mutabakat katmanları (sıcak katman yazıldı).
+`PruneApiCalls`, `RequestResync` (+ T10), mutabakat panel ekranı,
+ılık/soğuk mutabakat katmanları (sıcak katman yazıldı).
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -372,6 +373,31 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **`DB::table()` global scope'a TABİ DEĞİLDİR.** Ham sorguda kiracı filtresi
   AÇIKÇA yazılır; yazılmazsa çapraz kiracı sayımı sızar (mutasyonla bulundu).
 
+## Sipariş ekranı kuralları (§13 · faz 1.6)
+
+- **Fazla satış ve eşleşmemiş SKU AYRI uyarılardır.** Fazla satışta stok
+  düşmüştür ve eksik görünür; eşleşmemiş satırda (`variant_id` NULL) stoğa
+  HİÇ dokunulmamıştır ve tablo "her şey yolunda" der. Satıcı eşleştirmeyi
+  yapana kadar bakiye olduğundan fazla görünür — ikisi tek uyarıda
+  birleştirilirse bu sessiz hâl fark edilmez.
+- **Rozet sırası: fazla satış > eşleşmemiş > stok düşüldü.** İkisi aynı
+  siparişte olabilir; fazla satış SATILMIŞ ve stoğu eksiye düşmüş bir
+  kalemdir ve kargo çıkışı gerçekten tehlikededir.
+- **Stoğu hiç düşülmemiş sipariş "uygulandı" gösterilmez** — eşleşmemiş
+  satır varken rozet `PENDING`'dir.
+- **Rota model bağlaması KULLANILMAZ.** `SubstituteBindings` `web`
+  grubundadır ve rota seviyesindeki `tenant` ara katmanından ÖNCE çalışır;
+  bağlama kullanılsaydı sorgu kiracı bağlamı kurulmadan atılır ve izolasyon
+  istisnası fırlatırdı. Kimlik `string` alınır ve kontrolcüde, kiracı
+  scope'unun altında aranır — yetkilendirme kimliğin tahmin edilemezliğine
+  dayandırılmaz.
+- **Sayım sorguları AYRI AYRI kiracı filtresi taşır.** Satır sayımı ve üst
+  özet iki farklı `DB::table()` sorgusudur; her biri ayrı bir boşluktur ve
+  **her biri ayrı testtir**.
+- **Filtreler `whereHas` ile kurulur, `join` ile değil** — sipariş başına
+  birden çok satır vardır ve `join` çok kalemli siparişi listede tekrar
+  ederdi.
+
 ## Panel kuralları
 
 - **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
@@ -439,9 +465,11 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 ## Sıradaki adım
 
-§6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi
-ve **§13 · faz 1.5 (`PushListing` + panelden gönderme)** kapandı. Panelde beş
-ekran var: özet · ürünler · ürün kanalları · stok · kanallar.
+§6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
+**§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
+maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde yedi ekran
+var: özet · ürünler · ürün kanalları · siparişler · sipariş ayrıntısı · stok ·
+kanallar.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
@@ -451,13 +479,14 @@ da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
 → REPAIR → kanala 17 gitti).
 
-1. **Sipariş listesi ekranı** (§13 · faz 1.6 panel maddesi) — "panelde sipariş
-   listesi ve fazla satış uyarısı". Sipariş alımı çalışıyor ama panelde
-   görünmüyor; kullanıcının siparişi göreceği tek yer yok.
-2. **Mutabakat panel ekranı** — `reconciliation_runs` / `reconciliation_items`
+1. **Mutabakat panel ekranı** — `reconciliation_runs` / `reconciliation_items`
    yazılıyor ama hiçbir yerde gösterilmiyor. Sürüklenme bulunduğunu kullanıcı
-   göremiyor.
-3. **Faz 2 · `TrendyolAdapter`** — ikinci kanal; adapter mimarisi hazır.
+   göremiyor; `recon_items_drift_idx` tam bu sorgu için var. Panelde kalan
+   en büyük boşluk artık bu.
+2. **Faz 2 · `TrendyolAdapter`** — ikinci kanal; adapter mimarisi hazır.
+3. **`RequestResync` + T10** — §18'de P1 ve §13 · faz 1.6'da listeli ama
+   yazılmadı: `error_permanent → pending` geçişi `ListingResyncRequested`
+   üretmeli. Faz 1.6'nın tek kalan eksiği bu.
 
 **Abonelik/ödeme Faz 4'tür (hafta 21–25), şimdi değil.** §13 · Faz 4:
 "Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa". Şema kararı
