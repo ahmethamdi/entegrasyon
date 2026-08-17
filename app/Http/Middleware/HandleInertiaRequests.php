@@ -54,6 +54,14 @@ class HandleInertiaRequests extends Middleware
                     'email' => $request->user()->email,
                 ],
             ],
+
+            // Tek seferlik bildirimler. `warning` sessiz başarısızlığın
+            // panjurudur: kanal cevap vermediğinde kullanıcı bunu görmeli,
+            // yoksa "kaydedildi" sanıp ürün göndermeye başlar.
+            'flash' => [
+                'success' => $request->session()->get('success'),
+                'warning' => $request->session()->get('warning'),
+            ],
         ];
     }
 }

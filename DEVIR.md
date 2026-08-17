@@ -1,117 +1,110 @@
-# Devir Notu — 17 Ağustos 2026 (bütünlük taramaları turu)
+# Devir Notu — 17 Ağustos 2026 (kanal bağlama turu)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ## Tek cümlede durum
 
-Zincirin tamamı çalışıyor, koruma katmanı devrede, panelde görünüyor ve
-**artık kayıp iş kurtarılıyor**: §6'nın iki bütünlük taraması yazıldı,
-zamanlayıcıya bağlandı ve uçtan uca doğrulandı. **248 test yeşil**
-(985 assertion).
+Artık **mağaza panelden bağlanabiliyor**: form → kimlik bilgisi kasaya →
+sağlık kontrolü → durum yazımı, tarayıcıda uçtan uca doğrulandı. Bir önceki
+turda §6 bütünlük taramaları kapanmıştı. **269 test yeşil** (1065 assertion),
+Pint temiz, iki random seed'de stabil.
 
 ## Bu sohbette ne yapıldı
 
-§6 · iki bütünlük taraması — doküman §18'deki T5 ve T6.
+§13 · faz 1.4 · "WooCommerce bağlantı ekranı ve sağlık kontrolü".
 
 | Ne | Nerede |
 |---|---|
-| Seviye 1 taraması | `app/Domain/Messaging/Support/DetectUnconsumedEvents.php` |
-| Seviye 2 taraması | `app/Domain/Sync/Support/DetectStuckSyncOperations.php` |
-| Komut kabukları | `*/Console/Detect*Command.php` |
-| Zamanlama | `routes/console.php` |
-| Komut kaydı | `bootstrap/app.php` |
-| T5 testleri | `tests/Feature/Messaging/DetectUnconsumedEventsTest.php` (9) |
-| T6 testleri | `tests/Feature/Sync/DetectStuckSyncOperationsTest.php` (9) |
-| Zamanlayıcı entegrasyonu | `tests/Feature/Messaging/ScheduledScansTest.php` (6) |
-| Uçtan uca kurtarma | `tests/Feature/Sync/LostWorkRecoveryTest.php` (3) |
+| Bağlama action'ı | `app/Domain/Channels/Actions/ConnectChannel.php` |
+| Sağlık kontrolü + durum yazımı | `app/Domain/Channels/Actions/CheckChannelHealth.php` |
+| Adres normalleştirme | `app/Domain/Channels/Support/StoreUrl.php` |
+| Tekillik istisnası | `app/Domain/Channels/Exceptions/AccountAlreadyConnectedException.php` |
+| Panel controller | `app/Http/Controllers/ChannelConnectionController.php` |
+| Ekranlar | `resources/js/Pages/Channels/{Index,Create}.vue` |
+| Rotalar | `routes/web.php` |
+| Flash paylaşımı | `app/Http/Middleware/HandleInertiaRequests.php` |
+| Action testleri | `tests/Feature/Channels/ConnectChannelTest.php` (9) |
+| Ekran testleri | `tests/Feature/Channels/ChannelConnectionScreenTest.php` (12) |
 
-27 yeni test (221 → 248).
+21 yeni test (248 → 269).
 
-## İki taramanın ayrı olma nedeni — özü
-
-İki teslim zinciri var ve **biri diğerinin kaybını göremez**:
+## Akışın özü
 
 ```
-Seviye 1 — outbox teslimi:
-  relay yayınladı → Redis işi düşürdü → fan-out HİÇ çalışmadı
-  İmza: published_at dolu + consumed_at NULL
-  Eylem: published_at = NULL, publish_attempts++   → relay tekrar alır
-  Seviye 2 bunu göremez: bulacağı operasyon hiç yaratılmadı.
-
-Seviye 2 — sync teslimi:
-  fan-out çalıştı, operasyonlar açıldı → Redis PushInventory'yi düşürdü
-  İmza: status = 'pending' + attempt_count = 0
-  Eylem: doğrudan yeniden dispatch. Outbox olayı YENİDEN YAYINLANMAZ.
-  Seviye 1 bunu göremez: consumed_at dolu, olay tarafı kusursuz görünür.
+Form (kanal · etiket · adres · consumer key/secret)
+  → StoreUrl::parse  → host küçük harf, şema/eğik çizgi atılır, https zorlanır
+  → guardAgainstForeignTenant  → mağaza başka kiracıdaysa AccountAlreadyConnected
+  → TRANSACTION: firstOrNew(type, account) + CredentialVault::store
+  → COMMIT
+  → CheckChannelHealth (transaction DIŞINDA — ağ çağrısı)
+       sağlıklı  → status = active,  health = healthy,  last_error = null
+       sağlıksız → status = pending, health = unhealthy, last_error = mesaj
+  → /channels · success veya warning flash
 ```
 
-`LostWorkRecoveryTest::the_two_scans_do_not_overlap_in_scope` iki kaybı aynı
-anda kurar ve her taramanın **yalnızca kendi** kaybını gördüğünü doğrular.
+**Sağlık kontrolü geçmeden bağlantı aktif olmaz.** Kimlik bilgisi yine
+saklanır (çağrıyı yapabilmek için zorunlu ve kullanıcı mağazası geçici kapalı
+olabilir) ama `pending` durumda senkron çalışmaz. Aktif ama çalışmayan
+bağlantı en pahalı hata biçimidir: kullanıcı ürün göndermeye başlar, hepsi
+AUTHENTICATION ile kalıcı hataya düşer ve sebep ancak destek kaydıyla bulunur.
 
-## Bu turda bulunan GERÇEK boşluk
+## Tarayıcıda doğrulandı
 
-**`inbox:recover` hiç zamanlanmamıştı.** Geçen tur yazılmış, komut kusursuz,
-testleri yeşil — ve zamanlayıcıda kaydı yoktu. Dakikalık çalışması gereken
-sipariş kurtarma taraması **hiç çalışmıyordu**. `routes/console.php` yalnızca
-`inspire` komutunu içeriyordu.
+Kayıt → `/channels` (boş durum) → `/channels/create` → var olmayan mağaza ile
+gönderim → `/channels` üzerinde:
 
-İkinci katman: komutu zamanlamak da yetmiyor. Domain klasörlerindeki komutlar
-otomatik keşfedilmiyor (Laravel yalnızca `app/Console/Commands` tarar) ve
-`bootstrap/app.php` içinde açıkça kaydedilmeleri gerekiyor. Kayıt olmadan
-`schedule:list` kusursuz görünüyor ama dakikası gelince artisan "böyle bir
-komut yok" diyor. **`ScheduledScansTest` bu ikisini AYRI AYRI doğrular** —
-biri zamanlamayı, diğeri komutun gerçekten çözülüp çalıştığını.
+- amber uyarı: "kaydedildi ama kanal cevap vermedi — bağlantı beklemede"
+- kırmızı `CEVAP VERMİYOR` rozeti, `Durum: pending`
+- cURL hata metni kartta görünür (gizlenmiyor)
+- yetenekler tip sisteminden: `Ürün · Stok · Fiyat · Sipariş · Kargo`
+  (Kategori ve Onay YOK — Woo onları desteklemiyor)
+- **sırlar sayfada yok**, konsol hatası yok
 
-Sınıfın var olması onu kimsenin çağırdığı anlamına gelmez; bu turda tam
-olarak bu oldu.
-
-## Mutasyonla sınandı — hepsi öldü
+## Mutasyonla sınandı — altısı da öldü
 
 | Mutasyon | Öldüren test |
 |---|---|
-| `clock_timestamp()` → `now()` (iki taramada) | `*_stale_only_by_wall_clock_*` (2) |
-| `consumed_at IS NULL` yüklemi kaldırıldı | `permanently_failed_operations_do_not_republish_event` |
-| `attempt_count = 0` → `>= 0` | `attempted_operation_is_not_flagged_as_stuck` |
-| Tarama `attempt_count = 1` yazıyor | `scan_does_not_open_an_attempt` + `limit_bounds_a_single_pass` |
-| Seviye 1 `consumed_at` damgalıyor | `unconsumed_event_is_detected_and_republished` |
-| Seviye 2 outbox olayını yeniden yayınlıyor | `stuck_operation_is_detected_and_redispatched` |
-| `status = 'pending'` → tüm durumlar | `terminal_and_dead_operations_are_never_redispatched` |
-| `published_at = NULL` yazılmıyor | 3 test, uçtan uca dahil |
+| Sağlıksızken de `status = active` | 4 test |
+| Çapraz kiracı koruması `if (false)` | `the_same_store_cannot_be_connected_by_two_tenants` |
+| Sırlar `settings` kolonuna da yazılıyor | `secrets_never_land_in_the_settings_column` |
+| Inertia'ya `$c->toArray()` gönderiliyor | 2 test (yetenekler + sır sızıntısı) |
+| `strtolower($host)` kaldırıldı | `store_url_is_normalised_before_uniqueness_is_checked` |
+| Health rotası `runAsSystem()` ile sorguluyor | `health_check_cannot_target_another_tenants_connection` |
 
-## Hayatta kalan mutasyon — YAPISAL SINIR, sahte test yazılmadı
+## Bu turda öğrenilen iki şey
 
-**`published_at IS NOT NULL` → `1 = 1`: hiçbir test kırılmıyor.**
+**1. Sessiz `catch` beni kendi hatamdan habersiz bıraktı.**
+`capabilitiesOrEmpty()` içindeki `catch (Throwable) { return []; }`,
+`with('channelType:code,name')` yazdığım için `adapter_class`'ın yüklenmediğini
+ve `AdapterRegistry`'nin patladığını gizledi. Test "Undefined array key" ile
+düştü ama sebebi görünmüyordu. Catch artık `Log::warning` yazıyor — koruma
+olarak kalıyor, hata gizleyici olarak değil.
 
-Cümle davranış katmıyor çünkü `NULL < clock_timestamp() - interval`
-karşılaştırması `NULL` döner, SQL bunu "doğru değil" sayar ve satır zaten
-elenir. PostgreSQL'de doğrulandı:
+**Eager-load kuralı**: yetenek okunacaksa `adapter_class` DA seçilmeli.
 
-```sql
-SELECT (NULL::timestamptz < clock_timestamp() - interval '5 minutes');  -- NULL
-```
+**2. Dev veritabanı seed'i bayattı.** Tarayıcı turunda açılır listede Trendyol
+göründü; oysa seeder onu `is_active = false` ve yazılmamış
+`Trendyol\TrendyolAdapter` ile tanımlıyor. Satır eski bir seeder sürümünden
+kalmıştı (`created_at == updated_at`, yani sonradan değiştirilmemiş).
+`php artisan db:seed --class=ChannelTypeSeeder` düzeltti. Kod doğruydu.
 
-Cümle **iki nedenle duruyor**: (1) §6'daki sorgu tanımı böyle, (2)
-`outbox_unconsumed_idx` kısmi indeksinin yüklemiyle birebir eşleşiyor ve
-planlayıcının indeksi seçmesini garanti ediyor. Gerekçe kodun içinde yazılı.
-
-Bu, DEVIR.md'nin üçüncü kategorisi: mutasyon hayatta kalır ve kalmalı.
+**Ders**: tarayıcıda gördüğün tuhaflığın kaynağı kod olmayabilir; dev verisinin
+tazeliğini de doğrula.
 
 ## Ortam
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 248 yeşil olmalı
+docker compose exec app php artisan test      # 269 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
+docker compose exec app php artisan db:seed --class=ChannelTypeSeeder
 ```
 
-Zamanlama doğrulaması:
+Panel: `http://localhost:8080/` · Kanallar: `http://localhost:8080/channels`
 
-```bash
-docker compose exec app php artisan schedule:list
-docker compose exec app php artisan outbox:detect-unconsumed   # bulunan sayısı
-docker compose exec app php artisan sync:detect-stuck
-```
+Tarayıcı doğrulaması için Playwright scratchpad'e kuruldu (`npm i playwright`);
+projeye bağımlılık EKLENMEDİ.
 
 ## Zamanlanmış işler — §15 tablosu
 
@@ -122,23 +115,17 @@ docker compose exec app php artisan sync:detect-stuck
 | `outbox:detect-unconsumed` | 10 dakika | Seviye 1: tüketici hiç çalışmadı |
 
 `outbox:relay` **bu listede yok ve olmamalı** — supervisor altında sürekli
-çalışan bir süreç. Zamanlanırsa dakikada bir yeni sonsuz döngü başlar.
-`ScheduledScansTest::the_continuous_relay_process_is_not_scheduled` korur.
+çalışan bir süreç.
 
 ## Sıradaki adım — SEÇİM SENİN
 
-Doküman §13'e göre **tamamlanmamış en erken faz maddesi 1.4**: 1.5/1.6/1.7
-zaten yazılmış durumda.
-
-1. **Kanal bağlama akışı** (§13 · faz 1.4) — Woo mağazasını panelden
-   gerçekten bağlamak. `CredentialVault` ve `healthCheck()` hazır. Dokümanın
-   doğrulama ölçütü: *"gerçek Woo mağazasına bağlanıyor, sırlar loglarda
-   görünmüyor"*. Sistemi ilk kez gerçek bir mağazayla uçtan uca çalıştırır.
-   *En yüksek değer ve doküman sırasına uygun.*
-2. **Ürün/stok listesi** — satıcının her gün bakacağı ekran; fazla satış
-   uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5 panel maddeleri). 1.4
-   olmadan gerçek veriyle beslenemez.
-3. **§10 mutabakat** — sürüklenme tespiti. `clock_timestamp()` kuralına tabi
+1. **Ürün/stok listesi ekranı** — satıcının her gün bakacağı ekran; fazla
+   satış uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5 panel maddeleri).
+   Artık gerçek mağaza bağlanabildiği için gerçek veriyle beslenebilir.
+2. **`PushListing` işi + panelden gönderme akışı** (§13 · faz 1.5) — faz
+   1.4'ün açık kalan tek ucu. Bağlama ve sağlık kontrolü tamam; ürünü kanala
+   gönderen iş henüz yok.
+3. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
    ve karşılaştırma `max(available, 0)` ile yapılır.
 
 ## Bu projede işe yarayan çalışma biçimi
@@ -147,16 +134,20 @@ zaten yazılmış durumda.
 2. **Mutasyonla sına**: kodu kasten boz, testin kırmızıya döndüğünü doğrula.
 3. Stok yazan her testin sonunda `assertLedgerMatchesProjection()` çağır.
 4. **Entegrasyonu ayrıca sına** — sınıfın var olması onu kimsenin çağırdığı
-   anlamına gelmez (`ScheduledScansTest` bu turda tam bunu buldu).
+   anlamına gelmez (`ScheduledScansTest` geçen turda tam bunu buldu).
 5. **Uçtan uca test yaz** — parçalar tek tek doğruyken aralarındaki sözleşme
    yanlış olabilir (`LostWorkRecoveryTest`).
+6. **Ekran işi bittiğinde TARAYICIDA çalıştır.** Bu turda iki bulgu yalnızca
+   orada göründü; testler ikisini de görmüyordu.
 
 ## Mutasyonla bulunan gerçek boşluklar (tarihçe)
 
 Hepsi testler yeşilken bulundu:
 
-- **Kurtarma taramaları zamanlayıcıya bağlanmamıştı** (bu tur) — `inbox:recover`
-  bir tur boyunca hiç çalışmadı.
+- **Eager-load'da `adapter_class` seçilmiyordu** (bu tur) — panel yetenekleri
+  sessizce boş kalıyordu ve `catch` sebebi gizliyordu.
+- **Kurtarma taramaları zamanlayıcıya bağlanmamıştı** — `inbox:recover` bir
+  tur boyunca hiç çalışmadı.
 - **`ApplyMovement` outbox yüküne `origin_connection_id` yazmıyordu** —
   fan-out'un yankı bastırması üretimde hiç çalışmıyordu.
 - **`verifyWebhookSignature` kiracı bağlamı bekliyordu** — meşru her webhook
@@ -168,8 +159,8 @@ Hepsi testler yeşilken bulundu:
 
 Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
-- **`published_at IS NOT NULL` yüklemi** (bu tur): NULL karşılaştırması satırı
-  zaten eler. Cümleyi doküman ve kısmi indeks eşleşmesi için tutuyoruz.
+- **`published_at IS NOT NULL` yüklemi**: NULL karşılaştırması satırı zaten
+  eler. Cümleyi doküman ve `outbox_unconsumed_idx` eşleşmesi için tutuyoruz.
 - **`hash_equals` → `===`**: zamanlama saldırısı işlevsel testte görünmez.
 - **Adapter'a `max($q, 0)`**: `InventoryPushItem` negatifi kurucuda reddettiği
   için ikinci kırpma her zaman işlemsizdir.
@@ -179,30 +170,27 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 ## Tekrar tekrar ısıran tuzaklar
 
 - **`clock_timestamp()`** — zaman damgaları saniye hassasiyetli, `now()`
-  transaction başında donar. Bu turdaki iki tarama da bu kurala tabiydi;
-  pencere testi `pg_sleep(1.1)` + `date_trunc('second', now())` ile kurulur:
-  damgayı donmuş `now()`'a **eşit** yaz, eşiği bir saniye ver.
-- **`Command::run()` REZERVE İMZADIR.** Tarama sınıfı `Command`'dan türeyip
-  `run(int, int): Collection` tanımlayamaz — fatal error. Bu yüzden mantık
-  `Support/` altında sade sınıfta, komut ince kabuk (`OutboxRelay` /
-  `OutboxRelayCommand` ayrımının aynısı).
+  transaction başında donar. Pencere testi: `pg_sleep(1.1)`, sonra damgayı
+  `date_trunc('second', now())` ile donmuş `now()`'a **eşit** yaz, eşiği bir
+  saniye ver.
+- **`Command::run()` REZERVE İMZADIR.** Tarama/iş mantığı `Support/` altında
+  sade sınıfta, komut ince kabuk (`OutboxRelay` / `OutboxRelayCommand`).
 - **Domain komutları otomatik keşfedilmez** — `bootstrap/app.php` →
   `withCommands()` içinde açık kayıt gerekir.
 - **`QUEUE_CONNECTION=sync` gerçek worker'ı taklit etmez.** Planlamayı sınayan
-  testler `Queue::fake()` çağırır; yoksa `PushInventory` derhal çalışır ve
-  kuyruk kancaları çağıranın bağlamını temizler. `LostWorkRecoveryTest`'in
-  seviye 1 testi tam bu yüzden bir kez kırmızıya döndü.
+  testler `Queue::fake()` çağırır.
 - **Seviye 2 taraması damgalamadığı için TÜKENMEZ**: ardışık iki tur aynı
-  satırları döner. Bu bilinçli — damgalamak `attempt_count = 0` imzasını yok
-  eder. `limit_bounds_a_single_pass` bunu belge olarak sabitler.
-- **Açılış stoğu ledger üzerinden girer** (IMPORT) ve o hareket de outbox
-  olayı yazar. Olayı `movement_type` ile hedefle.
+  satırları döner. Bilinçli — damgalamak `attempt_count = 0` imzasını yok eder.
+- **Tarayıcı testinde `networkidle` yetmeyebilir.** Var olmayan alan adının DNS
+  denemesi uzun sürer; yönlendirme `waitForURL(..., { timeout: 90000 })` ile
+  beklenmeli. İlk turda "gönderim başarısız" sandım, oysa yalnızca yavaştı.
+- **Açılış stoğu ledger üzerinden girer** (IMPORT) ve o hareket de outbox olayı
+  yazar. Olayı `movement_type` ile hedefle.
 - **Eşzamanlılık testi `RefreshDatabase` ile yazılamaz** → `DatabaseTruncation`
   + ayrı PDO; `tearDown`'da `truncateDatabaseTables()`.
 - **CI'da `public/build` yoktur** — `Tests` job'ı `npm run build` çalıştırır.
 
 ## Bilinen açık uç
 
-Eski turlarda bir `--order-by=random` turunda tek test düşmüştü; bu turda iki
-seed daha denendi (`1786963531`, `1786963555`) ve tekrar üretilemedi.
-Görülürse seed ile kaydedilmeli.
+Eski turlarda bir `--order-by=random` turunda tek test düşmüştü; son iki turda
+üç seed daha denendi ve tekrar üretilemedi. Görülürse seed ile kaydedilmeli.

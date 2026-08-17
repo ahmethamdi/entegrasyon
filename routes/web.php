@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -32,6 +33,15 @@ Route::middleware('guest')->group(function (): void {
 
 Route::middleware(['auth', 'tenant'])->group(function (): void {
     Route::get('/', DashboardController::class)->name('dashboard');
+
+    // Kanal bağlama akışı (§13 · faz 1.4). Sağlık kontrolü POST'tur:
+    // yan etkisi var (durum yazar) ve GET olsaydı tarayıcı ön yüklemesi
+    // kanala habersiz istek atardı.
+    Route::get('/channels', [ChannelConnectionController::class, 'index'])->name('channels.index');
+    Route::get('/channels/create', [ChannelConnectionController::class, 'create'])->name('channels.create');
+    Route::post('/channels', [ChannelConnectionController::class, 'store'])->name('channels.store');
+    Route::post('/channels/{connection}/health', [ChannelConnectionController::class, 'health'])
+        ->name('channels.health');
 });
 
 Route::post('/logout', [SessionController::class, 'destroy'])

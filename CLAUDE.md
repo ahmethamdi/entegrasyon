@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 248 test yeşil olmalı
+docker compose exec app php artisan test      # 269 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -93,7 +93,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 248 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 269 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -102,7 +102,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 (`ChannelHttpClient`, `WooCommerceAdapter`, `WooOrderNormalizer`,
 `WooProductMapper`), koruma katmanı (`ChannelRateLimiter`,
 `CircuitBreaker`) ve **panel** (kimlik doğrulama, `EstablishTenantContext`,
-senkron durumu ekranı) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
+senkron durumu ekranı, kanal bağlama akışı) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
 yeşil. **Dikey dilim kapalı** — `WooCommerceVerticalSliceTest` zinciri
 baştan sona yürütüyor. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
 
@@ -267,6 +267,32 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **İkisi de Redis erişilemezken çağrıyı GEÇİRİR.** Koruma katmanının
   erişilemezliği, korumaya çalıştığı sorundan büyük zarar vermemeli.
 
+## Kanal bağlama kuralları
+
+- **Sağlık kontrolü geçmeden bağlantı `active` olmaz.** Kimlik bilgisi kasaya
+  yazılır (çağrıyı yapabilmek için zorunlu) ama durum `pending` kalır ve
+  `last_error` panelde gösterilir. Aktif ama çalışmayan bağlantı en pahalı
+  hata biçimidir: kullanıcı ürün göndermeye başlar, hepsi AUTHENTICATION ile
+  kalıcı hataya düşer.
+- **Sağlıksızlığa düşen bağlantı `active`'ten geri çekilir** — sağlıksız
+  kanala iş atılmaz. Bağlantı **silinmez**, işaretlenir: listing ve sipariş
+  geçmişi ona bağlıdır.
+- **`external_account_id` normalleştirilir** (`StoreUrl`): küçük harf, şema
+  ve sondaki eğik çizgi atılır. Normalleştirilmezse aynı mağaza iki farklı
+  kimlikle bağlanır ve global tekillik kısıtı hiçbir şey korumaz.
+- **Şemasız adres `https` varsayar** — Woo anahtar çiftini Basic auth ile
+  taşır, düz HTTP'de anahtar her istekte ağda açık gider.
+- **Aynı kiracı aynı mağazayı yeniden bağlarsa yeni satır AÇILMAZ** — anahtar
+  yenileme akışı budur. Yeni satır `(tenant, type, account)` kısıtını ihlal
+  eder ve listing'ler eski bağlantıda kalırdı.
+- **Sırlar `settings` içine yazılmaz** — orası şifrelenmemiş jsonb ve panele
+  olduğu gibi gider. Yalnızca `base_url` orada durur.
+- **Sağlık kontrolü transaction DIŞINDA** çalışır: ağ çağrısı transaction'ı
+  saniyelerce açık tutardı. Arada süreç ölürse bağlantı `pending` kalır.
+- **Adapter yetenekleri eager-load'da `adapter_class` gerektirir.**
+  `with('channelType:code,name')` yazılırsa `AdapterRegistry` sınıfı bulamaz
+  ve yetenekler sessizce boşalır.
+
 ## Panel kuralları
 
 - **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
@@ -289,15 +315,16 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 ## Sıradaki adım
 
-§6 bütünlük taramaları kapandı (T5/T6 yeşil, zamanlayıcıya bağlı). Üç yol:
+§6 bütünlük taramaları ve §13 · faz 1.4 kanal bağlama akışı kapandı. İki yol:
 
-1. **Kanal bağlama akışı** (§13 · faz 1.4 — tamamlanmamış EN ERKEN faz
-   maddesi) — Woo mağazasını panelden gerçekten bağlamak (`CredentialVault`
-   ve `healthCheck()` hazır). Doğrulama ölçütü dokümanda: "gerçek Woo
-   mağazasına bağlanıyor, sırlar loglarda görünmüyor".
-2. **Ürün/stok listesi** — satıcının her gün bakacağı ekran; fazla satış
-   uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5).
-3. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
+1. **Ürün/stok listesi** — satıcının her gün bakacağı ekran; fazla satış
+   uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5). Artık gerçek bir
+   mağaza panelden bağlanabildiği için gerçek veriyle beslenebilir.
+2. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
    ve karşılaştırma `max(available, 0)` ile yapılır.
+
+Faz 1.4'ün açık kalan tek ucu: `PushListing` işi henüz yok, yani panelden
+ürün gönderme akışı (§13 · faz 1.5 · "panelde kanal seçimi, gönderme akışı")
+yazılmadı. Bağlama ve sağlık kontrolü tamamdır.
 
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
