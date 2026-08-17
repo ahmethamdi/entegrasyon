@@ -236,8 +236,15 @@ final class SyncResultRecorder
             return;
         }
 
+        // synced_hash = "kanala en son NE gönderdik" (§9). Gönderilen şey,
+        // operasyon açılırken istenen içeriktir; desired_hash tam olarak
+        // onu taşır. Burada yeniden hesaplamak yanlış olurdu: iş kuyrukta
+        // beklerken kanonik içerik değişmiş olabilir ve o değişiklik henüz
+        // GÖNDERİLMEDİ — yeniden hesaplayan bir kayıt, gönderilmemiş içeriği
+        // gönderilmiş gösterir ve mutabakat gerçek farkı göremez.
         $state->forceFill([
             'synced_version' => $operation->entity_version,
+            'synced_hash' => $state->desired_hash,
             'status' => $this->statusAfterSuccess($state, $operation),
             'last_synced_at' => now(),
             'last_error' => null,

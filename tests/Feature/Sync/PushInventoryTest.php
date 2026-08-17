@@ -749,13 +749,15 @@ final class PushInventoryTest extends TestCase
     /** Tek işi worker'daki gibi çalıştırır — her operasyon AYRI iş örneğinde. */
     private function runJob(Tenant $tenant, string $operationId): void
     {
-        $this->asTenant($tenant, function () use ($operationId): void {
-            (new PushInventory($operationId))->handle(
-                app(InventoryBatchBuilder::class),
-                app(SyncResultRecorder::class),
-                app(AdapterRegistry::class),
-            );
-        });
+        // Worker'daki gibi: bağlam sarmalayıcısı YOK. İş kiracı bağlamını
+        // kendi kurar ve bitişte bırakır; asTenant() ile sarmak gerçek
+        // worker'ı taklit etmez ve işin finally'si çağıranın bağlamını da
+        // temizlerdi.
+        (new PushInventory($operationId, $tenant->id))->handle(
+            app(InventoryBatchBuilder::class),
+            app(SyncResultRecorder::class),
+            app(AdapterRegistry::class),
+        );
     }
 
     /** @return array<string, SyncOperation> */

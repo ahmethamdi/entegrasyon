@@ -140,12 +140,20 @@ function statusClass(status) {
                         </td>
 
                         <td class="px-4 py-3 text-right">
-                            <Link
-                                :href="`/products/${row.id}/edit`"
-                                class="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
-                            >
-                                Düzenle
-                            </Link>
+                            <div class="flex justify-end gap-2">
+                                <Link
+                                    :href="`/products/${row.id}/channels`"
+                                    class="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                >
+                                    Kanallar
+                                </Link>
+                                <Link
+                                    :href="`/products/${row.id}/edit`"
+                                    class="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                >
+                                    Düzenle
+                                </Link>
+                            </div>
                         </td>
                     </tr>
                 </tbody>

@@ -7,6 +7,7 @@ namespace Tests\Feature\Sync;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
@@ -18,6 +19,8 @@ use App\Domain\Sync\Jobs\PushInventory;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\DetectStuckSyncOperations;
+use App\Domain\Sync\Support\InventoryBatchBuilder;
+use App\Domain\Sync\Support\SyncResultRecorder;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -26,6 +29,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
+use Tests\Support\Channels\ProgrammableInventoryAdapter;
 use Tests\TestCase;
 
 /**
@@ -368,6 +372,43 @@ final class DetectStuckSyncOperationsTest extends TestCase
         $this->assertCount(3, $this->scan(limit: 10));
     }
 
+    /**
+     * YENİDEN ATILAN İŞ GERÇEKTEN ÇALIŞABİLMELİ — bağlamı kendi kurar.
+     *
+     * Tarama `runAsSystem()` içinde koşar ve işi kiracı bağlamı OLMADAN atar;
+     * gerçek worker'da `Queue::looping` kancası zaten her iş sınırında bağlamı
+     * temizler. İş bağlamı kendisi kurmazsa ilk tenant-scoped sorgu istisna
+     * fırlatır ve seviye 2 taraması hiçbir şey KURTARMAZ — kurtarma mekanizması
+     * sessizce ölür.
+     *
+     * "Dispatch edildi" iddiası bunu göstermez: iş atılmıştır ama çalışamaz.
+     * Bu yüzden burada dispatch değil, ÇALIŞTIRMA sınanır.
+     */
+    #[Test]
+    public function redispatched_job_can_run_without_tenant_context(): void
+    {
+        [$tenant, $listing, $event] = $this->makeContext();
+
+        $operation = $this->operation($tenant, $listing, $event, createdMinutesAgo: 10);
+
+        $this->scan();
+
+        // Worker'daki gibi: BAĞLAM YOK.
+        TenantContext::clear();
+
+        (new PushInventory($operation->id, $tenant->id))->handle(
+            app(InventoryBatchBuilder::class),
+            app(SyncResultRecorder::class),
+            app(AdapterRegistry::class),
+        );
+
+        // Bağlam İŞ BİTİNCE BIRAKILIR — sonraki işe sızmamalı.
+        $this->assertFalse(
+            TenantContext::hasTenant(),
+            'İş bittiğinde bağlam bırakılmalı.',
+        );
+    }
+
     // ---------------------------------------------------------------- yardımcılar
 
     /** @return Collection<int, string> */
@@ -394,7 +435,7 @@ final class DetectStuckSyncOperationsTest extends TestCase
             [
                 'name' => 'WooCommerce',
                 'kind' => 'ecommerce',
-                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\WooCommerceAdapter',
+                'adapter_class' => ProgrammableInventoryAdapter::class,
                 'is_active' => true,
             ],
         ));

@@ -13,6 +13,7 @@ use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\InventoryBatchBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -41,6 +42,17 @@ use Throwable;
  *
  * ID TAŞINIR, MODEL DEĞİL: iş serileştirildiğinde model kopyası bayat
  * kalırdı; operasyon durumu tam da kuyrukta beklerken değişir.
+ *
+ * KİRACI BAĞLAMINI İŞ KENDİ KURAR (§11 · P0 güvenlik):
+ *   Bu iş İKİ yoldan atılır: fan-out tüketicisinden (kiracı bağlamı vardır)
+ *   ve seviye 2 bütünlük taramasından (`runAsSystem` içinde, bağlam YOKTUR).
+ *   Gerçek worker'da `Queue::looping` kancası her iş sınırında bağlamı
+ *   temizler, bu yüzden handle() her koşulda bağlamsız başlar. Bağlam yükte
+ *   taşınır, başta kurulur, `finally` ile bırakılır — bırakılmazsa sonraki
+ *   işe sızar ve kiracı A'nın bağlamıyla kiracı B'nin verisi yazılırdı.
+ *
+ *   Bu olmadan seviye 2 taraması hiçbir şey KURTARMAZ: iş atılır, ilk
+ *   tenant-scoped sorguda düşer ve kurtarma mekanizması sessizce ölür.
  */
 final class PushInventory implements ShouldQueue
 {
@@ -51,6 +63,7 @@ final class PushInventory implements ShouldQueue
 
     public function __construct(
         public readonly string $operationId,
+        public readonly string $tenantId,
     ) {}
 
     public function handle(
@@ -59,6 +72,22 @@ final class PushInventory implements ShouldQueue
         AdapterRegistry $registry,
         ?CircuitBreaker $breaker = null,
         ?ChannelRateLimiter $limiter = null,
+    ): void {
+        TenantContext::set($this->tenantId);
+
+        try {
+            $this->push($builder, $recorder, $registry, $breaker, $limiter);
+        } finally {
+            TenantContext::clear();
+        }
+    }
+
+    private function push(
+        InventoryBatchBuilder $builder,
+        SyncResultRecorder $recorder,
+        AdapterRegistry $registry,
+        ?CircuitBreaker $breaker,
+        ?ChannelRateLimiter $limiter,
     ): void {
         $breaker ??= app(CircuitBreaker::class);
         $limiter ??= app(ChannelRateLimiter::class);

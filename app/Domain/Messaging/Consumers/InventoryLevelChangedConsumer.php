@@ -104,7 +104,7 @@ final class InventoryLevelChangedConsumer
         //     erken çıkar — ucuzdur ve teslim garantisini tek bir işe
         //     bağlamaktan güvenlidir.
         foreach ($pending as $operationId) {
-            PushInventory::dispatch($operationId)->onQueue('inventory:high');
+            PushInventory::dispatch($operationId, $event->tenant_id)->onQueue('inventory:high');
         }
     }
 

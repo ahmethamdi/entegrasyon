@@ -455,13 +455,15 @@ final class WooCommerceVerticalSliceTest extends TestCase
 
     private function runPushJob(Tenant $tenant, string $operationId): void
     {
-        $this->asTenant($tenant, function () use ($operationId): void {
-            (new PushInventory($operationId))->handle(
-                app(InventoryBatchBuilder::class),
-                app(SyncResultRecorder::class),
-                app(AdapterRegistry::class),
-            );
-        });
+        // Worker'daki gibi: bağlam sarmalayıcısı YOK. İş kiracı bağlamını
+        // kendi kurar ve bitişte bırakır; asTenant() ile sarmak gerçek
+        // worker'ı taklit etmez ve işin finally'si çağıranın bağlamını da
+        // temizlerdi.
+        (new PushInventory($operationId, $tenant->id))->handle(
+            app(InventoryBatchBuilder::class),
+            app(SyncResultRecorder::class),
+            app(AdapterRegistry::class),
+        );
     }
 
     private function levelFor(Tenant $tenant, Variant $variant): InventoryLevel

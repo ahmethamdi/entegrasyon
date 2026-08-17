@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +53,14 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
     Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+
+    // Kanala gönderme akışı (§13 · faz 1.5). Gönderme POST'tur: yan etkisi
+    // var (listing satırı ve senkron operasyonu yaratır) ve GET olsaydı
+    // tarayıcı ön yüklemesi ürünü habersiz kanala gönderirdi.
+    Route::get('/products/{product}/channels', [ProductChannelController::class, 'index'])
+        ->name('products.channels.index');
+    Route::post('/products/{product}/channels', [ProductChannelController::class, 'store'])
+        ->name('products.channels.store');
 
     // Ürün/stok listesi (§13 · faz 1.2 · panel). Düzeltme POST'tur ve
     // ledger'a yazar: fazla satışın "düzeltme yolu" (§17 · P0).

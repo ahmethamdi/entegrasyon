@@ -11,8 +11,11 @@ use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\ContentHasher;
+use App\Domain\Sync\Support\ListingPayloadBuilder;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * Senkron operasyonu açar — sürüm kapısı burada uygulanır.
@@ -35,6 +38,11 @@ use InvalidArgumentException;
  */
 final class OpenSyncOperation
 {
+    public function __construct(
+        private readonly ContentHasher $hasher = new ContentHasher,
+        private readonly ListingPayloadBuilder $payloadBuilder = new ListingPayloadBuilder,
+    ) {}
+
     /**
      * @param  int  $eventVersion  Olayın taşıdığı iş sürümü
      * @param  string|null  $reconciliationItemId  YALNIZCA intent = REPAIR
@@ -76,8 +84,14 @@ final class OpenSyncOperation
                 }
 
                 // (3) İstenen durumu ilerlet — YALNIZCA normal senkronda.
+                //
+                //     desired_hash "ne gönderilmek isteniyor" sorusunu
+                //     cevaplar (§9). Sürümle birlikte yazılır: sürüm hangi
+                //     olayı, hash hangi içeriği gösterir ve çakışma tespiti
+                //     ikisinin ayrı durmasına dayanır.
                 $state->forceFill([
                     'desired_version' => $eventVersion,
+                    'desired_hash' => $this->desiredHash($listing, $domain, $eventVersion),
                     'status' => 'pending',
                     'last_requested_at' => now(),
                 ])->save();
@@ -167,6 +181,31 @@ final class OpenSyncOperation
         return $intent === SyncIntent::REPAIR
             ? "{$base}:repair:{$reconciliationItemId}"
             : $base;
+    }
+
+    /**
+     * İstenen içeriğin parmak izi — yalnızca hash'i tanımlı alanlarda.
+     *
+     * CONTENT dışındaki alanların kendi yükleri vardır (stok mutlak sayı,
+     * fiyat varyant alanı) ve onların hash'i kendi yollarında hesaplanır.
+     * Burada uydurma bir değer yazmak, mutabakatın karşılaştırdığı iki
+     * tarafı anlamsız kılardı.
+     *
+     * Hash hesaplaması senkron kapısını DÜŞÜREMEZ: içerik okunamıyorsa
+     * (ürün silinmiş, ilişki kopuk) operasyon yine açılır ve hata iş
+     * tarafında, kendi denemesiyle görünür.
+     */
+    private function desiredHash(Listing $listing, SyncDomain $domain, int $eventVersion): ?string
+    {
+        if ($domain !== SyncDomain::CONTENT) {
+            return null;
+        }
+
+        try {
+            return $this->hasher->hash($this->payloadBuilder->build($listing, $eventVersion));
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     /**

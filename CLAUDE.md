@@ -101,10 +101,14 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `SyncResultRecorder`) ve **gerçek WooCommerce entegrasyonu**
 (`ChannelHttpClient`, `WooCommerceAdapter`, `WooOrderNormalizer`,
 `WooProductMapper`), koruma katmanı (`ChannelRateLimiter`,
-`CircuitBreaker`) ve **panel** (kimlik doğrulama, `EstablishTenantContext`,
-senkron durumu ekranı, kanal bağlama akışı, ürün yönetimi, ürün/stok listesi) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
-yeşil. **Dikey dilim kapalı** — `WooCommerceVerticalSliceTest` zinciri
-baştan sona yürütüyor. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
+`CircuitBreaker`), **ürün aktarımı** (`PushListing`, `PublishListing`,
+`ContentHasher`, `ListingPayloadBuilder`) ve **panel** (kimlik doğrulama,
+`EstablishTenantContext`, senkron durumu ekranı, kanal bağlama akışı, ürün
+yönetimi, ürün/stok listesi, ürün→kanal gönderme ekranı) yazıldı. P0 testleri
+T1/T2/T3/T4/T9/T11/T12 ve T7/T8 yeşil. **Dikey dilim kapalı ve PANELDEN
+sürülebilir** — `WooCommerceVerticalSliceTest` sipariş→stok→kanal zincirini,
+`PanelToChannelSliceTest` ürün→kanal zincirini yürütüyor. Ayrıntı için
+memory'deki "Repo Durumu" dosyasına bak.
 
 ## Gelen hat kuralları
 
@@ -192,9 +196,8 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`TrendyolAdapter`, `PushListing` işi, `UpdateOrderSnapshot`,
-`UpdateFulfillment`, mutabakat, `PruneApiCalls`, kanal bağlama akışı ve
-ürün/stok panel ekranları.
+`TrendyolAdapter`, `UpdateOrderSnapshot`, `UpdateFulfillment`, mutabakat,
+`PruneApiCalls`, sipariş listesi ekranı.
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -354,18 +357,66 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   (`SessionGuard::login()` → `session->regenerate(true)`). Controller'a ikinci
   bir `regenerate()` **eklenmez**; garantiyi `AuthenticationTest` doğrular.
 
+## Ürün aktarımı kuralları (§13 · faz 1.5)
+
+- **Create mi update mi sorusu `external_id` ile cevaplanır** — ama create'ten
+  ÖNCE `findExistingListing()` sorulur. Satıcı ürünü kanal panelinden açmış
+  olabilir; sormadan yaratmak **kopya listeleme** üretir ve geri alınamaz
+  (yorumlar, sıralama, SEO geçmişi ilk üründe kalır).
+- **Listing `draft` doğar, `live` işaretini kanal onayından SONRA
+  `PushListing` yazar.** Canlı işareti stok fan-out'unun hedef filtresidir;
+  kanalda karşılığı olmayan satıra stok göndermek her turda hata alır.
+- **`external_id` başarısızlıkta YAZILMAZ** — kanal ürünü yaratmadı; yazmak
+  sonraki turda var olmayan ürüne `update` çağırtır.
+- **İçerik yükünde GRUPLAMA YOK.** Stoktan farklı olarak içerik listing
+  başınadır (Woo ürün uç noktası tekil çalışır); `ListingPayloadBuilder`
+  `InventoryBatchBuilder`'ın karşılığı değil, tekil yük üreticisidir.
+- **Hash yalnızca İÇERİKTEN türer** — sürüm, zaman veya kimlik karışmaz.
+  Sürüm "hangi olay", hash "hangi içerik" sorusunu cevaplar; karışırsa içerik
+  değişmeden yapılan her gönderim satırı kirli gösterir ve mutabakat gerçek
+  sürüklenmeyi gürültüde kaybeder. Anahtarlar sıralanır (`ksort`), yoksa aynı
+  içerik alan sırasına göre farklı hash üretir.
+- **`synced_hash` YENİDEN HESAPLANMAZ, `desired_hash`'ten kopyalanır.** İş
+  kuyrukta beklerken kanonik içerik değişmiş olabilir ve o değişiklik henüz
+  GÖNDERİLMEDİ; yeniden hesaplayan kayıt gönderilmemiş içeriği gönderilmiş
+  gösterir.
+- **Sağlıksız kanala gönderilmez**: `active` olmayan bağlantı ne listelenir ne
+  kabul edilir. Katalog yeteneği `instanceof SupportsCatalog` ile okunur.
+- **İkinci gönderme ikinci listing satırı AÇMAZ** — `(bağlantı, varyant)`
+  tekildir; akış var olan satırı yeniden kullanır. Aynı sürüm iki kez
+  gönderilirse sürüm kapısı ikinci operasyonu eler.
+
+## Kuyruk işleri — iki kural, ikisi de gerçek worker'da bulundu
+
+- **Kuyruğa giren iş kiracı bağlamını KENDİ kurar.** `Queue::looping` kancası
+  her iş sınırında bağlamı temizler; `handle()` her koşulda bağlamsız başlar.
+  Bağlam yükte taşınır, başta kurulur, `finally` ile bırakılır. `PushListing`
+  panelden, `PushInventory` hem fan-out'tan hem seviye 2 taramasından
+  (`runAsSystem`, bağlam YOK) atılır — ikisi de kendi kurar.
+- **`TenantAwareJob::$tenantId` READONLY DEĞİLDİR** — PHP kısıtı:
+  `SerializesModels::__unserialize()` özellikleri ALT SINIFIN kapsamından
+  yeniden atar ve PHP, ana sınıfta tanımlı readonly özelliğin alt sınıf
+  kapsamından ilklenmesine izin vermez. Readonly yapılırsa iş kuyruğa yazılır
+  ama **bir daha asla okunamaz**: gerçek worker'da her outbox olayı düşer.
+- Testler işi doğrudan kurup `handle()` çağırdığı için bu gidiş-dönüş hiç
+  yaşanmaz. `JobSerializationTest` kuyruğa giren her işi serileştirip geri
+  okur — yeni bir kuyruk işi eklendiğinde oraya da eklenir.
+
 ## Sıradaki adım
 
-§6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi ve ürün/stok
-listesi kapandı. Panelde artık dört ekran var: özet · ürünler · stok · kanallar.
+§6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi
+ve **§13 · faz 1.5 (`PushListing` + panelden gönderme)** kapandı. Panelde beş
+ekran var: özet · ürünler · ürün kanalları · stok · kanallar.
 
-1. **`PushListing` işi + panelden gönderme akışı** (§13 · faz 1.5) — faz
-   1.5'in açık kalan tek ucu ve **dikey dilimin son halkası**. Ürün panelden
-   yaratılıyor, kanal bağlanıyor; ama ürünü kanala gönderen iş yok ve
-   `listings` satırı hâlâ elle yaratılıyor. Bu bittiğinde §19'daki zincir
-   baştan sona panelden sürülebilir.
-2. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
-   ve karşılaştırma `max(available, 0)` ile yapılır.
+**Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
+zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
+da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
+
+1. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
+   ve karşılaştırma `max(available, 0)` ile yapılır. `remote_hash` alanı
+   burada dolar; `desired_hash`/`synced_hash` çifti hazır (§9 karar tablosu).
+2. **Sipariş listesi ekranı** (§13 · faz 1.6 panel maddesi) — "panelde sipariş
+   listesi ve fazla satış uyarısı".
 
 **Abonelik/ödeme Faz 4'tür (hafta 21–25), şimdi değil.** §13 · Faz 4:
 "Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa". Şema kararı

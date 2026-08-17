@@ -55,7 +55,9 @@ final class DetectStuckSyncOperations
     public function run(int $staleAfterSeconds = self::DEFAULT_STALE_SECONDS, int $limit = 500): Collection
     {
         // Tarama TÜM kiracıları görmek zorundadır; erişim açıktır. İş
-        // yalnızca kimlik taşır ve PushInventory bağlamı kendi kurar.
+        // yalnızca kimlik taşır ve PushInventory bağlamı kendi kurar —
+        // kiracı kimliği bu yüzden yükte TAŞINIR (mutasyonla bulundu:
+        // taşınmazsa iş bağlamsız düşer ve tarama hiçbir şey kurtarmaz).
         $stuck = TenantContext::runAsSystem(
             fn (): array => $this->findStuck($staleAfterSeconds, $limit),
         );
@@ -82,7 +84,7 @@ final class DetectStuckSyncOperations
 
             Log::info('sync.stuck_operation_redispatched', $context);
 
-            PushInventory::dispatch($operation->id)->onQueue('inventory:high');
+            PushInventory::dispatch($operation->id, $operation->tenant_id)->onQueue('inventory:high');
 
             $redispatched[] = $operation->id;
         }

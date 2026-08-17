@@ -18,6 +18,20 @@ use Illuminate\Queue\SerializesModels;
  * Bağlam iş yükünde taşınır ve handle() başında kurulur; bitişte finally ile
  * temizlenir. QueueServiceProvider kancaları ikinci savunma hattıdır —
  * istisna finally'yi atlarsa bile sonraki iş temiz bağlamla başlar.
+ *
+ * $tenantId READONLY DEĞİLDİR — PHP kısıtı, tercih değil:
+ *   `SerializesModels::__unserialize()` özellikleri ALT SINIFIN kapsamından
+ *   yeniden atar. PHP, ana sınıfta tanımlı bir readonly özelliğin alt sınıf
+ *   kapsamından ilklenmesine izin vermez ve kuyruktan geri okuma
+ *   "Cannot initialize readonly property ... from scope ..." ile DÜŞER.
+ *   İş kuyruğa yazılır ama bir daha asla çalışmaz.
+ *
+ *   Testler işi doğrudan kurup handle() çağırdığı için bu gidiş-dönüş
+ *   yaşanmaz ve hata yalnızca gerçek worker'da görünür; `JobSerializationTest`
+ *   tam olarak bu boşluğu kapatır.
+ *
+ *   (PHP 8.3 hedefleniyor; `public protected(set)` 8.4 özelliğidir ve
+ *   kullanılamaz.)
  */
 abstract class TenantAwareJob implements ShouldQueue
 {
@@ -26,7 +40,12 @@ abstract class TenantAwareJob implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public function __construct(public readonly string $tenantId) {}
+    public string $tenantId;
+
+    public function __construct(string $tenantId)
+    {
+        $this->tenantId = $tenantId;
+    }
 
     final public function handle(): void
     {
