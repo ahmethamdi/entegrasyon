@@ -1,123 +1,97 @@
-# Devir Notu — 17 Ağustos 2026 (ürün/stok ekranı turu)
+# Devir Notu — 17 Ağustos 2026 (ürün yönetimi turu)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ## Tek cümlede durum
 
-Satıcının her gün bakacağı ekran ayakta: fazla satış kırpılmadan görünüyor,
-eksik miktar yazıyor ve **panelden düzeltilebiliyor** — düzeltme ledger'a
-`MANUAL_ADJUSTMENT` olarak işleniyor ve outbox olayı üretiyor. Önceki iki
-turda §6 taramaları ve kanal bağlama akışı kapanmıştı. **293 test yeşil**
-(1165 assertion), Pint temiz, iki random seed'de stabil.
+**Panel artık gerçek bir CMS**: ürün panelden yaratılıyor ve düzenleniyor
+(açılış stoğu ledger üzerinden), dört sekmeli gezinme var (özet · ürünler ·
+stok · kanallar). Önceki turlarda §6 taramaları, kanal bağlama ve stok ekranı
+kapanmıştı. **313 test yeşil** (1252 assertion), Pint temiz, iki random
+seed'de stabil.
 
-## Bu sohbette ne yapıldı
+## Bu turda ne eklendi
 
-§13 · faz 1.2 panel maddesi + §17 · P0 "Fazla satış ekranı — eksik miktar ve
-DÜZELTME YOLU gösterilmeli".
+§13 · faz 1.2 · "Panelde ürün oluşturma, düzenleme" — dokümanın faz 1.2'de
+kalan son panel maddesi.
 
 | Ne | Nerede |
 |---|---|
-| Düzeltme action'ı | `app/Domain/Inventory/Actions/AdjustStock.php` |
-| Ekran + düzeltme controller'ı | `app/Http/Controllers/InventoryController.php` |
-| Ekran | `resources/js/Pages/Inventory/Index.vue` |
-| Gezinme (3 ekran) | `resources/js/Layouts/PanelLayout.vue` |
-| Rotalar | `routes/web.php` |
-| Ekran testleri | `tests/Feature/Inventory/InventoryScreenTest.php` (13) |
-| Düzeltme testleri | `tests/Feature/Inventory/AdjustStockTest.php` (8) |
-| Eşzamanlılık | `tests/Feature/Inventory/ConcurrentAdjustStockTest.php` (3) |
+| Ürün yaratma | `app/Domain/Catalog/Actions/CreateProduct.php` |
+| Ürün düzenleme | `app/Domain/Catalog/Actions/UpdateProduct.php` |
+| SKU tekillik istisnası | `app/Domain/Catalog/Exceptions/DuplicateSkuException.php` |
+| Controller | `app/Http/Controllers/ProductController.php` |
+| Ekranlar | `resources/js/Pages/Products/{Index,Create,Edit}.vue` |
+| Action testleri | `tests/Feature/Catalog/CreateProductTest.php` (7) |
+| Ekran testleri | `tests/Feature/Catalog/ProductScreenTest.php` (13) |
 
-24 yeni test (269 → 293).
+20 yeni test (293 → 313). Catalog domain'inde daha önce **hiç action yoktu** —
+modeller vardı, kimse çağırmıyordu; ürünler factory/tinker ile doluyordu.
 
-## Ekranın özü
+### İki değişmez kural
 
-```
-Üst özet: varyant sayısı · fazla satılan · TOPLAM EKSİK ADET
-  (fazla satış varsa kırmızı; SUM(-available), §10 metrik tanımıyla aynı)
+**Açılış stoğu ledger üzerinden girer.** `CreateProduct` `InventoryLevel`
+satırını yazmaz; IMPORT hareketi açar, projeksiyon ondan türer. Ürün + varyant
++ hareket TEK transaction: araya düşen hata stoksuz varyant bırakırdı.
 
-Liste: SKU · elde · rezerve · SATILABILIR · senkron rozeti · [Düzelt]
-  negatif available KIRPILMADAN, altında "N adet eksik"
-  sıralama: available ARTAN → eylem gereken satır en üstte
+**İçerik düzenlemesi stoğa dokunmaz.** Başlık/fiyat değişince
+`inventory_movements` DEĞİŞMEZ; `content_version` artar (senkron kapısı ondan
+beslenir). İçerik ve stok ayrı senkron alanlarıdır — başlık düzeltmesinin stok
+hareketi yaratması ledger'ı kirletir ve gerçek fazla satışı gürültüde gizler.
 
-Rozet sırası: HATA > YENİDEN DENENİYOR > BEKLİYOR > SENKRON > LİSTELENMEDİ
+### Mutasyonla bulunan boşluk — AYNI HATAYI TEKRAR ETTİM
 
-[Düzelt] → satır içi form, eksik miktar HAZIR GELİR
-  → AdjustStock → LockInventoryRows + ApplyMovement(MANUAL_ADJUSTMENT)
-  → outbox olayı → kanala geri yazılır
-```
+`ProductController::stockFor()` de `DB::table()` kullanıyor ve **kiracı
+filtresini açıkça yazmayı ilk seferde atlamadım ama testini yazmadım**;
+mutasyonla filtre silinince hiçbir test kırılmadı. Geçen tur
+`InventoryController`'da tam bunu öğrenmişken tekrarlandı.
+→ `stock_totals_never_include_another_tenants_variants`
 
-**Düzeltme de ledger üzerinden geçer.** Panel `inventory_levels` satırını
-doğrudan güncellemez; `on_hand = Σ on_hand_delta` korunur ve düzeltmeyi kimin
-ne zaman hangi notla yaptığı ledger'da kalır.
+**Ders: `DB::table()` her kullanıldığında hem filtre hem TESTİ yazılmalı.**
 
-## Tarayıcıda doğrulandı
+Diğer beş mutasyon (açılış stoğunun ledger'ı atlaması, `content_version`
+artmaması, ürün listesinde kırpma, SKU tekilliğinin yutulması) yakalandı.
 
-Fazla satılan varyant (`KAZAK-SIYAH-M`, bakiye −3) ile:
+### Tarayıcıda doğrulandı
 
-- özet kırmızı: "Fazla satılan 1 · Toplam eksik adet 3"
-- satırda `-3` kırmızı, altında "3 adet eksik"
-- [Düzelt] açıldı → **miktar 3 olarak hazır geldi** (en olası eylem)
-- kaydedildi → bakiye 0, özet sıfırlandı, flash mesajı göründü
-- konsol hatası yok
+Kayıt → boş liste ("Henüz ürün yok") → ürün ekle (KAZAK-001, 249.90, stok 10)
+→ liste (Yayında rozeti, 1 varyant, toplam stok 10) → düzenle (başlık+fiyat)
+→ stok ekranında fiyat 279.00 ve **stok hâlâ 10**. Konsol hatası yok.
 
-## Mutasyonla bulunan İKİ GERÇEK BOŞLUK
+Not: ilk tarayıcı script'im `waitForLoadState` ile beklediği için ekran
+görüntülerini yönlendirme öncesi aldı ve "gönderim başarısız" izlenimi verdi.
+`waitForURL` ile tekrar koşturunca ekleme/düzenleme ikisi de doğrulandı —
+uygulamada sorun yoktu, ölçüm yanlıştı.
 
-**1. `DB::table()` Eloquent global scope'una TABİ DEĞİL.**
-Rozet sayıları ham sorguyla toplanıyor. `listings.tenant_id` filtresi
-kaldırıldığında **hiçbir test kırılmadı** — çapraz kiracı sayımı sessizce
-sızıyordu. Testin kurgusu bunu görünür kılmak için özel: B kiracısı A'nın
-varyant kimliğine listing açıyor (FK kiracı sınırını zorlamıyor).
-→ `sync_counts_never_include_another_tenants_listings`
+## ABONELİK — Faz 4, şimdi değil
 
-**2. Rozet delisted satırları sayıyordu.**
-`lifecycle_status = 'live'` filtresi kaldırıldığında test kırılmadı; tüm
-testler yalnızca canlı listing yaratıyordu. Taslak/delisted satıra stok
-gönderilmez (fan-out `live()` kullanır), sayılırsa rozet asla temizlenmez.
-→ `sync_counts_ignore_delisted_listings`
+Kullanıcı sordu, dokümanda **var**: §13 · Faz 4 · hafta 21–25 ·
+"Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa".
 
-## Öldürülen diğer mutasyonlar
+Şema kararı zaten alınmış:
+- `tenants.plan_code` kolonu **şu an bile mevcut**
+- §4 · `plans` (code PK, price_monthly, kiracısız + seed)
+- §4 · `subscriptions` (`UNIQUE(tenant_id) WHERE status = 'active'`)
+- §3 · klasör: `Models/ Plan · Subscription · UsageRecord`
 
-| Mutasyon | Öldüren test |
-|---|---|
-| Panelde `max($available, 0)` (P0 ihlali) | `oversold_variant_is_shown_unclamped_with_shortfall` |
-| Rozet sırası: bekliyor kalıcı hatadan önce | `permanent_error_outranks_pending_in_the_badge` |
-| Düzeltme projeksiyona doğrudan yazıyor | 6 test (`assertLedgerMatchesProjection` dahil) |
+**Neden en sonda:** abonelik kota uygular (kaç kanal, kaç ürün, kaç senkron)
+ve kotanın neyi sınırladığı senkron davranışına bağlıdır. Senkron oturmadan
+tanımlanan kota sonra değişir. Faz 4 demosu da bunu varsayar: "yeni kullanıcı
+kaydolup ödeme yapıp senkronlayabiliyor" — senkronun çalıştığını kabul ediyor.
 
-## SAHTE TEST YAZMAKTAN DÖNÜLDÜ — okunması gereken bölüm
-
-İlk yazdığım `adjustment_locks_the_row_before_writing` testi **sahteydi**.
-Varsayımım "kilit alınmazsa `ApplyMovement` istisna atar" idi; mutasyonla
-kilidi sildim ve **tüm testler yeşil kaldı**.
-
-Sonra bir eşzamanlılık testi yazdım (`DatabaseTruncation` + ayrı PDO +
-`lock_timeout`) ve **o da kilit silinmişken yeşil kaldı**. Sebebi araştırdım:
-
-> `ApplyMovement` zaten `UPDATE inventory_levels` yapıyor ve PostgreSQL o
-> satıra commit'e kadar tutulan bir satır kilidi koyuyor. İkinci bağlantının
-> `FOR UPDATE`'i o UPDATE kilidinde bloklanıyor — `LockInventoryRows` hiç
-> çağrılmasa bile. **Tek-SKU yolunda açık kilidin gözlenebilir etkisi YOK.**
-
-Yani bu üçüncü kategori: yapısal sınır. Çağrı yine de KALIYOR ve gerekçesi
-eşzamanlılık değil **sıralama**: düzeltme sipariş alımıyla aynı satırlara
-yazar, çok-SKU yolları kilidi `ORDER BY variant_id` ile alır ve aynı kapıdan
-geçmeyen bir yazıcı çok kalemli bir iadeyle ters sırada kilitlenip ABBA
-deadlock üretir. Kuralı koruyan şey test değil, tüm yazma yollarının aynı
-action'ı kullanması disiplini.
-
-Testler artık kilidin varlığını değil GÖZLENEBİLİR olanı doğruluyor:
-commit'ten önce ikinci yazıcının giremediğini, commit sonrası okuyucunun
-bayat bakiye görmediğini ve ledger toplamının projeksiyona eşit kaldığını.
-Sınıf başlığında bu sınır açıkça yazılı.
+Yani sıra: Faz 1 bitir (PushListing) → Faz 2 Trendyol → Faz 3 güvenilirlik →
+**Faz 4 abonelik/ödeme** → Faz 5 tampon.
 
 ## Ortam
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 293 yeşil olmalı
+docker compose exec app php artisan test      # 313 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
 
-Panel: `/` özet · `/inventory` stok · `/channels` kanallar (gezinme ayakta)
+Panel: `/` özet · `/products` ürünler · `/inventory` stok · `/channels` kanallar
 
 ## Sıradaki adım — SEÇİM SENİN
 
@@ -131,14 +105,17 @@ Panel: `/` özet · `/inventory` stok · `/channels` kanallar (gezinme ayakta)
 3. **Sipariş listesi ekranı** (§13 · faz 1.6 panel maddesi) — "panelde
    sipariş listesi ve fazla satış uyarısı".
 
+**Abonelik/ödeme Faz 4'tür** — yukarıdaki bölüme bak, şimdi yazılmamalı.
+
 ## Bu projede işe yarayan çalışma biçimi
 
 1. **Testi önce yaz, kırmızı olduğunu gör**, sonra implementasyonu yaz.
 2. **Mutasyonla sına**: kodu kasten boz, testin kırmızıya döndüğünü doğrula.
-   Bu turda iki gerçek boşluk böyle bulundu.
+   Her turda gerçek boşluk çıkıyor.
 3. **Mutasyon hayatta kalırsa SAHTE TEST YAZMA.** Ya gerçek bir test bul, ya
-   yapısal sınırı belgele. Bu turda ikinci eşzamanlılık testi de yeşil
-   kalınca sebebi araştırıldı ve sınır yazıldı — test uydurulmadı.
+   yapısal sınırı belgele (bkz. `AdjustStock` kilidi).
+7. **`DB::table()` yazdıysan kiracı filtresinin TESTİNİ de yaz.** İki ayrı
+   turda aynı boşluk çıktı; filtreyi yazmak yetmiyor, koruması gerekiyor.
 4. Stok yazan her testin sonunda `assertLedgerMatchesProjection()` çağır.
 5. **Entegrasyonu ayrıca sına** — sınıfın var olması onu kimsenin çağırdığı
    anlamına gelmez (`ScheduledScansTest`).
@@ -149,9 +126,10 @@ Panel: `/` özet · `/inventory` stok · `/channels` kanallar (gezinme ayakta)
 
 Hepsi testler yeşilken bulundu:
 
-- **`DB::table()` sorgusunda kiracı filtresi yoktu** (bu tur) — rozet
-  sayıları çapraz kiracı sızdırıyordu.
-- **Rozet delisted listing'leri sayıyordu** (bu tur).
+- **`DB::table()` kiracı filtresinin testi yoktu** — İKİ ayrı turda:
+  `InventoryController` rozet sayılarında ve `ProductController` stok
+  toplamında. İkisi de çapraz kiracı sızdırıyordu.
+- **Rozet delisted listing'leri sayıyordu.**
 - **Eager-load'da `adapter_class` seçilmiyordu** — panel yetenekleri sessizce
   boşalıyordu ve `catch` sebebi gizliyordu.
 - **Kurtarma taramaları zamanlayıcıya bağlanmamıştı** — `inbox:recover` bir
@@ -165,7 +143,7 @@ Hepsi testler yeşilken bulundu:
 
 Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
-- **`AdjustStock` içindeki `LockInventoryRows` çağrısı** (bu tur):
+- **`AdjustStock` içindeki `LockInventoryRows` çağrısı**:
   `ApplyMovement`'ın UPDATE'i aynı satır kilidini zaten koyuyor. Çağrı,
   çok-SKU yollarıyla kilit SIRALAMASINI paylaşmak için duruyor.
 - **`published_at IS NOT NULL` yüklemi**: NULL karşılaştırması satırı zaten
@@ -178,7 +156,7 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 ## Tekrar tekrar ısıran tuzaklar
 
 - **`DB::table()` global scope'a TABİ DEĞİLDİR** — ham sorguda kiracı filtresi
-  açıkça yazılır. (Bu tur bulundu.)
+  açıkça yazılır VE testi yazılır. İki turda aynı boşluk çıktı.
 - **`inventory_movements` kolonu `type`, `movement_type` DEĞİL.** Testte
   yanlış yazınca "Undefined column" alırsın.
 - **`clock_timestamp()`** — zaman damgaları saniye hassasiyetli, `now()`
@@ -200,5 +178,5 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
 ## Bilinen açık uç
 
-Eski turlarda bir `--order-by=random` turunda tek test düşmüştü; son üç turda
-beş seed denendi ve tekrar üretilemedi. Görülürse seed ile kaydedilmeli.
+Eski turlarda bir `--order-by=random` turunda tek test düşmüştü; son dört
+turda yedi seed denendi ve tekrar üretilemedi. Görülürse seed ile kaydedilmeli.

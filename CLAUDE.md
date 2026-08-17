@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 293 test yeşil olmalı
+docker compose exec app php artisan test      # 313 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -93,7 +93,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 293 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 313 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -102,7 +102,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 (`ChannelHttpClient`, `WooCommerceAdapter`, `WooOrderNormalizer`,
 `WooProductMapper`), koruma katmanı (`ChannelRateLimiter`,
 `CircuitBreaker`) ve **panel** (kimlik doğrulama, `EstablishTenantContext`,
-senkron durumu ekranı, kanal bağlama akışı, ürün/stok listesi) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
+senkron durumu ekranı, kanal bağlama akışı, ürün yönetimi, ürün/stok listesi) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
 yeşil. **Dikey dilim kapalı** — `WooCommerceVerticalSliceTest` zinciri
 baştan sona yürütüyor. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
 
@@ -293,6 +293,27 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   `with('channelType:code,name')` yazılırsa `AdapterRegistry` sınıfı bulamaz
   ve yetenekler sessizce boşalır.
 
+## Katalog kuralları
+
+- **Açılış stoğu ledger üzerinden girer.** `CreateProduct` `InventoryLevel`
+  satırını yazmaz; IMPORT hareketi açar ve projeksiyon ondan türer. Doğrudan
+  yazmak `on_hand = Σ on_hand_delta` eşitliğini ürün yaratılırken bozar.
+- **Ürün + varyant + açılış hareketi TEK transaction.** Ayrı olsalardı araya
+  düşen hata stoksuz varyant veya varyantsız ürün bırakırdı.
+- **İçerik düzenlemesi stoğa DOKUNMAZ.** İçerik ve stok ayrı senkron
+  alanlarıdır; başlık düzeltmesinin stok hareketi yaratması ledger'ı kirletir.
+  Stok değişimi ayrı eylem: `AdjustStock` veya sipariş/iade yolları.
+- **`content_version` düzenlemede ARTAR** — senkron kapısı bundan beslenir.
+  Artmazsa değişiklik kanala hiç gitmez ve panelde "senkron" görünür.
+- **Fiyat varyant seviyesindedir**; tek varyantlı üründe action onu varyanta
+  taşır. Çok varyantlı üründe varyant başına düzenleme ayrı ekranın işi.
+- **Varsayılan varyant ürünün SKU'sunu taşır** — ilk adımda ikinci bir SKU
+  sormak kullanıcıya gereksiz karar yüklüyordu.
+- **SKU kiracı içinde tekildir** (`UNIQUE(tenant_id, sku)`); ihlal
+  `DuplicateSkuException` ile alan hatasına çevrilir, 500 verilmez.
+- Modül sınırı: Catalog, Inventory'nin **modeline** yazmaz — `LockInventoryRows`
+  ile kilitler, `ApplyMovement`'a yaptırır.
+
 ## Stok ekranı kuralları
 
 - **Negatif `available` kırpılmadan gösterilir** ve eksik miktar ayrıca
@@ -335,13 +356,24 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 ## Sıradaki adım
 
-§6 taramaları, §13 · faz 1.4 kanal bağlama ve ürün/stok listesi kapandı.
-İki yol:
+§6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi ve ürün/stok
+listesi kapandı. Panelde artık dört ekran var: özet · ürünler · stok · kanallar.
 
 1. **`PushListing` işi + panelden gönderme akışı** (§13 · faz 1.5) — faz
-   1.4/1.5'in açık kalan tek ucu. Ürün panelde görünüyor ve kanal bağlanıyor,
-   ama ürünü kanala gönderen iş yok; `listings` satırı elle yaratılıyor.
+   1.5'in açık kalan tek ucu ve **dikey dilimin son halkası**. Ürün panelden
+   yaratılıyor, kanal bağlanıyor; ama ürünü kanala gönderen iş yok ve
+   `listings` satırı hâlâ elle yaratılıyor. Bu bittiğinde §19'daki zincir
+   baştan sona panelden sürülebilir.
 2. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
    ve karşılaştırma `max(available, 0)` ile yapılır.
+
+**Abonelik/ödeme Faz 4'tür (hafta 21–25), şimdi değil.** §13 · Faz 4:
+"Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa". Şema kararı
+alınmış (`tenants.plan_code` kolonu zaten var; §4 · `plans` kiracısız+seed,
+`subscriptions` `UNIQUE(tenant_id) WHERE status='active'`; §3 · `Plan`,
+`Subscription`, `UsageRecord` modelleri) ama **yazılmadı ve şimdi
+yazılmamalı**: kota neyi sınırladığını senkron davranışından alır, o oturmadan
+tanımlanan kota sonra değişir. Faz 4 demosu da bunu varsayıyor: "yeni
+kullanıcı kaydolup ödeme yapıp senkronlayabiliyor".
 
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.

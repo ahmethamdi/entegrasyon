@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -43,6 +44,14 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     Route::post('/channels', [ChannelConnectionController::class, 'store'])->name('channels.store');
     Route::post('/channels/{connection}/health', [ChannelConnectionController::class, 'health'])
         ->name('channels.health');
+
+    // Ürün yönetimi (§13 · faz 1.2 · "panelde ürün oluşturma, düzenleme").
+    // Açılış stoğu ledger üzerinden girer; içerik düzenlemesi stoğa dokunmaz.
+    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+    Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
+    Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
 
     // Ürün/stok listesi (§13 · faz 1.2 · panel). Düzeltme POST'tur ve
     // ledger'a yazar: fazla satışın "düzeltme yolu" (§17 · P0).
