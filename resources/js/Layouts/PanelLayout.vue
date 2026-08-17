@@ -9,6 +9,7 @@ const tenantName = computed(() => page.props.tenant?.name ?? '');
 const nav = [
     { href: '/', label: 'Özet' },
     { href: '/products', label: 'Ürünler' },
+    { href: '/orders', label: 'Siparişler' },
     { href: '/inventory', label: 'Stok' },
     { href: '/channels', label: 'Kanallar' },
 ];

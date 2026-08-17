@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
@@ -66,6 +67,13 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     // ledger'a yazar: fazla satışın "düzeltme yolu" (§17 · P0).
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::post('/inventory/adjust', [InventoryController::class, 'adjust'])->name('inventory.adjust');
+
+    // Sipariş listesi (§13 · faz 1.6 · "panelde sipariş listesi ve fazla
+    // satış uyarısı"). Salt okunur: sipariş kanaldan gelir ve panelden
+    // yaratılmaz. Ayrıntı rotası model bağlamasını kiracı scope'u altında
+    // çözer; başka kiracının siparişi 404 verir.
+    Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
 });
 
 Route::post('/logout', [SessionController::class, 'destroy'])
