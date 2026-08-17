@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 374 test yeşil olmalı
+docker compose exec app php artisan test      # 397 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -94,7 +94,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-29 domain tablosu, 28 model, 374 test. Stok çekirdeği (`ApplyMovement`,
+29 domain tablosu, 28 model, 397 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -163,6 +163,45 @@ memory'deki "Repo Durumu" dosyasına bak.
 - Hata sınıflandırmayı **adapter** yapar (`classifyError()`), ne yapılacağına
   **çekirdek** karar verir (`RetryPolicy`). `VALIDATION` ve `AUTHENTICATION`
   kalıcıdır, diğerleri geçici.
+- **Kimlik bilgisi `runAsSystem()` ile okunur.** `channel_credentials`
+  kiracıya göre kapsanır ama `ChannelHttpClient` bağlam OLMADAN çağrılabilir
+  (kuyruk işi, `runAsSystem` taraması, sağlık kontrolü). Kapsama burada bir
+  şey korumaz — bağlantı zaten elimizdedir ve kiracısını kendisi taşır —
+  yalnızca okumayı engeller ve istek **sessizce kimliksiz** gider. Kanal 401
+  döner, `AUTHENTICATION` kalıcı sayılır ve listing "anahtarın yanlış"
+  diyerek ölür; oysa anahtar doğrudur, hiç gönderilmemiştir.
+- **Basic auth çiftinin adı kanal başına değişir, biçim aynıdır.** Woo
+  `consumer_key`/`consumer_secret`, Trendyol `api_key`/`api_secret`. Adlar
+  `ChannelHttpClient::BASIC_AUTH_KEY_PAIRS` içinde toplanır;
+  `if ($channel === '...')` yazılmaz.
+- **Yazılmamış yetenek SESSİZCE BAŞARILI DÖNMEZ.** `AdapterResult::success()`
+  dönseydi operasyon tamamlandı sanılır, `synced_version` ilerler ve kanalda
+  hiçbir şey değişmemişken satır "senkron" görünürdü.
+
+## Trendyol kuralları (§14 · Faz 2)
+
+- **Satıcı kimliği hesabın kimliğidir**, mağaza adresi değil. Woo'da hesap
+  kimliği alan adıdır; Trendyol'da tek API adresi vardır ve tüm satıcılar onu
+  paylaşır. Alan adı kimlik sayılsaydı her satıcı aynı `external_account_id`
+  ile çakışır ve `(tenant, type, account)` tekilliği ikinciyi reddederdi.
+  Kimlik ayrıca **yol üzerinde** taşınır (`/suppliers/{id}/...`).
+- **Hız sınırı yanıt başlığından öğrenilir ve bağlantıya YAZILIR.** Sınır
+  satıcı seviyesine göre değişir; sabit profil yüksek seviyeliyi yavaşlatır,
+  düşük seviyeliyi 429'a sokar. Süreçle ölseydi her worker'ın ilk istekleri
+  daima varsayılanla giderdi. Profili adapter bildirir, uygulamayı çekirdek
+  yapar — `ChannelRateLimiter` değişmez.
+- **Sayı olmayan sınır başlığı YOK SAYILIR.** `X-RateLimit-Limit: 600, 300`
+  gerçek bir vakadır (vekil sunucu iki başlığı birleştirir); `(int)` dönüşümü
+  sessizce ilk sayıya iner ve **düşük** sınır yok sayılırdı. Filtre
+  `ctype_digit`'tir.
+- **Webhook YOKTUR**: `verifyWebhookSignature` her zaman `false` döner.
+  `true` dönmek Trendyol adına imzasız sipariş enjekte etmenin kapısını
+  açardı. Sipariş yoklamayla gelir; olay kimliği sipariş numarasından türer.
+- **Pazaryeri karmaşıklığı çekirdeğe dokunmaz.** Taksonomi, zorunlu
+  öznitelik ve onay süreci yetenek arayüzleriyle taşınır; stok akışı
+  listing'in nasıl oluştuğunu bilmez ve yalnızca `lifecycle_status = 'live'`
+  kontrolü yapar.
+- **Kargo kapsam dışıdır** — `SupportsFulfillment` UYGULANMAZ.
 
 ## Zaman damgası tuzağı — `now()` yerine `clock_timestamp()`
 
@@ -231,9 +270,13 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`TrendyolAdapter`, `UpdateOrderSnapshot`, `UpdateFulfillment`,
-`PruneApiCalls`, `RequestResync` (+ T10), mutabakat panel ekranı,
-ılık/soğuk mutabakat katmanları (sıcak katman yazıldı).
+`UpdateOrderSnapshot`, `UpdateFulfillment`, `PruneApiCalls`,
+`RequestResync` (+ T10), mutabakat panel ekranı, ılık/soğuk mutabakat
+katmanları (sıcak katman yazıldı).
+
+`TrendyolAdapter`'ın **istemci/kimlik/hız sınırı katmanı yazıldı**; katalog
+aktarımı, taksonomi çekme, sipariş yoklaması ve stok/fiyat itme Faz 2'nin
+sonraki maddeleridir ve gövdeleri açıkça istisna fırlatır.
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -479,14 +522,20 @@ da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
 → REPAIR → kanala 17 gitti).
 
-1. **Mutabakat panel ekranı** — `reconciliation_runs` / `reconciliation_items`
-   yazılıyor ama hiçbir yerde gösterilmiyor. Sürüklenme bulunduğunu kullanıcı
-   göremiyor; `recon_items_drift_idx` tam bu sorgu için var. Panelde kalan
-   en büyük boşluk artık bu.
-2. **Faz 2 · `TrendyolAdapter`** — ikinci kanal; adapter mimarisi hazır.
-3. **`RequestResync` + T10** — §18'de P1 ve §13 · faz 1.6'da listeli ama
-   yazılmadı: `error_permanent → pending` geçişi `ListingResyncRequested`
-   üretmeli. Faz 1.6'nın tek kalan eksiği bu.
+**Faz 2 başladı.** İlk madde (Trendyol istemcisi, kimlik doğrulama, dinamik
+hız sınırı) kapandı. Dokümandaki sıradaki maddeler:
+
+1. **Taksonomi çekme, önbellekleme, sürümleme** (§13 · Faz 2 · 20 sa) —
+   `SupportsTaxonomy` gövdeleri. Kategori ve öznitelik eşleştirme arayüzü
+   (28 sa) bunun üzerine kurulur ve katalog aktarımının ön koşuludur.
+2. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
+   Woo satışı Trendyol stoğunu günceller.
+3. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
+   Faz 2 demosu bunu ister: "Trendyol siparişi Woo stoğunu düşürüyor".
+
+Panel tarafında hâlâ açık: **mutabakat panel ekranı** (`reconciliation_items`
+yazılıyor ama gösterilmiyor) ve **`RequestResync` + T10** (§18 · P1, faz
+1.6'da listeli ama yazılmadı).
 
 **Abonelik/ödeme Faz 4'tür (hafta 21–25), şimdi değil.** §13 · Faz 4:
 "Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa". Şema kararı
