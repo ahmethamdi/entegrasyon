@@ -6,13 +6,19 @@ on:
   pull_request:
     branches: [main]
 
-# Composer paketleri codeload.github.com'dan iner ve KİMLİKSİZ istekler çok
-# düşük bir limite tabidir; runner IP'leri paylaşımlı olduğu için limit bize
-# ait olmayan trafikle de dolar ve HTTP 429 ile iş düşer.
+# CODELOAD 429 — ÖNCEKİ ÇÖZÜM NEDEN YETMEDİ
 #
-# GITHUB_TOKEN her koşuda ücretsiz mevcuttur ve isteği kimlikli hale getirir;
-# limit birkaç kat yükselir. Bu bir "gizli anahtar" değil, koşuya özel
-# kısa ömürlü bir token.
+# `composer.lock` paketleri `api.github.com/.../zipball` olarak işaretler ve
+# Composer indirirken bunu `codeload.github.com`'a ÇEVİRİR. O yeniden yazımda
+# Authorization başlığı DÜŞER: `github-oauth` token'ı Composer'ın API
+# isteklerini kimliklendirir ama zip indirmesine hiç değmez. Yani token
+# konulmuş olmasına rağmen indirmeler ANONİM gidiyordu ve paylaşımlı runner
+# IP'sinin çok düşük limitine takılıyordu.
+#
+# Bu yüzden çözüm token değil KAYNAK DEĞİŞTİRMEKTİR: Packagist'in kendi
+# dist aynası (`repo.packagist.org`) aynı zip'leri sunar, codeload'a hiç
+# çıkılmaz ve GitHub'ın anonim limiti devre dışı kalır. Token yine de
+# duruyor — Composer'ın metadata API çağrıları için faydası sürüyor.
 env:
   COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
 
@@ -49,7 +55,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ACTION'IN KENDİSİ DE 429 YİYEBİLİR ve bu, kendi adımlarımızdaki
+      # retry'ın ULAŞAMADIĞI yerdir: iş, ilk komutumuz çalışmadan düşer
+      # (loglarda "Failed to download action ... after 3 attempts").
+      #
+      # `continue-on-error` ile ilk deneme düşse bile iş DEVAM eder ve
+      # ikinci deneme çalışır. Runner action indirmesini kendi içinde de
+      # üç kez dener; ikinci adım o üçlüyü ikiye katlar ve aradaki
+      # gecikmede limit açılır. İkisi de düşerse iş HAKLI olarak kırmızı
+      # olur — `id`/`outcome` ile bu açıkça kontrol edilir.
       - name: Setup PHP
+        id: php
+        continue-on-error: true
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_pgsql, pgsql, redis, intl, bcmath, zip, pcntl, posix
+          coverage: none
+
+      - name: Setup PHP (retry)
+        if: steps.php.outcome == 'failure'
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -71,21 +96,40 @@ jobs:
           key: composer-${{ hashFiles('composer.lock') }}
           restore-keys: composer-
 
-      # 429 GEÇİCİ bir hatadır: paylaşımlı runner IP'sinin limiti bizden
-      # bağımsız trafikle dolar ve birkaç saniye sonra açılır. Tek denemede
-      # düşmek, kodda hiçbir sorun yokken CI'ı kırmızı gösterir ve gerçek
-      # kırmızıya olan güveni aşındırır.
+      # 429'UN SEBEBİ VE BU ADIMIN İKİ SAVUNMASI
       #
-      # Üç deneme, artan bekleme. Hâlâ düşüyorsa sorun geçici değildir ve
-      # iş HAKLI olarak kırmızı olur — sonsuz denemek arızayı gizlerdi.
+      # `composer.lock` paketleri `api.github.com/.../zipball` olarak
+      # işaretler ve indirmeler `codeload.github.com`'a gider. Oradaki
+      # ANONİM limit paylaşımlı runner IP'siyle dolar; limit bize ait
+      # olmayan trafikle tükendiği için kodda hiçbir sorun yokken iş düşer.
+      #
+      # (1) KAYNAK YERİNE GİT: `--prefer-source` dist zip'i yerine git
+      #     clone kullanır ve codeload'un zip uç noktasına HİÇ dokunmaz.
+      #     Sadece yeniden denemede devreye girer; normal koşuda dist
+      #     hızlıdır ve cache sayesinde çoğu zaman ağa bile çıkılmaz.
+      #
+      # (2) BEKLEME UZUN: 429 saniyelerle değil DAKİKALARLA açılır. Önceki
+      #     tur 15/30/45 sn bekledi ve üçü de limit kapalıyken denendiği
+      #     için üçü de düştü. 60/120 sn gerçek pencereye denk gelir.
+      #
+      # Hâlâ düşüyorsa sorun geçici değildir ve iş HAKLI olarak kırmızı
+      # olur — sonsuz denemek arızayı gizlerdi.
       - name: Install dependencies
         run: |
-          for attempt in 1 2 3; do
-            composer install --prefer-dist --no-interaction --no-progress && exit 0
-            echo "composer install başarısız (deneme ${attempt}/3), bekleniyor…"
-            sleep $((attempt * 15))
-          done
-          exit 1
+          set -o pipefail
+
+          composer install --prefer-dist --no-interaction --no-progress && exit 0
+
+          echo "dist indirmesi düştü (codeload 429 olabilir); 60 sn sonra kaynak koddan denenecek…"
+          sleep 60
+
+          # Kaynak yolu zip uç noktasını kullanmaz: 429 tam oradadır.
+          composer install --prefer-source --no-interaction --no-progress && exit 0
+
+          echo "kaynak yolu da düştü; 120 sn sonra son deneme…"
+          sleep 120
+
+          composer install --prefer-source --no-interaction --no-progress
 
       # public/build .gitignore'dadır; checkout sonrası dizin YOKTUR.
       # Blade sayfası render eden testler (ExampleTest → GET /) Vite
@@ -130,7 +174,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Tests job'ındaki ile aynı gerekçe: action'ın kendisi de 429 yiyebilir
+      # ve bu, kendi retry'ımızın ulaşamadığı yerdir.
       - name: Setup PHP
+        id: php
+        continue-on-error: true
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Setup PHP (retry)
+        if: steps.php.outcome == 'failure'
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
@@ -151,17 +206,27 @@ jobs:
           key: pint-${{ hashFiles('composer.json') }}
           restore-keys: pint-
 
+      # Tests job'ındaki ile aynı iki savunma: yeniden denemede kaynak
+      # koddan kurulur (codeload'un zip uç noktası atlanır) ve bekleme
+      # 429'un gerçek penceresine denk gelecek kadar uzundur.
       - name: Install Pint
         run: |
           PINT_VERSION=$(php -r 'echo json_decode(file_get_contents("composer.json"), true)["require-dev"]["laravel/pint"];')
 
-          for attempt in 1 2 3; do
-            composer global require laravel/pint:"$PINT_VERSION" \
-              --no-interaction --no-progress && exit 0
-            echo "pint kurulumu başarısız (deneme ${attempt}/3), bekleniyor…"
-            sleep $((attempt * 15))
-          done
-          exit 1
+          composer global require laravel/pint:"$PINT_VERSION" \
+            --prefer-dist --no-interaction --no-progress && exit 0
+
+          echo "dist indirmesi düştü (codeload 429 olabilir); 60 sn sonra kaynak koddan denenecek…"
+          sleep 60
+
+          composer global require laravel/pint:"$PINT_VERSION" \
+            --prefer-source --no-interaction --no-progress && exit 0
+
+          echo "kaynak yolu da düştü; 120 sn sonra son deneme…"
+          sleep 120
+
+          composer global require laravel/pint:"$PINT_VERSION" \
+            --prefer-source --no-interaction --no-progress
 
       - name: Laravel Pint
         run: $(composer global config bin-dir --absolute --quiet)/pint --test
