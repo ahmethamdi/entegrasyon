@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
+use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -29,6 +31,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         OutboxRelayCommand::class,
         RecoverPendingInbox::class,
+        // §6 · iki bütünlük taraması. Zamanlaması routes/console.php içinde;
+        // kayıt burada olmadan zamanlayıcı komutu bulamaz ve tarama sessizce
+        // hiç çalışmaz (ScheduledScansTest bu ikisini ayrı ayrı doğrular).
+        DetectUnconsumedEventsCommand::class,
+        DetectStuckSyncOperationsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

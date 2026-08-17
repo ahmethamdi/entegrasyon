@@ -2,7 +2,53 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+/*
+|--------------------------------------------------------------------------
+| Kurtarma ve bütünlük taramaları
+|--------------------------------------------------------------------------
+|
+| Mimari Karar Dokümanı v2.2 · §6 · iki bütünlük taraması, §15 · zamanlanmış
+| işler. Frekanslar §15 tablosundan birebir alınmıştır.
+|
+| BU BLOK OLMADAN TARAMALARIN HİÇBİR DEĞERİ YOKTUR. Sınıfın var olması onu
+| kimsenin çağırdığı anlamına gelmez; zamanlanmayan bir kurtarma taraması
+| yalnızca kurtardığı yanılsamasını üretir. ScheduledScansTest bu blokun
+| varlığını ve frekanslarını doğrular.
+|
+| outbox:relay BURADA YOKTUR ve olmamalıdır: o supervisor altında sürekli
+| çalışan bir süreçtir, zamanlanmış bir komut değil. Zamanlanırsa dakikada
+| bir yeni sonsuz döngü başlar ve süreçler birikir.
+|
+| Hepsi maintenance kuyruğuna aittir (§15) ve üst üste binmez: yavaş bir tur
+| bitmeden ikincisi başlarsa iki kopya aynı satırları işler.
+*/
+
+// Gelen hat kurtarması — KAYBEDİLEN ŞEY SİPARİŞTİR, bu yüzden dakikalık.
+// Kayıt ile kuyruğa atma arasında süreç ölürse mesaj pending kalır ve
+// webhook 202 döndüğü için kanal yeniden göndermez.
+Schedule::command('inbox:recover')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping();
+
+// SEVİYE 2 — Redis işi kaybetti: operasyon var, kuyrukta karşılığı yok.
+// Seviye 1'den daha sık, çünkü kayıp daha yakın bir halkada: fan-out zaten
+// tamamlanmıştır ve tek eksik stoğun kanala gitmesidir.
+Schedule::command('sync:detect-stuck')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
+// SEVİYE 1 — tüketici hiç çalışmadı: olay yayınlandı ama fan-out olmadı.
+// Bu taramanın görmediğini hiçbir mekanizma görmez; seviye 2 de göremez,
+// çünkü bulacağı operasyon hiç yaratılmamıştır.
+Schedule::command('outbox:detect-unconsumed')
+    ->everyTenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();

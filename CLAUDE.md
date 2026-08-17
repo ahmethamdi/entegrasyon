@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 221 test yeşil olmalı
+docker compose exec app php artisan test      # 248 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -57,6 +57,20 @@ Bunlar test ile korunur. İhlal eden değişiklik reddedilmelidir.
 - `consumed_at` = planlama bitti, downstream başarısı **değil**
 - `sync_operations.outbox_event_id` **UNIQUE değil**, yalnızca indeks
 
+### Bütünlük taramaları
+- İki teslim zinciri, **iki ayrı tarama**; biri diğerinin kaybını göremez
+- Seviye 1 (`DetectUnconsumedEvents`): `published_at` dolu + `consumed_at` NULL
+  → `published_at = NULL`, `publish_attempts++`. `consumed_at`'e **dokunulmaz**
+- Seviye 2 (`DetectStuckSyncOperations`): `pending` + `attempt_count = 0`
+  → doğrudan yeniden dispatch. Outbox olayı **yeniden yayınlanmaz**
+- Seviye 2 **deneme açmaz ve damgalamaz** — damgalasa kendi imzasını yok ederdi
+- `consumed_at` doluysa olay yeniden yayınlanmaz (kalıcı hata operasyon
+  seviyesinde yaşar); yeniden yayın sonsuz döngü olurdu
+- İkisi de `clock_timestamp()` kullanır ve `runAsSystem()` ile tüm kiracıları görür
+- Komutlar `bootstrap/app.php` içinde **açıkça kaydedilir** (domain klasörleri
+  otomatik keşfedilmez) ve `routes/console.php` içinde zamanlanır — ikisi ayrı
+  koşul, `ScheduledScansTest` ikisini de ayrı doğrular
+
 ### Sürüm ve onarım
 - `NORMAL_SYNC`: `synced >= event` veya `desired > event` → ele
 - `REPAIR`: sürüm kapısı **atlanır**, `desired_version` **artırılmaz**
@@ -79,7 +93,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 221 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 248 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -179,8 +193,7 @@ testin sonunda çağrılır.
 ## Henüz yazılmadı
 
 `TrendyolAdapter`, `PushListing` işi, `UpdateOrderSnapshot`,
-`UpdateFulfillment`, mutabakat, `DetectUnconsumedEvents`,
-`DetectStuckSyncOperations`, `PruneApiCalls`, kanal bağlama akışı ve
+`UpdateFulfillment`, mutabakat, `PruneApiCalls`, kanal bağlama akışı ve
 ürün/stok panel ekranları.
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
@@ -276,17 +289,15 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 ## Sıradaki adım
 
-Panel iskeleti kuruldu, tek ekran var. İki mantıklı yol:
+§6 bütünlük taramaları kapandı (T5/T6 yeşil, zamanlayıcıya bağlı). Üç yol:
 
-1. **Kanal bağlama akışı** — Woo mağazasını panelden gerçekten bağlamak
-   (`CredentialVault` ve `healthCheck()` hazır). Sistemi ilk kez gerçek bir
-   mağazayla uçtan uca çalıştırır.
+1. **Kanal bağlama akışı** (§13 · faz 1.4 — tamamlanmamış EN ERKEN faz
+   maddesi) — Woo mağazasını panelden gerçekten bağlamak (`CredentialVault`
+   ve `healthCheck()` hazır). Doğrulama ölçütü dokümanda: "gerçek Woo
+   mağazasına bağlanıyor, sırlar loglarda görünmüyor".
 2. **Ürün/stok listesi** — satıcının her gün bakacağı ekran; fazla satış
    uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5).
-
-Doküman sırası ise §6 bütünlük taramaları (`DetectUnconsumedEvents` T5,
-`DetectStuckSyncOperations` T6) ve §10 mutabakat — ikisi de
-`clock_timestamp()` kuralına tabi. Bunlar **kurtarma** mekanizmaları;
-sistem üretimde çalışmadan önce aciliyeti düşük.
+3. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
+   ve karşılaştırma `max(available, 0)` ile yapılır.
 
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
