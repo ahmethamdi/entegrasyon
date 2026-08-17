@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\InventoryController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,6 +43,11 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     Route::post('/channels', [ChannelConnectionController::class, 'store'])->name('channels.store');
     Route::post('/channels/{connection}/health', [ChannelConnectionController::class, 'health'])
         ->name('channels.health');
+
+    // Ürün/stok listesi (§13 · faz 1.2 · panel). Düzeltme POST'tur ve
+    // ledger'a yazar: fazla satışın "düzeltme yolu" (§17 · P0).
+    Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
+    Route::post('/inventory/adjust', [InventoryController::class, 'adjust'])->name('inventory.adjust');
 });
 
 Route::post('/logout', [SessionController::class, 'destroy'])

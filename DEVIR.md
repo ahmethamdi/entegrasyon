@@ -1,196 +1,204 @@
-# Devir Notu — 17 Ağustos 2026 (kanal bağlama turu)
+# Devir Notu — 17 Ağustos 2026 (ürün/stok ekranı turu)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ## Tek cümlede durum
 
-Artık **mağaza panelden bağlanabiliyor**: form → kimlik bilgisi kasaya →
-sağlık kontrolü → durum yazımı, tarayıcıda uçtan uca doğrulandı. Bir önceki
-turda §6 bütünlük taramaları kapanmıştı. **269 test yeşil** (1065 assertion),
-Pint temiz, iki random seed'de stabil.
+Satıcının her gün bakacağı ekran ayakta: fazla satış kırpılmadan görünüyor,
+eksik miktar yazıyor ve **panelden düzeltilebiliyor** — düzeltme ledger'a
+`MANUAL_ADJUSTMENT` olarak işleniyor ve outbox olayı üretiyor. Önceki iki
+turda §6 taramaları ve kanal bağlama akışı kapanmıştı. **293 test yeşil**
+(1165 assertion), Pint temiz, iki random seed'de stabil.
 
 ## Bu sohbette ne yapıldı
 
-§13 · faz 1.4 · "WooCommerce bağlantı ekranı ve sağlık kontrolü".
+§13 · faz 1.2 panel maddesi + §17 · P0 "Fazla satış ekranı — eksik miktar ve
+DÜZELTME YOLU gösterilmeli".
 
 | Ne | Nerede |
 |---|---|
-| Bağlama action'ı | `app/Domain/Channels/Actions/ConnectChannel.php` |
-| Sağlık kontrolü + durum yazımı | `app/Domain/Channels/Actions/CheckChannelHealth.php` |
-| Adres normalleştirme | `app/Domain/Channels/Support/StoreUrl.php` |
-| Tekillik istisnası | `app/Domain/Channels/Exceptions/AccountAlreadyConnectedException.php` |
-| Panel controller | `app/Http/Controllers/ChannelConnectionController.php` |
-| Ekranlar | `resources/js/Pages/Channels/{Index,Create}.vue` |
+| Düzeltme action'ı | `app/Domain/Inventory/Actions/AdjustStock.php` |
+| Ekran + düzeltme controller'ı | `app/Http/Controllers/InventoryController.php` |
+| Ekran | `resources/js/Pages/Inventory/Index.vue` |
+| Gezinme (3 ekran) | `resources/js/Layouts/PanelLayout.vue` |
 | Rotalar | `routes/web.php` |
-| Flash paylaşımı | `app/Http/Middleware/HandleInertiaRequests.php` |
-| Action testleri | `tests/Feature/Channels/ConnectChannelTest.php` (9) |
-| Ekran testleri | `tests/Feature/Channels/ChannelConnectionScreenTest.php` (12) |
+| Ekran testleri | `tests/Feature/Inventory/InventoryScreenTest.php` (13) |
+| Düzeltme testleri | `tests/Feature/Inventory/AdjustStockTest.php` (8) |
+| Eşzamanlılık | `tests/Feature/Inventory/ConcurrentAdjustStockTest.php` (3) |
 
-21 yeni test (248 → 269).
+24 yeni test (269 → 293).
 
-## Akışın özü
+## Ekranın özü
 
 ```
-Form (kanal · etiket · adres · consumer key/secret)
-  → StoreUrl::parse  → host küçük harf, şema/eğik çizgi atılır, https zorlanır
-  → guardAgainstForeignTenant  → mağaza başka kiracıdaysa AccountAlreadyConnected
-  → TRANSACTION: firstOrNew(type, account) + CredentialVault::store
-  → COMMIT
-  → CheckChannelHealth (transaction DIŞINDA — ağ çağrısı)
-       sağlıklı  → status = active,  health = healthy,  last_error = null
-       sağlıksız → status = pending, health = unhealthy, last_error = mesaj
-  → /channels · success veya warning flash
+Üst özet: varyant sayısı · fazla satılan · TOPLAM EKSİK ADET
+  (fazla satış varsa kırmızı; SUM(-available), §10 metrik tanımıyla aynı)
+
+Liste: SKU · elde · rezerve · SATILABILIR · senkron rozeti · [Düzelt]
+  negatif available KIRPILMADAN, altında "N adet eksik"
+  sıralama: available ARTAN → eylem gereken satır en üstte
+
+Rozet sırası: HATA > YENİDEN DENENİYOR > BEKLİYOR > SENKRON > LİSTELENMEDİ
+
+[Düzelt] → satır içi form, eksik miktar HAZIR GELİR
+  → AdjustStock → LockInventoryRows + ApplyMovement(MANUAL_ADJUSTMENT)
+  → outbox olayı → kanala geri yazılır
 ```
 
-**Sağlık kontrolü geçmeden bağlantı aktif olmaz.** Kimlik bilgisi yine
-saklanır (çağrıyı yapabilmek için zorunlu ve kullanıcı mağazası geçici kapalı
-olabilir) ama `pending` durumda senkron çalışmaz. Aktif ama çalışmayan
-bağlantı en pahalı hata biçimidir: kullanıcı ürün göndermeye başlar, hepsi
-AUTHENTICATION ile kalıcı hataya düşer ve sebep ancak destek kaydıyla bulunur.
+**Düzeltme de ledger üzerinden geçer.** Panel `inventory_levels` satırını
+doğrudan güncellemez; `on_hand = Σ on_hand_delta` korunur ve düzeltmeyi kimin
+ne zaman hangi notla yaptığı ledger'da kalır.
 
 ## Tarayıcıda doğrulandı
 
-Kayıt → `/channels` (boş durum) → `/channels/create` → var olmayan mağaza ile
-gönderim → `/channels` üzerinde:
+Fazla satılan varyant (`KAZAK-SIYAH-M`, bakiye −3) ile:
 
-- amber uyarı: "kaydedildi ama kanal cevap vermedi — bağlantı beklemede"
-- kırmızı `CEVAP VERMİYOR` rozeti, `Durum: pending`
-- cURL hata metni kartta görünür (gizlenmiyor)
-- yetenekler tip sisteminden: `Ürün · Stok · Fiyat · Sipariş · Kargo`
-  (Kategori ve Onay YOK — Woo onları desteklemiyor)
-- **sırlar sayfada yok**, konsol hatası yok
+- özet kırmızı: "Fazla satılan 1 · Toplam eksik adet 3"
+- satırda `-3` kırmızı, altında "3 adet eksik"
+- [Düzelt] açıldı → **miktar 3 olarak hazır geldi** (en olası eylem)
+- kaydedildi → bakiye 0, özet sıfırlandı, flash mesajı göründü
+- konsol hatası yok
 
-## Mutasyonla sınandı — altısı da öldü
+## Mutasyonla bulunan İKİ GERÇEK BOŞLUK
+
+**1. `DB::table()` Eloquent global scope'una TABİ DEĞİL.**
+Rozet sayıları ham sorguyla toplanıyor. `listings.tenant_id` filtresi
+kaldırıldığında **hiçbir test kırılmadı** — çapraz kiracı sayımı sessizce
+sızıyordu. Testin kurgusu bunu görünür kılmak için özel: B kiracısı A'nın
+varyant kimliğine listing açıyor (FK kiracı sınırını zorlamıyor).
+→ `sync_counts_never_include_another_tenants_listings`
+
+**2. Rozet delisted satırları sayıyordu.**
+`lifecycle_status = 'live'` filtresi kaldırıldığında test kırılmadı; tüm
+testler yalnızca canlı listing yaratıyordu. Taslak/delisted satıra stok
+gönderilmez (fan-out `live()` kullanır), sayılırsa rozet asla temizlenmez.
+→ `sync_counts_ignore_delisted_listings`
+
+## Öldürülen diğer mutasyonlar
 
 | Mutasyon | Öldüren test |
 |---|---|
-| Sağlıksızken de `status = active` | 4 test |
-| Çapraz kiracı koruması `if (false)` | `the_same_store_cannot_be_connected_by_two_tenants` |
-| Sırlar `settings` kolonuna da yazılıyor | `secrets_never_land_in_the_settings_column` |
-| Inertia'ya `$c->toArray()` gönderiliyor | 2 test (yetenekler + sır sızıntısı) |
-| `strtolower($host)` kaldırıldı | `store_url_is_normalised_before_uniqueness_is_checked` |
-| Health rotası `runAsSystem()` ile sorguluyor | `health_check_cannot_target_another_tenants_connection` |
+| Panelde `max($available, 0)` (P0 ihlali) | `oversold_variant_is_shown_unclamped_with_shortfall` |
+| Rozet sırası: bekliyor kalıcı hatadan önce | `permanent_error_outranks_pending_in_the_badge` |
+| Düzeltme projeksiyona doğrudan yazıyor | 6 test (`assertLedgerMatchesProjection` dahil) |
 
-## Bu turda öğrenilen iki şey
+## SAHTE TEST YAZMAKTAN DÖNÜLDÜ — okunması gereken bölüm
 
-**1. Sessiz `catch` beni kendi hatamdan habersiz bıraktı.**
-`capabilitiesOrEmpty()` içindeki `catch (Throwable) { return []; }`,
-`with('channelType:code,name')` yazdığım için `adapter_class`'ın yüklenmediğini
-ve `AdapterRegistry`'nin patladığını gizledi. Test "Undefined array key" ile
-düştü ama sebebi görünmüyordu. Catch artık `Log::warning` yazıyor — koruma
-olarak kalıyor, hata gizleyici olarak değil.
+İlk yazdığım `adjustment_locks_the_row_before_writing` testi **sahteydi**.
+Varsayımım "kilit alınmazsa `ApplyMovement` istisna atar" idi; mutasyonla
+kilidi sildim ve **tüm testler yeşil kaldı**.
 
-**Eager-load kuralı**: yetenek okunacaksa `adapter_class` DA seçilmeli.
+Sonra bir eşzamanlılık testi yazdım (`DatabaseTruncation` + ayrı PDO +
+`lock_timeout`) ve **o da kilit silinmişken yeşil kaldı**. Sebebi araştırdım:
 
-**2. Dev veritabanı seed'i bayattı.** Tarayıcı turunda açılır listede Trendyol
-göründü; oysa seeder onu `is_active = false` ve yazılmamış
-`Trendyol\TrendyolAdapter` ile tanımlıyor. Satır eski bir seeder sürümünden
-kalmıştı (`created_at == updated_at`, yani sonradan değiştirilmemiş).
-`php artisan db:seed --class=ChannelTypeSeeder` düzeltti. Kod doğruydu.
+> `ApplyMovement` zaten `UPDATE inventory_levels` yapıyor ve PostgreSQL o
+> satıra commit'e kadar tutulan bir satır kilidi koyuyor. İkinci bağlantının
+> `FOR UPDATE`'i o UPDATE kilidinde bloklanıyor — `LockInventoryRows` hiç
+> çağrılmasa bile. **Tek-SKU yolunda açık kilidin gözlenebilir etkisi YOK.**
 
-**Ders**: tarayıcıda gördüğün tuhaflığın kaynağı kod olmayabilir; dev verisinin
-tazeliğini de doğrula.
+Yani bu üçüncü kategori: yapısal sınır. Çağrı yine de KALIYOR ve gerekçesi
+eşzamanlılık değil **sıralama**: düzeltme sipariş alımıyla aynı satırlara
+yazar, çok-SKU yolları kilidi `ORDER BY variant_id` ile alır ve aynı kapıdan
+geçmeyen bir yazıcı çok kalemli bir iadeyle ters sırada kilitlenip ABBA
+deadlock üretir. Kuralı koruyan şey test değil, tüm yazma yollarının aynı
+action'ı kullanması disiplini.
+
+Testler artık kilidin varlığını değil GÖZLENEBİLİR olanı doğruluyor:
+commit'ten önce ikinci yazıcının giremediğini, commit sonrası okuyucunun
+bayat bakiye görmediğini ve ledger toplamının projeksiyona eşit kaldığını.
+Sınıf başlığında bu sınır açıkça yazılı.
 
 ## Ortam
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 269 yeşil olmalı
+docker compose exec app php artisan test      # 293 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
-docker compose exec app php artisan db:seed --class=ChannelTypeSeeder
 ```
 
-Panel: `http://localhost:8080/` · Kanallar: `http://localhost:8080/channels`
-
-Tarayıcı doğrulaması için Playwright scratchpad'e kuruldu (`npm i playwright`);
-projeye bağımlılık EKLENMEDİ.
-
-## Zamanlanmış işler — §15 tablosu
-
-| Komut | Frekans | Ne kurtarır |
-|---|---|---|
-| `inbox:recover` | 1 dakika | Kuyruğa hiç girmemiş webhook — **kaybedilen şey SİPARİŞ** |
-| `sync:detect-stuck` | 5 dakika | Seviye 2: Redis `PushInventory`'yi düşürdü |
-| `outbox:detect-unconsumed` | 10 dakika | Seviye 1: tüketici hiç çalışmadı |
-
-`outbox:relay` **bu listede yok ve olmamalı** — supervisor altında sürekli
-çalışan bir süreç.
+Panel: `/` özet · `/inventory` stok · `/channels` kanallar (gezinme ayakta)
 
 ## Sıradaki adım — SEÇİM SENİN
 
-1. **Ürün/stok listesi ekranı** — satıcının her gün bakacağı ekran; fazla
-   satış uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5 panel maddeleri).
-   Artık gerçek mağaza bağlanabildiği için gerçek veriyle beslenebilir.
-2. **`PushListing` işi + panelden gönderme akışı** (§13 · faz 1.5) — faz
-   1.4'ün açık kalan tek ucu. Bağlama ve sağlık kontrolü tamam; ürünü kanala
-   gönderen iş henüz yok.
-3. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
-   ve karşılaştırma `max(available, 0)` ile yapılır.
+1. **`PushListing` işi + panelden gönderme akışı** (§13 · faz 1.5) — açık
+   kalan tek uç. Ürün panelde görünüyor, kanal bağlanıyor, ama ürünü kanala
+   gönderen iş yok: `listings` satırı hâlâ elle yaratılıyor. Bu bittiğinde
+   dikey dilim panelden uçtan uca sürülebilir hale gelir.
+   *Doküman sırasına en uygun ve en yüksek değer.*
+2. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi,
+   karşılaştırma `max(available, 0)` ile. Kurtarma mekanizması.
+3. **Sipariş listesi ekranı** (§13 · faz 1.6 panel maddesi) — "panelde
+   sipariş listesi ve fazla satış uyarısı".
 
 ## Bu projede işe yarayan çalışma biçimi
 
 1. **Testi önce yaz, kırmızı olduğunu gör**, sonra implementasyonu yaz.
 2. **Mutasyonla sına**: kodu kasten boz, testin kırmızıya döndüğünü doğrula.
-3. Stok yazan her testin sonunda `assertLedgerMatchesProjection()` çağır.
-4. **Entegrasyonu ayrıca sına** — sınıfın var olması onu kimsenin çağırdığı
-   anlamına gelmez (`ScheduledScansTest` geçen turda tam bunu buldu).
-5. **Uçtan uca test yaz** — parçalar tek tek doğruyken aralarındaki sözleşme
-   yanlış olabilir (`LostWorkRecoveryTest`).
-6. **Ekran işi bittiğinde TARAYICIDA çalıştır.** Bu turda iki bulgu yalnızca
-   orada göründü; testler ikisini de görmüyordu.
+   Bu turda iki gerçek boşluk böyle bulundu.
+3. **Mutasyon hayatta kalırsa SAHTE TEST YAZMA.** Ya gerçek bir test bul, ya
+   yapısal sınırı belgele. Bu turda ikinci eşzamanlılık testi de yeşil
+   kalınca sebebi araştırıldı ve sınır yazıldı — test uydurulmadı.
+4. Stok yazan her testin sonunda `assertLedgerMatchesProjection()` çağır.
+5. **Entegrasyonu ayrıca sına** — sınıfın var olması onu kimsenin çağırdığı
+   anlamına gelmez (`ScheduledScansTest`).
+6. **Ekran işi bittiğinde TARAYICIDA çalıştır.** Kanal turunda iki bulgu
+   yalnızca orada göründü.
 
 ## Mutasyonla bulunan gerçek boşluklar (tarihçe)
 
 Hepsi testler yeşilken bulundu:
 
-- **Eager-load'da `adapter_class` seçilmiyordu** (bu tur) — panel yetenekleri
-  sessizce boş kalıyordu ve `catch` sebebi gizliyordu.
+- **`DB::table()` sorgusunda kiracı filtresi yoktu** (bu tur) — rozet
+  sayıları çapraz kiracı sızdırıyordu.
+- **Rozet delisted listing'leri sayıyordu** (bu tur).
+- **Eager-load'da `adapter_class` seçilmiyordu** — panel yetenekleri sessizce
+  boşalıyordu ve `catch` sebebi gizliyordu.
 - **Kurtarma taramaları zamanlayıcıya bağlanmamıştı** — `inbox:recover` bir
   tur boyunca hiç çalışmadı.
-- **`ApplyMovement` outbox yüküne `origin_connection_id` yazmıyordu** —
-  fan-out'un yankı bastırması üretimde hiç çalışmıyordu.
-- **`verifyWebhookSignature` kiracı bağlamı bekliyordu** — meşru her webhook
-  sessizce reddedilirdi.
-- **Başarıda sürüm kapısı yoktu** — bayat başarı `synced_version`'ı geri sarıyordu.
+- **`ApplyMovement` outbox yüküne `origin_connection_id` yazmıyordu.**
+- **`verifyWebhookSignature` kiracı bağlamı bekliyordu.**
+- **Başarıda sürüm kapısı yoktu.**
 - **Bağlantı filtresi testi aslında tenant scope'u sınıyordu.**
 
 ## Davranışla sınanamayan kurallar (dürüst sınır)
 
 Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
+- **`AdjustStock` içindeki `LockInventoryRows` çağrısı** (bu tur):
+  `ApplyMovement`'ın UPDATE'i aynı satır kilidini zaten koyuyor. Çağrı,
+  çok-SKU yollarıyla kilit SIRALAMASINI paylaşmak için duruyor.
 - **`published_at IS NOT NULL` yüklemi**: NULL karşılaştırması satırı zaten
-  eler. Cümleyi doküman ve `outbox_unconsumed_idx` eşleşmesi için tutuyoruz.
+  eler. Doküman ve `outbox_unconsumed_idx` eşleşmesi için tutuluyor.
 - **`hash_equals` → `===`**: zamanlama saldırısı işlevsel testte görünmez.
-- **Adapter'a `max($q, 0)`**: `InventoryPushItem` negatifi kurucuda reddettiği
-  için ikinci kırpma her zaman işlemsizdir.
+- **Adapter'a `max($q, 0)`**: `InventoryPushItem` negatifi kurucuda reddeder.
 - **`regenerate()` çağrısı**: `SessionGuard::login()` zaten çağırıyor; ikinci
   çağrı **kaldırıldı**.
 
 ## Tekrar tekrar ısıran tuzaklar
 
+- **`DB::table()` global scope'a TABİ DEĞİLDİR** — ham sorguda kiracı filtresi
+  açıkça yazılır. (Bu tur bulundu.)
+- **`inventory_movements` kolonu `type`, `movement_type` DEĞİL.** Testte
+  yanlış yazınca "Undefined column" alırsın.
 - **`clock_timestamp()`** — zaman damgaları saniye hassasiyetli, `now()`
-  transaction başında donar. Pencere testi: `pg_sleep(1.1)`, sonra damgayı
-  `date_trunc('second', now())` ile donmuş `now()`'a **eşit** yaz, eşiği bir
-  saniye ver.
-- **`Command::run()` REZERVE İMZADIR.** Tarama/iş mantığı `Support/` altında
-  sade sınıfta, komut ince kabuk (`OutboxRelay` / `OutboxRelayCommand`).
+  transaction başında donar.
+- **`Command::run()` REZERVE İMZADIR.** Mantık `Support/` altında sade
+  sınıfta, komut ince kabuk.
 - **Domain komutları otomatik keşfedilmez** — `bootstrap/app.php` →
-  `withCommands()` içinde açık kayıt gerekir.
-- **`QUEUE_CONNECTION=sync` gerçek worker'ı taklit etmez.** Planlamayı sınayan
-  testler `Queue::fake()` çağırır.
-- **Seviye 2 taraması damgalamadığı için TÜKENMEZ**: ardışık iki tur aynı
-  satırları döner. Bilinçli — damgalamak `attempt_count = 0` imzasını yok eder.
-- **Tarayıcı testinde `networkidle` yetmeyebilir.** Var olmayan alan adının DNS
-  denemesi uzun sürer; yönlendirme `waitForURL(..., { timeout: 90000 })` ile
-  beklenmeli. İlk turda "gönderim başarısız" sandım, oysa yalnızca yavaştı.
-- **Açılış stoğu ledger üzerinden girer** (IMPORT) ve o hareket de outbox olayı
-  yazar. Olayı `movement_type` ile hedefle.
+  `withCommands()`.
+- **`QUEUE_CONNECTION=sync` gerçek worker'ı taklit etmez.** Stok yazan ekran
+  testleri de `Queue::fake()` çağırır: hareket outbox olayı yazar, relay
+  tüketiciyi derhal çalıştırır ve kuyruk kancaları bağlamı temizler.
+- **Açılış stoğu ledger üzerinden girer** (IMPORT) — `InventoryLevel::create`
+  ile seed etmek eşitliği bozar.
 - **Eşzamanlılık testi `RefreshDatabase` ile yazılamaz** → `DatabaseTruncation`
   + ayrı PDO; `tearDown`'da `truncateDatabaseTables()`.
+- **Tarayıcı testinde `networkidle` yetmeyebilir** — var olmayan alan adının
+  DNS denemesi uzun sürer; `waitForURL(..., { timeout: 90000 })` kullan.
 - **CI'da `public/build` yoktur** — `Tests` job'ı `npm run build` çalıştırır.
 
 ## Bilinen açık uç
 
-Eski turlarda bir `--order-by=random` turunda tek test düşmüştü; son iki turda
-üç seed daha denendi ve tekrar üretilemedi. Görülürse seed ile kaydedilmeli.
+Eski turlarda bir `--order-by=random` turunda tek test düşmüştü; son üç turda
+beş seed denendi ve tekrar üretilemedi. Görülürse seed ile kaydedilmeli.

@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 269 test yeşil olmalı
+docker compose exec app php artisan test      # 293 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -93,7 +93,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 269 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 293 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -102,7 +102,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 (`ChannelHttpClient`, `WooCommerceAdapter`, `WooOrderNormalizer`,
 `WooProductMapper`), koruma katmanı (`ChannelRateLimiter`,
 `CircuitBreaker`) ve **panel** (kimlik doğrulama, `EstablishTenantContext`,
-senkron durumu ekranı, kanal bağlama akışı) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
+senkron durumu ekranı, kanal bağlama akışı, ürün/stok listesi) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
 yeşil. **Dikey dilim kapalı** — `WooCommerceVerticalSliceTest` zinciri
 baştan sona yürütüyor. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
 
@@ -293,6 +293,26 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   `with('channelType:code,name')` yazılırsa `AdapterRegistry` sınıfı bulamaz
   ve yetenekler sessizce boşalır.
 
+## Stok ekranı kuralları
+
+- **Negatif `available` kırpılmadan gösterilir** ve eksik miktar ayrıca
+  yazılır (§17 · P0). Kırpma yalnızca `OutboundQuantity::forChannel()` içinde.
+- **Düzeltme de ledger üzerinden geçer**: panel `inventory_levels` satırını
+  doğrudan güncellemez, `AdjustStock` bir `MANUAL_ADJUSTMENT` hareketi yazar.
+  Böylece `on_hand = Σ on_hand_delta` korunur ve düzeltmenin izi kalır.
+- **`MANUAL_ADJUSTMENT` EKLER**, eksiltmez — yön hareket türünden gelir ve
+  miktar pozitif olmak zorundadır. Eksiltme uygun hareket türüyle yapılır.
+- **Düzeltme idempotent DEĞİLDİR ve olmamalı**: iki ayrı sayım iki ayrı
+  düzeltmedir. Siparişte çıpa dış olay kimliğidir; burada öyle bir kimlik
+  yoktur ve uydurmak satıcının bilerek yaptığı ikinci düzeltmeyi yutardı.
+- **Rozet sırası: kalıcı hata > geçici hata > bekliyor > senkron.**
+  `error_permanent` kullanıcı müdahalesi bekler; "bekliyor" demek satıcıyı
+  kendiliğinden düzelecek sanmaya iter ve o satıra hiç bakmaz.
+- **Rozet yalnızca CANLI listeleri sayar** — taslak/delisted satıra stok
+  gönderilmez, sayılırsa rozet asla temizlenmez.
+- **`DB::table()` global scope'a TABİ DEĞİLDİR.** Ham sorguda kiracı filtresi
+  AÇIKÇA yazılır; yazılmazsa çapraz kiracı sayımı sızar (mutasyonla bulundu).
+
 ## Panel kuralları
 
 - **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
@@ -315,16 +335,13 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 ## Sıradaki adım
 
-§6 bütünlük taramaları ve §13 · faz 1.4 kanal bağlama akışı kapandı. İki yol:
+§6 taramaları, §13 · faz 1.4 kanal bağlama ve ürün/stok listesi kapandı.
+İki yol:
 
-1. **Ürün/stok listesi** — satıcının her gün bakacağı ekran; fazla satış
-   uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5). Artık gerçek bir
-   mağaza panelden bağlanabildiği için gerçek veriyle beslenebilir.
+1. **`PushListing` işi + panelden gönderme akışı** (§13 · faz 1.5) — faz
+   1.4/1.5'in açık kalan tek ucu. Ürün panelde görünüyor ve kanal bağlanıyor,
+   ama ürünü kanala gönderen iş yok; `listings` satırı elle yaratılıyor.
 2. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
    ve karşılaştırma `max(available, 0)` ile yapılır.
-
-Faz 1.4'ün açık kalan tek ucu: `PushListing` işi henüz yok, yani panelden
-ürün gönderme akışı (§13 · faz 1.5 · "panelde kanal seçimi, gönderme akışı")
-yazılmadı. Bağlama ve sağlık kontrolü tamamdır.
 
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
