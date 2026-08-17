@@ -23,6 +23,7 @@ use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\InventoryPushItem;
 use App\Support\Logging\PayloadRedactor;
+use App\Support\Tenancy\TenantContext;
 use GuzzleHttp\Psr7\Response;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -343,6 +344,52 @@ final class WooCommerceAdapterTest extends TestCase
         $this->assertSame(0, $snapshot->quantityFor('202'));
         $this->assertNull($snapshot->quantityFor('999'));
         $this->assertNotNull($snapshot->observedAt, 'Okuma anı taşınmalı — gecikme sürüklenme sanılmasın.');
+    }
+
+    /**
+     * KİMLİK BİLGİSİ KİRACI BAĞLAMI OLMADAN DA GÖNDERİLİR.
+     *
+     * `channel_credentials` kiracıya göre kapsanır ve `ChannelHttpClient`
+     * bağlam OLMADAN çağrılabilir: kiracı bağlamını kurmayan bir kuyruk işi,
+     * `runAsSystem` ile koşan bir tarama (seviye 2 kurtarma, mutabakat) veya
+     * panelden tetiklenen sağlık kontrolü. Kapsanmış sorgu o durumda istisna
+     * fırlatır ve istemci onu yutup isteği SESSİZCE KİMLİKSİZ gönderirdi.
+     *
+     * Bedeli en pahalı hata biçimidir: Woo 401 döner, adapter bunu
+     * AUTHENTICATION diye sınıflandırır, `RetryPolicy` KALICI hata sayar ve
+     * listing "anahtarın yanlış" diyerek ölür — oysa anahtar doğrudur ve
+     * yalnızca hiç gönderilmemiştir. Kullanıcı anahtarı defalarca yeniden
+     * girer, hiçbiri işe yaramaz.
+     *
+     * Bu test bağlamı BİLEREK bırakır. `verifyWebhookSignature` aynı
+     * gerekçeyle aynı biçimi zaten kullanıyordu (§13 · faz 1.4'te bulundu);
+     * bu, aynı boşluğun istek yolundaki hâliydi.
+     */
+    #[Test]
+    public function credentials_are_sent_even_without_tenant_context(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        $this->asTenant($tenant, fn () => app(CredentialVault::class)->store($connection, [
+            'consumer_key' => 'ck_1234567890',
+            'consumer_secret' => 'cs_1234567890',
+        ]));
+
+        Http::fake(['*' => Http::response(['environment' => []], 200)]);
+
+        // Çağrı bağlam DIŞINDA yapılır: gerçek kuyruk işinin hâli bu.
+        $this->assertFalse(
+            TenantContext::hasTenant(),
+            'Test kurgusu gereği bağlam bırakılmış olmalı.',
+        );
+
+        $this->adapterFor($connection)->healthCheck();
+
+        Http::assertSent(function (Request $request): bool {
+            $sent = $request->header('Authorization')[0] ?? '';
+
+            return $sent === 'Basic '.base64_encode('ck_1234567890:cs_1234567890');
+        });
     }
 
     /**

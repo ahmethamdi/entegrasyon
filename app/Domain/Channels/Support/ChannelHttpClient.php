@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Support;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Support\Logging\PayloadRedactor;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -54,6 +55,20 @@ final class ChannelHttpClient
     private const MAX_LOGGED_BODY_BYTES = 16384;
 
     private const DEFAULT_TIMEOUT_SECONDS = 30;
+
+    /**
+     * Basic auth çiftinin kanal başına adları — biçim aynı, ad farklı.
+     *
+     * WooCommerce `consumer_key`/`consumer_secret`, Trendyol
+     * `api_key`/`api_secret` der. Sıra önemlidir: ilk eşleşen çift
+     * kullanılır.
+     *
+     * @var list<array{0: string, 1: string}>
+     */
+    private const BASIC_AUTH_KEY_PAIRS = [
+        ['consumer_key', 'consumer_secret'],
+        ['api_key', 'api_secret'],
+    ];
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -144,13 +159,20 @@ final class ChannelHttpClient
             ->acceptJson()
             ->asJson();
 
-        // WooCommerce HTTPS üzerinde Basic auth kabul eder; anahtar çifti
-        // kasadan gelir ve hiçbir yerde loglanmaz.
-        if (isset($secrets['consumer_key'], $secrets['consumer_secret'])) {
-            return $request->withBasicAuth(
-                (string) $secrets['consumer_key'],
-                (string) $secrets['consumer_secret'],
-            );
+        // Basic auth: anahtar çifti kasadan gelir ve hiçbir yerde loglanmaz.
+        //
+        // Kanal başına AD FARKLIDIR ama BİÇİM AYNIDIR: WooCommerce çifti
+        // consumer_key/consumer_secret, Trendyol api_key/api_secret diye
+        // adlandırır. `if ($channel === 'trendyol')` yazmak yerine bilinen
+        // adlar tek yerde denenir — yeni kanal eklendiğinde burada bir satır
+        // büyür, çağıran taraf hiç değişmez.
+        foreach (self::BASIC_AUTH_KEY_PAIRS as [$idKey, $secretKey]) {
+            if (isset($secrets[$idKey], $secrets[$secretKey])) {
+                return $request->withBasicAuth(
+                    (string) $secrets[$idKey],
+                    (string) $secrets[$secretKey],
+                );
+            }
         }
 
         if (isset($secrets['access_token'])) {
@@ -167,12 +189,33 @@ final class ChannelHttpClient
      * noktalar); eksikliği burada hata değildir. Kanal 401 dönerse adapter
      * bunu AUTHENTICATION olarak sınıflandırır ve karar çekirdeğe kalır.
      *
+     * KİMLİK BİLGİSİ AÇIKÇA SİSTEM BAĞLAMINDA OKUNUR.
+     *
+     * `channel_credentials` kiracıya göre kapsanır. İstemci bağlam OLMADAN
+     * çağrılabilir — kiracı bağlamını kurmayan bir kuyruk işi, sistem
+     * bağlamında koşan bir tarama (`runAsSystem`) veya sağlık kontrolü. O
+     * durumda kapsanmış sorgu istisna fırlatır, aşağıdaki `catch` onu yutar
+     * ve istek SESSİZCE KİMLİKSİZ gider.
+     *
+     * Bedeli en pahalı hata biçimidir: kanal 401 döner, adapter bunu
+     * AUTHENTICATION diye sınıflandırır, `RetryPolicy` KALICI hata sayar ve
+     * listing "anahtarın yanlış" diyerek ölür — oysa anahtar doğrudur,
+     * yalnızca hiç gönderilmemiştir. Kullanıcı anahtarı defalarca yeniden
+     * girer ve hiçbiri işe yaramaz.
+     *
+     * Bağlantı zaten elimizdedir ve hangi kiracıya ait olduğunu kendisi
+     * taşır; kapsama burada bir şey KORUMAZ, yalnızca okumayı engeller.
+     * `verifyWebhookSignature` aynı gerekçeyle aynı biçimi kullanır (§13 ·
+     * faz 1.4'te bulunmuştu).
+     *
      * @return array<string, mixed>
      */
     private function secrets(): array
     {
         try {
-            return $this->vault->read($this->connection);
+            return TenantContext::runAsSystem(
+                fn (): array => $this->vault->read($this->connection),
+            );
         } catch (Throwable) {
             return [];
         }
