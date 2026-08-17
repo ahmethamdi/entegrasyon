@@ -2,18 +2,38 @@
 
 declare(strict_types=1);
 
-use App\Domain\Channels\Models\ChannelType;
-use App\Domain\Identity\Models\Tenant;
+use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 /*
-| Bu turda yalnızca iskeletin ayakta olduğunu gösteren tek sayfa var.
-| Panel ekranları sonraki fazlarda eklenecek.
+| Panel rotaları.
+|
+| Mimari Karar Dokümanı v2.2 · §13 · faz 1.1.
+|
+| KİRACI BAĞLAMI AYRI ARA KATMANDA (`tenant`):
+|   Giriş ve kayıt rotaları kiracısızdır; bağlam kurmaya çalışmak onları
+|   kendi üzerlerine yönlendirirdi. Bağlam yalnızca panel rotalarında kurulur
+|   ve istek bitince bırakılır.
 */
-Route::get('/', fn () => Inertia::render('Dashboard', [
-    'tenantCount' => Tenant::count(),
-    'channelTypes' => ChannelType::query()
-        ->orderBy('code')
-        ->get(['code', 'name', 'kind', 'is_active']),
-]))->name('dashboard');
+
+// ─────────────────────────────────────────────────────────── misafir
+
+Route::middleware('guest')->group(function (): void {
+    Route::get('/login', [SessionController::class, 'create'])->name('login');
+    Route::post('/login', [SessionController::class, 'store']);
+
+    Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
+    Route::post('/register', [RegisteredUserController::class, 'store']);
+});
+
+// ─────────────────────────────────────────────────────────── panel
+
+Route::middleware(['auth', 'tenant'])->group(function (): void {
+    Route::get('/', DashboardController::class)->name('dashboard');
+});
+
+Route::post('/logout', [SessionController::class, 'destroy'])
+    ->middleware('auth')
+    ->name('logout');

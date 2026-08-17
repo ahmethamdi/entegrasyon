@@ -35,9 +35,25 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
+        $tenant = $request->attributes->get('tenant');
+
         return [
             ...parent::share($request),
-            //
+
+            // Kiracı ve kullanıcı her sayfada gerekli (başlık, çıkış düğmesi).
+            // Yalnızca GÖRÜNEN alanlar paylaşılır: modeli olduğu gibi
+            // göndermek parola hash'i ve kimlik bilgisi sızdırabilir.
+            'tenant' => $tenant === null ? null : [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+            ],
+            'auth' => [
+                'user' => $request->user() === null ? null : [
+                    'id' => $request->user()->id,
+                    'name' => $request->user()->name,
+                    'email' => $request->user()->email,
+                ],
+            ],
         ];
     }
 }

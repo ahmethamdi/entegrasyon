@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
+use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -34,6 +35,16 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        // Kiracı bağlamı AYRI bir ara katmandır, web grubuna eklenmez:
+        // giriş ve kayıt rotaları henüz kiracısızdır ve bağlam kurmaya
+        // çalışmak onları kendi üzerine yönlendirirdi.
+        $middleware->alias([
+            'tenant' => EstablishTenantContext::class,
+        ]);
+
+        // Giriş yapmamış ziyaretçi panel yerine giriş ekranına gider.
+        $middleware->redirectGuestsTo(fn () => route('login'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
