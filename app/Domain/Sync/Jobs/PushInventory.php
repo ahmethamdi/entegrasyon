@@ -6,6 +6,8 @@ namespace App\Domain\Sync\Jobs;
 
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\ChannelRateLimiter;
+use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\InventoryBatchBuilder;
@@ -55,7 +57,12 @@ final class PushInventory implements ShouldQueue
         InventoryBatchBuilder $builder,
         SyncResultRecorder $recorder,
         AdapterRegistry $registry,
+        ?CircuitBreaker $breaker = null,
+        ?ChannelRateLimiter $limiter = null,
     ): void {
+        $breaker ??= app(CircuitBreaker::class);
+        $limiter ??= app(ChannelRateLimiter::class);
+
         $operation = SyncOperation::query()->find($this->operationId);
 
         // Operasyon silinmiş, tamamlanmış veya bayat kalmış: gönderme.
@@ -67,12 +74,39 @@ final class PushInventory implements ShouldQueue
             return;
         }
 
+        $connectionId = $operation->channel_connection_id;
+
+        // DEVRE KESİCİ — kanal ölü sayılıyorsa hiç deneme.
+        //
+        // Deneme AÇILMAZ ve durum DEĞİŞMEZ: bu operasyon denenmedi,
+        // ertelendi. Sayacı artırmak yeniden deneme bütçesini boşa harcar
+        // ve seviye 2 taramasının ("worker hiç çalışmadı") anlamını bozar.
+        if (! $breaker->allows($connectionId)) {
+            $this->release(CircuitBreaker::PAUSE_SECONDS);
+
+            return;
+        }
+
         // Her çağrıda YENİ örnek — paylaşılan adapter kiracı A'nın kimlik
         // bilgisini kiracı B'nin işinde kullanırdı (§7, P0 güvenlik).
         $adapter = $registry->for($operation->connection);
 
         if (! $adapter instanceof SupportsInventory) {
             $recorder->recordSkipped($operation, 'channel_lacks_inventory_capability');
+
+            return;
+        }
+
+        // HIZ SINIRI — kota tükendiyse kanalı hiç dövme.
+        //
+        // 429 almak da kotayı harcar ve bazı kanallarda ceza süresi
+        // başlatır; sınıra biz uyarsak kanal hiç reddetmek zorunda kalmaz.
+        // Profili ADAPTER bildirir, uygulamayı çekirdek yapar.
+        if (! $limiter->attempt($connectionId, $adapter->rateLimitProfile())) {
+            $this->release(max(
+                $limiter->secondsUntilAvailable($connectionId, $adapter->rateLimitProfile()),
+                1,
+            ));
 
             return;
         }
@@ -96,12 +130,20 @@ final class PushInventory implements ShouldQueue
             $result = $adapter->pushInventory($batch);
 
             $recorder->recordSuccess($batch->operations(), $attempt, $result);
+
+            // Devre sayacını sıfırla: "ardışık" hata sayılır, toplam değil.
+            // Yarı açıktaysa bu başarı devreyi kapatır.
+            $breaker->recordSuccess($connectionId);
         } catch (Throwable $e) {
             // Sınıflandırmayı ADAPTER yapar (kanal gövdesini yalnızca o
             // anlar), ne yapılacağına ÇEKİRDEK karar verir.
             $class = $adapter->classifyError($e);
 
             $recorder->recordFailure($batch->operations(), $attempt, $class, $e);
+
+            // Devre kesici hatayı SAYAR; eşiğe ulaşınca kanalı duraklatır.
+            // AUTHENTICATION eşiği beklemez, tek hatada süresiz açar.
+            $breaker->recordFailure($connectionId, $class);
 
             $delay = RetryPolicy::delayFor($class, $operation->fresh()->attempt_count);
 
