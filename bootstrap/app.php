@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
+use App\Domain\Reconciliation\Console\ReconcileHotCommand;
 use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -36,6 +37,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // hiç çalışmaz (ScheduledScansTest bu ikisini ayrı ayrı doğrular).
         DetectUnconsumedEventsCommand::class,
         DetectStuckSyncOperationsCommand::class,
+        // §10 · mutabakat. Zamanlaması routes/console.php içinde.
+        ReconcileHotCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

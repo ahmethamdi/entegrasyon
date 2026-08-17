@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 313 test yeşil olmalı
+docker compose exec app php artisan test      # 355 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -90,10 +90,11 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 
 ## Kurulu olan
 
-`app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
+`app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync ·
+Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 313 test. Stok çekirdeği (`ApplyMovement`,
+29 domain tablosu, 28 model, 355 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -194,10 +195,44 @@ Ledger ↔ projeksiyon eşitliği `tests/Concerns/AssertsLedgerIntegrity.php`
 içindeki `assertLedgerMatchesProjection()` ile doğrulanır — stok yazan her
 testin sonunda çağrılır.
 
+## Mutabakat kuralları (§10)
+
+- **Karşılaştırma GİDEN değerle yapılır**: beklenen uzak değer
+  `OutboundQuantity::forChannel()` yani `max(available, 0)`. Kanonik bakiye
+  fazla satış nedeniyle negatifse kanaldaki 0 **doğrudur** ve sürüklenme
+  değildir. Ham kanonik değerle karşılaştırılsaydı her fazla satış kalıcı
+  sürüklenme olarak raporlanır ve **sonsuz onarım döngüsü** doğardı.
+- **`error_permanent` ASLA aday değildir.** Düzeltilemeyecek listing her
+  turda kontrol edilirse bütçe boşa gider ve gerçek sürüklenmeler geç fark
+  edilir. Satır ancak kullanıcı müdahalesiyle `pending`'e dönünce akışa girer.
+- **Dört aday sorgusu AYRI çalışır**, tek UNION değil: her biri kendi kısmi
+  indeksini kullanır; tek dev sorgu planlayıcıyı zorlar ve indeks seçimini
+  bozar. Birleştirme uygulama katmanında, listing başına en yüksek öncelikle.
+- **Onarım sürüm kapısını ATLAR ve `desired_version`'ı ARTIRMAZ.** Mutabakat
+  uzak durumu okumuş ve farkı kanıtlamıştır. Anahtar kalem kimliğini taşır
+  (`inv:{listing}:{version}:repair:{item_id}`) — aynı kalem iki kez işlense
+  tek operasyon oluşur ve biçim normal anahtarla çakışmaz.
+- **`REMOTE_MISSING` otomatik onarım AÇMAZ** — yeniden listeleme kullanıcı
+  onayı ister; sessizce yaratmak kanalda kopya ürün açardı.
+- **`REMOTE_UNREACHABLE` sürüklenme DEĞİLDİR**: API hatası altyapı sorunudur
+  ve fark kanıtlanmamıştır. Bilinmeyen duruma karşı yazmak yanlıştır.
+- **Doğrulama AYRI turda.** Onarımdan hemen sonra okumak hem kota yer hem de
+  pazaryerlerinde stok saniyeler sonra yansıdığı için yanlış sonuç verir;
+  kalem sonraki turda `drift_detected` sebebiyle tekrar aday olur.
+- **Uzak durum TOPLU okunur** — 50 listing tek istekte. Listing başına ayrı
+  istek ölçek hesabını yüz katına çıkarırdı.
+- **Kaynak kanal DAHİLDİR.** Fan-out'ta kaynak kanalın atlanması bir
+  eniyilemedir, otorite devri değil; kanal kendi güncellemesini uygulamamış
+  olabilir.
+- `remote_hash` / `last_observed_at` burada dolar — §9'un üçüncü durumu.
+  Sync state satırı yoksa **yaratılır**: hiç senkronlanmamış listing tam da
+  sürüklenmeye en açık olandır ve gözlemi atmak öğrenileni çöpe atmaktır.
+
 ## Henüz yazılmadı
 
-`TrendyolAdapter`, `UpdateOrderSnapshot`, `UpdateFulfillment`, mutabakat,
-`PruneApiCalls`, sipariş listesi ekranı.
+`TrendyolAdapter`, `UpdateOrderSnapshot`, `UpdateFulfillment`,
+`PruneApiCalls`, sipariş listesi ekranı, mutabakat panel ekranı, ılık/soğuk
+mutabakat katmanları (sıcak katman yazıldı).
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -412,11 +447,17 @@ ekran var: özet · ürünler · ürün kanalları · stok · kanallar.
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
 da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 
-1. **§10 mutabakat** — sürüklenme tespiti; `clock_timestamp()` kuralına tabi
-   ve karşılaştırma `max(available, 0)` ile yapılır. `remote_hash` alanı
-   burada dolar; `desired_hash`/`synced_hash` çifti hazır (§9 karar tablosu).
-2. **Sipariş listesi ekranı** (§13 · faz 1.6 panel maddesi) — "panelde sipariş
-   listesi ve fazla satış uyarısı".
+**§10 mutabakat sıcak katmanı da kapandı** — sürüklenme tespiti, onarım ve
+zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
+→ REPAIR → kanala 17 gitti).
+
+1. **Sipariş listesi ekranı** (§13 · faz 1.6 panel maddesi) — "panelde sipariş
+   listesi ve fazla satış uyarısı". Sipariş alımı çalışıyor ama panelde
+   görünmüyor; kullanıcının siparişi göreceği tek yer yok.
+2. **Mutabakat panel ekranı** — `reconciliation_runs` / `reconciliation_items`
+   yazılıyor ama hiçbir yerde gösterilmiyor. Sürüklenme bulunduğunu kullanıcı
+   göremiyor.
+3. **Faz 2 · `TrendyolAdapter`** — ikinci kanal; adapter mimarisi hazır.
 
 **Abonelik/ödeme Faz 4'tür (hafta 21–25), şimdi değil.** §13 · Faz 4:
 "Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa". Şema kararı

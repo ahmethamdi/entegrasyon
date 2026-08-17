@@ -13,6 +13,7 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
+use DateTimeImmutable;
 use RuntimeException;
 use Throwable;
 
@@ -45,6 +46,18 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
 
     /** @var array<string, int> */
     private static array $batchSize = [];
+
+    /**
+     * Kanal kodu → external_id → kanalda GÖZLENEN miktar.
+     *
+     * Mutabakat testleri uzak durumu buradan okur.
+     *
+     * @var array<string, array<string, int>>
+     */
+    private static array $remote = [];
+
+    /** @var array<string, bool> */
+    private static array $fetchFails = [];
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -79,11 +92,25 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
         self::$batchSize[$channelTypeCode] = $size;
     }
 
+    /** Kanalda gözlenen miktarı programlar — §10 mutabakat testleri. */
+    public static function remoteQuantity(string $channelTypeCode, string $externalId, int $quantity): void
+    {
+        self::$remote[$channelTypeCode][$externalId] = $quantity;
+    }
+
+    /** Uzak okuma patlasın — REMOTE_UNREACHABLE yolu. */
+    public static function failFetchOn(string $channelTypeCode): void
+    {
+        self::$fetchFails[$channelTypeCode] = true;
+    }
+
     public static function reset(): void
     {
         self::$plan = [];
         self::$pushes = [];
         self::$batchSize = [];
+        self::$remote = [];
+        self::$fetchFails = [];
     }
 
     /**
@@ -154,7 +181,27 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
 
     public function fetchInventory(array $listings): RemoteInventorySnapshot
     {
-        return new RemoteInventorySnapshot([]);
+        $code = $this->code();
+
+        if (self::$fetchFails[$code] ?? false) {
+            throw new RuntimeException('kanal okunamadı');
+        }
+
+        $programmed = self::$remote[$code] ?? [];
+
+        // YALNIZCA istenen kimlikler döner — kanalda olmayan kimlik yanıtta
+        // hiç görünmez ve mutabakat onu REMOTE_MISSING sayar.
+        $quantities = [];
+
+        foreach ($listings as $listing) {
+            $externalId = $listing->external_id;
+
+            if ($externalId !== null && array_key_exists($externalId, $programmed)) {
+                $quantities[$externalId] = $programmed[$externalId];
+            }
+        }
+
+        return new RemoteInventorySnapshot($quantities, new DateTimeImmutable);
     }
 
     public function maxInventoryBatchSize(): int

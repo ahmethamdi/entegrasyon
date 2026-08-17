@@ -52,3 +52,17 @@ Schedule::command('outbox:detect-unconsumed')
     ->everyTenMinutes()
     ->onOneServer()
     ->withoutOverlapping();
+
+// §10 · SICAK KATMAN MUTABAKATI — sürüklenme tespiti.
+//
+// Bütünlük taramalarından FARKLI bir soruyu cevaplar: onlar "iş kayboldu mu"
+// diye sorar, bu "gönderdiğimizi sandığımız değer kanalda gerçekten var mı"
+// diye sorar. Kanalda elle yapılan değişiklik, kanalın kendi satışı veya
+// başarılı görünüp uygulanmamış bir yazma yalnızca BURADA yakalanır.
+//
+// Kapsam sıcak katman: son 30 dk satış olan, geçici hata almış, bir saattir
+// bekleyen listing'ler — bağlantı başına en fazla 50 (§10 bütçe tablosu).
+Schedule::command('reconcile:hot')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();

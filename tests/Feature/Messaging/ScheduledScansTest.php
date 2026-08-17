@@ -25,6 +25,7 @@ use Tests\TestCase;
  *   inbox:recover              1 dakika
  *   sync:detect-stuck          5 dakika   (seviye 2)
  *   outbox:detect-unconsumed  10 dakika   (seviye 1)
+ *   reconcile:hot              5 dakika   (§10 · sıcak katman)
  *
  * outbox:relay BU LİSTEDE YOKTUR ve olmamalıdır: o bir kuyruk işi veya
  * zamanlanmış komut değil, supervisor altında sürekli çalışan bir süreçtir.
@@ -40,7 +41,12 @@ final class ScheduledScansTest extends TestCase
     {
         $commands = $this->scheduledCommands();
 
-        foreach (['inbox:recover', 'sync:detect-stuck', 'outbox:detect-unconsumed'] as $command) {
+        foreach ([
+            'inbox:recover',
+            'sync:detect-stuck',
+            'outbox:detect-unconsumed',
+            'reconcile:hot',
+        ] as $command) {
             $this->assertContains(
                 $command,
                 array_keys($commands),
@@ -61,6 +67,10 @@ final class ScheduledScansTest extends TestCase
         // Seviye 2: her 5 dakikada. Daha sık, çünkü Redis iş kaybı outbox
         // kaybından daha yakın bir halkada olur ve stok kanala hiç gitmez.
         $this->assertSame('*/5 * * * *', $commands['sync:detect-stuck']);
+
+        // §10 · sıcak katman da beş dakikalık: sürüklenme ne kadar geç fark
+        // edilirse o kadar çok yanlış stokla satış yapılır.
+        $this->assertSame('*/5 * * * *', $commands['reconcile:hot']);
 
         // Gelen hat kurtarması: dakikalık. Kaybedilen şey SİPARİŞTİR.
         $this->assertSame('* * * * *', $commands['inbox:recover']);
@@ -104,7 +114,12 @@ final class ScheduledScansTest extends TestCase
     {
         $registered = array_keys($this->app[Kernel::class]->all());
 
-        foreach (['inbox:recover', 'sync:detect-stuck', 'outbox:detect-unconsumed'] as $command) {
+        foreach ([
+            'inbox:recover',
+            'sync:detect-stuck',
+            'outbox:detect-unconsumed',
+            'reconcile:hot',
+        ] as $command) {
             $this->assertContains(
                 $command,
                 $registered,
