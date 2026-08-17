@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 145 test yeşil olmalı
+docker compose exec app php artisan test      # 207 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -79,14 +79,15 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 182 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 207 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
 `OrderEventRouter`), giden hat (`InventoryBatchBuilder`, `PushInventory`,
 `SyncResultRecorder`) ve **gerçek WooCommerce entegrasyonu**
 (`ChannelHttpClient`, `WooCommerceAdapter`, `WooOrderNormalizer`,
-`WooProductMapper`) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
+`WooProductMapper`) ve koruma katmanı (`ChannelRateLimiter`,
+`CircuitBreaker`) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
 yeşil. **Dikey dilim kapalı** — `WooCommerceVerticalSliceTest` zinciri
 baştan sona yürütüyor. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
 
@@ -176,9 +177,10 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`ChannelRateLimiter` (Redis kova), `CircuitBreaker`, `TrendyolAdapter`,
-`PushListing` işi, `UpdateOrderSnapshot`, `UpdateFulfillment`, mutabakat,
-`PruneApiCalls`, kimlik doğrulama ve panel ekranları.
+`TrendyolAdapter`, `PushListing` işi, `UpdateOrderSnapshot`,
+`UpdateFulfillment`, mutabakat, `DetectUnconsumedEvents`,
+`DetectStuckSyncOperations`, `PruneApiCalls`, kimlik doğrulama ve panel
+ekranları.
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -231,10 +233,30 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **`delist` silmez, taslağa çeker.** Silme geri alınamaz ve kanaldaki
   yorumları, sıralamayı, SEO geçmişini de götürür.
 
+## Koruma katmanı kuralları
+
+- **Kova ve devre bağlantı başınadır**, kiracı başına değil. Sınırı koyan
+  kanaldır ve kanal mağaza hesabını tanır; aynı kiracının iki Woo mağazası
+  ayrı kotaya sahiptir.
+- **Jeton kovası, sabit pencere değil.** Sabit pencere sınır çizgisinde iki
+  kat isteğe izin verir (pencerenin sonunda N, hemen ardından N daha).
+- **Kova Lua ile atomik**, zaman `TIME` ile **Redis'ten** okunur. Oku-hesapla-yaz
+  ayrı komut olsaydı iki worker aynı jetonu alırdı; PHP saatleri kayarsa kova
+  olduğundan hızlı dolardı.
+- **`AUTHENTICATION` devreyi tek hatada ve SÜRESİZ açar** (TTL yok). Token
+  geçersizken beklemek düzeltmez; `reset()` kullanıcı müdahalesiyle çağrılır.
+- **`half_open`'da sonda TEKTİR** (`SET NX`). Tüm yükü bir anda geri salmak,
+  toparlanmakta olan kanalı tekrar çökertir.
+- **Sayaç başarıda sıfırlanır** — *ardışık* hata sayılır, toplam değil.
+- **Devre açıkken veya kota boşken DENEME AÇILMAZ.** İş `release` edilir,
+  `attempt_count` **0 kalır**: o operasyon denenmedi, ertelendi.
+- **İkisi de Redis erişilemezken çağrıyı GEÇİRİR.** Koruma katmanının
+  erişilemezliği, korumaya çalıştığı sorundan büyük zarar vermemeli.
+
 ## Sıradaki adım
 
-Doküman §12: **`ChannelRateLimiter`** (Redis kova, `rateLimitProfile()`
-sözleşmesi) ve **`CircuitBreaker`** (ardışık 10 hata → 5 dk duraklatma;
-`AUTHENTICATION` devreyi süresiz açar). Ardından `PushListing` işi ve
-panel ekranları — ilk görsel çıktı için zincir artık hazır.
+Doküman §6 ve §10 — **bütünlük taramaları**: `DetectUnconsumedEvents`
+(seviye 1, T5) ve `DetectStuckSyncOperations` (seviye 2, T6). İkisi de
+`clock_timestamp()` kuralına tabidir. Ardından mutabakat (§10) veya
+`PushListing` + panel ekranları — ilk görsel çıktı için zincir hazır.
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
