@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [main]
 
+# Composer paketleri codeload.github.com'dan iner ve KİMLİKSİZ istekler çok
+# düşük bir limite tabidir; runner IP'leri paylaşımlı olduğu için limit bize
+# ait olmayan trafikle de dolar ve HTTP 429 ile iş düşer.
+#
+# GITHUB_TOKEN her koşuda ücretsiz mevcuttur ve isteği kimlikli hale getirir;
+# limit birkaç kat yükselir. Bu bir "gizli anahtar" değil, koşuya özel
+# kısa ömürlü bir token.
+env:
+  COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
+
 jobs:
   tests:
     name: Tests (PHP 8.3 · PostgreSQL 16)
@@ -46,15 +56,36 @@ jobs:
           extensions: pdo_pgsql, pgsql, redis, intl, bcmath, zip, pcntl, posix
           coverage: none
 
-      - name: Cache Composer packages
+      # HEM vendor HEM composer'ın indirme önbelleği tutulur.
+      #
+      # Yalnızca vendor tutulsaydı kısmi isabet (restore-keys) durumunda
+      # eksik paketler yine codeload'dan inerdi; indirme önbelleği o
+      # boşluğu da kapatır ve ağa hiç çıkılmaz. 429 tam olarak burada
+      # yaşandı: paylaşımlı runner IP'si limite takıldı ve iş düştü.
+      - name: Cache Composer
         uses: actions/cache@v4
         with:
-          path: vendor
+          path: |
+            vendor
+            ~/.composer/cache
           key: composer-${{ hashFiles('composer.lock') }}
           restore-keys: composer-
 
+      # 429 GEÇİCİ bir hatadır: paylaşımlı runner IP'sinin limiti bizden
+      # bağımsız trafikle dolar ve birkaç saniye sonra açılır. Tek denemede
+      # düşmek, kodda hiçbir sorun yokken CI'ı kırmızı gösterir ve gerçek
+      # kırmızıya olan güveni aşındırır.
+      #
+      # Üç deneme, artan bekleme. Hâlâ düşüyorsa sorun geçici değildir ve
+      # iş HAKLI olarak kırmızı olur — sonsuz denemek arızayı gizlerdi.
       - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: |
+          for attempt in 1 2 3; do
+            composer install --prefer-dist --no-interaction --no-progress && exit 0
+            echo "composer install başarısız (deneme ${attempt}/3), bekleniyor…"
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       # public/build .gitignore'dadır; checkout sonrası dizin YOKTUR.
       # Blade sayfası render eden testler (ExampleTest → GET /) Vite
@@ -105,11 +136,35 @@ jobs:
           php-version: '8.3'
           coverage: none
 
-      - name: Install dependencies
-        run: composer install --prefer-dist --no-interaction --no-progress
+      # Bu job'ın TÜM bağımlılıklara ihtiyacı yok — yalnızca Pint çalıştırır.
+      # Tam `composer install` yüzlerce paketi codeload'dan indirir ve tam bu
+      # yüzden 429 yiyip düşmüştü: Tests job'ının cache'i vardı ve geçiyordu,
+      # cache'i olmayan lint düşüyordu. YALNIZCA Pint kurulur; rate limit
+      # yüzeyi yüzlerce paketten bire iner.
+      #
+      # Sürüm composer.json'dan okunur ve orada sabitlenir — burada ikinci
+      # bir sürüm yazmak iki dosyanın sessizce ayrışmasına yol açardı.
+      - name: Cache Pint
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache
+          key: pint-${{ hashFiles('composer.json') }}
+          restore-keys: pint-
+
+      - name: Install Pint
+        run: |
+          PINT_VERSION=$(php -r 'echo json_decode(file_get_contents("composer.json"), true)["require-dev"]["laravel/pint"];')
+
+          for attempt in 1 2 3; do
+            composer global require laravel/pint:"$PINT_VERSION" \
+              --no-interaction --no-progress && exit 0
+            echo "pint kurulumu başarısız (deneme ${attempt}/3), bekleniyor…"
+            sleep $((attempt * 15))
+          done
+          exit 1
 
       - name: Laravel Pint
-        run: vendor/bin/pint --test
+        run: $(composer global config bin-dir --absolute --quiet)/pint --test
 
   frontend:
     name: Frontend build
