@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 207 test yeşil olmalı
+docker compose exec app php artisan test      # 221 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -79,15 +79,16 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 `app/Domain/`: Identity · Catalog · Inventory · Channels · Messaging · Sync
 `app/Support/`: Tenancy · Uuid · Logging
 
-27 domain tablosu, 26 model, 207 test. Stok çekirdeği (`ApplyMovement`,
+27 domain tablosu, 26 model, 221 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
 `OrderEventRouter`), giden hat (`InventoryBatchBuilder`, `PushInventory`,
 `SyncResultRecorder`) ve **gerçek WooCommerce entegrasyonu**
 (`ChannelHttpClient`, `WooCommerceAdapter`, `WooOrderNormalizer`,
-`WooProductMapper`) ve koruma katmanı (`ChannelRateLimiter`,
-`CircuitBreaker`) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
+`WooProductMapper`), koruma katmanı (`ChannelRateLimiter`,
+`CircuitBreaker`) ve **panel** (kimlik doğrulama, `EstablishTenantContext`,
+senkron durumu ekranı) yazıldı. P0 testleri T1/T2/T3/T4/T9/T11/T12 ve T7/T8
 yeşil. **Dikey dilim kapalı** — `WooCommerceVerticalSliceTest` zinciri
 baştan sona yürütüyor. Ayrıntı için memory'deki "Repo Durumu" dosyasına bak.
 
@@ -179,8 +180,8 @@ testin sonunda çağrılır.
 
 `TrendyolAdapter`, `PushListing` işi, `UpdateOrderSnapshot`,
 `UpdateFulfillment`, mutabakat, `DetectUnconsumedEvents`,
-`DetectStuckSyncOperations`, `PruneApiCalls`, kimlik doğrulama ve panel
-ekranları.
+`DetectStuckSyncOperations`, `PruneApiCalls`, kanal bağlama akışı ve
+ürün/stok panel ekranları.
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -253,10 +254,39 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **İkisi de Redis erişilemezken çağrıyı GEÇİRİR.** Koruma katmanının
   erişilemezliği, korumaya çalıştığı sorundan büyük zarar vermemeli.
 
+## Panel kuralları
+
+- **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
+  grubunda **değil**: giriş ve kayıt rotaları kiracısızdır ve bağlam kurmaya
+  çalışmak onları kendi üzerlerine yönlendirirdi.
+- **Oturumdaki kiracı kimliğine ASLA olduğu gibi güvenilmez.** Her istekte
+  `tenant_users` üzerinden üyelik doğrulanır. `BelongsToTenant` global
+  scope'u bağlamı sorgulamaz, ona **güvenir**; çerezi kurcalayan biri başka
+  kiracının verisine erişirdi.
+- **İstek sonunda bağlam `finally` ile bırakılır.** `TenantContext` statiktir;
+  Octane veya uzun ömürlü süreçte sonraki isteğe sızardı.
+- **Fazla satış panelde GİZLENMEZ** (§17 · P0). Negatif `available` kırpılmadan,
+  eksik miktarla birlikte gösterilir. Kırpma yalnızca kanala giden yükte
+  meşrudur; panelde gizlemek satıcıyı eksikten habersiz bırakır.
+- **Inertia'ya model gönderilmez**, yalnızca görünen alanlar. Modeli olduğu
+  gibi paylaşmak parola hash'i ve kimlik bilgisi sızdırır.
+- **`Auth::attempt()` oturum kimliğini zaten yeniliyor**
+  (`SessionGuard::login()` → `session->regenerate(true)`). Controller'a ikinci
+  bir `regenerate()` **eklenmez**; garantiyi `AuthenticationTest` doğrular.
+
 ## Sıradaki adım
 
-Doküman §6 ve §10 — **bütünlük taramaları**: `DetectUnconsumedEvents`
-(seviye 1, T5) ve `DetectStuckSyncOperations` (seviye 2, T6). İkisi de
-`clock_timestamp()` kuralına tabidir. Ardından mutabakat (§10) veya
-`PushListing` + panel ekranları — ilk görsel çıktı için zincir hazır.
+Panel iskeleti kuruldu, tek ekran var. İki mantıklı yol:
+
+1. **Kanal bağlama akışı** — Woo mağazasını panelden gerçekten bağlamak
+   (`CredentialVault` ve `healthCheck()` hazır). Sistemi ilk kez gerçek bir
+   mağazayla uçtan uca çalıştırır.
+2. **Ürün/stok listesi** — satıcının her gün bakacağı ekran; fazla satış
+   uyarısı ve senkron rozeti (§13 · faz 1.2 ve 1.5).
+
+Doküman sırası ise §6 bütünlük taramaları (`DetectUnconsumedEvents` T5,
+`DetectStuckSyncOperations` T6) ve §10 mutabakat — ikisi de
+`clock_timestamp()` kuralına tabi. Bunlar **kurtarma** mekanizmaları;
+sistem üretimde çalışmadan önce aciliyeti düşük.
+
 Doküman §18 testlerin **önce** yazılmasını şart koşuyor.
