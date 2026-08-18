@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 440 test yeşil olmalı
+docker compose exec app php artisan test      # 474 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -94,7 +94,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 440 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 474 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -263,6 +263,48 @@ memory'deki "Repo Durumu" dosyasına bak.
 - **Eksik zorunlu öznitelik ADIYLA gösterilir**, sayıyla değil: sayı tek
   başına kullanıcıya ne yapacağını söylemez.
 
+## Ön koşul kapısı ve onay kuralları (§14 · Faz 2)
+
+- **KAPI STOK AKIŞINA DOKUNMAZ** — §14'ün ana tasarım hedefi. Eksik
+  eşleştirmede listing `blocked` olur ve içerik gönderilmez, ama hareket,
+  bakiye ve outbox olayı HİÇ etkilenmez. Test bunu snapshot
+  karşılaştırmasıyla korur; kırılırsa pazaryeri karmaşıklığı çekirdeğe
+  sızmış demektir.
+- **Kapı ÇEKİRDEKTEDİR** (`Sync/Support/PrerequisiteGate`), `Adapters/
+  Trendyol/Catalog/` altında DEĞİL. §19'un dizin ağacından bilinçli sapma:
+  kapı kiracının eşleştirme tablolarını okur ve çekirdeğin listing
+  durumunu belirler; Trendyol'a özgü hiçbir şey bilmez ve
+  `SupportsTaxonomy` uygulayan HER kanalda çalışır. §14'ün kendi örneği de
+  `instanceof SupportsTaxonomy` ile yazılmış. `ListingMapper` ise gerçekten
+  kanala özgüdür ve dokümanın gösterdiği yerde durur.
+- **"Hazır mı" mantığı TEK KAYNAKTIR.** Eşleştirme ekranı kapının
+  `missingRequiredAttributes()` metodunu çağırır. İki yerde hesaplansaydı
+  biri değiştiğinde panel "hazır" derken kapı "eksik" der ve satıcı neyi
+  düzelteceğini bilemezdi.
+- **İç kategorisi olmayan ürünün sebebi AYRIDIR** — "eşleşme yok" demek
+  kullanıcıyı eşleştirme ekranında hiç bulunmayan bir satırı aramaya
+  gönderirdi.
+- **ENGEL BİR CEZA DEĞİL BEKLEME DURUMUDUR.** Eksik kapanınca satır taslağa
+  döner, sync state `pending` olur ve eski hata metni TEMİZLENİR. Sürüm
+  alanlarına dokunulmaz: `desired_version` artırılsaydı eksik kapandığında
+  sürüm kapısı gönderimi eler ve ürün sessizce hiç gitmezdi.
+- **ONAY SÜRECİ OLAN KANALDA GÖNDERİM `live` DEĞİL `pending_approval`
+  YAZAR.** Doğrudan canlı işaretlenseydi henüz yayında olmayan satır
+  fan-out hedefi olur ve her stok turunda hata alırdı. Canlı işareti
+  `TrackApprovalStatus` kanaldan öğrenerek yazar.
+- **Onay durumu TOPLU okunur** ve **yanıtta olmayan satıra DOKUNULMAZ** —
+  yokluk red değildir; kanal yeni ürünü listeye hemen koymaz.
+- **`approved: true` + `onSale: false` "inactive"dir**, onaylanmış değil:
+  o satır kanalda GÖRÜNMEZ ve "onaylandı" demek satıcıya ürününün yayında
+  olduğunu düşündürürdü.
+- **Red sebebi ADIYLA saklanır ve AYRI kutuda gösterilir.** Senkron hatası
+  "gönderemedik", red ise "gönderdik ama kanal beğenmedi" demektir; ikisi
+  aynı alana yazılsaydı biri diğerini ezerdi.
+- **`PublishListing`'in boş dizisi İKİ anlama gelir** — sürüm kapısı eledi
+  (zaten gönderilmiş) veya ön koşul engelledi (hiç gönderilmedi). Panel
+  ikisini AYIRT ETMEK zorundadır; "zaten güncel" demek satıcıyı eksik
+  eşleştirmeden habersiz bırakır (gerçek tarayıcı çalıştırmasında bulundu).
+
 ## Zaman damgası tuzağı — `now()` yerine `clock_timestamp()`
 
 `outbox_events` zaman damgaları **saniye hassasiyetlidir**
@@ -334,14 +376,17 @@ testin sonunda çağrılır.
 `RequestResync` (+ T10), mutabakat panel ekranı, ılık/soğuk mutabakat
 katmanları (sıcak katman yazıldı).
 
-`TrendyolAdapter`'ın **istemci/kimlik/hız sınırı ve taksonomi katmanı
-yazıldı**; katalog aktarımı, sipariş yoklaması, onay durumu ve stok/fiyat
-itme Faz 2'nin sonraki maddeleridir ve gövdeleri açıkça istisna fırlatır.
+`TrendyolAdapter`'ın **istemci/kimlik/hız sınırı, taksonomi, katalog
+aktarımı ve onay durumu katmanları yazıldı**. Hâlâ istisna fırlatanlar:
+`pushInventory`, `pushPrices`, `fetchOrders`, `parseOrderEvent`, `delist`,
+`fetchListing`, `fetchInventory`, `fetchPrices`. Bu liste madde kapandıkça
+küçülür ve `TrendyolAdapterTest` onu **yazılmamış olarak** doğrular —
+yazılan bir gövde listeden çıkarılmazsa test yanlış sebeple kırmızıya
+döner.
 
-Kategori/öznitelik **eşleştirme** tabloları ve panel ekranı **yazıldı**;
-sıradaki madde `PrerequisiteGate`'tir. Ekran zaten "hazır mı" sorusunu
-cevaplıyor (`ready`); kapı aynı mantığı listing tarafında uygulayacak —
-**mantık ortak bir yere alınmalı, ikinci kez yazılmamalı.**
+Kategori/öznitelik **eşleştirme** ve **ön koşul kapısı** yazıldı. "Hazır
+mı" mantığı `PrerequisiteGate::missingRequiredAttributes()` içinde TEK
+kaynaktır ve eşleştirme ekranı onu çağırır.
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -587,19 +632,15 @@ da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
 → REPAIR → kanala 17 gitti).
 
-**Faz 2 başladı.** İlk ÜÇ madde kapandı: Trendyol istemcisi (kimlik
-doğrulama, dinamik hız sınırı), **taksonomi çekme/önbellekleme/sürümleme**
-ve **kategori/öznitelik eşleştirme arayüzü** (üç tablo, üç action, panel
-ekranı). Dokümandaki sıradaki maddeler:
+**Faz 2 başladı.** İlk DÖRT madde kapandı: Trendyol istemcisi (kimlik
+doğrulama, dinamik hız sınırı), **taksonomi çekme/önbellekleme/sürümleme**,
+**kategori/öznitelik eşleştirme arayüzü** ve **katalog aktarımı + ön koşul
+kapısı + onay durumu takibi**. Dokümandaki sıradaki maddeler:
 
-1. **Katalog aktarımı, ön koşul kapısı, onay durumu takibi** (24 sa) —
-   `PrerequisiteGate`: eksik eşleştirmede listing `blocked`, stok akışı
-   ETKİLENMEZ. Girdisi hazır; eşleştirme ekranı "hazır mı" sorusunu zaten
-   cevaplıyor (`ready`) ve o mantık **ortak bir yere alınmalı, ikinci kez
-   yazılmamalı**.
-2. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
-   Woo satışı Trendyol stoğunu günceller.
-3. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
+1. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
+   Woo satışı Trendyol stoğunu günceller. `TrendyolAdapter::pushInventory`
+   ve `pushPrices` hâlâ açıkça istisna fırlatıyor.
+2. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
    Faz 2 demosu bunu ister: "Trendyol siparişi Woo stoğunu düşürüyor".
 
 Panel tarafında hâlâ açık: **mutabakat panel ekranı** (`reconciliation_items`
