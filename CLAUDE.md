@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 474 test yeşil olmalı
+docker compose exec app php artisan test      # 532 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -104,7 +104,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 474 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 532 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -229,6 +229,32 @@ memory'deki "Repo Durumu" dosyasına bak.
 - **Stok/fiyat itme de ASENKRONDUR** — yanıt `batchRequestId` döner.
   Kabul "gönderildi" demektir, "uygulandı" değil; farkı mutabakat turu
   yakalar.
+
+## Sipariş güncelleme ve kargo kuralları (§13 · Faz 3)
+
+- **İKİSİ DE STOK HAREKETİ ÜRETMEZ** (§4). Mal SATIŞTA zaten düşülmüştür;
+  hareket üretselerdi aynı satış iki kez düşülür ve bakiye KALICI olarak
+  bozulurdu. Testler ledger'ı önce/sonra karşılaştırarak korur.
+- **GÜNCELLEME KALEMLERE DOKUNMAZ.** Kalem değişikliği stok demektir ve
+  stok yalnızca iptal/iade yollarından geçer; kanalın gönderdiği kalem
+  listesi burada uygulansaydı sessizce stok tutarsızlığı üretirdi.
+- **NULL "DEĞİŞMEDİ" DEMEKTİR, "BOŞALT" DEĞİL.** Kanal her olayda tüm
+  alanları göndermez ve boş değerin mevcut veriyi ezmesi GERİ ALINAMAZ.
+  `delivered` olayı `shipped_at` taşımaz — ezseydi kargoya veriliş anı
+  kaybolurdu.
+- **PAKET BAŞINA TEK SATIR, DURUM İLERLER** (`(order_id, external_id)`
+  tekil). Çok paketli sipariş AYRI satırlar taşır: tek satıra
+  sıkıştırılsaydı ikinci paket birincinin durumunu ezer ve satıcı yarısı
+  teslim olmuş siparişi "tamamen teslim" sanırdı.
+- **BAYAT TEKRAR YENİ DURUMU EZMEZ.** Idempotency kapısının asıl değeri
+  budur: yoklama örtüşmesi eski olayı tur tur yeniden görür ve kapı
+  olmasaydı araya giren `Delivered` her turda `Shipped`'a geri ezilirdi.
+- **DÜRÜST SINIR — `fulfilled` TİPİNİ HİÇBİR NORMALIZER ÜRETMİYOR.** Woo
+  kargoyu ayrı webhook göndermiyor, Trendyol'da kargo §14 gereği KAPSAM
+  DIŞI. Router'ın FULFILLED dalı ve paket bazlı çıpa bu yüzden davranışla
+  sınanamaz; mutasyon orada hayatta kalır ve KALMALIDIR. Kanal kargo
+  bildirimi göndermeye başlarsa ilk iş normalizer'a `fulfilled` tipini ve
+  `payload['fulfillment']` bloğunu eklemektir.
 
 ## Sipariş yoklaması kuralları (§13 · Faz 2)
 
@@ -428,9 +454,11 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`UpdateOrderSnapshot`, `UpdateFulfillment`, `PruneApiCalls`,
-`RequestResync` (+ T10), mutabakat panel ekranı, ılık/soğuk mutabakat
-katmanları (sıcak katman yazıldı).
+`PruneApiCalls`, `RequestResync` (+ T10), mutabakat panel ekranı,
+ılık/soğuk mutabakat katmanları (sıcak katman yazıldı).
+
+`UpdateOrderSnapshot` ve `UpdateFulfillment` **YAZILDI** (§13 · Faz 3) ve
+`OrderEventRouter`'a bağlandı.
 
 **FİYAT SENKRON YOLU ÇEKİRDEKTE YOK** — `pushPrices` gövdeleri (Woo ve
 Trendyol) hazır ama **çağıranı yok**: `SyncDomain::PRICE` ve `PRICE_PUSH`
@@ -702,8 +730,9 @@ kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
 Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
-**Sıradaki: Faz 3 (güvenilirlik).** Faz 4 abonelik/ödeme hâlâ hafta
-21–25'tir ve şimdi yazılmamalı.
+**Faz 3 başladı** (güvenilirlik). İlk madde kapandı:
+`UpdateOrderSnapshot` + `UpdateFulfillment`. Faz 4 abonelik/ödeme hâlâ
+hafta 21–25'tir ve şimdi yazılmamalı.
 
 **`pushPrices`'ın ÇEKİRDEKTE ÇAĞIRANI YOK** — bu turda bulundu ve
 Woo'yu da kapsıyor. `SyncDomain::PRICE` ve `PRICE_PUSH` şemada var ama
