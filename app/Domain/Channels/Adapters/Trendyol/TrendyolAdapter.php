@@ -93,6 +93,34 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     /** Öğrenilen sınırın `settings` içindeki yeri. */
     private const LEARNED_RATE_LIMIT_KEY = 'learned_rate_limit';
 
+    /** Yoklama sayfa boyutu — kanalın üst sınırı 200. */
+    private const ORDER_PAGE_SIZE = 200;
+
+    /**
+     * Trendyol paket durumu → kanonik olay tipi.
+     *
+     * LİSTEDE OLMAYAN DURUM `updated` SAYILIR (bkz. `parseOrderEvent`):
+     * kanal durum listesini genişletebilir ve bilinmeyeni `created` ya da
+     * `cancelled` saymak bakiyeyi bozardı.
+     *
+     * `Delivered` ve `Shipped` stok hareketi ÜRETMEZ: stok sipariş
+     * oluştuğunda zaten düşülmüştür; kargo aşamaları yalnızca anlık
+     * görüntüyü tazeler.
+     */
+    private const STATUS_TO_TYPE = [
+        'Created' => 'created',
+        'Awaiting' => 'created',
+        'Picking' => 'updated',
+        'Invoiced' => 'updated',
+        'Shipped' => 'updated',
+        'Delivered' => 'updated',
+        'AtCollectionPoint' => 'updated',
+        'Cancelled' => 'cancelled',
+        'UnDelivered' => 'updated',
+        'Returned' => 'returned',
+        'UnPacked' => 'updated',
+    ];
+
     public function __construct(
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,
@@ -619,14 +647,178 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
     // ------------------------------------------------------------- sipariş
 
+    /**
+     * Siparişleri YOKLAMA ile çeker — webhook yoktur.
+     *
+     * Mimari Karar Dokümanı v2.2 · §13 · Faz 2 ("Sipariş yoklaması"),
+     * §7 · SupportsOrders, §14.
+     *
+     * TARİH MİLİSANİYE EPOCH'TUR: Trendyol saniye kabul etmez. Saniye
+     * gönderilseydi pencere 1970'e düşer ve kanal TÜM sipariş geçmişini
+     * döndürürdü — ilk turda binlerce sipariş, tükenen kota ve saatlerce
+     * süren bir tur.
+     *
+     * HAM GÖVDE DÖNER: ayrıştırma `parseOrderEvent` ile SONRA yapılır.
+     * Sıra bilinçlidir — ayrıştırma hatası siparişin kaybolmasına değil,
+     * inbox satırının hata durumuna düşmesine yol açar.
+     *
+     * BAŞARISIZ YANIT YÜKSELTİLİR: `json()` bir 500 gövdesinde de dizi
+     * döndürür ve boş sayfa "yeni sipariş yok" diye okunurdu; imleç
+     * ilerler ve o penceredeki siparişler bir daha HİÇ sorulmazdı.
+     */
     public function fetchOrders(CarbonInterface $since, ?string $cursor = null): OrderPage
     {
-        throw $this->notImplemented('sipariş yoklaması');
+        $page = $cursor === null ? 0 : max(0, (int) $cursor);
+
+        $response = $this->client->get($this->supplierPath('orders'), [
+            // MİLİSANİYE — saniye değil.
+            'startDate' => $since->getTimestampMs(),
+            'page' => $page,
+            'size' => self::ORDER_PAGE_SIZE,
+            // Eskiden yeniye: tur yarıda kalırsa imleç en eski işlenmemiş
+            // siparişin gerisinde kalır ve hiçbir şey atlanmaz.
+            'orderByField' => 'PackageLastModifiedDate',
+            'orderByDirection' => 'ASC',
+        ]);
+
+        // Sessizce boş sayfaya düşme — yükselt.
+        $response->throw();
+
+        $orders = array_values(array_filter(
+            (array) ($response->json('content') ?? []),
+            'is_array',
+        ));
+
+        $totalPages = (int) ($response->json('totalPages') ?? 1);
+        $hasMore = $page + 1 < $totalPages;
+
+        return new OrderPage(
+            orders: $orders,
+            nextCursor: $hasMore ? (string) ($page + 1) : null,
+            hasMore: $hasMore,
+        );
     }
 
+    /**
+     * Ham Trendyol siparişini kanonik olaya çevirir — TİP dahil.
+     *
+     * DEĞİŞMEZ KURAL — TİP AYRIMI (§1 · Karar 24):
+     *   created / updated / cancelled / returned AYRI yollara gider. Tek
+     *   yola sokulsaydı iptal ve iade siparişin yeniden yaratılması gibi
+     *   işlenir ve stok İKİ KEZ düşerdi.
+     *
+     * DEĞİŞMEZ KURAL — BİLİNMEYEN DURUM `updated`:
+     *   Trendyol durum listesini genişletebilir. Bilinmeyen bir durumu
+     *   `created` saymak var olan siparişi yeniden yaratmayı denerdi;
+     *   `cancelled` saymak satılmış stoğu geri eklerdi. İkisi de bakiyeyi
+     *   bozar. `updated` stok hareketi ÜRETMEZ ve güvenli olanıdır.
+     *
+     * ÇIPA DURUMU TAŞIR: `externalRef` stok hareketi idempotency
+     * anahtarının çıpasıdır ve yalnızca sipariş numarasına bağlansaydı
+     * aynı siparişin iptali ile iadesi `order_events` üzerinde çakışır,
+     * ikincisi sessizce yutulurdu.
+     */
     public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
     {
-        throw $this->notImplemented('sipariş normalizasyonu');
+        /** @var array<string, mixed> $payload */
+        $payload = is_array($message->payload) ? $message->payload : [];
+
+        $orderNumber = $payload['orderNumber'] ?? $payload['id'] ?? null;
+
+        if ($orderNumber === null || (string) $orderNumber === '') {
+            // Kimliksiz gövdeden sipariş yaratılamaz; satır hata durumuna
+            // düşer ve elle incelenir — sessizce yutulmaz.
+            return null;
+        }
+
+        $orderNumber = (string) $orderNumber;
+        $status = (string) ($payload['status'] ?? '');
+        $type = self::STATUS_TO_TYPE[$status] ?? 'updated';
+
+        return new NormalizedOrderEvent(
+            type: $type,
+            externalOrderId: $orderNumber,
+            // Çıpa DURUMU taşır — aynı siparişin iki olayı çakışamaz.
+            externalRef: $message->external_event_id ?? "{$orderNumber}:{$status}",
+            payload: $this->toCanonicalOrderPayload($payload, $type, $orderNumber),
+            occurredAt: $this->parseOrderDate($payload),
+        );
+    }
+
+    /**
+     * Trendyol gövdesini `OrderPayloadMapper`'ın beklediği biçime çevirir.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function toCanonicalOrderPayload(array $payload, string $type, string $orderNumber): array
+    {
+        return [
+            'type' => $type,
+            'external_number' => $orderNumber,
+            'status' => (string) ($payload['status'] ?? 'pending'),
+            'financial_status' => ($payload['status'] ?? null) === 'Returned' ? 'refunded' : null,
+            'currency' => (string) ($payload['currencyCode'] ?? 'TRY'),
+            'subtotal' => (string) ($payload['totalPrice'] ?? '0'),
+            'shipping_total' => (string) ($payload['totalShippingPrice'] ?? '0'),
+            'tax_total' => '0',
+            'grand_total' => (string) ($payload['grossAmount'] ?? $payload['totalPrice'] ?? '0'),
+            'lines' => $this->orderLines($payload),
+            // Kişisel veri taşınmaz; yalnızca referans.
+            'customer_ref' => array_filter([
+                'external_customer_id' => isset($payload['customerId'])
+                    ? (string) $payload['customerId']
+                    : null,
+            ]),
+        ];
+    }
+
+    /**
+     * Sipariş kalemleri.
+     *
+     * SKU BARKODDUR: Trendyol ürünü barkodla tanır ve listing'in
+     * `external_id`'si de odur (`ListingMapper`). Eşleşmezse
+     * `order_lines.variant_id` NULL kalır, satır PENDING olur ve sipariş
+     * KAYBEDİLMEZ (Karar 24).
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<array<string, mixed>>
+     */
+    private function orderLines(array $payload): array
+    {
+        $lines = [];
+
+        foreach ((array) ($payload['lines'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $quantity = (int) ($item['quantity'] ?? 0);
+
+            $lines[] = [
+                'external_line_id' => (string) ($item['id'] ?? ''),
+                'sku' => (string) ($item['barcode'] ?? $item['merchantSku'] ?? ''),
+                'title' => (string) ($item['productName'] ?? $item['barcode'] ?? ''),
+                'quantity' => $quantity,
+                'unit_price' => (string) ($item['price'] ?? $item['amount'] ?? '0'),
+                'line_total' => (string) ($item['amount'] ?? '0'),
+            ];
+        }
+
+        return $lines;
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function parseOrderDate(array $payload): ?DateTimeImmutable
+    {
+        $raw = $payload['orderDate'] ?? $payload['lastModifiedDate'] ?? null;
+
+        if (! is_numeric($raw)) {
+            return null;
+        }
+
+        // Kanal milisaniye epoch gönderir.
+        return (new DateTimeImmutable)->setTimestamp(intdiv((int) $raw, 1000));
     }
 
     public function acknowledgeOrder(Order $order): AdapterResult

@@ -90,3 +90,18 @@ Schedule::command('approval:track')
     ->hourly()
     ->onOneServer()
     ->withoutOverlapping();
+
+// §13 · Faz 2 · SİPARİŞ YOKLAMASI — webhook göndermeyen kanallar.
+//
+// BEŞ DAKİKA: Trendyol webhook göndermez ve sipariş yalnızca bu turla
+// gelir. Dakikalık koşmak kotayı 5 katına çıkarırdı ve satıcı seviyesine
+// göre değişen hız sınırı düşük seviyeli hesapları 429'a sokardı;
+// 15 dakika ise stok düşüşünü demoda görünmeyecek kadar geciktirirdi.
+// reconcile:hot ile aynı ritim — kota hesabı buna göre kurulmuş (§10).
+//
+// Kayıp sipariş riski bu frekansla BÜYÜMEZ: pencere geriye bakar ve
+// başarısız turda imleç ilerlemez, yani gecikme telafi edilir.
+Schedule::command('orders:poll')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();

@@ -144,14 +144,20 @@ final class TrendyolAdapterTest extends TestCase
         $adapter = $this->adapter();
 
         $calls = [
-            // TAKSONOMİ, KATALOG AKTARIMI, ONAY DURUMU ve **STOK/FİYAT
-            // İTME** ARTIK BU LİSTEDE DEĞİL: §13 · Faz 2'nin ikinci,
-            // üçüncü, dördüncü ve beşinci maddeleriyle yazıldılar
-            // (`TaxonomySyncTest`, `TrendyolCatalogTest`,
-            // `ApprovalStatusTest`, `TrendyolInventoryPricingTest` onları
-            // doğruluyor). Bu liste madde kapandıkça KÜÇÜLÜR; yazılan bir
-            // gövde buradan çıkarılmazsa test yazılmış kodu "yazılmamış"
-            // sanarak YANLIŞ SEBEPLE kırmızıya döner.
+            // TAKSONOMİ, KATALOG AKTARIMI, ONAY DURUMU, STOK/FİYAT İTME ve
+            // **SİPARİŞ YOKLAMASI** ARTIK BU LİSTEDE DEĞİL: §13 · Faz 2'nin
+            // ikinci–altıncı maddeleriyle yazıldılar (`TaxonomySyncTest`,
+            // `TrendyolCatalogTest`, `ApprovalStatusTest`,
+            // `TrendyolInventoryPricingTest`, `TrendyolOrderPollingTest`
+            // onları doğruluyor). Bu liste madde kapandıkça KÜÇÜLÜR;
+            // yazılan bir gövde buradan çıkarılmazsa test yazılmış kodu
+            // "yazılmamış" sanarak YANLIŞ SEBEPLE kırmızıya döner.
+            //
+            // KALANLAR KAPSAM DIŞIDIR, EKSİK DEĞİL: `delist` ve
+            // `fetchListing` Faz 2'nin hiçbir maddesinde yok.
+            // `acknowledgeOrder` da yazılmadı ama bu listede hiç olmadı —
+            // sipariş onaylama Trendyol'da kargo akışının parçasıdır ve
+            // `SupportsFulfillment` UYGULANMAZ (§14 · kargo kapsam dışı).
             'listeden çıkarma' => fn () => $adapter->delist(new Listing),
             'uzak listing okuma' => fn () => $adapter->fetchListing(new Listing),
         ];

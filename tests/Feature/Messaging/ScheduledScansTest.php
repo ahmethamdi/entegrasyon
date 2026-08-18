@@ -46,6 +46,10 @@ final class ScheduledScansTest extends TestCase
             'sync:detect-stuck',
             'outbox:detect-unconsumed',
             'reconcile:hot',
+            // §13 · Faz 2 — Trendyol webhook GÖNDERMEZ; sipariş yalnızca
+            // bu turla gelir. Zamanlanmazsa hiçbir Trendyol siparişi
+            // alınmaz ve eksiklik panelde "sipariş yok" gibi görünür.
+            'orders:poll',
         ] as $command) {
             $this->assertContains(
                 $command,
@@ -74,6 +78,11 @@ final class ScheduledScansTest extends TestCase
 
         // Gelen hat kurtarması: dakikalık. Kaybedilen şey SİPARİŞTİR.
         $this->assertSame('* * * * *', $commands['inbox:recover']);
+
+        // Sipariş yoklaması: beş dakikalık. Webhook'suz kanalda siparişin
+        // TEK giriş yolu budur; dakikalık koşmak kotayı beş katına çıkarır
+        // ve düşük seviyeli satıcıyı 429'a sokardı.
+        $this->assertSame('*/5 * * * *', $commands['orders:poll']);
     }
 
     /**
@@ -119,6 +128,7 @@ final class ScheduledScansTest extends TestCase
             'sync:detect-stuck',
             'outbox:detect-unconsumed',
             'reconcile:hot',
+            'orders:poll',
         ] as $command) {
             $this->assertContains(
                 $command,
