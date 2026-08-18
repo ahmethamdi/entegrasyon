@@ -15,6 +15,7 @@ use App\Domain\Channels\Models\CategoryMapping;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelCategoryAttribute;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Sync\Support\PrerequisiteGate;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -55,6 +56,14 @@ use InvalidArgumentException;
  */
 final class CategoryMappingController extends Controller
 {
+    public function __construct(
+        // Eksik zorunlu öznitelik hesabı ÖN KOŞUL KAPISINDAN gelir:
+        // ekranın gösterdiği "hazır" ile gönderimin uyguladığı kural TEK
+        // kaynaktan okunur. İkisi ayrı yazılsaydı biri değiştiğinde panel
+        // ile davranış ayrışırdı.
+        private readonly PrerequisiteGate $gate,
+    ) {}
+
     public function index(Request $request): InertiaResponse
     {
         $channelTypeCode = $this->selectedChannelType($request);
@@ -445,15 +454,12 @@ final class CategoryMappingController extends Controller
         // Kanal özniteliği → iç seçenek tanımı haritası.
         $mapped = $mappedAttributes[$mapping->channel_category_id] ?? [];
 
-        // Eksik zorunlu öznitelikler ADIYLA gösterilir: sayı tek başına
-        // kullanıcıya ne yapacağını söylemez.
-        $missing = [];
-
-        foreach ($required as $attribute) {
-            if (! array_key_exists($attribute['externalId'], $mapped)) {
-                $missing[] = $attribute['name'];
-            }
-        }
+        // EKSİK HESABI ÖN KOŞUL KAPISINDAN GELİR, BURADA YENİDEN
+        // YAZILMAZ. İki ayrı yerde hesaplansaydı biri değiştiğinde panel
+        // "hazır" derken kapı "eksik" der ve satıcı neyi düzelteceğini
+        // bilemezdi — ekranın vaadi ile gönderimin davranışı ayrışırdı.
+        // Eksikler ADIYLA gösterilir: sayı tek başına ne yapacağını söylemez.
+        $missing = $this->gate->missingRequiredAttributes($mapping->channel_category_id);
 
         // BAYAT: eşleştirme eski sürümün satırına bakıyor. Satır SİLİNMEZ,
         // yalnızca işaretlenir — satıcının emeği yok olmaz.

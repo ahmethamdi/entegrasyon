@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Trendyol;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\Trendyol\Catalog\ListingMapper;
 use App\Domain\Channels\Adapters\Trendyol\Taxonomy\TaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
@@ -33,6 +34,7 @@ use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use Carbon\CarbonInterface;
+use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
@@ -311,14 +313,60 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
     // ------------------------------------------------------------- katalog
 
+    /**
+     * Ürünü kanala aktarır.
+     *
+     * TRENDYOL ÜRÜN YARATMAYI ASENKRON YAPAR: yanıt `batchRequestId`
+     * döner, ürün kimliği DEĞİL. Kimlik BARKODDUR ve onu biz belirleriz —
+     * bu yüzden `external_id` yükten okunur, yanıttan değil. Batch
+     * kimliğini `external_id` sanmak, sonraki güncellemede var olmayan bir
+     * ürünü aramak demekti.
+     *
+     * BAŞARISIZLIKTA İSTİSNA FIRLATILIR, `failure()` DÖNMEZ (§7):
+     *   sınıflandırma ve yeniden deneme kararı `PushListing`'deki tek
+     *   try/catch'te toplanır.
+     */
     public function createListing(ListingPayload $payload): AdapterResult
     {
-        throw $this->notImplemented('ürün aktarımı');
+        $item = (new ListingMapper)->toChannelItem($payload);
+
+        $response = $this->client->post(
+            $this->supplierPath('v2/products'),
+            ['items' => [$item]],
+        );
+
+        $response->throw();
+
+        return AdapterResult::success([
+            // Kimlik BARKODDUR — yanıttaki batch kimliği değil.
+            'external_id' => $item['barcode'],
+            'batch_request_id' => $response->json('batchRequestId'),
+        ]);
     }
 
+    /**
+     * Var olan ürünü günceller.
+     *
+     * Trendyol'da güncelleme AYRI bir uç noktadır (`v2/products` PUT
+     * değil, `v2/products/price-and-inventory` de değil): içerik
+     * güncellemesi `v2/products` üzerinden aynı barkodla yapılır ve kanal
+     * onu güncelleme sayar.
+     */
     public function updateListing(ListingPayload $payload): AdapterResult
     {
-        throw $this->notImplemented('ürün güncelleme');
+        $item = (new ListingMapper)->toChannelItem($payload);
+
+        $response = $this->client->post(
+            $this->supplierPath('v2/products'),
+            ['items' => [$item]],
+        );
+
+        $response->throw();
+
+        return AdapterResult::success([
+            'external_id' => $payload->listing->external_id ?? $item['barcode'],
+            'batch_request_id' => $response->json('batchRequestId'),
+        ]);
     }
 
     public function delist(Listing $listing): AdapterResult
@@ -326,9 +374,43 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         throw $this->notImplemented('listeden çıkarma');
     }
 
+    /**
+     * Kanalda aynı barkodlu ürün var mı — KOPYA LİSTELEME KORUMASI.
+     *
+     * Satıcı ürünü daha önce Trendyol panelinden açmış olabilir.
+     * Sormadan yaratmak kopya listeleme üretir ve geri alınamaz: yorumlar,
+     * sıralama ve SEO geçmişi ilk üründe kalır.
+     */
     public function findExistingListing(Variant $variant): ?RemoteListing
     {
-        throw $this->notImplemented('ürün eşleştirme');
+        $barcode = $variant->barcode ?? $variant->sku;
+
+        if ($barcode === null || trim((string) $barcode) === '') {
+            return null;
+        }
+
+        $response = $this->client->get(
+            $this->supplierPath('products'),
+            ['barcode' => $barcode],
+        );
+
+        $response->throw();
+
+        foreach ($response->json('content') ?? [] as $row) {
+            // Kanal benzer barkodları da döndürebilir; TAM eşleşme aranır.
+            if ((string) ($row['barcode'] ?? '') !== (string) $barcode) {
+                continue;
+            }
+
+            return new RemoteListing(
+                externalId: (string) $row['barcode'],
+                title: $row['title'] ?? null,
+                url: $row['productUrl'] ?? null,
+                raw: $row,
+            );
+        }
+
+        return null;
     }
 
     public function fetchListing(Listing $listing): ?RemoteListing
@@ -381,10 +463,126 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
     // ---------------------------------------------------------------- onay
 
-    /** @param list<Listing> $listings */
+    /**
+     * Onay durumlarını TOPLU okur.
+     *
+     * Mimari Karar Dokümanı v2.2 · §7 · SupportsApprovalWorkflow, §14.
+     *
+     * TOPLU OKUNUR: listing başına ayrı istek, 500 ürünlü katalogda 500
+     * istek demektir ve kotayı anlamsızca tüketir.
+     *
+     * KİMLİĞİ OLMAYAN LISTING SORULMAZ: `external_id` NULL ise ürün kanala
+     * hiç gitmemiştir. Hiç kimlik kalmazsa çağrı da YAPILMAZ — boş bir
+     * filtreyle istek atmak kanalın TÜM kataloğunu geri getirirdi.
+     *
+     * YANITTA OLMAYAN LISTING İÇİN DURUM UYDURULMAZ: Trendyol yeni
+     * gönderilen ürünü listeye hemen koymaz ve yokluğu red saymak satıcıyı
+     * var olmayan bir hatayı düzeltmeye gönderirdi. Anahtar yoksa
+     * `statusFor()` null döner ve çekirdek satıra dokunmaz.
+     *
+     * BAŞARISIZ YANIT YÜKSELTİLİR: `json()` bir 500 gövdesinde de dizi
+     * döndürür ve boş sonuç "hiçbiri onaylanmadı" diye yorumlanırdı —
+     * taksonomide bire bir aynı hata yaşandı.
+     *
+     * @param  list<Listing>  $listings
+     */
     public function fetchApprovalStatus(array $listings): ApprovalStatusBatch
     {
-        throw $this->notImplemented('onay durumu takibi');
+        $barcodes = [];
+
+        foreach ($listings as $listing) {
+            if ($listing->external_id !== null) {
+                $barcodes[] = $listing->external_id;
+            }
+        }
+
+        // Sorulacak kimlik yoksa çağrı yapılmaz: filtresiz istek kanalın
+        // tüm kataloğunu getirirdi.
+        if ($barcodes === []) {
+            return new ApprovalStatusBatch([]);
+        }
+
+        $response = $this->client->get(
+            $this->supplierPath('products'),
+            ['barcode' => implode(',', array_unique($barcodes)), 'size' => count($barcodes)],
+        );
+
+        // Sessizce boş ağaca/listeye düşme — yükselt.
+        $response->throw();
+
+        $statuses = [];
+
+        foreach ($response->json('content') ?? [] as $row) {
+            $barcode = (string) ($row['barcode'] ?? '');
+
+            if ($barcode === '') {
+                continue;
+            }
+
+            $statuses[$barcode] = $this->classifyApproval($row);
+        }
+
+        return new ApprovalStatusBatch($statuses, new DateTimeImmutable);
+    }
+
+    /**
+     * Kanal satırını kanonik onay durumuna çevirir.
+     *
+     * ONAYLANMIŞ AMA SATIŞA KAPALI ÜRÜN "approved" SAYILMAZ:
+     *   Trendyol'da `approved: true` + `onSale: false` mümkündür (satıcı
+     *   kapatmış olabilir). O satır kanalda GÖRÜNMEZ; "onaylandı" demek
+     *   satıcıya ürünün yayında olduğunu düşündürür ve neden satmadığını
+     *   araştırmasına engel olurdu.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array{status: string, reason: string|null}
+     */
+    private function classifyApproval(array $row): array
+    {
+        $approved = (bool) ($row['approved'] ?? false);
+        $onSale = (bool) ($row['onSale'] ?? false);
+
+        if (! $approved) {
+            return [
+                'status' => 'rejected',
+                'reason' => $this->rejectionReason($row),
+            ];
+        }
+
+        return [
+            'status' => $onSale ? 'approved' : 'inactive',
+            'reason' => null,
+        ];
+    }
+
+    /**
+     * Red sebebi — kanal onu iç içe bir listede taşır.
+     *
+     * SEBEP GÖSTERİLMEK ZORUNDADIR: "reddedildi" tek başına satıcıya ne
+     * düzelteceğini söylemez. Birden çok sebep varsa hepsi birleştirilir;
+     * ilkini almak satıcıyı düzeltip yeniden reddedilmeye gönderirdi.
+     *
+     * @param  array<string, mixed>  $row
+     */
+    private function rejectionReason(array $row): ?string
+    {
+        $details = $row['rejectReasonDetails'] ?? [];
+
+        if (! is_array($details) || $details === []) {
+            return null;
+        }
+
+        $reasons = [];
+
+        foreach ($details as $detail) {
+            $reason = is_array($detail) ? ($detail['reason'] ?? null) : $detail;
+
+            if (is_string($reason) && $reason !== '') {
+                $reasons[] = $reason;
+            }
+        }
+
+        return $reasons === [] ? null : implode(' · ', $reasons);
     }
 
     // ------------------------------------------------------------------ iç

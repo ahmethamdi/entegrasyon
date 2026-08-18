@@ -10,6 +10,9 @@ use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Jobs\PushListing;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Models\ListingSyncState;
+use App\Domain\Sync\Support\PrerequisiteGate;
+use App\Domain\Sync\Support\PrerequisiteResult;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -40,11 +43,18 @@ use Illuminate\Support\Facades\DB;
  * SÜRÜM ÜRÜNÜN content_version'INDAN GELİR: senkron kapısı ondan beslenir.
  * Uydurma bir sayaç, panelde "senkron" görünen ürünün kanala hiç gitmemesine
  * yol açardı.
+ *
+ * DEĞİŞMEZ KURAL — ÖN KOŞUL KAPISI GÖNDERMEDEN ÖNCE (§14):
+ *   Taksonomisi olan kanalda eksik eşleştirme varsa listing `blocked`
+ *   olur, operasyon AÇILMAZ ve iş atılmaz. Kapı yeteneğe göre çalışır;
+ *   WooCommerce'te hiç devreye girmez. **STOK AKIŞI ETKİLENMEZ** —
+ *   engellenen satır yalnızca içerik gönderiminin dışında kalır.
  */
 final class PublishListing
 {
     public function __construct(
         private readonly OpenSyncOperation $openSyncOperation,
+        private readonly PrerequisiteGate $gate,
     ) {}
 
     /**
@@ -56,11 +66,28 @@ final class PublishListing
 
         $tenantId = $product->tenant_id;
 
-        $pending = DB::transaction(function () use ($product, $connection): array {
+        // ÖN KOŞUL KAPISI transaction'dan ÖNCE: yalnızca okuma yapar ve
+        // sonucu tüm varyantlar için aynıdır (iç kategori üründedir).
+        $prerequisite = $this->gate->check($product, $connection);
+
+        $pending = DB::transaction(function () use ($product, $connection, $prerequisite): array {
             $operationIds = [];
 
             foreach ($product->variants as $variant) {
                 $listing = $this->listingFor($product, $variant->id, $connection);
+
+                // ENGELLENDİ: satır işaretlenir, operasyon AÇILMAZ.
+                // Kullanıcı eksiği kapatınca akış yeniden başlar.
+                if (! $prerequisite->satisfied()) {
+                    $this->block($listing, $prerequisite);
+
+                    continue;
+                }
+
+                // Engel kalkmışsa taslağa geri döndür: `blocked` kalırsa
+                // satır fan-out hedefi olamaz ve kanal onayı yazılsa bile
+                // panelde engelli görünürdü.
+                $this->unblock($listing);
 
                 // Sürüm kapısı burada da geçerlidir: aynı sürüm iki kez
                 // gönderilirse ikinci çağrı null döner ve iş atılmaz.
@@ -114,5 +141,58 @@ final class PublishListing
             // PushListing yazar.
             'lifecycle_status' => 'draft',
         ]);
+    }
+
+    /**
+     * Ön koşul sağlanmadı — satırı işaretle, operasyon AÇMA.
+     *
+     * §14: `listings.lifecycle_status = 'blocked'` +
+     * `listing_sync_states(CONTENT).status = 'blocked'`.
+     *
+     * SEBEP YAZILIR: satıcı panelde yalnızca "engellendi" görseydi neyi
+     * düzelteceğini bilemez ve destek istemek zorunda kalırdı.
+     *
+     * SÜRÜM ALANLARINA DOKUNULMAZ: hiçbir şey gönderilmedi. `desired_version`
+     * artırılsaydı eksik kapandığında sürüm kapısı gönderimi eler ve ürün
+     * sessizce hiç gitmezdi.
+     */
+    private function block(Listing $listing, PrerequisiteResult $prerequisite): void
+    {
+        $listing->forceFill(['lifecycle_status' => 'blocked'])->save();
+
+        $state = ListingSyncState::query()->firstOrNew([
+            'listing_id' => $listing->id,
+            'domain' => SyncDomain::CONTENT->value,
+        ]);
+
+        $state->forceFill([
+            'tenant_id' => $listing->tenant_id,
+            'status' => 'blocked',
+            'last_error' => $prerequisite->reason(),
+        ])->save();
+    }
+
+    /**
+     * Engel kalktı — satırı taslağa döndür.
+     *
+     * Yalnızca `blocked` satıra dokunulur: `live` bir listing'i taslağa
+     * çekmek onu fan-out hedefi olmaktan çıkarır ve kanaldaki canlı ürüne
+     * stok gitmemeye başlardı.
+     */
+    private function unblock(Listing $listing): void
+    {
+        if ($listing->lifecycle_status !== 'blocked') {
+            return;
+        }
+
+        $listing->forceFill(['lifecycle_status' => 'draft'])->save();
+
+        // Durum satırı `pending`'e döner ve hata metni TEMİZLENİR: eski
+        // sebep kalsaydı panel eksik kapanmışken hâlâ onu gösterirdi.
+        ListingSyncState::query()
+            ->where('listing_id', $listing->id)
+            ->where('domain', SyncDomain::CONTENT->value)
+            ->where('status', 'blocked')
+            ->update(['status' => 'pending', 'last_error' => null]);
     }
 }

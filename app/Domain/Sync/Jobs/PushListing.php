@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Jobs;
 
 use App\Domain\Channels\Contracts\AdapterResult;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
@@ -153,7 +154,7 @@ final class PushListing implements ShouldQueue
             $result = $this->send($adapter, $listing, $builder, $operation->entity_version);
 
             // Kimlik ve yaşam döngüsü BAŞARIDAN SONRA yazılır.
-            $this->adoptRemoteIdentity($listing, $result);
+            $this->adoptRemoteIdentity($listing, $result, $adapter);
 
             $recorder->recordSuccess([$operation], $attempt, $result);
 
@@ -213,20 +214,40 @@ final class PushListing implements ShouldQueue
      * Taslak satır ancak kanala GİRDİKTEN sonra canlı olur: canlı işareti
      * fan-out hedefidir ve kanalda karşılığı olmayan satıra stok göndermek
      * her turda hata alırdı.
+     *
+     * ONAY SÜRECİ OLAN KANALDA `live` DEĞİL `pending_approval` YAZILIR:
+     *   Trendyol gönderilen ürünü hemen yayına almaz; onay bekler ve
+     *   reddedebilir. Doğrudan canlı işaretlenseydi henüz yayında olmayan
+     *   satır fan-out hedefi olur ve her stok turunda hata alırdı — üstelik
+     *   panel "yayında" derken ürün kanalda görünmezdi. Gerçek canlı
+     *   işaretini `TrackApprovalStatus` kanaldan öğrenerek yazar.
+     *
+     *   Yetenek `instanceof` ile okunur: Woo'da onay süreci yoktur ve
+     *   satır eskisi gibi doğrudan canlı olur.
      */
-    private function adoptRemoteIdentity(Listing $listing, AdapterResult $result): void
-    {
+    private function adoptRemoteIdentity(
+        Listing $listing,
+        AdapterResult $result,
+        SupportsCatalog $adapter,
+    ): void {
         $externalId = $result->data['external_id'] ?? $listing->external_id;
 
         if ($externalId === null) {
             return;
         }
 
+        $awaitsApproval = $adapter instanceof SupportsApprovalWorkflow;
+
         $listing->forceFill(array_filter([
             'external_id' => (string) $externalId,
             'external_url' => $result->data['external_url'] ?? $listing->external_url,
-            'lifecycle_status' => 'live',
-            'listed_at' => $listing->listed_at ?? now(),
+            'lifecycle_status' => $awaitsApproval ? 'pending_approval' : 'live',
+            // Yayına giriş tarihi ancak GERÇEKTEN yayındayken anlamlıdır;
+            // onay bekleyen satırda yazılsaydı ürünün kanaldaki yaşı
+            // olduğundan eski görünürdü.
+            'listed_at' => $awaitsApproval
+                ? $listing->listed_at
+                : ($listing->listed_at ?? now()),
         ], static fn (mixed $value): bool => $value !== null))->save();
     }
 }

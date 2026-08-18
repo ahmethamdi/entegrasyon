@@ -79,3 +79,14 @@ Schedule::command('taxonomy:sync')
     ->dailyAt('03:00')
     ->onOneServer()
     ->withoutOverlapping();
+
+// §13 · Faz 2 · onay durumu takibi — SAATLİK.
+//
+// Trendyol'un onay süreci saatler sürer; dakikalık yoklama kotayı tüketir
+// ve hiçbir şey kazandırmaz. Onaysız listing'e stok gönderilmediği için
+// (fan-out `lifecycle_status = 'live'` filtresi) gecikme stok akışını
+// bozmaz — yalnızca ürünün yayına giriş anını geciktirir.
+Schedule::command('approval:track')
+    ->hourly()
+    ->onOneServer()
+    ->withoutOverlapping();

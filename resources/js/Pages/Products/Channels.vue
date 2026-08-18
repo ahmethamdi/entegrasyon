@@ -11,6 +11,14 @@ const props = defineProps({
 const page = usePage();
 
 const flashSuccess = computed(() => page.props.flash?.success);
+
+/**
+ * ENGELLENEN GÖNDERİM UYARIDIR, BAŞARI DEĞİL.
+ *
+ * Yeşil bir "gönderiliyor" kutusu, ürün hiç gönderilmemişken satıcıyı
+ * her şeyin yolunda olduğuna inandırırdı.
+ */
+const flashWarning = computed(() => page.props.flash?.warning);
 const connectionError = computed(() => page.props.errors?.connection_id);
 
 /** Gönderim sürerken butonu kilitle: çift tıklama iki istek atardı. */
@@ -39,20 +47,51 @@ function statusClass(status) {
     return 'bg-stone-50 text-stone-600 border-stone-200';
 }
 
+/**
+ * YAŞAM DÖNGÜSÜ SENKRON DURUMUNU EZER.
+ *
+ * Ön koşul engeli ve kanal onayı, senkron durumundan daha belirleyicidir:
+ * "bekliyor" demek satıcıyı kendiliğinden düzelecek sanmaya iter, oysa
+ * engellenmiş satır KULLANICI müdahalesi bekler ve onay bekleyen satır
+ * KANAL'ı bekler. İkisi de "senkron sorunu" değildir.
+ */
+const lifecycleLabels = {
+    blocked: 'Ön koşul eksik',
+    pending_approval: 'Kanal onayı bekliyor',
+    rejected: 'Kanal reddetti',
+};
+
 /** Gönderilmemiş kanalda rozet yok — durumu "henüz gönderilmedi". */
 function statusLabel(channel) {
     if (!channel.published) return 'Gönderilmedi';
+
+    // Yaşam döngüsü önce: engel ve onay senkron durumundan önce gelir.
+    if (lifecycleLabels[channel.lifecycle]) return lifecycleLabels[channel.lifecycle];
+
     return statusLabels[channel.syncStatus] ?? channel.syncStatus ?? 'Bekliyor';
+}
+
+function badgeClass(channel) {
+    if (!channel.published) return 'border-stone-200 bg-stone-50 text-stone-600';
+    if (channel.lifecycle === 'rejected') return 'bg-red-50 text-red-800 border-red-200';
+    if (channel.lifecycle === 'blocked') return 'bg-amber-50 text-amber-900 border-amber-300';
+    if (channel.lifecycle === 'pending_approval') return 'bg-stone-50 text-stone-700 border-stone-300';
+
+    return statusClass(channel.syncStatus);
 }
 
 /** Kalıcı hatalı kanal ÜSTTE: kullanıcının ilgilenmesi gereken satır o. */
 const sorted = computed(() =>
     [...props.channels].sort((a, b) => {
         const rank = (c) => {
-            if (!c.published) return 2;
-            if (c.syncStatus === 'error_permanent') return 0;
-            if (c.syncStatus === 'error_transient') return 1;
-            return 3;
+            if (!c.published) return 4;
+            // Kullanıcı müdahalesi bekleyenler ÖNCE: red ve ön koşul
+            // engeli kendiliğinden düzelmez.
+            if (c.lifecycle === 'rejected') return 0;
+            if (c.lifecycle === 'blocked') return 1;
+            if (c.syncStatus === 'error_permanent') return 2;
+            if (c.syncStatus === 'error_transient') return 3;
+            return 5;
         };
         return rank(a) - rank(b);
     }),
@@ -105,6 +144,13 @@ function send(connectionId) {
         </div>
 
         <div
+            v-if="flashWarning"
+            class="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+            {{ flashWarning }}
+        </div>
+
+        <div
             v-if="connectionError"
             class="mt-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
@@ -142,7 +188,7 @@ function send(connectionId) {
                             </h2>
                             <span
                                 class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
-                                :class="channel.published ? statusClass(channel.syncStatus) : 'border-stone-200 bg-stone-50 text-stone-600'"
+                                :class="badgeClass(channel)"
                             >
                                 {{ statusLabel(channel) }}
                             </span>
@@ -178,6 +224,19 @@ function send(connectionId) {
                     class="mt-3 rounded bg-red-50 px-3 py-2 font-mono text-xs text-red-900"
                 >
                     {{ channel.lastError }}
+                </p>
+
+                <!--
+                    RED SEBEBİ AYRI GÖSTERİLİR: senkron hatası "gönderemedik"
+                    demektir, red ise "gönderdik ama kanal beğenmedi". İkisi
+                    aynı kutuda birleştirilseydi satıcı hangisini
+                    düzelteceğini bilemezdi.
+                -->
+                <p
+                    v-if="channel.rejectionReason"
+                    class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                >
+                    Kanal reddetti: {{ channel.rejectionReason }}
                 </p>
 
                 <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">

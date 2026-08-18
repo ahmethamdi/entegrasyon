@@ -47,6 +47,8 @@ class Listing extends Model
         'lifecycle_status',
         'listed_at',
         'delisted_at',
+        'approval_rejection_reason',
+        'approval_checked_at',
     ];
 
     protected function casts(): array
@@ -54,6 +56,7 @@ class Listing extends Model
         return [
             'listed_at' => 'datetime',
             'delisted_at' => 'datetime',
+            'approval_checked_at' => 'datetime',
         ];
     }
 

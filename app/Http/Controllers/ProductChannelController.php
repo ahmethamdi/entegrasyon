@@ -11,6 +11,7 @@ use App\Domain\Sync\Actions\PublishListing;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
+use App\Domain\Sync\Support\PrerequisiteGate;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,6 +46,9 @@ final class ProductChannelController extends Controller
 {
     public function __construct(
         private readonly AdapterRegistry $registry,
+        // Ön koşul sonucu MESAJ için gerekir: `PublishListing`'in boş
+        // dizisi "engellendi" ile "zaten güncel"i ayırt etmez.
+        private readonly PrerequisiteGate $gate,
     ) {}
 
     /** Ürünün kanal durumları ve gönderilebilir bağlantılar. */
@@ -78,7 +82,28 @@ final class ProductChannelController extends Controller
 
         $connection = $this->publishableConnection($validated['connection_id']);
 
+        // ÖN KOŞUL KAPISI ÖNCE SORULUR — sonuç `PublishListing`'in boş
+        // dizisinden AYIRT EDİLEMEZ.
+        //
+        // Boş dizi İKİ ayrı anlama gelir: sürüm kapısı eledi (zaten
+        // gönderilmiş) veya ön koşul kapısı engelledi (hiç gönderilmedi).
+        // İkisi tek mesaja indirgenirse satıcı eksik eşleştirmeyi "her şey
+        // yolunda" sanır ve ürününün neden kanalda görünmediğini asla
+        // anlayamaz. (Gerçek tarayıcı çalıştırmasında bulundu.)
+        $prerequisite = $this->gate->check($model, $connection);
+
         $operationIds = $publish->run($model, $connection);
+
+        if (! $prerequisite->satisfied()) {
+            return redirect("/products/{$model->id}/channels")->with(
+                'warning',
+                sprintf(
+                    '%s gönderilemedi — ön koşul eksik. %s',
+                    $model->sku,
+                    $prerequisite->reason(),
+                ),
+            );
+        }
 
         // Sürüm kapısı elediyse yeni iş yoktur; kullanıcıya "gönderildi"
         // demek yanlış olurdu — zaten gönderilmiş olan budur.
@@ -172,6 +197,11 @@ final class ProductChannelController extends Controller
                 'externalId' => $forConnection->first()?->external_id,
                 'externalUrl' => $forConnection->first()?->external_url,
                 'lifecycle' => $forConnection->first()?->lifecycle_status,
+                // ONAY DURUMU LIFECYCLE'DAN AYRI GÖSTERİLİR (§14): ürün
+                // bizde "gönderildi" ama kanalda "beklemede" veya
+                // "reddedildi" olabilir. Red sebebi gösterilmezse satıcı
+                // neyi düzelteceğini bilemez.
+                'rejectionReason' => $forConnection->first()?->approval_rejection_reason,
                 ...$this->syncSummary($forConnection, $states),
             ];
         }
