@@ -23,8 +23,6 @@ use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
-use App\Domain\Sync\Support\InventoryPushBatch;
-use App\Domain\Sync\Support\PricePushBatch;
 use App\Support\Logging\PayloadRedactor;
 use App\Support\Tenancy\TenantContext;
 use GuzzleHttp\Psr7\Response as PsrResponse;
@@ -146,18 +144,14 @@ final class TrendyolAdapterTest extends TestCase
         $adapter = $this->adapter();
 
         $calls = [
-            'stok itme' => fn () => $adapter->pushInventory(
-                new InventoryPushBatch('c1', []),
-            ),
-            'fiyat itme' => fn () => $adapter->pushPrices(
-                new PricePushBatch('c1', []),
-            ),
-            // TAKSONOMİ, KATALOG AKTARIMI ve ONAY DURUMU ARTIK BU LİSTEDE
-            // DEĞİL: §13 · Faz 2'nin ikinci ve üçüncü maddeleriyle
-            // yazıldılar (`TaxonomySyncTest`, `TrendyolCatalogTest`,
-            // `ApprovalStatusTest` onları doğruluyor). Bu liste madde
-            // kapandıkça KÜÇÜLÜR; yazılan bir gövde buradan çıkarılmazsa
-            // test yazılmış kodu "yazılmamış" sanarak kırmızıya döner.
+            // TAKSONOMİ, KATALOG AKTARIMI, ONAY DURUMU ve **STOK/FİYAT
+            // İTME** ARTIK BU LİSTEDE DEĞİL: §13 · Faz 2'nin ikinci,
+            // üçüncü, dördüncü ve beşinci maddeleriyle yazıldılar
+            // (`TaxonomySyncTest`, `TrendyolCatalogTest`,
+            // `ApprovalStatusTest`, `TrendyolInventoryPricingTest` onları
+            // doğruluyor). Bu liste madde kapandıkça KÜÇÜLÜR; yazılan bir
+            // gövde buradan çıkarılmazsa test yazılmış kodu "yazılmamış"
+            // sanarak YANLIŞ SEBEPLE kırmızıya döner.
             'listeden çıkarma' => fn () => $adapter->delist(new Listing),
             'uzak listing okuma' => fn () => $adapter->fetchListing(new Listing),
         ];

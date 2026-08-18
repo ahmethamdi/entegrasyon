@@ -282,15 +282,104 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         return 1000;
     }
 
+    /**
+     * Stoğu MUTLAK değer olarak iter.
+     *
+     * Mimari Karar Dokümanı v2.2 · §1 · Karar 25, §7 · SupportsInventory,
+     * §13 · Faz 2 ("Stok ve fiyat itme").
+     *
+     * DEĞİŞMEZ KURAL — MUTLAK DEĞER, DELTA ASLA:
+     *   Kaybolan veya iki kez işlenen bir delta isteği kanaldaki bakiyeyi
+     *   KALICI olarak kaydırır ve fark geri kazanılamaz. Mutlak değerde
+     *   tekrar zararsızdır — yeniden denemenin güvenli olmasının ve
+     *   mutabakatın çalışabilmesinin dayanağı budur.
+     *
+     * DEĞİŞMEZ KURAL — KİMLİK BARKODDUR, SAYIYA ÇEVRİLMEZ:
+     *   Woo'da kimlik sayısal ürün kimliğidir ve o adapter `(int)` dönüşümü
+     *   yapar. Aynı satır buraya kopyalansaydı harf içeren her barkod
+     *   (`TSH-201`) `0`'a düşer ve istek yanlış ürüne giderdi ya da hiçbir
+     *   şeyi güncellemezdi — kanal 200 döndüğü için senkron BAŞARILI
+     *   görünürdü ve hata ancak mutabakat turunda ortaya çıkardı.
+     *
+     * DEĞİŞMEZ KURAL — STOK YÜKÜ FİYAT ALANI TAŞIMAZ:
+     *   Uç nokta stok ve fiyatla paylaşılır ve KISMİ güncellemeyi
+     *   destekler. Stok yükünde fiyat da gönderilseydi, panelden yapılmış
+     *   ama henüz kanala gitmemiş bir fiyat değişikliği eski değerle
+     *   EZİLİRDİ: stok her satışta gider, fiyat nadiren değişir — ezme
+     *   sessiz ve sürekli olurdu.
+     *
+     * ASENKRON KABUL "UYGULANDI" DEMEK DEĞİLDİR: kanal `batchRequestId`
+     * döner ve işi kuyruğuna alır. Kimlik sonuçta taşınır; gerçekten
+     * uygulanıp uygulanmadığını mutabakat turu doğrular.
+     */
     public function pushInventory(InventoryPushBatch $batch): AdapterResult
     {
-        throw $this->notImplemented('stok itme');
+        if ($batch->isEmpty()) {
+            // Boş yükte çağrı yapılmaz: kota boşa gitmez ve kanal boş
+            // `items` dizisini VALIDATION ile reddederdi — o hata KALICIDIR.
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $items = array_map(
+            static fn (array $item): array => [
+                // Barkod OLDUĞU GİBİ; `(int)` dönüşümü YOK.
+                'barcode' => (string) $item['external_id'],
+                // MUTLAK değer. Kırpma OutboundQuantity'de yapıldı.
+                'quantity' => $item['quantity'],
+            ],
+            $batch->toArray(),
+        );
+
+        $response = $this->client->post(
+            $this->supplierPath('v2/products/price-and-inventory'),
+            ['items' => $items],
+        );
+
+        // Başarısızlık İSTİSNA olarak yükselir (§7): sınıflandırma ve
+        // yeniden deneme kararı PushInventory'deki tek try/catch'te toplanır.
+        $response->throw();
+
+        return AdapterResult::success([
+            'pushed' => $batch->count(),
+            'batch_request_id' => $response->json('batchRequestId'),
+        ]);
     }
 
-    /** @param list<Listing> $listings */
+    /**
+     * Uzak stok durumunu TOPLU okur — mutabakatın karşılaştırma girdisi.
+     *
+     * KİMLİĞİ OLMAYAN LISTING SORULMAZ: `external_id` NULL ise ürün kanala
+     * hiç gitmemiştir. Hiç kimlik kalmazsa çağrı da YAPILMAZ — filtresiz
+     * istek kanalın TÜM kataloğunu geri getirirdi.
+     *
+     * BAŞARISIZ YANIT YÜKSELTİLİR: `json()` bir 500 gövdesinde de dizi
+     * döndürür ve boş snapshot mutabakatta "kanalda ürün yok" diye okunup
+     * `REMOTE_MISSING` üretirdi — oysa olan yalnızca geçici bir hatadır.
+     *
+     * @param  list<Listing>  $listings
+     */
     public function fetchInventory(array $listings): RemoteInventorySnapshot
     {
-        throw $this->notImplemented('uzak stok okuma');
+        $rows = $this->fetchRemoteRows($listings);
+
+        if ($rows === null) {
+            return new RemoteInventorySnapshot([]);
+        }
+
+        $quantities = [];
+
+        foreach ($rows as $row) {
+            $barcode = (string) ($row['barcode'] ?? '');
+
+            if ($barcode === '') {
+                continue;
+            }
+
+            $quantities[$barcode] = (int) ($row['quantity'] ?? 0);
+        }
+
+        // Okuma anı taşınır: gecikmeli okuma sürüklenme sanılmamalı (§10).
+        return new RemoteInventorySnapshot($quantities, new DateTimeImmutable);
     }
 
     // ------------------------------------------------------------- fiyat
@@ -300,15 +389,125 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         return 1000;
     }
 
+    /**
+     * Fiyatı MUTLAK değer olarak iter — stokla AYNI uç nokta.
+     *
+     * Yüzde indirim veya delta gönderilmez; gerekçe stoktakiyle aynıdır.
+     *
+     * FİYAT YÜKÜ STOK ALANI TAŞIMAZ: simetrik kural. `quantity` de
+     * gönderilseydi, yükü kuran taraf güncel bakiyeyi bilmediği için
+     * kanaldaki stoğu bayat bir değerle ezerdi — üstelik satılmış ürünü
+     * yeniden satışa açarak.
+     *
+     * `listPrice` ZORUNLUDUR: alan atlanırsa kanal `VALIDATION` döner ve o
+     * hata KALICIDIR. Satıcı üstü çizili fiyat girmemişse satış fiyatı
+     * kullanılır — kampanyasız ürün "düzeltilemez" damgasıyla ölmemeli.
+     */
     public function pushPrices(PricePushBatch $batch): AdapterResult
     {
-        throw $this->notImplemented('fiyat itme');
+        if ($batch->isEmpty()) {
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $items = array_map(
+            static function (array $item): array {
+                $salePrice = (float) $item['price'];
+
+                return [
+                    'barcode' => (string) $item['external_id'],
+                    'salePrice' => $salePrice,
+                    // Üstü çizili fiyat yoksa satış fiyatı: alan zorunlu.
+                    'listPrice' => isset($item['compare_at_price'])
+                        ? (float) $item['compare_at_price']
+                        : $salePrice,
+                ];
+            },
+            $batch->items,
+        );
+
+        $response = $this->client->post(
+            $this->supplierPath('v2/products/price-and-inventory'),
+            ['items' => $items],
+        );
+
+        $response->throw();
+
+        return AdapterResult::success([
+            'pushed' => $batch->count(),
+            'batch_request_id' => $response->json('batchRequestId'),
+        ]);
     }
 
-    /** @param list<Listing> $listings */
+    /**
+     * Uzak fiyatı TOPLU okur.
+     *
+     * Fiyat STRING taşınır: float para birimi için güvenilir değildir ve
+     * yuvarlama hataları kuruş kayması üretir.
+     *
+     * @param  list<Listing>  $listings
+     */
     public function fetchPrices(array $listings): RemotePriceSnapshot
     {
-        throw $this->notImplemented('uzak fiyat okuma');
+        $rows = $this->fetchRemoteRows($listings);
+
+        if ($rows === null) {
+            return new RemotePriceSnapshot([]);
+        }
+
+        $prices = [];
+
+        foreach ($rows as $row) {
+            $barcode = (string) ($row['barcode'] ?? '');
+
+            if ($barcode === '') {
+                continue;
+            }
+
+            $prices[$barcode] = (string) ($row['salePrice'] ?? '0');
+        }
+
+        return new RemotePriceSnapshot($prices, new DateTimeImmutable);
+    }
+
+    /**
+     * Uzak ürün satırlarını barkodla toplu okur — stok ve fiyat ORTAK.
+     *
+     * İki okuma yolu aynı uç noktayı ve aynı filtreyi kullanır; ayrı
+     * yazılsalardı "kimliksiz listing sorulmaz" ve "başarısız yanıt
+     * yükseltilir" kurallarının biri değişince diğeri sessizce geride
+     * kalırdı.
+     *
+     * @param  list<Listing>  $listings
+     * @return list<array<string, mixed>>|null Sorulacak kimlik yoksa null
+     */
+    private function fetchRemoteRows(array $listings): ?array
+    {
+        $barcodes = [];
+
+        foreach ($listings as $listing) {
+            if ($listing->external_id !== null) {
+                $barcodes[] = $listing->external_id;
+            }
+        }
+
+        // Filtresiz istek kanalın TÜM kataloğunu getirirdi.
+        if ($barcodes === []) {
+            return null;
+        }
+
+        $barcodes = array_values(array_unique($barcodes));
+
+        $response = $this->client->get($this->supplierPath('products'), [
+            'barcode' => implode(',', $barcodes),
+            'size' => count($barcodes),
+        ]);
+
+        // Sessizce boş snapshot'a düşme — yükselt.
+        $response->throw();
+
+        $rows = $response->json('content') ?? [];
+
+        return array_values(array_filter($rows, 'is_array'));
     }
 
     // ------------------------------------------------------------- katalog
