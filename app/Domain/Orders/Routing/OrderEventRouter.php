@@ -10,10 +10,14 @@ use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Actions\ApplyOrderCancellation;
 use App\Domain\Orders\Actions\ApplyOrderReturn;
 use App\Domain\Orders\Actions\IngestChannelOrder;
+use App\Domain\Orders\Actions\UpdateFulfillment;
+use App\Domain\Orders\Actions\UpdateOrderSnapshot;
 use App\Domain\Orders\Enums\OrderEventType;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\CancellationEvent;
 use App\Domain\Orders\Support\CancelledLine;
+use App\Domain\Orders\Support\FulfillmentEvent;
+use App\Domain\Orders\Support\OrderSnapshotEvent;
 use App\Domain\Orders\Support\ReturnedLine;
 use App\Domain\Orders\Support\ReturnEvent;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
@@ -47,6 +51,10 @@ final class OrderEventRouter
         private readonly IngestChannelOrder $ingestOrder = new IngestChannelOrder,
         private readonly ApplyOrderCancellation $applyCancellation = new ApplyOrderCancellation,
         private readonly ApplyOrderReturn $applyReturn = new ApplyOrderReturn,
+        // §13 · Faz 3 — bu ikisi olmadan UPDATED ve FULFILLED olayları
+        // yalnızca log'lanıyordu ve sessizce düşüyordu.
+        private readonly UpdateOrderSnapshot $updateSnapshot = new UpdateOrderSnapshot,
+        private readonly UpdateFulfillment $updateFulfillment = new UpdateFulfillment,
     ) {}
 
     public function route(InboxMessage $message): void
@@ -99,10 +107,10 @@ final class OrderEventRouter
             OrderEventType::RETURNED => $this->handleReturned($normalized, $message),
 
             // Güncelleme ve kargo: sipariş anlık görüntüsünü tazeler, stok
-            // hareketi ÜRETMEZ. UpdateOrderSnapshot ve UpdateFulfillment
-            // henüz yazılmadı; olay yutulmasın diye açıkça log'lanıyor.
-            OrderEventType::UPDATED,
-            OrderEventType::FULFILLED => $this->handleUnimplemented($type, $normalized, $message),
+            // hareketi ÜRETMEZ (§4). Mal satışta zaten düşülmüştür;
+            // hareket üretselerdi aynı satış iki kez düşülürdü.
+            OrderEventType::UPDATED => $this->handleUpdated($normalized, $message),
+            OrderEventType::FULFILLED => $this->handleFulfilled($normalized, $message),
 
             // Bizim ürettiğimiz denetim olayı kanaldan gelmez.
             OrderEventType::OVERSELL_DETECTED => null,
@@ -204,16 +212,67 @@ final class OrderEventRouter
         return $order;
     }
 
-    private function handleUnimplemented(
-        OrderEventType $type,
-        NormalizedOrderEvent $normalized,
-        InboxMessage $message,
-    ): void {
-        Log::info('inbox.event_type_not_implemented', [
-            'message' => $message->id,
-            'type' => $type->value,
-            'external_order_id' => $normalized->externalOrderId,
-        ]);
+    /**
+     * Sipariş anlık görüntüsünü tazeler — STOK HAREKETİ ÜRETMEZ (§4).
+     *
+     * Mal satışta zaten düşülmüştür. Bu yol hareket üretseydi aynı satış
+     * iki kez düşülür ve bakiye KALICI olarak bozulurdu.
+     */
+    private function handleUpdated(NormalizedOrderEvent $normalized, InboxMessage $message): void
+    {
+        $order = $this->resolveOrder($normalized, $message);
+
+        if ($order === null) {
+            return;
+        }
+
+        $payload = $normalized->payload;
+
+        $this->updateSnapshot->run(new OrderSnapshotEvent(
+            orderId: $order->id,
+            externalRef: $normalized->externalRef,
+            status: isset($payload['status']) ? (string) $payload['status'] : null,
+            financialStatus: isset($payload['financial_status'])
+                ? (string) $payload['financial_status']
+                : null,
+            payload: $payload,
+            occurredAt: $normalized->occurredAt,
+            inboxMessageId: $message->id,
+        ));
+    }
+
+    /**
+     * Kargo bildirimini kaydeder — STOK HAREKETİ ÜRETMEZ (§4).
+     *
+     * Kargo yalnızca teslim durumunu izler.
+     */
+    private function handleFulfilled(NormalizedOrderEvent $normalized, InboxMessage $message): void
+    {
+        $order = $this->resolveOrder($normalized, $message);
+
+        if ($order === null) {
+            return;
+        }
+
+        $payload = $normalized->payload;
+
+        /** @var array<string, mixed> $shipment */
+        $shipment = is_array($payload['fulfillment'] ?? null) ? $payload['fulfillment'] : [];
+
+        $this->updateFulfillment->run(new FulfillmentEvent(
+            orderId: $order->id,
+            externalId: isset($shipment['external_id']) ? (string) $shipment['external_id'] : null,
+            carrier: isset($shipment['carrier']) ? (string) $shipment['carrier'] : null,
+            trackingNumber: isset($shipment['tracking_number'])
+                ? (string) $shipment['tracking_number']
+                : null,
+            status: isset($shipment['status'])
+                ? (string) $shipment['status']
+                : (isset($payload['status']) ? (string) $payload['status'] : null),
+            payload: $payload,
+            occurredAt: $normalized->occurredAt,
+            inboxMessageId: $message->id,
+        ));
     }
 
     private function defaultWarehouseId(string $tenantId): string

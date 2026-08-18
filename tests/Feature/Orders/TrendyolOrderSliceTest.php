@@ -214,6 +214,64 @@ final class TrendyolOrderSliceTest extends TestCase
     }
 
     /**
+     * DURUM DEĞİŞİMİ SİPARİŞİ GERÇEKTEN TAZELİYOR — §13 · Faz 3.
+     *
+     * KAPATILAN BOŞLUK: `OrderEventRouter` bugüne kadar `UPDATED`
+     * olayını YALNIZCA LOG'LUYORDU. Faz 2'de yoklama yazıldıktan sonra
+     * boşluk CANLI hale geldi: sipariş `Shipped`'a geçtiğinde olay
+     * inbox'a yazılıyor, işleniyor ve sessizce düşüyordu — panel
+     * siparişi sonsuza kadar "Created" gösterirdi.
+     *
+     * Bu test yönlendirmenin GERÇEKTEN bağlandığını doğrular: eylem
+     * sınıflarının kendi testleri yeşilken router onları hiç
+     * çağırmıyor olabilirdi.
+     */
+    #[Test]
+    public function a_polled_status_change_refreshes_the_order(): void
+    {
+        [$tenant] = $this->setUpConnection();
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        $line = [
+            'id' => 9001, 'barcode' => 'BARKOD-A', 'quantity' => 3, 'amount' => 240.0,
+        ];
+
+        Http::fake(['*' => Http::sequence()
+            ->push(['content' => [[
+                'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => [$line],
+            ]], 'totalPages' => 1], 200)
+            ->push(['content' => [[
+                'orderNumber' => 'TY-1', 'status' => 'Shipped', 'lines' => [$line],
+            ]], 'totalPages' => 1], 200),
+        ]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        // HAM SATIR okunur.
+        $status = $this->asTenant($tenant, fn () => DB::table('orders')
+            ->where('tenant_id', $tenant->id)
+            ->where('external_id', 'TY-1')
+            ->value('status'));
+
+        $this->assertSame('Shipped', $status, 'Durum değişimi siparişe YANSIMALI.');
+
+        // KARGO AŞAMASI STOĞA DOKUNMAZ: mal satışta zaten düşüldü.
+        $this->assertSame(7, $this->availableFor($tenant, $variant));
+
+        $this->assertLedgerMatchesProjection(
+            $tenant->id,
+            $this->warehouse($tenant)->id,
+            $variant->id,
+        );
+    }
+
+    /**
      * AYNI SİPARİŞ İKİ TURDA STOĞU İKİ KEZ DÜŞÜRMEZ.
      *
      * Yoklama pencere örtüşmesi nedeniyle aynı siparişi tekrar görür.
