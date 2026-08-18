@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 397 test yeşil olmalı
+docker compose exec app php artisan test      # 414 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -94,7 +94,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-29 domain tablosu, 28 model, 397 test. Stok çekirdeği (`ApplyMovement`,
+31 domain tablosu, 30 model, 414 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -203,6 +203,35 @@ memory'deki "Repo Durumu" dosyasına bak.
   kontrolü yapar.
 - **Kargo kapsam dışıdır** — `SupportsFulfillment` UYGULANMAZ.
 
+## Taksonomi kuralları (§13 · Faz 2)
+
+- **Taksonomi KİRACIYA AİT DEĞİLDİR.** `channel_categories` ve
+  `channel_category_attributes` `tenant_id` kolonu taşımaz: kategori ağacı
+  kanalın gerçeğidir ve tüm satıcılar için aynıdır. Kiracı başına
+  kopyalansaydı aynı 30 bin satır her kiracı için yeniden saklanır ve her
+  kiracı ayrı ayrı çekmek zorunda kalırdı. Kiracıya ait olan
+  **eşleştirmedir** (`category_mappings`) — ağaç kanalın GERÇEĞİ, eşleştirme
+  satıcının KARARIDIR.
+- **Yeni sürüm eskiyi SİLMEZ.** Tekillik `(channel_type_code,
+  taxonomy_version, external_id)`; yeni sürüm yeni satırlar olarak yazılır.
+  Eşleştirmeler eski sürüme bağlıdır ve silinseydi satıcının aylarca emek
+  verdiği eşleştirmeler bir gecede yok olurdu. Sürüm bir **ayıraçtır**.
+- **Sürüm İÇERİKTEN türer ve SIRALANIR.** Kanal sürüm numarası vermez;
+  parmak izi ağacın şeklinden (kimlik + ad + ebeveyn) üretilir. Zaman
+  karışsaydı her çekim yeni sürüm üretirdi; sıralanmasaydı kanalın döndürme
+  sırası değişince ağaç aynıyken sürüm değişir ve tüm eşleştirmeler
+  "yeniden doğrula" damgası yerdi.
+- **Öznitelik yalnızca YAPRAK için çekilir.** Ara kategoriye ürün açılamaz;
+  öznitelik istemek boşuna istek ve boşuna kotadır.
+- **Başarısız yanıt sessizce boş ağaca dönüşmez** — `throw()` ile yükseltilir.
+  `json()` bir 500 gövdesinde de dizi döndürür ve boş ağaç geçerli bir
+  sürümle yazılırdı; panel "kategori yok" der ve aktarım sonsuza kadar
+  ön koşul kapısında takılırdı.
+- **Tek bozuk bağlantı tüm kanalı durdurmaz.** Tur kanal türü başına
+  çalışır ama bağlantılar SIRAYLA denenir; ilk bağlantıda pes edilseydi o
+  kanaldaki tüm satıcılar taksonomisiz kalır ve sorun kendi
+  bağlantılarında olmadığı için hiçbiri düzeltemezdi.
+
 ## Zaman damgası tuzağı — `now()` yerine `clock_timestamp()`
 
 `outbox_events` zaman damgaları **saniye hassasiyetlidir**
@@ -274,9 +303,13 @@ testin sonunda çağrılır.
 `RequestResync` (+ T10), mutabakat panel ekranı, ılık/soğuk mutabakat
 katmanları (sıcak katman yazıldı).
 
-`TrendyolAdapter`'ın **istemci/kimlik/hız sınırı katmanı yazıldı**; katalog
-aktarımı, taksonomi çekme, sipariş yoklaması ve stok/fiyat itme Faz 2'nin
-sonraki maddeleridir ve gövdeleri açıkça istisna fırlatır.
+`TrendyolAdapter`'ın **istemci/kimlik/hız sınırı ve taksonomi katmanı
+yazıldı**; katalog aktarımı, sipariş yoklaması, onay durumu ve stok/fiyat
+itme Faz 2'nin sonraki maddeleridir ve gövdeleri açıkça istisna fırlatır.
+
+Kategori/öznitelik **eşleştirme** tabloları (`category_mappings`,
+`attribute_mappings`, `attribute_value_mappings` — kiracı başına) henüz
+yazılmadı; taksonomi önbelleği (kiracısız) onların girdisidir.
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -522,15 +555,20 @@ da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
 → REPAIR → kanala 17 gitti).
 
-**Faz 2 başladı.** İlk madde (Trendyol istemcisi, kimlik doğrulama, dinamik
-hız sınırı) kapandı. Dokümandaki sıradaki maddeler:
+**Faz 2 başladı.** İlk iki madde kapandı: Trendyol istemcisi (kimlik
+doğrulama, dinamik hız sınırı) ve **taksonomi çekme/önbellekleme/sürümleme**.
+Dokümandaki sıradaki maddeler:
 
-1. **Taksonomi çekme, önbellekleme, sürümleme** (§13 · Faz 2 · 20 sa) —
-   `SupportsTaxonomy` gövdeleri. Kategori ve öznitelik eşleştirme arayüzü
-   (28 sa) bunun üzerine kurulur ve katalog aktarımının ön koşuludur.
-2. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
+1. **Kategori ve öznitelik eşleştirme arayüzü** (§13 · Faz 2 · 28 sa) —
+   `category_mappings`, `attribute_mappings`, `attribute_value_mappings`
+   (kiracı BAŞINA) + panel ekranı. Katalog aktarımının ön koşulu; taksonomi
+   önbelleği (kiracısız) bunun girdisi.
+2. **Katalog aktarımı, ön koşul kapısı, onay durumu takibi** (24 sa) —
+   `PrerequisiteGate`: eksik eşleştirmede listing `blocked`, stok akışı
+   ETKİLENMEZ.
+3. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
    Woo satışı Trendyol stoğunu günceller.
-3. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
+4. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
    Faz 2 demosu bunu ister: "Trendyol siparişi Woo stoğunu düşürüyor".
 
 Panel tarafında hâlâ açık: **mutabakat panel ekranı** (`reconciliation_items`
