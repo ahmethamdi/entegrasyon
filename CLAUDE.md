@@ -212,6 +212,23 @@ memory'deki "Repo Durumu" dosyasına bak.
   listing'in nasıl oluştuğunu bilmez ve yalnızca `lifecycle_status = 'live'`
   kontrolü yapar.
 - **Kargo kapsam dışıdır** — `SupportsFulfillment` UYGULANMAZ.
+- **TEK UÇ NOKTA, İKİ YETENEK.** Stok ve fiyat aynı
+  `v2/products/price-and-inventory` uç noktasına gider ve kalem KISMİ
+  güncellemeyi destekler. **Stok yükü fiyat alanı TAŞIMAZ, fiyat yükü stok
+  alanı taşımaz**: biri diğerini ezseydi ezme sessiz ve sürekli olurdu —
+  stok her satışta gider, fiyat nadiren değişir. Uç noktayı paylaşmaları
+  yetenekleri birleştirmez.
+- **KİMLİK BARKODDUR VE SAYIYA ÇEVRİLMEZ.** Woo'da kimlik sayısal ürün
+  kimliğidir ve o adapter `(int)` dönüşümü yapar; aynı satır Trendyol'a
+  kopyalanırsa harf içeren her barkod (`TSH-201`) `0`'a düşer, istek
+  yanlış ürüne gider ve **kanal 200 döndüğü için senkron BAŞARILI
+  görünür**.
+- **`listPrice` ZORUNLUDUR ve üstü çizili fiyat yoksa satış fiyatına
+  düşer.** Alan atlanırsa kanal `VALIDATION` döner, o hata KALICIDIR ve
+  kampanyasız ürün "düzeltilemez" damgasıyla ölürdü.
+- **Stok/fiyat itme de ASENKRONDUR** — yanıt `batchRequestId` döner.
+  Kabul "gönderildi" demektir, "uygulandı" değil; farkı mutabakat turu
+  yakalar.
 
 ## Taksonomi kuralları (§13 · Faz 2)
 
@@ -387,12 +404,11 @@ testin sonunda çağrılır.
 katmanları (sıcak katman yazıldı).
 
 `TrendyolAdapter`'ın **istemci/kimlik/hız sınırı, taksonomi, katalog
-aktarımı ve onay durumu katmanları yazıldı**. Hâlâ istisna fırlatanlar:
-`pushInventory`, `pushPrices`, `fetchOrders`, `parseOrderEvent`, `delist`,
-`fetchListing`, `fetchInventory`, `fetchPrices`. Bu liste madde kapandıkça
-küçülür ve `TrendyolAdapterTest` onu **yazılmamış olarak** doğrular —
-yazılan bir gövde listeden çıkarılmazsa test yanlış sebeple kırmızıya
-döner.
+aktarımı, onay durumu ve stok/fiyat itme katmanları yazıldı**. Hâlâ
+istisna fırlatanlar: `fetchOrders`, `parseOrderEvent`, `acknowledgeOrder`,
+`delist`, `fetchListing`. Bu liste madde kapandıkça küçülür ve
+`TrendyolAdapterTest` onu **yazılmamış olarak** doğrular — yazılan bir
+gövde listeden çıkarılmazsa test yanlış sebeple kırmızıya döner.
 
 Kategori/öznitelik **eşleştirme** ve **ön koşul kapısı** yazıldı. "Hazır
 mı" mantığı `PrerequisiteGate::missingRequiredAttributes()` içinde TEK
@@ -642,16 +658,24 @@ da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
 → REPAIR → kanala 17 gitti).
 
-**Faz 2 başladı.** İlk DÖRT madde kapandı: Trendyol istemcisi (kimlik
+**Faz 2 başladı.** İlk BEŞ madde kapandı: Trendyol istemcisi (kimlik
 doğrulama, dinamik hız sınırı), **taksonomi çekme/önbellekleme/sürümleme**,
-**kategori/öznitelik eşleştirme arayüzü** ve **katalog aktarımı + ön koşul
-kapısı + onay durumu takibi**. Dokümandaki sıradaki maddeler:
+**kategori/öznitelik eşleştirme arayüzü**, **katalog aktarımı + ön koşul
+kapısı + onay durumu takibi** ve **stok/fiyat itme**. Dokümandaki sıradaki
+madde:
 
-1. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
-   Woo satışı Trendyol stoğunu günceller. `TrendyolAdapter::pushInventory`
-   ve `pushPrices` hâlâ açıkça istisna fırlatıyor.
-2. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
+1. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
    Faz 2 demosu bunu ister: "Trendyol siparişi Woo stoğunu düşürüyor".
+   Bitince Faz 2 kapanır.
+
+**`pushPrices`'ın ÇEKİRDEKTE ÇAĞIRANI YOK** — bu turda bulundu ve
+Woo'yu da kapsıyor. `SyncDomain::PRICE` ve `PRICE_PUSH` şemada var ama
+fiyat operasyonu açan/dispatch eden hiçbir kod yok: `PushInventory`'nin
+fiyat karşılığı (`PushPrices` işi) yazılmamış. `DetectStuckSyncOperations`
+yalnızca `INVENTORY_PUSH` için iş atar, diğerine uyarı yazar — yani
+davranış dürüst, eksik olan yol. Adapter gövdeleri sözleşmeye uygun ve
+hazır; **fiyat senkronu ayrı bir çekirdek maddesidir** ve dokümanın Faz 2
+listesinde ayrıca yer almıyor.
 
 Panel tarafında hâlâ açık: **mutabakat panel ekranı** (`reconciliation_items`
 yazılıyor ama gösterilmiyor) ve **`RequestResync` + T10** (§18 · P1, faz
