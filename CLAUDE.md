@@ -230,6 +230,35 @@ memory'deki "Repo Durumu" dosyasına bak.
   Kabul "gönderildi" demektir, "uygulandı" değil; farkı mutabakat turu
   yakalar.
 
+## Sipariş yoklaması kuralları (§13 · Faz 2)
+
+- **YOKLAMA WEBHOOK'LA AYNI İNBOX'A YAZAR** (`source = 'polling'`).
+  `IngestInboxMessage` TEK gelen hattır; ikinci bir yol açılsaydı
+  tekilleştirme iki kez yazılır, biri unutulurdu ve `inbox:recover` iki
+  yeri bilmek zorunda kalırdı.
+- **OLAY KİMLİĞİ SİPARİŞ NUMARASI + DURUMDUR** (`{orderNumber}:{status}`).
+  Yalnızca numaraya bağlansaydı aynı siparişin sonraki İPTALİ birincil
+  tekillik indeksine takılır ve `insertOrIgnore` tarafından **SESSİZCE
+  YUTULURDU** — stok geri eklenmez, bakiye kalıcı eksik kalırdı.
+  Karar 24'ün açıkça uyardığı hata biçimi budur.
+- **PENCERE GERİYE BAKAR** (5 dk örtüşme) ve imleç turun **BAŞLAMA**
+  anına yazılır. Bitiş anı yazılsaydı istek sürerken oluşan sipariş iki
+  pencerenin arasına düşer ve HİÇ görülmezdi. Örtüşmenin bedeli yoktur:
+  tekilleştirme kopyayı zaten eler.
+- **BAŞARISIZ TURDA İMLEÇ İLERLEMEZ.** İlerleseydi hata anındaki pencere
+  sonsuza kadar atlanır ve o siparişler bir daha hiç sorulmazdı.
+- **TEK BOZUK BAĞLANTI TURU DURDURMAZ** — taksonomideki gerekçenin aynısı.
+- **BİLİNMEYEN DURUM `updated` SAYILIR.** `created` var olan siparişi
+  yeniden yaratmayı denerdi, `cancelled` satılmış stoğu geri eklerdi;
+  ikisi de bakiyeyi bozar. `updated` stok hareketi ÜRETMEZ.
+- **WEBHOOK GÖNDEREN KANAL YOKLANMAZ** — `supports_webhooks` kapısı.
+  **Bu alan eager-load'da AÇIKÇA seçilmeli**; seçilmezse kapı null okur ve
+  hiç çalışmaz (gerçek çalıştırmada bulundu, `adapter_class` ile aynı
+  tuzak).
+- **Yoklamada `signature_valid = true`** ve bu bir eksiklik değildir:
+  gövdeyi kanaldan BİZ istedik ve kimlikli bir çağrıyla aldık. İmza,
+  bize GÖNDERİLEN bir gövdenin sahiciliğini kanıtlar.
+
 ## Taksonomi kuralları (§13 · Faz 2)
 
 - **Taksonomi KİRACIYA AİT DEĞİLDİR.** `channel_categories` ve
@@ -403,12 +432,21 @@ testin sonunda çağrılır.
 `RequestResync` (+ T10), mutabakat panel ekranı, ılık/soğuk mutabakat
 katmanları (sıcak katman yazıldı).
 
-`TrendyolAdapter`'ın **istemci/kimlik/hız sınırı, taksonomi, katalog
-aktarımı, onay durumu ve stok/fiyat itme katmanları yazıldı**. Hâlâ
-istisna fırlatanlar: `fetchOrders`, `parseOrderEvent`, `acknowledgeOrder`,
-`delist`, `fetchListing`. Bu liste madde kapandıkça küçülür ve
-`TrendyolAdapterTest` onu **yazılmamış olarak** doğrular — yazılan bir
-gövde listeden çıkarılmazsa test yanlış sebeple kırmızıya döner.
+**FİYAT SENKRON YOLU ÇEKİRDEKTE YOK** — `pushPrices` gövdeleri (Woo ve
+Trendyol) hazır ama **çağıranı yok**: `SyncDomain::PRICE` ve `PRICE_PUSH`
+şemada/enum'da var, fiyat operasyonu açan ya da dispatch eden kod yok
+(`PushInventory`'nin fiyat karşılığı yazılmamış). Davranış dürüst —
+`DetectStuckSyncOperations` yalnızca `INVENTORY_PUSH` için iş atar,
+diğerine uyarı yazar. Dokümanın Faz 2 listesinde ayrıca yer almıyor.
+
+**FAZ 2 KAPANDI.** `TrendyolAdapter`'ın istemci/kimlik/hız sınırı,
+taksonomi, katalog aktarımı, onay durumu, stok/fiyat itme ve **sipariş
+yoklaması** katmanları yazıldı. Hâlâ istisna fırlatanlar: `delist`,
+`fetchListing`, `acknowledgeOrder` — **üçü de Faz 2 kapsamı dışıdır**,
+eksik değil. Bu liste madde kapandıkça küçülür ve `TrendyolAdapterTest`
+onu **yazılmamış olarak** doğrular (yalnızca `delist` + `fetchListing`) —
+yazılan bir gövde listeden çıkarılmazsa test yanlış sebeple kırmızıya
+döner.
 
 Kategori/öznitelik **eşleştirme** ve **ön koşul kapısı** yazıldı. "Hazır
 mı" mantığı `PrerequisiteGate::missingRequiredAttributes()` içinde TEK
@@ -658,15 +696,14 @@ da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
 → REPAIR → kanala 17 gitti).
 
-**Faz 2 başladı.** İlk BEŞ madde kapandı: Trendyol istemcisi (kimlik
-doğrulama, dinamik hız sınırı), **taksonomi çekme/önbellekleme/sürümleme**,
-**kategori/öznitelik eşleştirme arayüzü**, **katalog aktarımı + ön koşul
-kapısı + onay durumu takibi** ve **stok/fiyat itme**. Dokümandaki sıradaki
-madde:
+**FAZ 2 KAPANDI.** Altı maddenin altısı da bitti: Trendyol istemcisi,
+**taksonomi**, **eşleştirme arayüzü**, **katalog aktarımı + ön koşul
+kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
+Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
+düşürüyor, iptal geri ekliyor.
 
-1. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
-   Faz 2 demosu bunu ister: "Trendyol siparişi Woo stoğunu düşürüyor".
-   Bitince Faz 2 kapanır.
+**Sıradaki: Faz 3 (güvenilirlik).** Faz 4 abonelik/ödeme hâlâ hafta
+21–25'tir ve şimdi yazılmamalı.
 
 **`pushPrices`'ın ÇEKİRDEKTE ÇAĞIRANI YOK** — bu turda bulundu ve
 Woo'yu da kapsıyor. `SyncDomain::PRICE` ve `PRICE_PUSH` şemada var ama

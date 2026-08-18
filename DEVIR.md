@@ -1,109 +1,118 @@
-# Devir Notu — 18 Ağustos 2026 (Faz 2 · stok ve fiyat itme)
+# Devir Notu — 18 Ağustos 2026 (Faz 2 · sipariş yoklaması · FAZ 2 KAPANDI)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ## Tek cümlede durum
 
-**Faz 2'nin ilk BEŞ maddesi kapandı**: Trendyol bağlanıyor, taksonomi
-çekiliyor, eşleştirme panelden yapılıyor, ürün ön koşul kapısından geçerek
-aktarılıyor, onay durumu takip ediliyor ve **stok/fiyat kanala itiliyor**.
-**493 test yeşil** (1823 assertion), Pint temiz, üç random seed'de stabil.
+**FAZ 2 KAPANDI — altı maddenin altısı da bitti.** Trendyol bağlanıyor,
+taksonomi çekiliyor, eşleştirme panelden yapılıyor, ürün ön koşul
+kapısından geçerek aktarılıyor, onay takip ediliyor, stok/fiyat kanala
+itiliyor ve **sipariş yoklamayla alınıp stoğu düşürüyor**.
+**519 test yeşil** (1884 assertion), Pint temiz, üç random seed'de stabil.
 
-Faz 2'de **tek madde kaldı: sipariş yoklaması** (22 sa).
+**Faz 2 demosu uçtan uca çalışıyor:** yoklanan Trendyol siparişi stoğu
+10→7 düşürüyor, iptal 10'a geri alıyor.
 
 ## Bu turda ne eklendi
 
-### §13 · Faz 2 · stok ve fiyat itme (`850f41d`)
+### §13 · Faz 2 · sipariş yoklaması (`0b2a328`) — SON MADDE
 
-"Stok ve fiyat itme — 16 sa". **Panel işi yoktu ve yapılmadı** (çalışma
-sırası kararı korundu).
+"Sipariş yoklaması — 22 sa". **Panel işi yoktu ve yapılmadı.**
 
 | Ne | Nerede |
 |---|---|
-| Stok itme | `TrendyolAdapter::pushInventory` |
-| Fiyat itme | `TrendyolAdapter::pushPrices` |
-| Uzak okuma | `fetchInventory` · `fetchPrices` · ortak `fetchRemoteRows()` |
-| Adapter testleri | `TrendyolInventoryPricingTest` (16) |
-| Dikey dilim | `TrendyolInventorySliceTest` (3) |
+| Çekme + normalizasyon | `TrendyolAdapter::{fetchOrders,parseOrderEvent}` |
+| Tur | `Orders/Support/PollChannelOrders.php` |
+| Komut | `Orders/Console/PollChannelOrdersCommand.php` (`orders:poll`) |
+| Zamanlama | `routes/console.php` — **5 dakika** |
+| Testler | `TrendyolOrderPollingTest` (11) · `PollChannelOrdersTest` (11) · `TrendyolOrderSliceTest` (4) |
 
-Çekirdek tarafına **hiç dokunulmadı**: `InventoryBatchBuilder`,
-`PushInventory` ve `SyncResultRecorder` zaten hazırdı ve değişmeden
-Trendyol'u sürüyor. Madde gerçekten yalnızca adapter gövdeleriydi.
+**Çekirdeğe hiç dokunulmadı**: `IngestInboxMessage` → `ProcessInboxMessage`
+→ `OrderEventRouter` zinciri Woo için zaten çalışıyordu ve yoklama aynı
+hatta yazıyor.
 
-**TEK UÇ NOKTA, İKİ YETENEK.** Woo'da stok ve fiyat `products/batch`
-üzerinden ayrı alanlarla gider; Trendyol'da ikisi de
-`v2/products/price-and-inventory`'dir ve kalem KISMİ güncellemeyi
-destekler. Bu yüzden **stok yükü fiyat alanı TAŞIMAZ, fiyat yükü stok
-alanı taşımaz**: biri diğerini ezseydi ezme sessiz ve sürekli olurdu —
-stok her satışta gider, fiyat nadiren değişir. İkisi de ayrı mutasyonla
-sınandı.
+**OLAY KİMLİĞİ SİPARİŞ NUMARASI + DURUMDUR** (`{orderNumber}:{status}`).
+Bu turun en kritik kararı: kimlik yalnızca numaraya bağlansaydı aynı
+siparişin sonraki İPTALİ birincil tekillik indeksine takılır ve
+`insertOrIgnore` tarafından **SESSİZCE YUTULURDU** — stok geri eklenmez,
+bakiye kalıcı eksik kalırdı. Karar 24'ün açıkça uyardığı hata biçimi.
+Kullanıcıya soruldu ve onaylandı.
 
-**KİMLİK BARKODDUR, SAYIYA ÇEVRİLMEZ.** Woo'nun `pushInventory`'si
-`(int) $item['external_id']` yazar çünkü orada kimlik sayısaldır. Aynı
-satır kopyalansaydı `TSH-201` gibi her barkod `0`'a düşer ve istek yanlış
-ürüne giderdi — **kanal 200 döndüğü için senkron BAŞARILI görünürdü.**
-Kendi testi ve kendi mutasyonu var.
+**PENCERE GERİYE BAKAR** (5 dk örtüşme), imleç turun **BAŞLAMA** anına
+yazılır. Bitiş anı yazılsaydı istek sürerken oluşan sipariş iki
+pencerenin arasına düşer ve hiç görülmezdi. **Başarısız turda imleç
+İLERLEMEZ**; **tek bozuk bağlantı turu durdurmaz**.
 
-**`listPrice` ZORUNLU, üstü çizili fiyat yoksa satış fiyatına düşer.**
-Alan atlanırsa kanal `VALIDATION` döner, o hata KALICIDIR ve kampanyası
-olmayan ürün "düzeltilemez" damgasıyla ölürdü.
+**BİLİNMEYEN DURUM `updated`**: `created` var olan siparişi yeniden
+yaratmayı denerdi, `cancelled` satılmış stoğu geri eklerdi.
 
-**Okuma yolları ortak `fetchRemoteRows()` kullanır.** Ayrı yazılsalardı
-"kimliksiz listing sorulmaz" (filtresiz istek TÜM katalogu getirirdi) ve
-"başarısız yanıt YÜKSELTİLİR" (boş snapshot mutabakatta `REMOTE_MISSING`
-üretirdi) kurallarının biri değişince diğeri sessizce geride kalırdı.
+**Frekans 5 dakika** (kullanıcıya soruldu): `reconcile:hot` ile aynı
+ritim. Dakikalık kotayı 5 katına çıkarır ve düşük seviyeli satıcıyı
+429'a sokardı.
 
-## Bu turda bulunan gerçek boşluk — `pushPrices`'ın ÇAĞIRANI YOK
+## GERÇEK ÇALIŞTIRMADA BULUNAN HATA — webhook kapısı ölüydü
 
-**Woo'yu da kapsıyor ve testler yeşilken duruyor.**
+`orders:poll` gerçekten çalıştırıldı (exit 0, `schedule:list` doğrulandı)
+ve Woo bağlantısına hiç dokunmadığı görüldü. Bunu teste dökünce **test
+KIRMIZI döndü**: `supports_webhooks` eager-load'da SEÇİLMİYORDU
+(`with('channelType:code,name,adapter_class')`), kapı null okuyup **hiç
+çalışmıyordu**. Woo yalnızca `SupportsOrders` taşımadığı için atlanıyordu
+— yani doğru davranış YANLIŞ sebepten geliyordu; `SupportsOrders`
+uygulayan webhook'lu bir kanal her turda boşuna yoklanırdı.
+**`adapter_class` ile birebir aynı tuzak** (bu ikinci kez).
 
-`SyncDomain::PRICE` ve `PRICE_PUSH` §4'te ve enum'da var, ama çekirdekte
-**fiyat operasyonu açan ya da dispatch eden hiçbir kod yok**:
-`PushInventory`'nin fiyat karşılığı (`PushPrices` işi) hiç yazılmamış.
-Yani iki adapter'ın da `pushPrices` gövdesi bugün **ulaşılamaz**.
+Düzeltildi, testi yazıldı ve mutasyonla korunduğu doğrulandı.
 
-Davranış yine de dürüst: `DetectStuckSyncOperations` yalnızca
-`INVENTORY_PUSH` için iş atar ve başka bir `operation_type` görürse
-`Log::warning` yazıp **kurtarılmış SAYMAZ**. Yani eksik olan yol, sessiz
-bir yanlış değil.
+## Mutasyonla sınandı — on mutasyon, ONU DA YAKALANDI
 
-**Bu maddenin kapsamı adapter gövdeleriydi ve o kapsam tamamlandı** —
-fiyat senkron yolu ayrı bir çekirdek maddesidir ve dokümanın Faz 2
-listesinde ayrıca yer almıyor. Sipariş yoklamasından sonra ele alınmalı.
+Kimlikten durumun çıkarılması · pencere örtüşmesinin kalkması ·
+başarısız turda imlecin ilerlemesi · `wasRecentlyCreated` kontrolünün
+kalkması · bozuk bağlantının turu durdurması · tek sayfayla yetinilmesi ·
+sağlıksız bağlantı filtresinin kalkması · saniye/milisaniye · bilinmeyen
+durumun `created` sayılması · okumada `throw()`'un kalkması.
 
-## Mutasyonla sınandı — sekiz mutasyon, SEKİZİ DE YAKALANDI
+**BİRİ İLK TURDA HAYATTA KALDI:** pencere örtüşmesi. Sebep testin
+zayıflığıydı — imleç zaten 10 dakika geçmişte olduğu için `subMinutes(5)`
+silinse de "başlangıç imleçten geride" iddiası doğru kalıyordu. Sahte
+test yazılmadı; iddia **örtüşme MİKTARINI** ölçecek şekilde
+güçlendirildi ve mutasyonu gerçekten kırdığı doğrulandı.
 
-Barkodun `(int)` yapılması · stok yüküne fiyat eklenmesi · boş yük
-korumasının kalkması · `throw()`'un kalkması (itme) · `listPrice`
-fallback'inin kalkması · fiyat yüküne `quantity` eklenmesi · kimliksiz
-okuma korumasının kalkması · `throw()`'un kalkması (okuma).
+## Faz 2 demosu uçtan uca doğrulandı
 
-Her yamada `assert old in s` kullanıldı; **hiçbiri sessizce
-uygulanmamış değil**. Dikey dilim testi ayrıca `quantity`'nin sabite
-çevrilmesiyle sınandı ve iki testi birden kırdı — yani sahte yeşil değil.
+`TrendyolOrderSliceTest` **kuyruk sahtesi KULLANMAZ**; zincir gerçek
+sınıflarla yürür: yoklama → `IngestInboxMessage` → `ProcessInboxMessage`
+→ `OrderEventRouter` → `IngestChannelOrder` → `ApplyMovement` → ledger.
 
-## Dikey dilim: çekirdek GERÇEK adapter'ı sürüyor
+Dört şey doğrulanıyor: (a) yoklanan sipariş stoğu **10→7 düşürdü**;
+(b) iptal **10'a geri aldı**; (c) eşleşmemiş barkod siparişi
+KAYBETTİRMEDİ (satır `PENDING`, stoğa hiç dokunulmadı); (d) aynı
+siparişin ikinci turda yeniden yoklanması stoğu iki kez düşürmedi.
 
-`TrendyolInventorySliceTest` sahte adapter KULLANMAZ; sahte olan yalnızca
-HTTP katmanıdır. Zincir: satış (ledger) → `OpenSyncOperation` →
-`PushInventory` → `InventoryBatchBuilder` → `AdapterRegistry` → **gerçek
-`TrendyolAdapter`** → HTTP → `SyncResultRecorder`.
+### Bir önceki tur: stok ve fiyat itme (`850f41d`)
 
-Üç şey doğrulanıyor: (a) 20 − 3 = **17 mutlak değer olarak kanala gitti**;
-(b) **fazla satışta kanala 0 gitti ama kanonik bakiye −3 KALDI** (kırpmanın
-tek meşru yeri `OutboundQuantity`); (c) kanalın 400'ü `VALIDATION` → KALICI
-→ operasyon `dead`.
+Stok/fiyat aynı `v2/products/price-and-inventory` uç noktasına gider ve
+kalem KISMİ güncelleme destekler; **stok yükü fiyat alanı taşımaz, fiyat
+yükü stok alanı taşımaz**. **Kimlik BARKODDUR ve `(int)`'e çevrilmez.**
+`listPrice` zorunlu, üstü çizili fiyat yoksa satış fiyatına düşer. Sekiz
+mutasyonun sekizi de yakalandı; `TrendyolInventorySliceTest` çekirdeğin
+gerçek adapter'ı sürdüğünü doğruluyor.
 
-Bu testin ayrı yazılma sebebi: `TrendyolInventoryPricingTest` adapter'ı
-doğrudan çağırır, `PushInventoryTest` çekirdeği ama SAHTE adapter'la
-sınar. **İkisi de yeşilken aradaki sözleşme yanlış olabilir** — bu projede
-tam bu biçimde iki ölümcül hata bulundu.
+## Hâlâ açık — `pushPrices`'ın ÇEKİRDEKTE ÇAĞIRANI YOK
+
+**Woo'yu da kapsıyor.** `SyncDomain::PRICE` ve `PRICE_PUSH` şemada ve
+enum'da var, ama fiyat operasyonu açan ya da dispatch eden hiçbir kod
+yok: `PushInventory`'nin fiyat karşılığı yazılmamış. İki adapter'ın da
+`pushPrices` gövdesi bugün **ulaşılamaz**.
+
+Davranış dürüst: `DetectStuckSyncOperations` yalnızca `INVENTORY_PUSH`
+için iş atar, diğerine uyarı yazar ve kurtarılmış SAYMAZ. **Fiyat senkron
+yolu ayrı bir çekirdek maddesidir** ve dokümanın Faz 2 listesinde yok.
 
 ## Ortam
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 493 yeşil olmalı
+docker compose exec app php artisan test      # 519 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -116,29 +125,30 @@ gönderme · `/orders` siparişler · `/inventory` stok · `/channels` kanallar 
 
 **Kullanıcının açık talimatı:** "front'una en son bakarız, bir her şeyi
 bitirelim." Yeni sohbette **panel/görsel işlere girme**. Panel cilası zaten
-§13 · Faz 4'te listeli. Bu turda da yeni ekran yazılmadı ve bir sonraki
-madde (sipariş yoklaması) de panel işi içermiyor.
+§13 · Faz 4'te listeli. Bu turda da yeni ekran yazılmadı — Faz 2'nin
+altı maddesinin hiçbiri panel işi içermedi.
 
 Bu, ekran işi ÇIKTIĞINDA tarayıcıda doğrulama kuralını iptal ETMEZ.
 
 **Panelde bilerek ertelenenler:** mutabakat ekranı · `RequestResync` +
 T10 · onay durumu için ayrı ekran.
 
-## Sıradaki adım
+## Sıradaki adım — FAZ 2 BİTTİ, SIRADA FAZ 3
 
-1. **Sipariş yoklaması** (22 sa) — webhook YOK, polling aynı inbox'a
-   yazar. Gelen hat (`inbox_messages` → `ProcessInboxMessage` →
-   `OrderEventRouter`) Woo ile çalışıyor; yoklama işi aynı inbox'a
-   yazacak. Olay kimliği **sipariş numarasından türer** (§4) —
-   `extractEventId()` başlıktan `null` döner, kimliği yoklama işi üretir.
-   `TrendyolAdapter::fetchOrders`, `parseOrderEvent` ve
-   `acknowledgeOrder` hâlâ istisna fırlatıyor. **Panel işi YOK.**
-   **Faz 2 demosu bunu ister**: "Trendyol siparişi Woo stoğunu düşürüyor".
+Faz 2'nin altı maddesinin altısı da kapandı ve demo verilebilir.
 
-Bittiğinde **Faz 2 kapanır** ve demo verilebilir hale gelir.
+**Doküman sırası: Faz 3 (güvenilirlik).** Yazılmamış olanlar:
+`UpdateOrderSnapshot`, `UpdateFulfillment`, `PruneApiCalls`,
+`RequestResync` (+ T10), ılık/soğuk mutabakat katmanları (sıcak katman
+yazıldı).
 
-Sonrasında açık kalanlar: **fiyat senkron yolu** (yukarıdaki boşluk),
-mutabakat panel ekranı, `RequestResync` + T10.
+**Çekirdekte kalan bilinen boşluk: fiyat senkron yolu** (yukarıda).
+Adapter gövdeleri hazır; eksik olan `PushPrices` işi ve fiyat operasyonu
+açan yol.
+
+**Panelde bilerek ertelenenler:** mutabakat ekranı · `RequestResync` +
+T10 · onay durumu için ayrı ekran. Çalışma sırası kararı gereği bunlara
+kullanıcı "artık front'a bakalım" diyene kadar girilmiyor.
 
 **Abonelik/ödeme Faz 4'tür** (hafta 21–25) — şimdi yazılmamalı.
 
@@ -178,7 +188,8 @@ Bu veri commit'lerde DEĞİL, yalnızca yerel veritabanında.
 
 Hepsi testler yeşilken bulundu:
 
-- **`pushPrices`'ın çekirdekte çağıranı yok** — Woo dahil (bu tur).
+- **`supports_webhooks` eager-load'da seçilmiyordu** — webhook kapısı ölüydü.
+- **`pushPrices`'ın çekirdekte çağıranı yok** — Woo dahil.
 - **Engellenen gönderim "zaten güncel" diyordu** (panelde).
 - **Onay yanıtında olmayan satır "reddedildi" sayılabiliyordu** (mutasyon).
 - **Tek bozuk bağlantı tüm kanalın taksonomisini durduruyordu.**
@@ -246,11 +257,19 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **`StoreUrl` HTTPS'i zorunlu tutar** — yerel stub'a TLS eklenir.
 - **CI'da `public/build` yoktur** — `Tests` job'ı `npm run build` çalıştırır.
 - **CI'da `codeload` 429'u** — `--prefer-source` ile kaynak yoldan denenir.
+- **Eager-load'da OKUNACAK HER ALAN AÇIKÇA SEÇİLMELİ.** `adapter_class`
+  bir kez, `supports_webhooks` bir kez daha bu yüzden sessizce null okundu
+  ve kapı hiç çalışmadı. `with('rel:a,b')` yazdıysan o metotta okunan
+  alanların hepsi listede mi diye BAK.
+- **`(channel_type_code, external_account_id)` GLOBAL tekil** — aynı test
+  içinde iki kez `connection()` çağırmak kısıtı ihlal eder (bu turda
+  yaşandı).
 - **`TrendyolAdapterTest`'teki "yazılmamış yetenek" listesi madde kapandıkça
-  KÜÇÜLTÜLMELİ.** Bu turda `pushInventory`/`pushPrices` çıkarıldı; listede
-  kalan: `delist`, `fetchListing`. (`fetchOrders`/`parseOrderEvent`/
-  `acknowledgeOrder` gövdeleri hâlâ istisna atıyor ama o testin
-  listesinde değiller — sipariş yoklaması maddesinde ele alınacaklar.)
+  KÜÇÜLTÜLMELİ.** Önceki turda `pushInventory`/`pushPrices`, bu turda
+  `fetchOrders`/`parseOrderEvent` çıkarıldı. **Listede kalan: `delist`,
+  `fetchListing`** — ikisi de Faz 2 kapsamı dışı. `acknowledgeOrder`
+  gövdesi hâlâ istisna atıyor ama o testin listesinde hiç olmadı
+  (kargo §14'te kapsam dışı).
 
 ## Bilinen açık uçlar
 
@@ -260,10 +279,16 @@ hosts") ve bu turda da doğrulanamadı. `gh auth login` sonrası
 `gh run list` ile bakılmalı. Düzeltmenin kendisi (`6e2217e`) yerinde.
 
 **2 · `--order-by=random` düşüşü bu turda da tekrar üretilemedi.** Üç tur
-koşuldu, üçü de yeşil (seed'ler: 1787061938 · 1787062039 · 1787062087).
-Toplamda ALTI ardışık temiz tur (iki oturum). PHPUnit 11'de `--seed`
-seçeneği YOK; seed çıktının sonunda "Random Order Seed" satırında
-raporlanır. Görülürse o satırdaki seed kaydedilmeli.
+daha koşuldu, üçü de yeşil (seed'ler: 1787066180 · 1787066230 ·
+1787066267). Toplamda **DOKUZ ardışık temiz tur** (üç oturum). PHPUnit
+11'de `--seed` seçeneği YOK; seed çıktının sonunda "Random Order Seed"
+satırında raporlanır. Görülürse o satırdaki seed kaydedilmeli.
 
 **3 · `pushPrices` çekirdekte çağrılmıyor** (yukarıda ayrıntısı). Adapter
 gövdeleri hazır; eksik olan `PushPrices` işi ve fiyat operasyonu açan yol.
+
+**4 · `acknowledgeOrder` yazılmadı ve "yazılmamış yetenek" listesinde de
+YOK.** Sipariş onaylama Trendyol'da kargo akışının parçasıdır ve §14
+kargoyu kapsam dışı bırakır (`SupportsFulfillment` UYGULANMAZ). Yani bu
+bir eksik değil, bilinçli kapsam sınırı — ama `SupportsOrders` arayüzü
+metodu ilan ettiği için gövde istisna fırlatıyor.
