@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Trendyol;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\Trendyol\Taxonomy\TaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\HealthResult;
@@ -356,18 +357,26 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
     public function fetchCategoryTree(): CategoryTreeSnapshot
     {
-        throw $this->notImplemented('kategori ağacı çekme');
+        return $this->taxonomy()->fetchTree();
     }
 
     /** @return array<string, mixed> */
     public function fetchCategoryAttributes(string $categoryId): array
     {
-        throw $this->notImplemented('kategori öznitelikleri');
+        return $this->taxonomy()->fetchAttributes($categoryId);
     }
 
+    /**
+     * Taksonomi sürümü — AĞACI ÇEKİP İÇERİĞİNDEN türetir.
+     *
+     * Kanal bir sürüm numarası vermediği için "sürüm değişti mi" sorusu
+     * ancak ağaç okunarak cevaplanabilir. Çağıran zaten ağacı çekecekse
+     * `fetchCategoryTree()` kullanmalı ve sürümü snapshot'tan okumalıdır;
+     * bu metot iki kez çekmeye yol açar.
+     */
     public function taxonomyVersion(): string
     {
-        throw $this->notImplemented('taksonomi sürümü');
+        return $this->fetchCategoryTree()->version;
     }
 
     // ---------------------------------------------------------------- onay
@@ -387,6 +396,17 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      * bir satıcının kaynağını ister ve 403 alır. Kimlik `settings` içinde
      * durur — sır değildir ve panelde görünür.
      */
+    /**
+     * Taksonomi istemcisi.
+     *
+     * Ağaç uç noktası satıcıya özgü DEĞİLDİR (kategori ağacı tüm satıcılar
+     * için aynıdır), bu yüzden `supplierPath()` kullanılmaz.
+     */
+    private function taxonomy(): TaxonomyClient
+    {
+        return new TaxonomyClient($this->client);
+    }
+
     private function supplierPath(string $endpoint): string
     {
         $supplierId = (string) ($this->connection->settings['supplier_id'] ?? '');

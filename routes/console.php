@@ -66,3 +66,16 @@ Schedule::command('reconcile:hot')
     ->everyFiveMinutes()
     ->onOneServer()
     ->withoutOverlapping();
+
+// §13 · Faz 2 · TAKSONOMİ — kanal kategori ağacı.
+//
+// GÜNLÜK, SAATLİK DEĞİL: kategori ağacı sık değişmez ve 30 bin satırlık bir
+// ağacı saatte bir okumak kanal kotasını boşuna harcar. Gece 03:00 seçildi:
+// satış trafiği en düşük, kota en boş.
+//
+// Öznitelikler burada çekilmez (yaprak başına ayrı istek, 30 bin yaprakta
+// tur saatler sürer); eşleştirme ekranı talebe bağlı çeker.
+Schedule::command('taxonomy:sync')
+    ->dailyAt('03:00')
+    ->onOneServer()
+    ->withoutOverlapping();

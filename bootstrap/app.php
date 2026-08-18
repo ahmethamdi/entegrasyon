@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Channels\Console\SyncTaxonomyCommand;
 use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
@@ -39,6 +40,8 @@ return Application::configure(basePath: dirname(__DIR__))
         DetectStuckSyncOperationsCommand::class,
         // §10 · mutabakat. Zamanlaması routes/console.php içinde.
         ReconcileHotCommand::class,
+        // §13 · Faz 2 · taksonomi. Zamanlaması routes/console.php içinde.
+        SyncTaxonomyCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

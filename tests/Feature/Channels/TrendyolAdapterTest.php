@@ -151,8 +151,11 @@ final class TrendyolAdapterTest extends TestCase
             'fiyat itme' => fn () => $adapter->pushPrices(
                 new PricePushBatch('c1', []),
             ),
-            'taksonomi sürümü' => fn () => $adapter->taxonomyVersion(),
-            'kategori ağacı' => fn () => $adapter->fetchCategoryTree(),
+            // TAKSONOMİ ARTIK BU LİSTEDE DEĞİL: §13 · Faz 2'nin ikinci
+            // maddesiyle yazıldı ve `TaxonomySyncTest` onu doğruluyor.
+            // Bu liste madde kapandıkça KÜÇÜLÜR; yazılan bir gövde
+            // buradan çıkarılmazsa test yazılmış kodu "yazılmamış"
+            // sanarak kırmızıya döner.
             'onay durumu' => fn () => $adapter->fetchApprovalStatus([]),
         ];
 
