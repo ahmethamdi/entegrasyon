@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 414 test yeşil olmalı
+docker compose exec app php artisan test      # 440 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -94,7 +94,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-31 domain tablosu, 30 model, 414 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 440 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -232,6 +232,37 @@ memory'deki "Repo Durumu" dosyasına bak.
   kanaldaki tüm satıcılar taksonomisiz kalır ve sorun kendi
   bağlantılarında olmadığı için hiçbiri düzeltemezdi.
 
+## Eşleştirme kuralları (§13 · Faz 2)
+
+- **EŞLEŞTİRME KİRACIYA AİTTİR — taksonominin AKSİNE.** `channel_categories`
+  `tenant_id` taşımaz (ağaç kanalın GERÇEĞİ); `category_mappings`,
+  `attribute_mappings`, `attribute_value_mappings` taşır (eşleştirme
+  satıcının KARARI). İki satıcı aynı iç kategoriyi kanalın farklı
+  kategorilerine bağlayabilir ve ikisi de haklıdır.
+- **ÜÇ SEVİYENİN ANAHTARLARI BİLİNÇLİ OLARAK FARKLIDIR.** Öznitelik
+  eşleştirmesi **KATEGORİ BAŞINA** (`UNIQUE(tenant, option_definition,
+  channel_category)`): aynı "Beden" elbisede ve ayakkabıda farklı
+  `external_attribute_id` taşır. Değer eşleştirmesi **ÖZNİTELİK BAŞINA,
+  kategori YOK** (`UNIQUE(tenant, option_value, external_attribute)`): değer
+  listesi kategoriden bağımsızdır ve kategori de anahtara girseydi satıcı
+  aynı "S → SMALL" kararını her kategori için yeniden verirdi.
+- **YENİ SÜRÜM EŞLEŞTİRMEYİ SİLMEZ, BAYAT İŞARETLER.** `taxonomy_version`
+  FK'dan okunabilirdi ama KOLON olarak tutulur: "hangi eşleştirmeler eski
+  sürüme bakıyor" join'siz cevaplanır. Bayatlık `ready`'yi DÜŞÜRMEZ —
+  eşleştirme hâlâ geçerlidir, yalnızca yeniden doğrulanması istenir.
+- **ÜÇ KAPI, ÜÇÜ DE AYNI GEREKÇEYLE.** Yaprak olmayan kategori, kategoride
+  bulunmayan öznitelik ve izinli liste dışındaki değer REDDEDİLİR: üçü de
+  kanalda `VALIDATION` hatası verir, o hata **KALICIDIR** ve listing
+  "düzeltilemez" damgasıyla ölür. Kaydederken yakalamak sonra yakalamaktan
+  ucuzdur.
+- **BOŞ İZİNLİ DEĞER LİSTESİ "HİÇBİRİ" DEĞİL "SERBEST METİN" DEMEKTİR.**
+  Aksi yorumla satıcı o özniteliği asla eşleştiremezdi.
+- **İç kategori tablosu YOKTUR** (§4 de istemez): `products.internal_category_id`
+  serbest metindir ve ekran `products` üzerinden DISTINCT okur. Boş dize
+  NULL'a çevrilir — `""` bir kategori adı değildir.
+- **Eksik zorunlu öznitelik ADIYLA gösterilir**, sayıyla değil: sayı tek
+  başına kullanıcıya ne yapacağını söylemez.
+
 ## Zaman damgası tuzağı — `now()` yerine `clock_timestamp()`
 
 `outbox_events` zaman damgaları **saniye hassasiyetlidir**
@@ -307,9 +338,10 @@ katmanları (sıcak katman yazıldı).
 yazıldı**; katalog aktarımı, sipariş yoklaması, onay durumu ve stok/fiyat
 itme Faz 2'nin sonraki maddeleridir ve gövdeleri açıkça istisna fırlatır.
 
-Kategori/öznitelik **eşleştirme** tabloları (`category_mappings`,
-`attribute_mappings`, `attribute_value_mappings` — kiracı başına) henüz
-yazılmadı; taksonomi önbelleği (kiracısız) onların girdisidir.
+Kategori/öznitelik **eşleştirme** tabloları ve panel ekranı **yazıldı**;
+sıradaki madde `PrerequisiteGate`'tir. Ekran zaten "hazır mı" sorusunu
+cevaplıyor (`ready`); kapı aynı mantığı listing tarafında uygulayacak —
+**mantık ortak bir yere alınmalı, ikinci kez yazılmamalı.**
 
 Sahte adapter'lar hâlâ kullanılıyor — gerçek Woo adapter'ı onların yerini
 almaz, farklı şeyleri sınarlar: `FakeAdapter` (registry yaşam döngüsü),
@@ -543,9 +575,9 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 §6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
 **§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
-maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde yedi ekran
+maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde sekiz ekran
 var: özet · ürünler · ürün kanalları · siparişler · sipariş ayrıntısı · stok ·
-kanallar.
+kanallar · **eşleştirme**.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
@@ -555,20 +587,19 @@ da doğrulandı (ürün Woo'ya gitti, stok düzeltmesi arkasından ulaştı).
 zamanlama çalışıyor; gerçek Woo adapter'ıyla doğrulandı (kanalda 99, bizde 17
 → REPAIR → kanala 17 gitti).
 
-**Faz 2 başladı.** İlk iki madde kapandı: Trendyol istemcisi (kimlik
-doğrulama, dinamik hız sınırı) ve **taksonomi çekme/önbellekleme/sürümleme**.
-Dokümandaki sıradaki maddeler:
+**Faz 2 başladı.** İlk ÜÇ madde kapandı: Trendyol istemcisi (kimlik
+doğrulama, dinamik hız sınırı), **taksonomi çekme/önbellekleme/sürümleme**
+ve **kategori/öznitelik eşleştirme arayüzü** (üç tablo, üç action, panel
+ekranı). Dokümandaki sıradaki maddeler:
 
-1. **Kategori ve öznitelik eşleştirme arayüzü** (§13 · Faz 2 · 28 sa) —
-   `category_mappings`, `attribute_mappings`, `attribute_value_mappings`
-   (kiracı BAŞINA) + panel ekranı. Katalog aktarımının ön koşulu; taksonomi
-   önbelleği (kiracısız) bunun girdisi.
-2. **Katalog aktarımı, ön koşul kapısı, onay durumu takibi** (24 sa) —
+1. **Katalog aktarımı, ön koşul kapısı, onay durumu takibi** (24 sa) —
    `PrerequisiteGate`: eksik eşleştirmede listing `blocked`, stok akışı
-   ETKİLENMEZ.
-3. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
+   ETKİLENMEZ. Girdisi hazır; eşleştirme ekranı "hazır mı" sorusunu zaten
+   cevaplıyor (`ready`) ve o mantık **ortak bir yere alınmalı, ikinci kez
+   yazılmamalı**.
+2. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
    Woo satışı Trendyol stoğunu günceller.
-4. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
+3. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
    Faz 2 demosu bunu ister: "Trendyol siparişi Woo stoğunu düşürüyor".
 
 Panel tarafında hâlâ açık: **mutabakat panel ekranı** (`reconciliation_items`
