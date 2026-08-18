@@ -82,6 +82,16 @@ Bunlar test ile korunur. İhlal eden değişiklik reddedilmelidir.
 - Değişim `SetDefaultWarehouse` ile, tek transaction iki adım
 - "En az bir varsayılan" **DB kısıtıyla zorlanmaz**; `CreateTenant` garanti eder
 
+## Çalışma sırası — ÖNCE ÇEKİRDEK, PANEL SONA (18 Ağustos 2026)
+
+Kullanıcının kararı: **yeni panel ekranı yazılmıyor**, Faz 2'nin kalan
+maddeleri (stok/fiyat itme, sipariş yoklaması) çekirdek tarafında
+bitiriliyor. Panel cilası zaten §13 · Faz 4'te listeli.
+
+Bu, **ekran işi çıktığında tarayıcıda doğrulama** kuralını iptal etmez —
+bir ekran yazılırsa yine tarayıcıda sürülür. Karar yeni ekran YAZMAMAK
+üzerinedir; mevcut sekiz ekran çalışıyor ve dokunulmuyor.
+
 ## Modül sınırı
 
 Bir domain başka bir domainin **modeline** doğrudan yazmaz, yalnızca **action**

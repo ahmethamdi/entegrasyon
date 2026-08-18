@@ -31,10 +31,10 @@ function logout() {
         <header class="border-b border-stone-200 bg-white">
             <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
                 <div>
-                    <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
+                    <p class="font-mono text-base uppercase tracking-widest text-stone-900">
                         Entegrasyon
                     </p>
-                    <p class="text-sm font-medium text-stone-900">{{ tenantName }}</p>
+                    <p class="text-sm font-medium text-stone-600">{{ tenantName }}</p>
                 </div>
 
                 <div class="flex items-center gap-6">

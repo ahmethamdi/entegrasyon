@@ -113,6 +113,21 @@ Panel: `/` özet · `/products` ürünler · `/products/{id}/channels` kanala
 gönderme · `/orders` siparişler · `/inventory` stok · `/channels` kanallar ·
 `/mappings` eşleştirme
 
+## ÇALIŞMA SIRASI KARARI — ÖNCE ÇEKİRDEK, PANEL SONA (18 Ağustos)
+
+**Kullanıcının açık talimatı:** "front'una en son bakarız, bir her şeyi
+bitirelim." Yeni sohbette **panel/görsel işlere girme**; sıradaki
+maddeleri çekirdek tarafından bitir. Panel cilası zaten §13 · Faz 4'te
+listeli ("boş durumlar, yükleniyor, mobil düzen — 20 sa").
+
+Bu, ekran işi ÇIKTIĞINDA tarayıcıda doğrulama kuralını iptal ETMEZ: bir
+ekran yazılırsa yine tarayıcıda sürülür. Karar, yeni ekran YAZMAMAK
+üzerinedir — mevcut ekranlar çalışıyor ve dokunulmayacak.
+
+**Panelde bilerek ertelenenler:** mutabakat ekranı · `RequestResync` +
+T10 · onay durumu için ayrı ekran (rozet ve red sebebi ürün-kanal
+ekranında zaten görünüyor).
+
 ## Sıradaki adım — dokümandaki Faz 2 sırası
 
 1. **Stok ve fiyat itme** (16 sa) — çapraz kanal döngüsünün yarısı kapanır:
@@ -120,9 +135,24 @@ gönderme · `/orders` siparişler · `/inventory` stok · `/channels` kanallar 
    ve `pushPrices` hâlâ açıkça istisna fırlatıyor. **Çekirdek tarafı hazır**
    (`InventoryBatchBuilder`, `PushInventory`, `SyncResultRecorder` Woo ile
    çalışıyor); yalnızca adapter gövdeleri ve Trendyol'un
-   `price-and-inventory` uç noktası yazılacak.
+   `price-and-inventory` uç noktası yazılacak. **Panel işi YOK.**
 2. **Sipariş yoklaması** (22 sa) — webhook yok, polling aynı inbox'a yazar.
    **Faz 2 demosu bunu ister**: "Trendyol siparişi Woo stoğunu düşürüyor".
+   Gelen hat (`inbox_messages` → `ProcessInboxMessage` → `OrderEventRouter`)
+   Woo ile çalışıyor; yoklama işi aynı inbox'a yazacak. **Panel işi YOK.**
+
+İkisi bittiğinde **Faz 2 kapanır** ve demo verilebilir hale gelir.
+
+## Demo verisi panelde duruyor
+
+`demo@entegrasyon.local` / `demo12345` — gezilebilir bir kiracı.
+6 ürün, 2 kanal bağlantısı, `demo-v3` taksonomisi (4 yaprak) ve
+**bilinçli olarak KISMİ** eşleştirmeler: `mutfak` eşleşmedi ·
+`kadin-elbise` zorunlu öznitelik eksik (Renk) · `tisort` hazır.
+`TSH-201` fazla satış taşıyor (bakiye −3).
+
+Bu veri commit'lerde DEĞİL, yalnızca yerel veritabanında. Testleri
+etkilemez (testler `entegrasyon_test` veritabanında koşar).
 
 Panel tarafında hâlâ açık: **mutabakat panel ekranı** ve **`RequestResync` +
 T10** (§18 · P1, faz 1.6'da listeli ama yazılmadı).

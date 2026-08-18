@@ -17,7 +17,7 @@ function submit() {
 <template>
     <div class="flex min-h-screen items-center justify-center bg-stone-50 px-6">
         <div class="w-full max-w-sm">
-            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
+            <p class="font-mono text-lg uppercase tracking-widest text-stone-900">
                 Entegrasyon
             </p>
             <h1 class="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
