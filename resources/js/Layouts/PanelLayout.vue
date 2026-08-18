@@ -12,6 +12,7 @@ const nav = [
     { href: '/orders', label: 'Siparişler' },
     { href: '/inventory', label: 'Stok' },
     { href: '/channels', label: 'Kanallar' },
+    { href: '/mappings', label: 'Eşleştirme' },
 ];
 
 const currentPath = computed(() => page.url.split('?')[0]);

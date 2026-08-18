@@ -73,6 +73,9 @@ final class ProductController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
             'brand' => ['nullable', 'string', 'max:120'],
             'barcode' => ['nullable', 'string', 'max:120'],
+            // İç kategori: kanal eşleştirmesinin çıpası (§13 · Faz 2).
+            // Serbest metindir — ayrı bir iç kategori tablosu yoktur (§4).
+            'internal_category_id' => ['nullable', 'string', 'max:255'],
         ]);
 
         try {
@@ -85,6 +88,7 @@ final class ProductController extends Controller
                 description: $validated['description'] ?? null,
                 brand: $validated['brand'] ?? null,
                 barcode: $validated['barcode'] ?? null,
+                internalCategoryId: $validated['internal_category_id'] ?? null,
             );
         } catch (DuplicateSkuException $e) {
             // Kısıt ihlalini alan hatasına çevir: kullanıcı 500 değil açıklama görür.
@@ -110,6 +114,7 @@ final class ProductController extends Controller
                 'description' => $model->description,
                 'brand' => $model->brand,
                 'status' => $model->status,
+                'internalCategoryId' => $model->internal_category_id,
                 'price' => $model->variants->first()?->price,
             ],
         ]);
@@ -128,6 +133,7 @@ final class ProductController extends Controller
             'description' => ['nullable', 'string', 'max:5000'],
             'brand' => ['nullable', 'string', 'max:120'],
             'status' => ['nullable', 'string', 'in:draft,active,archived'],
+            'internal_category_id' => ['nullable', 'string', 'max:255'],
         ]);
 
         // STOĞA DOKUNULMAZ: içerik ve stok ayrı alanlar.
@@ -138,6 +144,7 @@ final class ProductController extends Controller
             description: $validated['description'] ?? null,
             brand: $validated['brand'] ?? null,
             status: $validated['status'] ?? null,
+            internalCategoryId: $validated['internal_category_id'] ?? null,
         );
 
         return redirect('/products')->with('success', "{$model->sku} güncellendi.");

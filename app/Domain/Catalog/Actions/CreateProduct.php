@@ -60,6 +60,7 @@ final class CreateProduct
         ?string $brand = null,
         string $currency = 'TRY',
         ?string $barcode = null,
+        ?string $internalCategoryId = null,
     ): Product {
         $tenantId = TenantContext::idOrFail();
 
@@ -72,14 +73,21 @@ final class CreateProduct
         try {
             return DB::transaction(function () use (
                 $tenantId, $sku, $title, $price, $openingStock, $warehouseId,
-                $description, $brand, $currency, $barcode,
+                $description, $brand, $currency, $barcode, $internalCategoryId,
             ): Product {
+                $normalizedCategory = $internalCategoryId === null
+                    ? null
+                    : (trim($internalCategoryId) === '' ? null : trim($internalCategoryId));
+
                 $product = Product::query()->create([
                     'tenant_id' => $tenantId,
                     'sku' => $sku,
                     'title' => $title,
                     'description' => $description,
                     'brand' => $brand,
+                    // İç kategori kanal eşleştirmesinin (§13 · Faz 2) çıpası;
+                    // boş dize NULL'a çevrilir, adsız kategori satırı olmaz.
+                    'internal_category_id' => $normalizedCategory,
                     'status' => 'active',
                     'content_version' => 1,
                 ]);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryController;
@@ -62,6 +63,18 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
         ->name('products.channels.index');
     Route::post('/products/{product}/channels', [ProductChannelController::class, 'store'])
         ->name('products.channels.store');
+
+    // Kategori ve öznitelik eşleştirme (§13 · Faz 2). Katalog aktarımının
+    // ön koşulu: §14'ün `PrerequisiteGate`'i buradaki kararları okur.
+    // Kaydetme POST'tur — yan etkisi var ve GET olsaydı tarayıcı ön
+    // yüklemesi satıcı adına eşleştirme kaydederdi.
+    Route::get('/mappings', [CategoryMappingController::class, 'index'])->name('mappings.index');
+    Route::post('/mappings/category', [CategoryMappingController::class, 'storeCategory'])
+        ->name('mappings.category.store');
+    Route::post('/mappings/attribute', [CategoryMappingController::class, 'storeAttribute'])
+        ->name('mappings.attribute.store');
+    Route::post('/mappings/attribute-value', [CategoryMappingController::class, 'storeAttributeValue'])
+        ->name('mappings.attribute-value.store');
 
     // Ürün/stok listesi (§13 · faz 1.2 · panel). Düzeltme POST'tur ve
     // ledger'a yazar: fazla satışın "düzeltme yolu" (§17 · P0).

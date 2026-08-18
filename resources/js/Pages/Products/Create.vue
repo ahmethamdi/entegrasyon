@@ -9,6 +9,7 @@ const form = useForm({
     opening_stock: 0,
     description: '',
     brand: '',
+    internal_category_id: '',
     barcode: '',
 });
 
@@ -150,6 +151,31 @@ function submit() {
                         class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-mono text-sm focus:border-stone-500 focus:outline-none"
                     >
                 </div>
+            </div>
+
+            <!--
+                İç kategori kanal eşleştirmesinin çıpasıdır (§13 · Faz 2).
+                Serbest metindir: ayrı bir iç kategori tablosu yoktur ve
+                satıcı kendi adlandırmasını kullanır.
+            -->
+            <div>
+                <label for="internal_category_id" class="block text-sm font-medium text-stone-700">
+                    İç kategori
+                </label>
+                <input
+                    id="internal_category_id"
+                    v-model="form.internal_category_id"
+                    type="text"
+                    placeholder="Örn. kadin-elbise"
+                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                >
+                <p class="mt-1 text-xs text-stone-500">
+                    Kendi kategori adınız. Kanalın kategorisine bu ad üzerinden
+                    eşleştirilir; aynı adı taşıyan ürünler tek eşleştirmeyi paylaşır.
+                </p>
+                <p v-if="form.errors.internal_category_id" class="mt-1 text-xs text-red-700">
+                    {{ form.errors.internal_category_id }}
+                </p>
             </div>
 
             <div class="flex items-center gap-3">

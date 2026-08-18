@@ -38,15 +38,20 @@ final class UpdateProduct
         ?string $description = null,
         ?string $brand = null,
         ?string $status = null,
+        ?string $internalCategoryId = null,
     ): Product {
         return DB::transaction(function () use (
-            $product, $title, $price, $description, $brand, $status,
+            $product, $title, $price, $description, $brand, $status, $internalCategoryId,
         ): Product {
             $product->forceFill([
                 'title' => $title,
                 'description' => $description,
                 'brand' => $brand,
                 'status' => $status ?? $product->status,
+                // İç kategori: kanal eşleştirmesinin (§13 · Faz 2) çıpası.
+                // Boş dize NULL'a çevrilir — "" bir kategori adı değildir ve
+                // eşleştirme ekranında adsız bir satır olarak görünürdü.
+                'internal_category_id' => $this->normalizeCategory($internalCategoryId),
                 // Senkron kapısı bundan beslenir; artmazsa değişiklik
                 // kanala hiç gitmez.
                 'content_version' => $product->content_version + 1,
@@ -68,5 +73,23 @@ final class UpdateProduct
 
             return $product;
         });
+    }
+
+    /**
+     * Boş dize NULL'a çevrilir.
+     *
+     * "" bir kategori adı DEĞİLDİR; olduğu gibi yazılsaydı eşleştirme
+     * ekranında adsız bir satır belirir ve satıcı onu ne eşleştirebilir
+     * ne de silebilirdi.
+     */
+    private function normalizeCategory(?string $internalCategoryId): ?string
+    {
+        if ($internalCategoryId === null) {
+            return null;
+        }
+
+        $trimmed = trim($internalCategoryId);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 }

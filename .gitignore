@@ -25,3 +25,6 @@ Thumbs.db
 
 # Entegrasyon
 /docker/postgres/data
+
+# Playwright CLI oturum artıkları (tarayıcı doğrulaması)
+/.playwright-cli
