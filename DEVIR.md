@@ -1,4 +1,4 @@
-# Devir Notu — 19 Ağustos 2026 (Faz 3 · dört madde bitti)
+# Devir Notu — 19 Ağustos 2026 (FAZ 3 KAPANDI)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -6,322 +6,210 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 564 yeşil olmalı
+docker compose exec app php artisan test      # 581 yeşil olmalı
 ```
 
-**Sıradaki iş: Faz 3 · madde 4 — ILIK/SOĞUK MUTABAKAT KATMANLARI (§10).**
-**Faz 3'ün SON maddesi.**
+**FAZ 3'TEN KALAN MADDE YOK.** Beş maddenin beşi de bitti. Çekirdek
+tarafında yazılacak bir güvenilirlik maddesi kalmadı.
 
-Sıcak katman çalışıyor: `reconcile:hot` (5 dakikalık), `CandidateSelector`
-DÖRT ayrı aday sorgusu (recently_sold 100 / previous_error 90 /
-stale_sync 80 / drift_detected 70), `ReconcileConnection` beş adım
-(DETECT/RECORD/CLASSIFY/REPAIR/VERIFY), bağlantı başına en fazla 50 listing.
-§10'un bütçe tablosunda **iki katman daha** var ve ikisi de yazılmadı.
+**Sıradaki iş FAZ 4'tür ve ilk adım KULLANICIYA SORMAKTIR.** Faz 4'ün
+içinde birbirinden bağımsız dört madde var ve hangisinin önce geleceği
+bir öncelik kararıdır, teknik bir zorunluluk değil:
 
-**ÖNCE DOKÜMANA BAK** (§10 · bütçe tablosu): kapsam, frekans ve bağlantı
-başına listing bütçesi orada tanımlı — buradan tahmin etme. PDF
-`~/Desktop/Entegrasyon-Mimari-v2.2.pdf`; `pdftotext -layout` ile metne
-çevirip `grep -n "ılık\|soğuk\|katman"` ile bul.
+1. **Panel cilası** (§13 · Faz 4, 20 sa) — boş durumlar, yükleniyor
+   göstergeleri, mobil düzen. Mevcut sekiz ekrana dokunur.
+2. **Mutabakat panel ekranı** — `reconciliation_items` yazılıyor ama
+   HİÇ GÖSTERİLMİYOR. Sürüklenme tespiti artık üç katmanda da çalışıyor
+   ve bulguları yalnızca veritabanında duruyor; bu ekran o yatırımın
+   kullanıcıya görünen tek yüzü.
+3. **Onay durumu için ayrı ekran** — rozet ve red sebebi bugün
+   ürün-kanal ekranında var; ayrı ekran §13'te listeli.
+4. **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
+   ALINMIŞ (`tenants.plan_code` kolonu var; §4 · `plans` kiracısız+seed,
+   `subscriptions` `UNIQUE(tenant_id) WHERE status='active'`; §3 · `Plan`,
+   `Subscription`, `UsageRecord`) ama YAZILMADI.
 
-Beklenen biçim: aynı `ReconcileConnection` beş adımı YENİDEN KULLANILIR,
-değişen şey **aday seçimi** ve **bütçe**. Yeni komut(lar) `bootstrap/app.php`
-kaydı + `routes/console.php` zamanlaması ister — İKİSİ AYRI koşul ve
-`ScheduledScansTest` ikisini ayrı ayrı doğrular.
+**ÇALIŞMA SIRASI KARARI KAPSAMINI DOLDURDU.** Kullanıcının 18 Ağustos
+talimatı "front'una en son bakarız, bir her şeyi bitirelim" idi ve o
+"her şey" artık bitti. Panel işine geçmek ARTIK MEŞRUDUR ama hangi
+maddeyle başlanacağı kullanıcının kararıdır — sorulmadan panel yazma.
 
-Dikkat edilecek §10 kuralları: `error_permanent` ASLA aday değildir ·
-karşılaştırma `max(available, 0)` ile yapılır (ham kanonik değerle
-yapılsaydı her fazla satış kalıcı sürüklenme sayılır ve SONSUZ ONARIM
-DÖNGÜSÜ doğardı) · onarım sürüm kapısını ATLAR ve `desired_version`'ı
-ARTIRMAZ · doğrulama AYRI turda · uzak durum TOPLU okunur ·
-`REMOTE_MISSING` ve `REMOTE_UNREACHABLE` otomatik onarım AÇMAZ.
+**Ekran işi çıktığında TARAYICIDA doğrula** — bu kural hiç iptal olmadı,
+yalnızca uygulanacağı madde bugüne kadar gelmedi.
 
-**Panel işine GİRME** (çalışma sırası kararı) — mutabakat panel ekranı
-Faz 4'te listeli. Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay)
-SIRAYA KONDU ama **Faz 3 + Faz 4 bitmeden başlanmıyor** — ayrıntı aşağıda.
-
-Yazdıktan sonra **GERÇEK çalıştır** — bu projede her tur ölümcül hata
-yeşil testlerin altından çıktı.
+Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) **Faz 4'ten
+SONRA** — ayrıntı aşağıda, sıra ve gerekçeler değişmedi.
 
 ## Tek cümlede durum
 
-**Faz 2 kapandı, Faz 3'te DÖRT madde bitti:** sipariş güncelleme + kargo,
-`PruneApiCalls`, `RequestResync` + T10 ve **fiyat senkron yolu**.
-P0/P1'in tamamı yeşil. **564 test yeşil** (1987 assertion), Pint temiz
-(284 dosya), iki random seed'de stabil.
+**Faz 2 ve Faz 3 kapandı.** P0/P1'in tamamı yeşil, yazılmamış P0/P1 testi
+yok. **581 test yeşil** (2044 assertion), Pint temiz (289 dosya), sekiz
+ardışık rastgele sıralı tur temiz.
 
 ## Bu turda ne eklendi
 
-### §13 · Faz 3 · FİYAT SENKRON YOLU (`d17aa8a`)
+### §10 · ILIK VE SOĞUK MUTABAKAT KATMANLARI (`5df1983`)
 
 | Ne | Nerede |
 |---|---|
-| Tetikleyici | `Catalog/Actions/UpdateProduct` → `VariantPriceChanged` |
-| Tüketici | `Messaging/Consumers/VariantPriceChangedConsumer` (fan-out) |
-| Yönlendirme | `ConsumeOutboxEvent`'e `VariantPriceChanged` dalı |
-| Gruplama | `Sync/Support/PriceBatchBuilder` |
-| İş | `Sync/Jobs/PushPrices` (kuyruk **`price:high`**) |
-| Yük | `PricePushBatch` artık operasyon listesi taşıyor |
-| Kurtarma | `DetectStuckSyncOperations`'a PRICE dalı |
-| Testler | `PriceSyncTest` (13) + `JobSerializationTest`'e PushPrices |
+| Katman enum'ı | `Reconciliation/Enums/ReconciliationScope` |
+| Örneklem | `Reconciliation/Support/SampledCandidates` |
+| Aday seçimi | `CandidateSelector::for()` artık scope alır |
+| Yönlendirme | `ReconcileConnection::selectCandidates()` |
+| Komutlar | `reconcile:warm` (saatlik) · `reconcile:cold` (günlük 05:00) |
+| Kayıt | `bootstrap/app.php` · Zamanlama `routes/console.php` |
+| Testler | `ReconciliationLayersTest` (17) + `ScheduledScansTest`'e 9 iddia |
 
-**KAPATILAN BOŞLUK:** `pushPrices` gövdeleri (Woo VE Trendyol) ilk günden
-beri hazırdı ama **çekirdekte çağıranı yoktu** — iki adapter'ın fiyat
-gövdesi de ULAŞILAMAZDI ve panelden fiyat düzeltmek kanala HİÇ yansımıyordu.
+Dokümanın bütçe tablosu (§10):
 
-**TETİKLEYİCİ DE MADDENİN PARÇASIYDI** (kullanıcı kararı: tam outbox yolu,
-stokun birebir aynısı). Stokta tetik `ApplyMovement`'ın ledger
-transaction'ında yaşar; fiyatın ledger'ı YOK ve `UpdateProduct` düz kolon
-güncelliyordu. Olay artık AYNI transaction'da yazılıyor — ayrı olsaydı
-araya düşen hata, fiyatı değişmiş ama olayı yazılmamış bir varyant bırakır
-ve hiçbir tarama onu görmezdi (dual write'ın tek çözümü outbox'tır, §6).
+| Katman | Sıklık | Kapsam | Bütçe |
+|---|---|---|---|
+| Sıcak | 5 dakika | 30 dk satış · geçici hata · 1 sa bekleyen | ≤ 50 |
+| Ilık | Saatlik | 24 sa satış · 24 sa bekleyen | ≤ 300 |
+| Soğuk | Günlük | Rastgele örneklem — uzun kuyruk | %2, üst sınır 500 |
 
-**FİYAT GERÇEKTEN DEĞİŞTİ Mİ kontrolü KURUŞ ölçeğinde tam sayı üzerinden.**
-`decimal(12,2)` PHP'ye STRING döner ve float karşılaştırması iki yönden de
-yanıltır. Her kaydetme fiyat turu açsaydı kanal kotası boşa gider ve
-mutabakat gerçek sürüklenmeyi gürültüde kaybederdi.
+**BEŞ ADIMLI AKIŞ YENİDEN KULLANILIR.** DETECT/RECORD/CLASSIFY/REPAIR/
+VERIFY üç katmanda da AYNIDIR; değişen yalnızca aday seçimi ve bütçedir.
+Akış katman başına kopyalansaydı üç kopya zamanla ayrışır ve
+`max(available, 0)` gibi bir kural birinde düzeltilip ötekilerde eski
+hâliyle kalırdı.
 
-**Fiyat MUTLAK ve STRING taşınır** (§7 — para float taşınmaz). Yükte
-`origin_connection_id` YOKTUR ve olmamalı: değişiklik PANELDEN geldi,
-bastırılacak kaynak kanal yok.
+**PENCERELER KATMANDAN GELİR** (`ReconciliationScope`), sorguya gömülü
+değil. Gömülü olsaydı ılık katman `CandidateSelector`'ın bir KOPYASI
+olarak yazılırdı. Ilık katman sıcakla AYNI eşikleri kullansaydı 300'lük
+bütçesini sıcak turun her beş dakikada bir zaten baktığı satırlarla
+doldurur ve HİÇBİR ŞEY EKLEMEZDİ.
 
-**DOKÜMANLA ÇELİŞKİ ELLE YAKALANDI — kuyruk adı.** `price:default`
-yazmıştım; §15 ve `config/horizon.php` **`price:high`** diyor. Uydurma
-kuyruk adı işin Redis'te sonsuza kadar beklemesi demekti, hiçbir hata
-görünmezdi ve tüm testler yeşil kalırdı. Düzeltildi ve **kuyruk adını
-Horizon yapılandırmasıyla karşılaştıran test** eklendi (yanlış adla
-kırmızıya döndüğü doğrulandı).
+**SOĞUK KATMAN DÖRT SEBEP SORGUSUNU ÇALIŞTIRMAZ — maddenin tüm
+gerekçesi budur.** Uzun kuyruk tam olarak o dört sebebin hiçbirine
+takılmayan satırdır: satmıyor, hata almamış, bekleyen işi yok,
+sürüklenme geçmişi yok. Satıcı kanal panelinden stoğu elle değiştirdiyse
+o sürüklenme sıcak ve ılık katmanlarda SONSUZA KADAR görünmez. Dört
+sorgu soğukta da koşsaydı soğuk katman ılığın günlük bir kopyası olur ve
+500'lük bütçenin çoğunu ılık turun bir saat önce zaten baktığı satırlar
+yerdi.
 
-**DOKUZ MUTASYON, DOKUZU DA YAKALANDI — biri ancak test eklendikten sonra:**
-yükten `operations` çıkarıldığında hiçbir test kırılmıyordu. O hâlde
-başarılı gönderim `synced_version`'ı ilerletmez, satır sonsuza kadar kirli
-görünür ve HER TURDA yeniden gönderilir — hiçbir hata da görünmez. Dikey
-dilim testi eklendi: çekirdek GERÇEK Woo adapter'ını sürüyor, sahte olan
-yalnızca HTTP.
+**SIRALAMA `last_observed_at NULLS FIRST` — "rastgele" DEĞİL, EN ESKİ.**
+Doküman kapsamı "rastgele örneklem" diye adlandırıyor ama §4 bu iş için
+AÇIKÇA `sync_states_observed_idx (domain, last_observed_at NULLS FIRST)`
+tanımlıyor ve o indeksin başka hiçbir kullanıcısı yok. `ORDER BY
+random()` hem indeksi kullanamaz (her turda tam tarama) hem de %2
+bütçeyle bir satırın AYLARCA seçilmemesi demektir. `NULLS FIRST` kritik:
+hiç gözlenmemiş satır sürüklenmeye en açık olandır ve `NULLS LAST`
+olsaydı dar bütçede ASLA seçilmezdi.
 
-**Mevcut bir testin PREMİSİ BAYATLADI:** `DetectStuckSyncOperationsTest`'in
-"bilinmeyen operasyon türü" örneği `PRICE_PUSH`'tu; fiyat artık kurtarıldığı
-için o örnek dürüst değildi ve `MEDIA_PUSH`'a taşındı (medya yolu gerçekten
-hiç yazılmadı). Bırakılsaydı test yeşil kalırdı ama var olmayan bir
-davranışı sınardı.
+**SOĞUK BÜTÇE ORANSALDIR, 500 yalnızca ÜST SINIR.** Sabit 500 kullanmak
+50 listing'i olan bağlantıda TAM KATALOG TARAMASI demektir ve o hiçbir
+katmanda yoktur. Alt sınır 1: küçük katalogda %2 sıfıra yuvarlanır ve
+soğuk katman o satıcılar için HİÇ çalışmazdı.
 
-**GERÇEK ÇALIŞTIRILDI (gerçek relay + gerçek worker):** fiyat 2234.72 →
-1899.00 · olay yazıldı (`"1899.00"` STRING) · relay yayınladı ·
-`ConsumeOutboxEvent` fan-out yaptı (`ops_planned=2`, iki AYRI bağlantı —
-Woo + Trendyol) · `queue:work --queue=price:high` `PushPrices`'i İKİ kez
-çalıştırdı ve **`pushPrices` İLK KEZ gerçekten çağrıldı**:
-`POST /products/batch {"id":417452,"regular_price":"1899.00"}` · stub host
-kapalı olduğu için `NETWORK` sınıflandırıldı → `retrying`, `attempts=1`
-(doğru geçici hata yolu) · `api_calls` satırı yazıldı. Gruplama iki
-operasyonu AYRI yükte tuttu ve bu DOĞRU: gruplama bağlantı başınadır.
-Dev verisi geri alındı.
+## Mutasyonla sınandı — ON YEDİ mutasyon, ON YEDİSİ DE YAKALANDI
+
+Ama ÜÇÜ ancak test veya düzeltme eklendikten sonra:
+
+**1 · `lifecycle_status = 'live'` yükleminin kaldırılması hiçbir testi
+kırmıyordu.** Sebep incedir: yalnızca draft satır içeren bir bağlantıda
+`activeListingCount()` sıfır döner, bütçe sıfır olur ve `for()` SQL'e HİÇ
+GELMEDEN çıkar — yani yüklem o senaryoda çalışmıyordu bile. Karışık
+katalog testi eklendi (canlı + taslak) ve **taslak satır ÖNCE yaratıldı**:
+her iki satır da hiç gözlenmemiş olduğu için sıralama `l.id ASC`
+tie-breaker'ına düşer ve listing kimlikleri UUIDv7 — ZAMAN SIRALI —
+olduğundan önce yaratılan başa gelir. Canlı satır önce yaratılsaydı bir
+kişilik bütçe onu seçer, taslağa hiç sıra gelmez ve test YİNE SAHTE
+YEŞİL kalırdı.
+
+**2 · `reconcile:cold` komutunun scope'u `WARM`'a çevrildiğinde hiçbir
+test kırılmıyordu.** Komut kayıtlıydı, zamanlanmıştı, sıfırla çıkıyordu ve
+sweeper'ı gerçekten çağırıyordu — yalnızca YANLIŞ KATMANI sürüyordu.
+Sonuç: uzun kuyruk hiç taranmaz ve `schedule:list` kusursuz görünür.
+Kayıt testi, frekans testi ve "başarıyla çalışır" testinin ÜÇÜ DE bunu
+göremez: hepsi komutun VAR OLDUĞUNU sınar, NE YAPTIĞINI değil. Komutu
+gerçekten çalıştırıp yazılan turun `scope` alanını okuyan test eklendi ve
+üç komut bağlaması da ayrı ayrı doğrulandı.
+
+**3 · GERÇEK ÇALIŞTIRMADA BULUNDU — bütçe tabanı ile örneklem havuzu
+AYRIŞIYORDU.** Dev veritabanında sayım 3 dedi, örneklem 2 satır döndü:
+`activeListingCount()` `error_permanent` satırlarını sayıyor, örneklem
+onları hariç tutuyordu. Kalıcı hataya düşmüş satırı çok olan bir
+bağlantıda bütçe gerçekte taranabilecek satır sayısının ÜSTÜNE çıkar ve
+"aktif listing'lerin %2'si" kuralı sessizce daha büyük bir orana dönerdi
+— sapma tam da oranın en çok korumak istediği yerde (büyük katalog, çok
+hatalı satır) en büyük olur. Sayım havuzla aynı yüklemleri taşıyacak
+şekilde düzeltildi ve testi yazıldı. Testler bunu göremezdi çünkü küçük
+kataloglarda alt sınır 1 her iki hesabı da aynı sayıya indiriyor.
+
+## RASTGELE SIRADA DÜŞÜŞ — YAKALANDI VE DÜZELTİLDİ
+
+Yeni `each_command_drives_its_own_layer` testi `latest('started_at')`
+kullanıyordu ve **altı turda bir düşüyordu**. Sebep:
+`reconciliation_runs.started_at` SANİYE hassasiyetlidir ve üç komut aynı
+saniye içinde koştuğunda ikisi AYNI damgayı taşır; hangisinin "son"
+olduğu belirsiz kalır ve sorgu bazen ılık turu döndürür. Sıralama `id`'ye
+(UUIDv7 — zaman sıralı ve saniye içinde de ayırt edici) alındı.
+Düzeltmeden sonra **sekiz ardışık rastgele tur temiz** ve mutasyon
+koruması korundu (mutasyon altında hâlâ kırmızı).
+
+Bu, projenin zaman damgası hassasiyeti tuzağının bir kez daha tekrarı —
+bu kez `outbox_events` değil `reconciliation_runs` üzerinde ve sorguda
+değil TESTTE.
+
+## GERÇEK ÇALIŞTIRILDI — gerçek HTTP + gerçek worker
+
+Yerel TLS stub'ı (`host.docker.internal:9911`) kanal olarak kullanıldı,
+sertifika container'ın güven deposuna eklendi ve tur bitince kaldırıldı.
+
+1. **Soğuk tur örneklemle aday seçti** (`reason=sampled` — dört sebebin
+   hiçbiri değil), Woo adapter'ını sürdü ve gerçek istek attı:
+   `GET /products?include=4242&per_page=100`.
+2. **Sürüklenme bulundu:** kanonik `available=17`,
+   `expected_remote=17`, kanal `99` → `DRIFT_DETECTED`, `magnitude=82`.
+3. **Onarım açıldı:** `intent=REPAIR`, anahtar
+   `inv:{listing}:4:repair:{reconciliation_item_id}` — kalem kimliğini
+   çıpa olarak taşıyor. **`desired`/`synced` 4'te KALDI** (§10: onarım
+   sürüm kapısını atlar ve sürümü ARTIRMAZ).
+4. **`queue:work --queue=inventory:high` `PushInventory`'yi çalıştırdı**
+   ve kanala kanonik değer gitti:
+   `POST /products/batch {"id":4242,"stock_quantity":17}`.
+5. **Doğrulama AYRI turda:** kanal artık 17 döndürünce SICAK tur kalemi
+   `drift_detected` sebebiyle yeniden aday etti ve **MATCHED** yazdı —
+   sürüklenme kapandı ve bir sonraki tur onu artık aday etmeyecek.
+
+Ayrıca doğrulandı: `error_permanent` satırı için SIFIR kalem yazıldı
+(üç katmanda da), draft satır örneklenmedi, `schedule:list` üç katmanı da
+doğru cron ifadesiyle gösteriyor (`*/5 * * * *` · `0 * * * *` ·
+`0 5 * * *`). **Dev verisi geri alındı** (bu oturumun 50 turu, 14 kalemi
+ve 1 onarım operasyonu silindi; 17 Ağustos'tan kalan 6 tur korundu).
+
+### Bir önceki tur — §13 · Faz 3 · fiyat senkron yolu (`d17aa8a`)
+
+Tetikleyici `UpdateProduct` → `VariantPriceChanged` → fan-out tüketicisi
+→ `PRICE_PUSH` → `PushPrices` (kuyruk **`price:high`**). Gruplama
+`PriceBatchBuilder`'da, bağlantı başına. `pushPrices` gövdeleri (Woo VE
+Trendyol) ilk günden beri hazırdı ama **çekirdekte çağıranı yoktu**.
+Kuyruk adı `price:default` yazılmıştı; §15 ve `config/horizon.php`
+`price:high` diyor — düzeltildi ve adı Horizon yapılandırmasıyla
+karşılaştıran test eklendi.
 
 ### Bir önceki tur — §13 · Faz 3 · RequestResync + T10 (`9ec5ac0`)
 
-| Ne | Nerede |
-|---|---|
-| Action | `Sync/Actions/RequestResync.php` |
-| Tüketici | `Messaging/Consumers/ListingResyncRequestedConsumer.php` |
-| Yönlendirme | `ConsumeOutboxEvent`'e `ListingResyncRequested` dalı |
-| Çıpa | `OpenSyncOperation`'a `resyncAnchor` parametresi |
-| Testler | `RequestResyncTest` (12, **T10 dahil**) |
-
-**T10 YAZILDI** — yazılmamış son P0/P1 testiydi.
-
-**DURUM DEĞİŞİKLİĞİ TEK BAŞINA HİÇBİR İŞ ÜRETMEZ.** `error_permanent →
-pending` yazmak yeterli olsaydı hiçbir şey olmazdı: kanonik veri o arada
-DEĞİŞMEDİ ve değişmeyen veriden yeni domain olayı doğmaz. Satır panelde
-"bekliyor" görünür ve sonsuza kadar bekler. Bu yüzden her çıkış geçişi
-AYNI transaction içinde `ListingResyncRequested` yazar.
-
-**BU GEÇİŞ SATIRI AKIŞA GERİ SOKAN TEK YOLDUR:** `error_permanent`
-mutabakatta asla aday değildir (§10 · `CandidateSelector`), yani o satıra
-başka hiçbir mekanizma dokunmaz.
-
-**NİYET REPAIR — TURUN TEK MİMARİ KARARI (kullanıcıya soruldu).**
-Dokümanın snippet'i NORMAL_SYNC kullanıyor ama kanonik veri değişmediği
-için talebin taşıdığı sürüm ZATEN GÖNDERİLMİŞ olabilir
-(`synced_version >= current_version`) ve sürüm kapısı operasyonu SESSİZCE
-elerdi: kullanıcı "yeniden dene" der, hiçbir şey olmaz. REPAIR kapıyı
-atlar ve `desired_version`'ı ARTIRMAZ — ikisi de §8'in mevcut kuralları.
-`synced_version` de geriye ALINMAZ: o alan GERÇEĞİ taşır ve mutabakat ile
-panel rozeti ondan beslenir.
-
-**REPAIR AYIRT EDİCİ ÇIPA İSTER.** Kapı atlandığı için anahtar tekilliği,
-"aynı tetik iki kez işlenirse tek operasyon" garantisini taşıyan TEK
-mekanizmadır. İki meşru kaynak, iki ayrı çıpa: mutabakat
-`reconciliation_item_id`, resync OLAY KİMLİĞİ. İkisi aynı anda verilemez.
-Ön ekler AYRI (`repair:` / `resync:`) — tek ön ek paylaşsalardı iki farklı
-tetikten biri sessizce yutulabilirdi.
-
-**Tek generic olay tipi** kullanılır, ayrı taksonomi kurulmaz (§9); sebep
-YÜKTE yaşar (`taxonomy_prerequisite_fixed`, `credential_reauthorized`,
-`manual_retry`, `price_conflict_resolved`, `content_corrected`).
-**Sürüm yükte DONAR ve tüketici onu YENİDEN HESAPLAMAZ:** iş kuyrukta
-beklerken kanonik sürüm değişmiş olabilir ve o değişiklik KENDİ olayını
-doğurmuştur.
-
-**Durum SORULMAZ, ön koşul KOYULMAZ:** "yeniden dene" geçici hatada da
-takılı bekleyen satırda da meşrudur; `error_permanent` şartı koymak
-kullanıcının elindeki tek kurtarma düğmesini keyfi kilitlerdi.
-
-**SEKİZ MUTASYON, SEKİZİ DE YAKALANDI — ama İKİSİ ancak test eklendikten
-sonra:**
-- **`ConsumeOutboxEvent` dalının kaldırılması hiçbir testi kırmıyordu**,
-  çünkü tüm testler tüketiciyi DOĞRUDAN çağırıyordu. Dal olmadan olay
-  "tanınmayan tür" sayılır, SESSİZCE consumed damgalanır ve kullanıcının
-  düzeltmesi hiç iş üretmez. Gerçek teslim yolundan (`ConsumeOutboxEvent`)
-  geçen test eklendi. **Bu projedeki "sınıfın var olması onu kimsenin
-  çağırdığı anlamına gelmez" biçiminin bir kez daha tekrarı.**
-- **Çıpanın anahtara girmemesi yakalanmıyordu:** aynı listing+sürüm için
-  İKİ MEŞRU resync talebi (satıcı düzeltir → başka sebeple yine hata →
-  düzeltir → tekrar dener) tek anahtara düşer ve ikincisi `insertOrIgnore`
-  ile yutulurdu. İki-talep testi eklendi.
-
-**UYARI — yamanın gerçekten uygulandığını doğrula:** ilk mutasyon
-denemesinde `?? OutboxEvent::record(...)` yaması yazımı gereği olayı YİNE
-yazıyordu; "hayatta kaldı" sonucu YANLIŞTI. Doğru yamada 7 test kırmızıya
-döndü.
-
-**GERÇEK ÇALIŞTIRILDI (gerçek relay + gerçek worker):** status
-`error_permanent → pending`, `last_error` temizlendi, `error_count` 0,
-**desired/synced 5'te KALDI** · `outbox:relay --once` yayınladı ·
-`queue:work --queue=outbox:consume` `ConsumeOutboxEvent`'i çalıştırdı
-(bağlam hatası YOK) · olay consumed, `ops_planned=1` · `CONTENT_PUSH` /
-`intent=REPAIR` operasyonu `...:resync:{olay}` anahtarıyla açıldı ·
-düzenlenmiş üründe sürüm **7** doğru okundu · ikinci talep İKİNCİ
-operasyonu üretti. Dev verisi geri alındı.
-
-### Bir önceki tur — §13 · Faz 3 · api_calls saklama taraması (`a452a27`)
-
-| Ne | Nerede |
-|---|---|
-| Tarama | `Channels/Support/PruneApiCalls.php` |
-| Komut | `Channels/Console/PruneApiCallsCommand.php` (`api-calls:prune`) |
-| Kayıt | `bootstrap/app.php` · Zamanlama `routes/console.php` (04:00) |
-| Testler | `PruneApiCallsTest` (7) + `ScheduledScansTest`'e 3 iddia |
-
-**KAPATILAN BOŞLUK:** `expires_at` ilk günden beri doldurulyordu (2xx
-+7 gün, 4xx/5xx +90 gün) ama **silen hiçbir şey yoktu** — saklama
-politikası yalnızca bir niyetti ve en çok yazılan tablo sınırsız
-büyüyordu.
-
-**ÖLÇÜT `expires_at`, DURUM KODU DEĞİL.** Saklama süresi satır
-YAZILIRKEN kararlaşır ve o alanda donar; tarama yeniden yorumlasaydı
-politika iki yerde yaşar ve geçmiş satırlar yazıldıkları günün kuralıyla
-değil BUGÜNÜN kuralıyla silinirdi.
-
-**SİLME PARTİLENİR** (varsayılan 5.000) — tek dev DELETE en çok yazılan
-tabloyu dakikalarca kilitler. **TUR BAŞINA ÜST SINIR VAR** (500.000):
-bitene kadar dönen tarama günlük bakım penceresini saatlerce tutar ve
-`withoutOverlapping` yüzünden sonraki turlar hiç başlamaz — tarama kendi
-kuyruğunu kilitler. Kalan satırlar YARIN silinir.
-
-**TRANSACTION YOK ve bu bilinçli:** her parti kendi başına atomiktir ve
-silinen günlük satırının geri alınmasına gerek yoktur. Turu sarmak,
-silinen her satırın kilidini tur sonuna kadar tutar — tam olarak
-kaçınılan şey.
-
-**Zamanlama 04:00** — taksonomi 03:00'te bitiyor, ikisi aynı bakım
-penceresinde üst üste binmiyor.
-
-**Sekiz mutasyon: DÖRDÜ yakalandı, DÖRDÜ HAYATTA KALDI VE KALMALI.**
-Yakalananlar: yüklem · partileme · zamanlama · artisan kaydı (son ikisi
-AYRI koşullar ve AYRI testlerle yakalandı). Hayatta kalanlar ve gerekçe
-(hepsi koda yazıldı, sahte test YAZILMADI):
-- **`<` → `<=`** — `expires_at` hassasiyeti SIFIR (saniyeye yuvarlanır),
-  `clock_timestamp()` mikrosaniye taşır: eşitlik ulaşılamaz. Boundary
-  testi bu yüzden yeniden yazıldı — ilk hâli iki operatör altında da
-  geçiyordu, yani **sahte yeşildi**.
-- **`while` koşulu → `while (true)`** — `min()` clamp'i sınırı zaten
-  uyguluyor (`LIMIT 0` → `$affected === 0` → break). Koşul boşa dönen o
-  son sorguyu engellemek için duruyor.
-- **`clock_timestamp()` → `now()`** — tur transaction DIŞINDA çalıştığı
-  için ikisi bugün aynı. Kural, "TRANSACTION YOK" kararı bir gün geri
-  alınırsa diye duruyor; donmanın gerçekliği PostgreSQL'de doğrulandı
-  (`now()` dondu, `clock_timestamp()` ilerledi).
-- **`runAsSystem` kaldırma** — `api_calls`'un MODELİ YOK, tablo
-  `DB::table()` ile okunuyor ve global scope hiç uygulanmıyor.
-
-**GERÇEK ÇALIŞTIRILDI:** dev veritabanında 48 satır → 3 süresi geçen
-silindi, 43 mevcut + 2 canlı satır duruyor. `--chunk=2` ile partileme
-gözlendi, ikinci tur `0` döndü (idempotent), `schedule:list` `0 4 * * *`
-gösteriyor, log satırı yazıldı. Test satırları sonra silindi (dev DB
-yine 43).
-
-### Bir önceki tur — §13 · Faz 3 · sipariş güncelleme ve kargo (`ab4bffe`)
-
-| Ne | Nerede |
-|---|---|
-| Anlık görüntü | `Orders/Actions/UpdateOrderSnapshot.php` |
-| Kargo | `Orders/Actions/UpdateFulfillment.php` |
-| Değer nesneleri | `Orders/Support/{OrderSnapshotEvent,FulfillmentEvent}.php` |
-| Bağlama | `OrderEventRouter::{handleUpdated,handleFulfilled}` |
-| Testler | `OrderSnapshotAndFulfillmentTest` (12) + dilim testine 1 |
-
-**KAPATILAN BOŞLUK:** `OrderEventRouter`'ın `UPDATED` ve `FULFILLED`
-dalları bugüne kadar **yalnızca log'luyordu**. Faz 2'de sipariş yoklaması
-yazıldıktan sonra bu boşluk **CANLI** hale gelmişti: Trendyol siparişi
-`Shipped`'a geçtiğinde olay inbox'a yazılıyor, işleniyor ve sessizce
-düşüyordu — panel siparişi sonsuza kadar "Created" gösterirdi.
-
-**İKİSİ DE STOK HAREKETİ ÜRETMEZ** (§4) — maddenin en önemli kuralı. Mal
-SATIŞTA zaten düşülmüştür; hareket üretselerdi aynı satış iki kez
-düşülür ve bakiye KALICI bozulurdu. Testler ledger'ı önce/sonra
-karşılaştırarak koruyor. **Güncelleme kalemlere de dokunmaz** — kalem
-değişikliği stok demektir.
-
-**NULL "DEĞİŞMEDİ" DEMEKTİR, "BOŞALT" DEĞİL.** `delivered` olayı
-`shipped_at` taşımaz; ezseydi kargoya veriliş anı KAYBOLURDU.
-
-**Paket başına TEK satır, durum ilerler** (`(order_id, external_id)`
-tekil); **çok paketli sipariş AYRI satırlar** taşır.
-
-**Bayat tekrar yeni durumu EZMEZ** — idempotency kapısının asıl değeri
-bu: yoklama örtüşmesi eski olayı tur tur yeniden görüyor ve kapı
-olmasaydı araya giren `Delivered` her turda `Shipped`'a geri ezilirdi.
-
-## Mutasyonla sınandı — altı mutasyon, ÜÇÜ HAYATTA KALDI
-
-**Yakalananlar:** NULL'ın durumu ezmesi · kargoda NULL'ın ezmesi · her
-olayın yeni paket satırı açması.
-
-**İlk turda hayatta kalan idempotency kapısı GERÇEK TESTLE kapatıldı:**
-mevcut testler doğal olarak idempotent bir senaryo kuruyordu (aynı durumu
-iki kez yazmak). Kapının asıl değeri BAYAT TEKRARIN yeni durumu geri
-almasını engellemek; o senaryo test edilmemişti. Test eklendi ve
-mutasyonu gerçekten kırdığı doğrulandı.
-
-**İKİSİ HAYATTA KALDI VE KALMALI — DÜRÜST SINIR:** router'ın `FULFILLED`
-dalı ve paket bazlı olay çıpası. Sebep: **hiçbir normalizer `fulfilled`
-tipi ÜRETMİYOR** — Woo kargoyu ayrı webhook göndermiyor, Trendyol'da
-kargo §14 gereği KAPSAM DIŞI (`SupportsFulfillment` uygulanmaz). O olayı
-üreten bir kaynak olmadığı için davranış testi YAZILAMAZ; sahte test
-yazmak var olmayan bir akışı varmış gibi gösterirdi. Gerekçe
-`UpdateFulfillment` başlığına yazıldı. **Kanal kargo bildirimi göndermeye
-başlarsa ilk iş normalizer'a `fulfilled` tipini ve
-`payload['fulfillment']` bloğunu eklemektir.**
-
-**Router bağlantısı ayrıca sınandı:** `UPDATED` dalı eski ölü haline
-(`=> null`) çevrildiğinde dilim testi kırmızıya döndü — yani eylem
-sınıflarının kendi testleri yeşilken router onları hiç çağırmıyor olma
-ihtimali kapatıldı.
+`error_permanent → pending` geçişi AYNI transaction içinde
+`ListingResyncRequested` yazar; durum değişikliği tek başına hiçbir iş
+üretmez. Niyet REPAIR ve ayırt edici çıpa OLAY KİMLİĞİDİR
+(`resync:` ön eki, mutabakatın `repair:` ön ekinden ayrı).
 
 ### Bir önceki turlar
 
-**Faz 2 · sipariş yoklaması (`0b2a328`):** `fetchOrders` +
-`parseOrderEvent` + `PollChannelOrders` + `orders:poll` (5 dakikalık).
-Olay kimliği `{siparişNo}:{durum}`; pencere geriye bakar; başarısız turda
-imleç ilerlemez. Gerçek çalıştırmada `supports_webhooks` eager-load
-hatası bulundu (kapı ölüydü).
+**`PruneApiCalls` (`a452a27`):** ölçüt `expires_at`, durum kodu değil;
+silme partilenir; tur başına üst sınır var; transaction YOK.
 
-**Faz 2 · stok/fiyat itme (`850f41d`):** tek uç nokta iki yetenek; kimlik
-barkod ve `(int)`'e çevrilmez; `listPrice` zorunlu.
+**Sipariş güncelleme + kargo (`ab4bffe`):** ikisi de stok hareketi
+ÜRETMEZ; NULL "değişmedi" demektir; paket başına tek satır.
 
 ## Ortam
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 564 yeşil olmalı
+docker compose exec app php artisan test      # 581 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -329,19 +217,6 @@ npm run build                                 # YERELDE (container'da Node yok)
 Panel: `/` özet · `/products` ürünler · `/products/{id}/channels` kanala
 gönderme · `/orders` siparişler · `/inventory` stok · `/channels` kanallar ·
 `/mappings` eşleştirme
-
-## ÇALIŞMA SIRASI KARARI — ÖNCE ÇEKİRDEK, PANEL SONA (18 Ağustos)
-
-**Kullanıcının açık talimatı:** "front'una en son bakarız, bir her şeyi
-bitirelim." Yeni sohbette **panel/görsel işlere girme**. Panel cilası zaten
-§13 · Faz 4'te listeli. Karar hâlâ yürürlükte: Faz 2'nin altı maddesinde
-de, Faz 3'ün ilk maddesinde de yeni ekran yazılmadı ve sıradaki Faz 3
-maddelerinin hiçbiri panel işi içermiyor.
-
-Bu, ekran işi ÇIKTIĞINDA tarayıcıda doğrulama kuralını iptal ETMEZ.
-
-**Panelde bilerek ertelenenler:** mutabakat ekranı · `RequestResync` +
-T10 · onay durumu için ayrı ekran.
 
 ## YOL HARİTASI — NE BİTTİ, NE KALDI (19 Ağustos 2026)
 
@@ -352,11 +227,9 @@ relay + fan-out, adapter mimarisi (7 yetenek arayüzü), sipariş alımı,
 gelen hat (webhook → inbox → router), giden hat (`InventoryBatchBuilder`,
 `PushInventory`, `SyncResultRecorder`), koruma katmanı (`ChannelRateLimiter`,
 `CircuitBreaker`), ürün aktarımı (`PushListing`, `PublishListing`),
-§6 bütünlük taramaları (iki seviye), §10 mutabakat SICAK katmanı,
+§6 bütünlük taramaları (iki seviye), **§10 mutabakatın ÜÇ KATMANI DA**,
 ön koşul kapısı + onay takibi, sipariş yoklaması, sipariş güncelleme +
-kargo, **api_calls saklama taraması** (`PruneApiCalls`), **resync yolu**
-(`RequestResync` + `ListingResyncRequestedConsumer`), **fiyat senkron yolu**
-(`VariantPriceChanged` → `PushPrices`).
+kargo, `PruneApiCalls`, resync yolu, fiyat senkron yolu.
 
 **Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
 stok/fiyat itme, sipariş yoklaması).
@@ -364,74 +237,55 @@ stok/fiyat itme, sipariş yoklaması).
 **Panel (8 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
 siparişler · sipariş ayrıntısı · stok · kanallar · eşleştirme.
 
-**Testler:** 564 yeşil (1987 assertion), 60 test dosyası.
-**P0/P1'in TAMAMI yeşil** — T1…T12, T10 dahil. Yazılmamış P0/P1 testi
-KALMADI.
+**Testler:** 581 yeşil (2044 assertion), 61 test dosyası.
+**P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
 
-### Kaldı — FAZ 3 (güvenilirlik), sırayla
+### Kaldı — FAZ 4 (panel + abonelik)
 
-1. ~~**`PruneApiCalls`**~~ — **BİTTİ** (`a452a27`).
-2. ~~**`RequestResync` + T10**~~ — **BİTTİ** (`9ec5ac0`), ayrıntı yukarıda.
-   Panel butonu hâlâ ERTELENMİŞ (Faz 4).
-3. ~~**Fiyat senkron yolu**~~ — **BİTTİ** (`d17aa8a`), ayrıntı yukarıda.
-   Tetikleyici (`VariantPriceChanged`) dahil tam outbox yolu yazıldı.
-4. **Ilık/soğuk mutabakat katmanları** — sıcak katman çalışıyor; §10 bütçe
-   tablosundaki diğer iki katman yok. **SIRADAKİ İŞ** (ayrıntı "BURADAN
-   DEVAM ET" bloğunda). **Faz 3'ün son maddesi.**
+Sıra kullanıcının kararına bağlı; teknik bağımlılık yok.
+
+- **Panel cilası** (§13 · Faz 4, 20 sa): boş durumlar, yükleniyor, mobil.
+- **Mutabakat panel ekranı** — `reconciliation_items` üç katmanda da
+  yazılıyor ama hiç gösterilmiyor.
+- **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal
+  ekranında var).
+- **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
+  alınmış, YAZILMADI. Kota neyi sınırladığını senkron davranışından alır
+  ve o davranış artık OTURDU — yani bu madde artık teknik olarak da
+  yazılabilir durumda.
 
 **Trendyol'da kapsam dışı bırakılanlar** (eksik DEĞİL): `delist`,
 `fetchListing`, `acknowledgeOrder` — kargo §14 gereği kapsam dışı.
 
-### Kaldı — FAZ 4 (panel + abonelik)
-
-- **Panel cilası** (§13 · Faz 4, 20 sa): boş durumlar, yükleniyor, mobil düzen.
-- **Mutabakat panel ekranı** — `reconciliation_items` yazılıyor, gösterilmiyor.
-- **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal ekranında var).
-- **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
-  alınmış, YAZILMADI ve şimdi yazılmamalı — kota neyi sınırladığını
-  senkron davranışından alır.
-
 ### KULLANICI KARARI — YENİ PAZARYERLERİ (19 Ağustos 2026)
 
-**Kullanıcının açık talebi:** "sadece trendyol woocommerce shopify
-istemiyorum; hepsiburada, amazon, ebay, etsy gibi platformlar da olsun —
-ama önce bunları bitirelim, sadece sıraya koy."
-
-**Bu maddeler FAZ 3 VE FAZ 4 BİTTİKTEN SONRA ele alınır. Şimdi
-yazılmıyor.** Sıra (kullanıcı aksini söylemedikçe):
+**Bu maddeler FAZ 4 BİTTİKTEN SONRA ele alınır.** Sıra (kullanıcı aksini
+söylemedikçe):
 
 1. **Hepsiburada** — TR pazarı, Trendyol'a en yakın model (taksonomi +
-   zorunlu öznitelik + onay süreci). Trendyol'un `ListingMapper` ·
-   `TaxonomyClient` · `TrackApprovalStatus` kalıbı doğrudan örnek olur;
-   en düşük riskli ikinci pazaryeri.
+   zorunlu öznitelik + onay süreci). `ListingMapper` · `TaxonomyClient` ·
+   `TrackApprovalStatus` kalıbı doğrudan örnek olur; en düşük riskli.
 2. **Amazon (SP-API)** — en büyük iş değeri, en yüksek karmaşıklık: LWA
-   OAuth + rate limit modeli farklı, feed tabanlı asenkron aktarım
+   OAuth + farklı rate limit modeli, feed tabanlı asenkron aktarım
    (`submitFeed` → `getFeedResult` yoklaması), FBA/FBM ayrımı. Muhtemelen
-   §7'ye yeni bir yetenek arayüzü gerekir (feed durumu yoklama) — bu
-   MİMARİ bir karardır ve dokümana bakılmadan yapılmaz.
-3. **Etsy** — OAuth 2.0 + PKCE, taksonomi yerine "taxonomy_id" + shop
-   section modeli; envanter uç noktası varyant bazlı ve Woo'dan farklı.
-4. **eBay** — en farklı model: Inventory API (offer/inventory item ayrımı)
-   + politika nesneleri (payment/return/fulfillment policy) bağlantı
-   kurulumunda zorunlu. `channel_connections.settings` bunu taşıyabilir
-   ama bağlama akışı ekstra adım ister.
+   §7'ye yeni bir yetenek arayüzü gerekir — bu MİMARİ bir karardır ve
+   dokümana bakılmadan yapılmaz.
+3. **Etsy** — OAuth 2.0 + PKCE, "taxonomy_id" + shop section modeli;
+   envanter uç noktası varyant bazlı ve Woo'dan farklı.
+4. **eBay** — Inventory API (offer/inventory item ayrımı) + politika
+   nesneleri (payment/return/fulfillment policy) bağlantı kurulumunda
+   zorunlu. `channel_connections.settings` bunu taşıyabilir ama bağlama
+   akışı ekstra adım ister.
 
 **Shopify BU LİSTEDE DEĞİL** — kullanıcı açıkça istemedi. Memory'deki
 "Teknoloji Kararları" notu "Laravel + Node Shopify app" diyor; o karar
-artık geçerli değil ve Shopify kapsam dışıdır.
+artık geçerli değil.
 
 **MİMARİ SÖZ:** yeni kanal eklemek çekirdeği DEĞİŞTİRMEMELİ. Kanal başına
-yazılması gereken şey bir adapter + (varsa) mapper/normalizer'dır; stok
-matematiği, outbox, fan-out, kilit ve mutabakat aynı kalır. Yeni bir kanal
-çekirdeğe dokunmayı gerektiriyorsa **önce dokümana bakılır** (§7 yetenek
-arayüzleri), `if ($channel === '...')` YAZILMAZ. Amazon'un feed modeli bu
-sözü en çok zorlayacak maddedir.
-
-**Her yeni kanal için gereken asgari iş** (Trendyol turlarından ölçü):
-istemci + kimlik + hız sınırı (≈8 sa) · taksonomi varsa (≈12 sa) ·
-eşleştirme zaten YAZILDI ve kanaldan bağımsız · katalog aktarımı + onay
-(≈16 sa) · stok/fiyat itme (≈8 sa) · sipariş yoklaması veya webhook
-(≈16 sa). Yani kanal başına kabaca **40–60 saat**, Amazon'da daha fazla.
+bir adapter + (varsa) mapper/normalizer; stok matematiği, outbox,
+fan-out, kilit ve mutabakat aynı kalır. `if ($channel === '...')`
+YAZILMAZ — yetenek `instanceof` ile okunur. Kanal başına kabaca
+**40–60 saat**, Amazon'da daha fazla.
 
 ## Demo verisi panelde duruyor
 
@@ -460,15 +314,16 @@ Bu veri commit'lerde DEĞİL, yalnızca yerel veritabanında.
 9. **Kuyruk işi / komut yazdıysan GERÇEK ÇALIŞTIR.**
 10. **Adapter yazdıysan BAĞLAM DIŞINDA çağırmayı da sına.**
 11. **Testte "işi çalıştır" derken reflection'a sapma.**
-12. **Adapter gövdesi yazdıysan ÇEKİRDEĞİN ONU SÜRDÜĞÜNÜ de sına** —
-    adapter testi + sahte adapterlı çekirdek testi ikisi de yeşilken
-    aradaki sözleşme yanlış olabilir (bu turda dikey dilim testi bu
-    yüzden yazıldı).
+12. **Adapter gövdesi yazdıysan ÇEKİRDEĞİN ONU SÜRDÜĞÜNÜ de sına.**
+13. **`--order-by=random` ile en az birkaç tur koş.** Bu turda yeni bir
+    test altı turda bir düşüyordu ve sıralı koşuda ASLA görünmezdi.
 
 ## Mutasyonla / gerçek çalıştırmayla bulunan gerçek boşluklar (tarihçe)
 
 Hepsi testler yeşilken bulundu:
 
+- **Bütçe tabanı örneklem havuzuyla ayrışıyordu** (§10 soğuk katman).
+- **Komut kayıtlı ve zamanlı olup YANLIŞ KATMANI sürebiliyordu.**
 - **`supports_webhooks` eager-load'da seçilmiyordu** — webhook kapısı ölüydü.
 - **`pushPrices`'ın çekirdekte çağıranı yok** — Woo dahil.
 - **Engellenen gönderim "zaten güncel" diyordu** (panelde).
@@ -507,16 +362,13 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **`ctype_digit` yerine yalnızca `(int)`, `"sınırsız"` girdisiyle** —
   `(int) "sınırsız"` zaten `0`. Kural `"600, 300"` ile sınanır.
 - **`PruneApiCalls`'ta `expires_at < ` → `<=`** — kolon saniye
-  hassasiyetli (`datetime_precision = 0`), `clock_timestamp()` mikrosaniye
-  taşır; eşitlik ulaşılamaz.
+  hassasiyetli, `clock_timestamp()` mikrosaniye taşır; eşitlik ulaşılamaz.
 - **`PruneApiCalls`'ta `while ($deleted < $maxRows)` → `while (true)`** —
-  `min($chunkSize, $maxRows - $deleted)` clamp'i sınırı zaten uyguluyor;
-  bütçe dolunca `LIMIT 0` hiçbir satır silmez ve döngü break'ten çıkar.
+  `min()` clamp'i sınırı zaten uyguluyor.
 - **`PruneApiCalls`'ta `clock_timestamp()` → `now()`** — tur transaction
-  DIŞINDA çalışıyor, ikisi bugün aynı. Kural "TRANSACTION YOK" kararı geri
-  alınırsa diye duruyor.
+  DIŞINDA çalışıyor. Kural "TRANSACTION YOK" kararı geri alınırsa diye.
 - **`PruneApiCalls`'ta `runAsSystem` kaldırma** — `api_calls`'un modeli
-  YOK, global scope hiç uygulanmıyor (`SyncTaxonomy` ile aynı biçim).
+  YOK, global scope hiç uygulanmıyor.
 
 ## Tekrar tekrar ısıran tuzaklar
 
@@ -534,91 +386,80 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **`inventory_movements` kolonu `type`, `movement_type` DEĞİL.**
 - **`channel_connections` kolonu `label`, `name` DEĞİL.**
 - **`api_calls` zaman kolonu `called_at`** — `created_at` YOK.
+- **`sync_operations`'ta `listing_id` YOK** — `entity_type` + `entity_id`
+  ve `domain` da YOK (`operation_type` var). Bu turda tinker'da ısırdı.
 - **`RemoteListing` parametresi `url`**, `externalUrl` DEĞİL.
 - **`ErrorClass` case'i `RATE_LIMITED`**, `RATE_LIMIT` DEĞİL.
 - **`SyncOperationStatus`'ta `FAILED` YOK** — kalıcı hata `DEAD`.
-- **`OpenSyncOperation` `Sync\Actions\` altında** (`Support\` değil) ve
-  parametresi `eventVersion`; dönüşü NULLABLE.
+- **`OpenSyncOperation` `Sync\Actions\` altında** ve parametresi
+  `eventVersion`; dönüşü NULLABLE.
 - **`TenantContext` metodu `runFor()`**, `run()` DEĞİL.
 - **`MissingTenantContextException` `Support\Tenancy\Exceptions\` altında.**
-- **`assertLedgerMatchesProjection()` ÜÇ argüman alır** (tenant, depo,
-  varyant).
-- **`(channel_type_code, external_account_id)` GLOBAL tekildir.**
+- **`assertLedgerMatchesProjection()` ÜÇ argüman alır.**
+- **`(channel_type_code, external_account_id)` GLOBAL tekildir** — aynı
+  test içinde iki kez `connection()` çağırmak kısıtı ihlal eder.
 - **`clock_timestamp()`** — zaman damgaları saniye hassasiyetli.
+- **PostgreSQL'de `interval ?` BAĞLANAMAZ** — `?::interval` cast'i kullan.
+  Metni sorguya gömmek katman değerini enjeksiyon yüzeyine taşır.
 - **`Command::run()` REZERVE İMZADIR.** Mantık `Support/` altında.
 - **Domain komutları otomatik keşfedilmez** — `bootstrap/app.php`.
 - **`QUEUE_CONNECTION=sync` gerçek worker'ı taklit etmez.**
 - **Açılış stoğu ledger üzerinden girer** (IMPORT).
 - **Eşzamanlılık testi `RefreshDatabase` ile yazılamaz** → `DatabaseTruncation`.
-- **`StoreUrl` HTTPS'i zorunlu tutar** — yerel stub'a TLS eklenir.
+- **`StoreUrl` HTTPS'i zorunlu tutar** — yerel stub'a TLS eklenir ve
+  sertifika container'ın güven deposuna konur
+  (`/usr/local/share/ca-certificates/` + `update-ca-certificates`).
 - **CI'da `public/build` yoktur** — `Tests` job'ı `npm run build` çalıştırır.
 - **CI'da `codeload` 429'u** — `--prefer-source` ile kaynak yoldan denenir.
-- **Eager-load'da OKUNACAK HER ALAN AÇIKÇA SEÇİLMELİ.** `adapter_class`
-  bir kez, `supports_webhooks` bir kez daha bu yüzden sessizce null okundu
-  ve kapı hiç çalışmadı. `with('rel:a,b')` yazdıysan o metotta okunan
-  alanların hepsi listede mi diye BAK.
-- **`(channel_type_code, external_account_id)` GLOBAL tekil** — aynı test
-  içinde iki kez `connection()` çağırmak kısıtı ihlal eder (bu turda
-  yaşandı).
-- **KUYRUK ADI UYDURULAMAZ — HORIZON'UN DİNLEDİĞİ AD OLMALI.** Yanlış ada
-  atılan iş Redis'e yazılır, hiçbir worker onu almaz, HİÇBİR HATA GÖRÜNMEZ
-  ve tüm testler yeşil kalır. Adlar §15 tablosunda ve `config/horizon.php`
-  içinde: `orders:high` · `inventory:high` · **`price:high`** ·
-  `listing:default` · `inbox:process` · `outbox:consume` · `reconciliation` ·
-  `listing:bulk` · `maintenance`. `PriceSyncTest` bunu artık test ediyor.
+- **Eager-load'da OKUNACAK HER ALAN AÇIKÇA SEÇİLMELİ.**
+- **KUYRUK ADI UYDURULAMAZ — HORIZON'UN DİNLEDİĞİ AD OLMALI.** Adlar §15
+  tablosunda ve `config/horizon.php` içinde: `orders:high` ·
+  `inventory:high` · `price:high` · `listing:default` · `inbox:process` ·
+  `outbox:consume` · `reconciliation` · `listing:bulk` · `maintenance`.
 - **YÜK OPERASYON LİSTESİ TAŞIMAZSA `SyncResultRecorder` HİÇBİR ŞEY YAZAMAZ.**
-  Çağrı başarılı olur, `synced_version` yerinde kalır, satır sonsuza kadar
-  kirli görünür ve her turda yeniden gönderilir. Yeni bir push yolu
-  yazdıysan BAŞARI yolunu da sına (mutasyonla bulundu).
-- **MEVCUT BİR TESTİN PREMİSİ BAYATLAYABİLİR.** "Bilinmeyen operasyon türü"
-  örneği `PRICE_PUSH`'tu; fiyat yolu yazılınca o test yeşil kaldı ama artık
-  var olmayan bir davranışı sınıyordu. Bir yol yazdığında onu "yok" varsayan
-  testleri ARA.
+- **MEVCUT BİR TESTİN PREMİSİ BAYATLAYABİLİR.** Bir yol yazdığında onu
+  "yok" varsayan testleri ARA.
 - **TÜKETİCİYİ DOĞRUDAN ÇAĞIRAN TEST YÖNLENDİRMEYİ SINAMAZ.** Yeni bir
-  outbox olay tipi eklediysen `ConsumeOutboxEvent`'in `match` dalını da
-  sına — dal yoksa olay "tanınmayan tür" sayılır, SESSİZCE consumed
-  damgalanır ve hiçbir iş üretilmez. Tüm birim testleri yeşil kalır
-  (mutasyonla bulundu, `RequestResync` turu).
-- **REPAIR NİYETİ AYIRT EDİCİ ÇIPA İSTER.** Kapı atlandığı için anahtar
-  tekilliği tek garantidir; çıpasız iki meşru talep tek anahtara düşer ve
-  ikincisi `insertOrIgnore` ile yutulur.
+  outbox olay tipi eklediysen `ConsumeOutboxEvent`'in `match` dalını da sına.
+- **REPAIR NİYETİ AYIRT EDİCİ ÇIPA İSTER.**
 - **SINIR TESTİ YAZDIYSAN İKİ OPERATÖR ALTINDA DA GEÇMEDİĞİNİ DOĞRULA.**
-  `PruneApiCalls`'ta "tam sınırdaki satır silinmez" testi yazıldı ve yeşil
-  geçti — ama `<` → `<=` mutasyonu altında DA geçti, yani hiçbir şey
-  sınamıyordu. Sebep: satır bir GÜN sonrasına kuruluydu, oysa iki
-  operatörün farkı yalnızca TAM EŞİTLİKTE görünür. Gerçek sınırı kurmaya
-  çalışınca kolonun saniye hassasiyeti çıktı ve eşitliğin ulaşılamaz
-  olduğu anlaşıldı. **Sınır testi kurarken farkın göründüğü ÖLÇEĞİ kullan**
-  (gün değil saniye) ve mutasyonla doğrula.
-- **`api_calls`'un MODELİ YOK** — tablo `DB::table()` ile yazılıp okunuyor,
-  `insertGetId()` bigserial döndürür.
+  Farkın göründüğü ÖLÇEĞİ kullan (gün değil saniye) ve mutasyonla doğrula.
+- **KOMUT KAYITLI + ZAMANLI + BAŞARILI OLUP YİNE DE YANLIŞ İŞİ YAPABİLİR.**
+  Üç test de komutun VAR OLDUĞUNU sınar, NE YAPTIĞINI değil. Komut yeni
+  bir parametre/mod alıyorsa **onu gerçekten çalıştırıp yazdığı satırı
+  oku** (bu turda `reconcile:cold`'un ILIK katmanı sürmesi hiçbir testi
+  kırmıyordu).
+- **ERKEN ÇIKIŞ, ARKASINDAKİ SQL YÜKLEMİNİ TEST DIŞI BIRAKIR.** `for()`
+  bütçe sıfırken SQL'e hiç gelmiyordu; o senaryoyla yazılan test
+  yüklemin kaldırılmasını GÖREMEZ. Filtreyi sınayan testi, sorgunun
+  GERÇEKTEN KOŞTUĞU bir kurulumda yaz.
+- **TESTTE `latest('<timestamp>')` SIRALAMAYI GARANTİ ETMEZ.** Zaman
+  damgaları saniye hassasiyetli; aynı saniyede yazılan iki satırda sıra
+  belirsizdir ve rastgele sırada aralıklı düşüş üretir. UUIDv7 birincil
+  anahtar zaman sıralıdır — **`orderByDesc('id')` kullan.**
+- **`api_calls`'un MODELİ YOK** — tablo `DB::table()` ile yazılıp okunuyor.
 - **`TrendyolAdapterTest`'teki "yazılmamış yetenek" listesi madde kapandıkça
-  KÜÇÜLTÜLMELİ.** Önceki turda `pushInventory`/`pushPrices`, bu turda
-  `fetchOrders`/`parseOrderEvent` çıkarıldı. **Listede kalan: `delist`,
-  `fetchListing`** — ikisi de Faz 2 kapsamı dışı. `acknowledgeOrder`
-  gövdesi hâlâ istisna atıyor ama o testin listesinde hiç olmadı
-  (kargo §14'te kapsam dışı).
+  KÜÇÜLTÜLMELİ.** Listede kalan: `delist`, `fetchListing` — ikisi de Faz 2
+  kapsamı dışı.
 
 ## Bilinen açık uçlar
 
-**1 · CI'ın 429 düzeltmesinden sonraki durumu buradan görülemiyor.** `gh`
-kimlik doğrulamalı değil (`gh auth status` → "not logged into any GitHub
-hosts") ve bu turda da doğrulanamadı. `gh auth login` sonrası
-`gh run list` ile bakılmalı. Düzeltmenin kendisi (`6e2217e`) yerinde.
+**1 · CI'ın 429 düzeltmesinden sonraki durumu buradan HÂLÂ görülemiyor.**
+`gh` kimlik doğrulamalı değil (`gh auth status` → "not logged into any
+GitHub hosts") ve bu turda da doğrulanamadı. **`gh auth login` tarayıcı
+veya cihaz kodu ister; oturum içinden tamamlanamaz — kullanıcının bir
+kez yapması gerekiyor.** Sonrasında `gh run list --limit 5` ile bakılır.
+Düzeltmenin kendisi (`6e2217e`) yerinde.
 
-**2 · `--order-by=random` düşüşü bu turda da tekrar üretilemedi.** İki tur
-daha koşuldu, ikisi de yeşil (seed'ler: 1787087064 · 1787087092).
-Toplamda **ON YEDİ ardışık temiz tur** (beş oturum). Bu turun
-seed'leri: 1787131051 · 1787131148. PHPUnit
-11'de `--seed` seçeneği YOK; seed çıktının sonunda "Random Order Seed"
-satırında raporlanır. Görülürse o satırdaki seed kaydedilmeli.
+**2 · `--order-by=random` düşüşü BU TURDA TEKRAR ÜRETİLDİ VE KAPATILDI.**
+Sebep yeni testin `latest('started_at')` kullanmasıydı (yukarıda). Bu,
+beş oturumdur aranan ESKİ düşüşle aynı şey OLMAYABİLİR — eski düşüş hiç
+tekrar üretilemedi ve bu turda da (düzeltmeden sonra sekiz tur) görünmedi.
+Toplamda **yirmi beş ardışık temiz tur**. Bu turun seed'leri: 1787137572 ·
+1787137611 · 1787137656 · 1787137769 · 1787137822 · 1787137885 ·
+1787137923 · 1787137966. PHPUnit 11'de `--seed` seçeneği YOK; seed
+çıktının sonunda raporlanır ve düşüş görülürse KAYDEDİLMELİ.
 
-**3 · ~~`pushPrices` çekirdekte çağrılmıyor~~ — KAPANDI** (`d17aa8a`).
-`PushPrices` işi, `PriceBatchBuilder`, fan-out tüketicisi ve tetikleyici
-yazıldı; gerçek worker'da `pushPrices` ilk kez çağrıldı.
-
-**4 · `acknowledgeOrder` yazılmadı ve "yazılmamış yetenek" listesinde de
+**3 · `acknowledgeOrder` yazılmadı ve "yazılmamış yetenek" listesinde de
 YOK.** Sipariş onaylama Trendyol'da kargo akışının parçasıdır ve §14
-kargoyu kapsam dışı bırakır (`SupportsFulfillment` UYGULANMAZ). Yani bu
-bir eksik değil, bilinçli kapsam sınırı — ama `SupportsOrders` arayüzü
-metodu ilan ettiği için gövde istisna fırlatıyor.
+kargoyu kapsam dışı bırakır. Bilinçli kapsam sınırı, eksik değil.

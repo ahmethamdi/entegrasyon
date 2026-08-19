@@ -104,7 +104,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 564 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 581 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -480,6 +480,36 @@ testin sonunda çağrılır.
 
 ## Mutabakat kuralları (§10)
 
+- **ÜÇ KATMAN, TEK AKIŞ.** Sıcak (5 dk · ≤50) · ılık (saatlik · ≤300) ·
+  soğuk (günlük · aktif listing'lerin %2'si, üst sınır 500). Beş adım
+  (DETECT/RECORD/CLASSIFY/REPAIR/VERIFY) üçünde de AYNIDIR; değişen
+  yalnızca **aday seçimi** ve **bütçe**. Akış katman başına kopyalansaydı
+  üç kopya zamanla ayrışır ve `max(available, 0)` gibi bir kural birinde
+  düzeltilip ötekilerde eski hâliyle kalırdı.
+- **PENCERELER `ReconciliationScope`'TAN GELİR**, sorguya gömülü değil.
+  Sıcak 30 dk satış / 1 sa bekleme, ılık 24 sa / 24 sa. Ilık katman sıcakla
+  AYNI eşikleri kullansaydı 300'lük bütçesini sıcak turun her beş dakikada
+  bir zaten baktığı satırlarla doldurur ve **hiçbir şey eklemezdi**.
+- **SOĞUK KATMAN DÖRT SEBEP SORGUSUNU ÇALIŞTIRMAZ** — kapsamı "rastgele
+  örneklem — uzun kuyruk"tur. Uzun kuyruk tam olarak o dört sebebin
+  hiçbirine takılmayan satırdır: satmıyor, hata almamış, bekleyen işi yok,
+  sürüklenme geçmişi yok. Satıcı kanal panelinden stoğu elle değiştirdiyse
+  o sürüklenme sıcak/ılıkta **sonsuza kadar görünmez**. Dört sorgu soğukta
+  da koşsaydı soğuk katman ılığın günlük bir kopyası olurdu.
+- **SIRALAMA `last_observed_at NULLS FIRST` — "rastgele" DEĞİL, EN ESKİ.**
+  §4 bu iş için açıkça `sync_states_observed_idx` tanımlar ve o indeksin
+  başka kullanıcısı yoktur. `ORDER BY random()` hem indeksi kullanamaz hem
+  de %2 bütçeyle bir satırın **aylarca** seçilmemesi demektir. `NULLS
+  FIRST` kritiktir: hiç gözlenmemiş satır sürüklenmeye en açık olandır ve
+  `NULLS LAST` olsaydı dar bütçede asla seçilmezdi.
+- **SOĞUK BÜTÇE ORANSALDIR**, 500 yalnızca ÜST SINIR. Sabit 500 kullanmak
+  50 listing'i olan bağlantıda **tam katalog taraması** demektir ve o
+  hiçbir katmanda yoktur. Alt sınır 1 — küçük katalogda %2 sıfıra yuvarlanır
+  ve soğuk katman o satıcılar için hiç çalışmazdı.
+- **BÜTÇE TABANI ÖRNEKLEM HAVUZUYLA AYNI KÜMEDİR** (gerçek çalıştırmada
+  bulundu). `activeListingCount()` ile örneklem sorgusu aynı yüklemleri
+  taşır — `error_permanent` dahil. Ayrışsalardı kalıcı hatası çok olan
+  bağlantıda "%2'sine bak" sessizce daha büyük bir orana dönerdi.
 - **Karşılaştırma GİDEN değerle yapılır**: beklenen uzak değer
   `OutboundQuantity::forChannel()` yani `max(available, 0)`. Kanonik bakiye
   fazla satış nedeniyle negatifse kanaldaki 0 **doğrudur** ve sürüklenme
@@ -513,8 +543,8 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-Mutabakat panel ekranı, ılık/soğuk mutabakat katmanları (sıcak katman
-yazıldı — §10 bütçe tablosundaki diğer iki katman).
+Mutabakat panel ekranı (Faz 4). **Çekirdek tarafında Faz 3'ten kalan
+madde YOK.**
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
@@ -823,13 +853,18 @@ kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
 Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
-**Faz 3 sürüyor** (güvenilirlik). DÖRT madde kapandı:
+**FAZ 3 KAPANDI** (güvenilirlik). BEŞ maddenin beşi de bitti:
 `UpdateOrderSnapshot` + `UpdateFulfillment`, **`PruneApiCalls`**,
-**`RequestResync` + T10** ve **fiyat senkron yolu**. **P0/P1'in tamamı
-yeşil; yazılmamış P0/P1 testi kalmadı.** **Sıradaki: ılık/soğuk mutabakat
-katmanları (§10)** — Faz 3'ün son maddesi; kapsam/frekans/bütçe için
-DOKÜMANA bakılır. Faz 4 abonelik/ödeme hâlâ hafta 21–25'tir ve şimdi
-yazılmamalı.
+**`RequestResync` + T10**, **fiyat senkron yolu** ve **ılık/soğuk
+mutabakat katmanları**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1 testi
+kalmadı.**
+
+**Sıradaki iş FAZ 4'tür** — panel cilası, mutabakat panel ekranı, onay
+durumu ekranı ve abonelik/ödeme (hafta 21–25). Yeni pazaryerleri
+(Hepsiburada → Amazon → Etsy → eBay) Faz 4'ten SONRA. Çalışma sırası
+kararı ("önce çekirdek, panel sona") artık kapsamını doldurdu: çekirdek
+tarafında Faz 3'ten kalan madde yok, o yüzden panel işine geçmek
+kullanıcının kararına bağlıdır.
 
 **YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
 Kullanıcının kararı: **Hepsiburada → Amazon → Etsy → eBay**. Bu maddeler
