@@ -1,4 +1,4 @@
-# Devir Notu — 19 Ağustos 2026 (FAZ 3 KAPANDI)
+# Devir Notu — 19 Ağustos 2026 (Faz 4 · iki madde bitti)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -6,47 +6,134 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 581 yeşil olmalı
+docker compose exec app php artisan test      # 605 yeşil olmalı
 ```
 
-**FAZ 3'TEN KALAN MADDE YOK.** Beş maddenin beşi de bitti. Çekirdek
-tarafında yazılacak bir güvenilirlik maddesi kalmadı.
+**FAZ 3 KAPANDI. FAZ 4'te İKİ MADDE BİTTİ:** onarım döngü emniyeti
+(çekirdek ön koşuldu) ve **mutabakat panel ekranı**.
 
-**Sıradaki iş FAZ 4'tür ve ilk adım KULLANICIYA SORMAKTIR.** Faz 4'ün
-içinde birbirinden bağımsız dört madde var ve hangisinin önce geleceği
-bir öncelik kararıdır, teknik bir zorunluluk değil:
+**Sıradaki iş — KULLANICIYA SOR.** Faz 4'te kalan üç madde arasında
+teknik bağımlılık yok; sıra bir öncelik kararıdır:
 
 1. **Panel cilası** (§13 · Faz 4, 20 sa) — boş durumlar, yükleniyor
-   göstergeleri, mobil düzen. Mevcut sekiz ekrana dokunur.
-2. **Mutabakat panel ekranı** — `reconciliation_items` yazılıyor ama
-   HİÇ GÖSTERİLMİYOR. Sürüklenme tespiti artık üç katmanda da çalışıyor
-   ve bulguları yalnızca veritabanında duruyor; bu ekran o yatırımın
-   kullanıcıya görünen tek yüzü.
-3. **Onay durumu için ayrı ekran** — rozet ve red sebebi bugün
-   ürün-kanal ekranında var; ayrı ekran §13'te listeli.
-4. **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
-   ALINMIŞ (`tenants.plan_code` kolonu var; §4 · `plans` kiracısız+seed,
+   göstergeleri, mobil düzen. Mevcut DOKUZ ekrana dokunur.
+2. **Onay durumu için ayrı ekran** — rozet ve red sebebi bugün ürün-kanal
+   ekranında var; ayrı ekran §13'te listeli. En küçük madde.
+3. **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
+   ALINMIŞ (`tenants.plan_code` var; §4 · `plans` kiracısız+seed,
    `subscriptions` `UNIQUE(tenant_id) WHERE status='active'`; §3 · `Plan`,
-   `Subscription`, `UsageRecord`) ama YAZILMADI.
+   `Subscription`, `UsageRecord`) ama YAZILMADI. En büyük madde. Kota neyi
+   sınırladığını senkron davranışından alır ve o davranış artık OTURDU —
+   teknik ön koşul ilk kez sağlandı.
 
-**ÇALIŞMA SIRASI KARARI KAPSAMINI DOLDURDU.** Kullanıcının 18 Ağustos
-talimatı "front'una en son bakarız, bir her şeyi bitirelim" idi ve o
-"her şey" artık bitti. Panel işine geçmek ARTIK MEŞRUDUR ama hangi
-maddeyle başlanacağı kullanıcının kararıdır — sorulmadan panel yazma.
-
-**Ekran işi çıktığında TARAYICIDA doğrula** — bu kural hiç iptal olmadı,
-yalnızca uygulanacağı madde bugüne kadar gelmedi.
+**EKRAN İŞİ ÇIKARSA TARAYICIDA DOĞRULA** — bu kural bu turda ilk kez
+uygulandı ve işe yaradı (mutabakat ekranı Playwright ile sürüldü).
 
 Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) **Faz 4'ten
-SONRA** — ayrıntı aşağıda, sıra ve gerekçeler değişmedi.
+SONRA** — sıra ve gerekçeler aşağıda, değişmedi.
 
 ## Tek cümlede durum
 
-**Faz 2 ve Faz 3 kapandı.** P0/P1'in tamamı yeşil, yazılmamış P0/P1 testi
-yok. **581 test yeşil** (2044 assertion), Pint temiz (289 dosya), sekiz
-ardışık rastgele sıralı tur temiz.
+**Faz 2 ve Faz 3 kapandı; Faz 4'te iki madde bitti.** P0/P1'in tamamı
+yeşil. **605 test yeşil** (2110 assertion), Pint temiz (293 dosya),
+rastgele sıralı turlar temiz. Panelde DOKUZ ekran.
 
 ## Bu turda ne eklendi
+
+### §13 · Faz 4 · MUTABAKAT PANEL EKRANI (`513480d`)
+
+| Ne | Nerede |
+|---|---|
+| Controller | `Http/Controllers/ReconciliationController` |
+| Ekran | `Pages/Reconciliation/Index.vue` |
+| Rota | `GET /reconciliation` (auth + tenant), SALT OKUNUR |
+| Navigasyon | `PanelLayout` — Stok ile Kanallar arasında |
+| Testler | `ReconciliationScreenTest` (13) |
+
+**KAPATILAN BOŞLUK:** üç mutabakat katmanı da `reconciliation_items`
+yazıyordu ve HİÇBİRİ gösterilmiyordu. §17 sürüklenme tespitini "ürünün
+temel iddiası", panel görünürlüğünü "destek yükünü belirleyen tek ekran"
+diye listeliyor; ikisi birleşince ekranın yokluğu şu demekti: satıcı
+kanalda yanlış stok olduğunu ancak müşteri şikâyet edince öğrenir.
+
+**`MANUAL_REVIEW` EN ÜSTTE VE AYRI SAYILIR.** O satırlarda otomatik
+onarım DURMUŞTUR; `DRIFT_DETECTED` ile aynı kefeye konsaydı satıcı
+"sistem hallediyor" sanır ve tam olarak müdahale bekleyen satırı hiç
+görmezdi. Uyarı kutusu ne yapılacağını SOMUT söylüyor.
+
+**ÜÇ SAYI, ÜÇ FARKLI EYLEM.** `REMOTE_UNREACHABLE` sürüklenme SAYILMAZ
+(fark kanıtlanmamıştır) ama AYRI gösterilir — sessizce yutulsaydı satıcı
+kanalının okunamadığını hiç bilmezdi.
+
+**FAZLA SATIŞTA İKİ DEĞER AYRIŞIR VE İKİSİ DE GÖSTERİLİR** (§17 · P0):
+"Bizde 0" (kırpılmış giden değer) + altında "bakiye −2" (ham kanonik).
+
+**LISTING BAŞINA SON KALEM** — her tur yeni kalem yazar; hepsi
+listelenseydi üç turdur sürüklenen tek listing ekranı üç satırla
+doldururdu. `MAX(id)` KULLANILAMAZ (PostgreSQL'de uuid için `max()` yok,
+sorgu patlar) → `DISTINCT ON`.
+
+**ON DÖRT MUTASYON, ON DÖRDÜ DE YAKALANDI** — biri ancak test ölçeği
+düzeltildikten sonra: sıralamanın TAMAMEN kaldırılması hiçbir testi
+kırmıyordu, çünkü `MANUAL_REVIEW` satırı testte zaten önce yaratılmıştı
+ve UUIDv7 zaman sıralı olduğu için sıralamasız da başta geliyordu. Kurgu
+ters çevrildi: takılı satır SONRA yaratılıyor, başa gelmesi ancak
+sıralamayla mümkün.
+
+**TARAYICIDA DOĞRULANDI** — ekran işi kuralı bu turda İLK KEZ uygulandı.
+Demo kiracıda gerçek mutabakat yolundan üç senaryo üretildi (sıradan
+sürüklenme, üç tur üst üste `MANUAL_REVIEW`, fazla satış) ve ekran
+Playwright ile sürüldü: navigasyon sekmesi, dört özet kartı, uyarı
+kutusu, rozetler, "Bizde 0 / bakiye −2", "Son tur: Sıcak (5 dk)" ve
+geçmiş filtresi doğrulandı. Dev verisi geri alındı.
+
+### §10 · ONARIM DÖNGÜ EMNİYETİ — 3 TUR KURALI (`355c7a4`)
+
+| Ne | Nerede |
+|---|---|
+| Sayaç | `Reconciliation/Support/DriftHistory` |
+| Durum | `ItemStatus::MANUAL_REVIEW` (yeni) |
+| Kapı | `ReconcileConnection::classify()` — geçmişe duyarlı |
+| Testler | `RepairLoopSafetyTest` (11) |
+
+**KAPATILAN BOŞLUK:** §10'un VERIFY adımı ve §1 · Karar 13 ("üç tur üst
+üste sürüklenmede otomatik onarım duruyor") YAZILMAMIŞTI. Doküman bunu
+P0 değer listesinde sayıyor. Onarım sürüm kapısını ATLAR ve
+`desired_version`'ı ARTIRMAZ; bedeli, kanal 200 dönüp değişikliği
+UYGULAMIYORSA aynı farkın her turda yeniden onarılmasıdır — sıcak
+katmanda beş dakikada bir, SONSUZA KADAR.
+
+**SAYAÇ GEÇMİŞTEN TÜRETİLİR, AYRI KOLON YOK** (kullanıcı kararı).
+`reconciliation_items` zaten gerçeği taşıyor; ayrı sayaç kolonu, kalem
+yazan HER yolun onu da güncellemesini zorunlu kılardı ve biri unutulunca
+iki gerçek kaynağı sessizce ayrışırdı. **Sayılan şey ARDIŞIKLIKTIR**,
+toplam değil: araya giren eşleşme zinciri KIRAR. Emniyet kalıcı ceza
+değildir — kanal düzelip bir tur eşleşince kendiliğinden kalkar.
+
+**`REPAIRED` DURUMU DA YAZILIYOR** (§10). Enum'da vardı ama HİÇ
+yazılmıyordu: onarımın tuttuğu hiçbir yerde kayıtlı değildi.
+
+**ON DÖRT MUTASYON: ON ÜÇÜ YAKALANDI, BİRİ HAYATTA KALDI VE KALMALI.**
+İkisi ancak müdahaleden sonra:
+- **`REMOTE_UNREACHABLE`'ın zinciri KIRMASI** hiçbir testi bozmuyordu. O
+  hâlde emniyet pratikte hiç devreye giremezdi: gerçek kanallarda geçici
+  hata KURALDIR ve araya giren tek bir ağ hatası sayacı sıfırlayıp sonsuz
+  döngüyü baştan başlatırdı. Doğru davranış ÜÇÜNCÜ seçenektir — o tur ne
+  SAYILIR ne zinciri KIRAR; YOK SAYILIR.
+- **`MANUAL_REVIEW`'ın zinciri uzatmaması** altı turluk testte
+  yakalanmıyordu: sayaç yalnızca son 10 kalemi okuyor ve ilk iki
+  `REPAIR_QUEUED` hâlâ penceredeydi. Tur sayısı pencereden BÜYÜĞE
+  çıkarıldı (14). **YENİ KURAL: bir pencere/limit varsa testin ölçeği o
+  pencereyi AŞMALI.**
+
+**HAYATTA KALAN (dürüst sınır):** `DriftHistory`'deki kiracı filtresi.
+Sorgu zaten `listing_id` ile daraltılıyor, FK `listings`'e bağlı ve bir
+listing TEK kiracıya ait. Gerekçe koda yazıldı, sahte test YAZILMADI.
+
+**GERÇEK ÇALIŞTIRILDI (İNATÇI KANAL: 200 döner, yazmayı UYGULAMAZ):**
+tur 1-2 `REPAIR_QUEUED` + iki onarım · tur 3-5 `MANUAL_REVIEW`, onarım
+AÇILMADI · kanal düzelince tur 6 `MATCHED` ve emniyet KENDİLİĞİNDEN
+KALKTI. Dev verisi geri alındı.
 
 ### §10 · ILIK VE SOĞUK MUTABAKAT KATMANLARI (`5df1983`)
 
@@ -227,28 +314,33 @@ relay + fan-out, adapter mimarisi (7 yetenek arayüzü), sipariş alımı,
 gelen hat (webhook → inbox → router), giden hat (`InventoryBatchBuilder`,
 `PushInventory`, `SyncResultRecorder`), koruma katmanı (`ChannelRateLimiter`,
 `CircuitBreaker`), ürün aktarımı (`PushListing`, `PublishListing`),
-§6 bütünlük taramaları (iki seviye), **§10 mutabakatın ÜÇ KATMANI DA**,
+§6 bütünlük taramaları (iki seviye), **§10 mutabakatın ÜÇ KATMANI DA**
++ **onarım döngü emniyeti (3 tur kuralı)**,
 ön koşul kapısı + onay takibi, sipariş yoklaması, sipariş güncelleme +
 kargo, `PruneApiCalls`, resync yolu, fiyat senkron yolu.
 
 **Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
 stok/fiyat itme, sipariş yoklaması).
 
-**Panel (8 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
-siparişler · sipariş ayrıntısı · stok · kanallar · eşleştirme.
+**Panel (9 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
+siparişler · sipariş ayrıntısı · stok · **mutabakat** · kanallar ·
+eşleştirme.
 
-**Testler:** 581 yeşil (2044 assertion), 61 test dosyası.
+**Testler:** 605 yeşil (2110 assertion), 63 test dosyası.
 **P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
 
 ### Kaldı — FAZ 4 (panel + abonelik)
 
 Sıra kullanıcının kararına bağlı; teknik bağımlılık yok.
 
+- ~~**Onarım döngü emniyeti**~~ — **BİTTİ** (`355c7a4`). Çekirdek ön
+  koşuldu: ekran onu göstermek zorundaydı.
+- ~~**Mutabakat panel ekranı**~~ — **BİTTİ** (`513480d`), tarayıcıda
+  doğrulandı.
 - **Panel cilası** (§13 · Faz 4, 20 sa): boş durumlar, yükleniyor, mobil.
-- **Mutabakat panel ekranı** — `reconciliation_items` üç katmanda da
-  yazılıyor ama hiç gösterilmiyor.
+  Artık DOKUZ ekrana dokunur.
 - **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal
-  ekranında var).
+  ekranında var). En küçük madde.
 - **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
   alınmış, YAZILMADI. Kota neyi sınırladığını senkron davranışından alır
   ve o davranış artık OTURDU — yani bu madde artık teknik olarak da
@@ -315,7 +407,12 @@ Bu veri commit'lerde DEĞİL, yalnızca yerel veritabanında.
 10. **Adapter yazdıysan BAĞLAM DIŞINDA çağırmayı da sına.**
 11. **Testte "işi çalıştır" derken reflection'a sapma.**
 12. **Adapter gövdesi yazdıysan ÇEKİRDEĞİN ONU SÜRDÜĞÜNÜ de sına.**
-13. **`--order-by=random` ile en az birkaç tur koş.** Bu turda yeni bir
+13. **Ekran yazdıysan TARAYICIDA sür.** Playwright CLI ile giriş yap,
+    snapshot al, ekran görüntüsü al ve GÖZLE bak. Mutabakat ekranı bu
+    turda böyle doğrulandı; `npx --package @playwright/cli playwright-cli`
+    ile çalışır (wrapper script kurulu değil). `open` YENİ OTURUM açar ve
+    çerezi düşürür — giriş sonrası navigasyonu menü linkine tıklayarak yap.
+14. **`--order-by=random` ile en az birkaç tur koş.** Bu turda yeni bir
     test altı turda bir düşüyordu ve sıralı koşuda ASLA görünmezdi.
 
 ## Mutasyonla / gerçek çalıştırmayla bulunan gerçek boşluklar (tarihçe)

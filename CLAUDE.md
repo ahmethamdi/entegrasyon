@@ -104,7 +104,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 581 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 605 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -510,6 +510,26 @@ testin sonunda çağrılır.
   bulundu). `activeListingCount()` ile örneklem sorgusu aynı yüklemleri
   taşır — `error_permanent` dahil. Ayrışsalardı kalıcı hatası çok olan
   bağlantıda "%2'sine bak" sessizce daha büyük bir orana dönerdi.
+- **ONARIM DÖNGÜ EMNİYETİ — 3 TUR KURALI.** Onarım sürüm kapısını ATLAR ve
+  `desired_version`'ı ARTIRMAZ; bedeli, kanal 200 dönüp değişikliği
+  UYGULAMIYORSA aynı farkın her turda yeniden onarılmasıdır (sıcak katmanda
+  beş dakikada bir, sonsuza kadar). İki tur onarım açar; **üçüncü ardışık
+  sürüklenmede otomatik onarım DURUR** ve kalem `MANUAL_REVIEW` işaretlenir.
+  Sürüklenme yine SAYILIR — emniyet onarımı durdurur, gerçeği gizlemez.
+- **SAYAÇ GEÇMİŞTEN TÜRETİLİR** (`DriftHistory`), ayrı kolon YOK.
+  `reconciliation_items` zaten gerçeği taşıyor; ayrı sayaç, kalem yazan her
+  yolun onu da güncellemesini zorunlu kılar ve biri unutulunca iki gerçek
+  kaynağı sessizce ayrışır. Sayılan şey **ARDIŞIKLIKTIR**, toplam değil:
+  araya giren eşleşme zinciri KIRAR. Emniyet kalıcı ceza değildir — kanal
+  düzelip bir tur eşleşince kendiliğinden kalkar.
+- **`REMOTE_UNREACHABLE` NE SAYILIR NE ZİNCİRİ KIRAR.** Sayılsaydı üç kez
+  düşen bir kanal hiç sürüklenmemiş listing'i onarım dışına atardı;
+  zinciri kırsaydı gerçek bir sonsuz döngü tek bir ağ hatasıyla yeniden
+  başlardı (gerçek kanallarda geçici hata kuraldır). O tur YOK SAYILIR.
+- **`MATCHED` ile `REPAIRED` AYRIDIR.** Eşleşme bir onarımın ARDINDAN
+  geldiyse `REPAIRED` yazılır: "zaten doğruydu" ile "bozuktu ve onarımımız
+  tuttu" farklı şeylerdir ve ikisi tek duruma sıkıştırılsaydı onarımın işe
+  yarayıp yaramadığı hiçbir yerde kayıtlı olmazdı.
 - **Karşılaştırma GİDEN değerle yapılır**: beklenen uzak değer
   `OutboundQuantity::forChannel()` yani `max(available, 0)`. Kanonik bakiye
   fazla satış nedeniyle negatifse kanaldaki 0 **doğrudur** ve sürüklenme
@@ -543,8 +563,9 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-Mutabakat panel ekranı (Faz 4). **Çekirdek tarafında Faz 3'ten kalan
-madde YOK.**
+Panel cilası, onay durumu için ayrı ekran, abonelik/ödeme (§13 · Faz 4).
+**Çekirdek tarafında Faz 3'ten kalan madde YOK** ve **mutabakat panel
+ekranı YAZILDI** (`513480d`).
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
@@ -766,6 +787,29 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   birden çok satır vardır ve `join` çok kalemli siparişi listede tekrar
   ederdi.
 
+## Mutabakat ekranı kuralları (§13 · Faz 4)
+
+- **`MANUAL_REVIEW` EN ÜSTTE VE AYRI SAYILIR.** O satırlarda otomatik onarım
+  DURMUŞTUR ve kendiliğinden düzelmeyecektir; `DRIFT_DETECTED` ile aynı
+  kefeye konsaydı satıcı "sistem hallediyor" sanır ve tam olarak müdahale
+  bekleyen satırı hiç görmezdi.
+- **ÜÇ SAYI, ÜÇ FARKLI EYLEM.** Elle inceleme müdahale ister, sürüklenme
+  kendiliğinden onarılır, okunamayan kanal bağlantı sağlığına bakmayı
+  gerektirir. `REMOTE_UNREACHABLE` sürüklenme **sayılmaz** ama **ayrı
+  gösterilir** — sessizce yutulsaydı satıcı kanalının okunamadığını hiç
+  bilmezdi.
+- **FAZLA SATIŞTA İKİ DEĞER AYRIŞIR VE İKİSİ DE GÖSTERİLİR** (§17 · P0).
+  Kanoniği −2 olan varyantta kanala giden değer 0'dır ve kanaldaki 0
+  DOĞRUDUR. Yalnızca ham değer gösterilseydi satıcı olmayan bir sürüklenme
+  arar; yalnızca kırpılmış değer gösterilseydi fazla satışı hiç göremezdi.
+- **LISTING BAŞINA SON KALEM.** Her tur yeni kalem yazar; hepsi listelenseydi
+  üç turdur sürüklenen tek listing ekranı üç satırla doldurur ve satıcı kaç
+  ayrı sorunu olduğunu sayamazdı. Çözülmüş satırlar varsayılan listede yok.
+- **`MAX(id)` KULLANILAMAZ** — PostgreSQL'de uuid için `max()` toplam
+  fonksiyonu YOKTUR ve sorgu doğrudan patlar. `DISTINCT ON` kullanılır.
+- **Ekran SALT OKUNURDUR**: sürüklenme tespiti ve onarımı zamanlanmış
+  turların işidir, panelden tetiklenmez.
+
 ## Panel kuralları
 
 - **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
@@ -835,9 +879,9 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 §6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
 **§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
-maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde sekiz ekran
+maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde dokuz ekran
 var: özet · ürünler · ürün kanalları · siparişler · sipariş ayrıntısı · stok ·
-kanallar · **eşleştirme**.
+**mutabakat** · kanallar · **eşleştirme**.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
