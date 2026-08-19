@@ -104,7 +104,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 539 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 551 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -387,6 +387,35 @@ memory'deki "Repo Durumu" dosyasına bak.
   ikisini AYIRT ETMEK zorundadır; "zaten güncel" demek satıcıyı eksik
   eşleştirmeden habersiz bırakır (gerçek tarayıcı çalıştırmasında bulundu).
 
+## Resync kuralları (§9 · Karar 18 · T10)
+
+- **DURUM DEĞİŞİKLİĞİ TEK BAŞINA HİÇBİR İŞ ÜRETMEZ.** `error_permanent →
+  pending` yazmak yeterli olsaydı hiçbir şey olmazdı: kanonik veri o arada
+  DEĞİŞMEDİ ve değişmeyen veriden yeni domain olayı doğmaz. Bu yüzden her
+  çıkış geçişi AYNI transaction içinde `ListingResyncRequested` yazar.
+- **BU GEÇİŞ SATIRI AKIŞA GERİ SOKAN TEK YOLDUR** — `error_permanent`
+  mutabakatta asla aday değildir (§10), yani o satıra başka hiçbir
+  mekanizma dokunmaz.
+- **NİYET REPAIR.** Kanonik veri değişmediği için talebin taşıdığı sürüm
+  zaten gönderilmiş olabilir; NORMAL_SYNC ile açılsaydı sürüm kapısı
+  operasyonu SESSİZCE eler ve kullanıcının "yeniden dene"si hiçbir şey
+  yapmazdı. REPAIR kapıyı atlar, `desired_version`'ı ARTIRMAZ ve
+  `synced_version`'ı geriye ALMAZ (o alan GERÇEĞİ taşır).
+- **REPAIR AYIRT EDİCİ ÇIPA İSTER.** Kapı atlandığı için anahtar tekilliği
+  "aynı tetik iki kez işlenirse tek operasyon" garantisini taşıyan TEK
+  mekanizmadır. Mutabakat `reconciliation_item_id`, resync OLAY KİMLİĞİ
+  taşır; ikisi aynı anda verilemez ve ön ekleri AYRIDIR (`repair:` /
+  `resync:`).
+- **TEK GENERIC OLAY TİPİ**, ayrı taksonomi kurulmaz; sebep YÜKTE yaşar.
+- **SÜRÜM YÜKTE DONAR, tüketici YENİDEN HESAPLAMAZ:** iş kuyrukta
+  beklerken kanonik sürüm değişmiş olabilir ve o değişiklik KENDİ olayını
+  doğurmuştur.
+- **DURUM SORULMAZ, ön koşul KOYULMAZ:** "yeniden dene" geçici hatada da
+  takılı bekleyen satırda da meşrudur.
+- **YENİ OLAY TİPİ `ConsumeOutboxEvent`'e BAĞLANMALI.** Dal yoksa olay
+  "tanınmayan tür" sayılır, sessizce consumed damgalanır ve hiçbir iş
+  üretilmez — tüketiciyi doğrudan çağıran testler bunu GÖRMEZ.
+
 ## Zaman damgası tuzağı — `now()` yerine `clock_timestamp()`
 
 `outbox_events` zaman damgaları **saniye hassasiyetlidir**
@@ -454,11 +483,15 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`RequestResync` (+ T10), mutabakat panel ekranı, ılık/soğuk mutabakat
-katmanları (sıcak katman yazıldı).
+Mutabakat panel ekranı, ılık/soğuk mutabakat katmanları (sıcak katman
+yazıldı), **fiyat senkron yolu** (`PushPrices` — adapter gövdeleri hazır,
+çekirdekte çağıranı yok).
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
+
+`RequestResync` + `ListingResyncRequestedConsumer` **YAZILDI** (§13 · Faz 3,
+`9ec5ac0`) ve **T10 ile korunuyor** — yazılmamış P0/P1 testi KALMADI.
 
 `UpdateOrderSnapshot` ve `UpdateFulfillment` **YAZILDI** (§13 · Faz 3) ve
 `OrderEventRouter`'a bağlandı.
@@ -762,12 +795,13 @@ kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
 Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
-**Faz 3 sürüyor** (güvenilirlik). İki madde kapandı:
-`UpdateOrderSnapshot` + `UpdateFulfillment`, ve **`PruneApiCalls`**.
-**Sıradaki: `RequestResync` + T10** (§18 · P1) — `error_permanent →
-pending` geçişi, `ListingResyncRequested` olayı, `desired_version`
-ARTMAZ. T10 yazılmamış tek P0/P1 testidir. Faz 4 abonelik/ödeme hâlâ
-hafta 21–25'tir ve şimdi yazılmamalı.
+**Faz 3 sürüyor** (güvenilirlik). ÜÇ madde kapandı:
+`UpdateOrderSnapshot` + `UpdateFulfillment`, **`PruneApiCalls`** ve
+**`RequestResync` + T10**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1
+testi kalmadı.** **Sıradaki: fiyat senkron yolu (`PushPrices`)** —
+adapter gövdeleri hazır, çekirdekte çağıranı yok; tetikleyici de bu
+maddenin parçası. Faz 4 abonelik/ödeme hâlâ hafta 21–25'tir ve şimdi
+yazılmamalı.
 
 **YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
 Kullanıcının kararı: **Hepsiburada → Amazon → Etsy → eBay**. Bu maddeler

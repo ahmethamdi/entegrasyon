@@ -1,4 +1,4 @@
-# Devir Notu — 19 Ağustos 2026 (Faz 3 · iki madde bitti)
+# Devir Notu — 19 Ağustos 2026 (Faz 3 · üç madde bitti)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -6,25 +6,33 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 539 yeşil olmalı
+docker compose exec app php artisan test      # 551 yeşil olmalı
 ```
 
-**Sıradaki iş: Faz 3 · madde 2 — `RequestResync` + T10 (§18 · P1).**
+**Sıradaki iş: Faz 3 · madde 3 — FİYAT SENKRON YOLU (`PushPrices`).**
 
-Bugün kodda HİÇ karşılığı yok; tek iz `ErrorClass.php:54`'teki sözleşme
-notu: "`error_permanent → pending` geçişi `ListingResyncRequested` olayı
-üretmek ZORUNDADIR (§9, Karar 18)". **T10 yazılmamış tek P0/P1 testidir.**
+`pushPrices` gövdeleri (Woo VE Trendyol) HAZIR ama **çekirdekte çağıranı
+YOK**: `SyncDomain::PRICE` ve `PRICE_PUSH` şemada/enum'da var, fiyat
+operasyonu açan ya da dispatch eden hiçbir kod yok. `PushInventory`'nin
+fiyat karşılığı hiç yazılmamış — yani iki adapter'ın da `pushPrices`
+gövdesi bugün ULAŞILAMAZ.
 
-Yapılacak: `error_permanent` durumundaki listing'i `pending`'e döndüren
-action + `ListingResyncRequested` olayı. Üç kurala dikkat:
-(a) **`desired_version` ARTMAZ** — artarsa sürüm kapısı gönderimi eler ve
-ürün sessizce hiç gitmez (ön koşul kapısında aynı tuzak yaşandı);
-(b) eski hata metni TEMİZLENİR; (c) `error_permanent` mutabakatta asla
-aday değildir (`CandidateSelector`) — satır ancak bu geçişle akışa girer,
-yani bu action o kilidi açan tek yoldur.
+Yapılacak: `PushPrices` işi (`Sync/Jobs/`) + fiyat operasyonunu açan yol.
+`PushInventory` birebir örnek: koruma katmanı (rate limiter + circuit
+breaker), `SyncResultRecorder`, boş yükte deneme AÇILMAZ, kiracı bağlamı
+yükte taşınır ve `handle()` başında kurulur.
 
-**Panel butonu ERTELENİR** (çalışma sırası kararı) — action ve olay
-çekirdek tarafında yazılır, ekran Faz 4'te.
+Dört şeye dikkat: (a) fiyatın tetikleyicisi ne olacak — stok gibi outbox
+olayı mı, panelden düzenleme mi? `UpdateProduct` fiyat değiştiğinde bugün
+outbox olayı YAZMIYOR, o yüzden **tetikleyici de bu maddenin parçası**;
+(b) `DetectStuckSyncOperations` yalnızca `INVENTORY_PUSH` için iş atıyor,
+`PRICE_PUSH` dalı oraya EKLENMELİ yoksa kurtarma taraması fiyatı hiç
+kurtarmaz; (c) `PricePushBatch` değer nesnesi zaten var
+(`Sync/Support/`); (d) yeni kuyruk işi `JobSerializationTest`'e eklenmeli.
+
+**Panel işine GİRME** (çalışma sırası kararı). Dokümanın Faz 2/Faz 3
+listelerinde bu madde ayrıca YOK ama gerçek bir eksik — devir notunun
+yol haritasında 3. sırada.
 
 Yazdıktan sonra **GERÇEK çalıştır** — bu projede her tur ölümcül hata
 yeşil testlerin altından çıktı.
@@ -35,14 +43,91 @@ başlanmıyor** — ayrıntı aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 2 kapandı, Faz 3'te iki madde bitti:** sipariş güncelleme + kargo
-(`UpdateOrderSnapshot` / `UpdateFulfillment`) ve **`PruneApiCalls`**.
-**539 test yeşil** (1937 assertion), Pint temiz (277 dosya), iki random
+**Faz 2 kapandı, Faz 3'te ÜÇ madde bitti:** sipariş güncelleme + kargo,
+`PruneApiCalls` ve **`RequestResync` + T10**. **T10 yazıldı — yazılmamış
+son P0/P1 testiydi; artık P0/P1'in tamamı yeşil.**
+**551 test yeşil** (1960 assertion), Pint temiz (280 dosya), iki random
 seed'de stabil.
 
 ## Bu turda ne eklendi
 
-### §13 · Faz 3 · api_calls saklama taraması (`a452a27`)
+### §13 · Faz 3 · RequestResync + T10 (`9ec5ac0`)
+
+| Ne | Nerede |
+|---|---|
+| Action | `Sync/Actions/RequestResync.php` |
+| Tüketici | `Messaging/Consumers/ListingResyncRequestedConsumer.php` |
+| Yönlendirme | `ConsumeOutboxEvent`'e `ListingResyncRequested` dalı |
+| Çıpa | `OpenSyncOperation`'a `resyncAnchor` parametresi |
+| Testler | `RequestResyncTest` (12, **T10 dahil**) |
+
+**T10 YAZILDI** — yazılmamış son P0/P1 testiydi.
+
+**DURUM DEĞİŞİKLİĞİ TEK BAŞINA HİÇBİR İŞ ÜRETMEZ.** `error_permanent →
+pending` yazmak yeterli olsaydı hiçbir şey olmazdı: kanonik veri o arada
+DEĞİŞMEDİ ve değişmeyen veriden yeni domain olayı doğmaz. Satır panelde
+"bekliyor" görünür ve sonsuza kadar bekler. Bu yüzden her çıkış geçişi
+AYNI transaction içinde `ListingResyncRequested` yazar.
+
+**BU GEÇİŞ SATIRI AKIŞA GERİ SOKAN TEK YOLDUR:** `error_permanent`
+mutabakatta asla aday değildir (§10 · `CandidateSelector`), yani o satıra
+başka hiçbir mekanizma dokunmaz.
+
+**NİYET REPAIR — TURUN TEK MİMARİ KARARI (kullanıcıya soruldu).**
+Dokümanın snippet'i NORMAL_SYNC kullanıyor ama kanonik veri değişmediği
+için talebin taşıdığı sürüm ZATEN GÖNDERİLMİŞ olabilir
+(`synced_version >= current_version`) ve sürüm kapısı operasyonu SESSİZCE
+elerdi: kullanıcı "yeniden dene" der, hiçbir şey olmaz. REPAIR kapıyı
+atlar ve `desired_version`'ı ARTIRMAZ — ikisi de §8'in mevcut kuralları.
+`synced_version` de geriye ALINMAZ: o alan GERÇEĞİ taşır ve mutabakat ile
+panel rozeti ondan beslenir.
+
+**REPAIR AYIRT EDİCİ ÇIPA İSTER.** Kapı atlandığı için anahtar tekilliği,
+"aynı tetik iki kez işlenirse tek operasyon" garantisini taşıyan TEK
+mekanizmadır. İki meşru kaynak, iki ayrı çıpa: mutabakat
+`reconciliation_item_id`, resync OLAY KİMLİĞİ. İkisi aynı anda verilemez.
+Ön ekler AYRI (`repair:` / `resync:`) — tek ön ek paylaşsalardı iki farklı
+tetikten biri sessizce yutulabilirdi.
+
+**Tek generic olay tipi** kullanılır, ayrı taksonomi kurulmaz (§9); sebep
+YÜKTE yaşar (`taxonomy_prerequisite_fixed`, `credential_reauthorized`,
+`manual_retry`, `price_conflict_resolved`, `content_corrected`).
+**Sürüm yükte DONAR ve tüketici onu YENİDEN HESAPLAMAZ:** iş kuyrukta
+beklerken kanonik sürüm değişmiş olabilir ve o değişiklik KENDİ olayını
+doğurmuştur.
+
+**Durum SORULMAZ, ön koşul KOYULMAZ:** "yeniden dene" geçici hatada da
+takılı bekleyen satırda da meşrudur; `error_permanent` şartı koymak
+kullanıcının elindeki tek kurtarma düğmesini keyfi kilitlerdi.
+
+**SEKİZ MUTASYON, SEKİZİ DE YAKALANDI — ama İKİSİ ancak test eklendikten
+sonra:**
+- **`ConsumeOutboxEvent` dalının kaldırılması hiçbir testi kırmıyordu**,
+  çünkü tüm testler tüketiciyi DOĞRUDAN çağırıyordu. Dal olmadan olay
+  "tanınmayan tür" sayılır, SESSİZCE consumed damgalanır ve kullanıcının
+  düzeltmesi hiç iş üretmez. Gerçek teslim yolundan (`ConsumeOutboxEvent`)
+  geçen test eklendi. **Bu projedeki "sınıfın var olması onu kimsenin
+  çağırdığı anlamına gelmez" biçiminin bir kez daha tekrarı.**
+- **Çıpanın anahtara girmemesi yakalanmıyordu:** aynı listing+sürüm için
+  İKİ MEŞRU resync talebi (satıcı düzeltir → başka sebeple yine hata →
+  düzeltir → tekrar dener) tek anahtara düşer ve ikincisi `insertOrIgnore`
+  ile yutulurdu. İki-talep testi eklendi.
+
+**UYARI — yamanın gerçekten uygulandığını doğrula:** ilk mutasyon
+denemesinde `?? OutboxEvent::record(...)` yaması yazımı gereği olayı YİNE
+yazıyordu; "hayatta kaldı" sonucu YANLIŞTI. Doğru yamada 7 test kırmızıya
+döndü.
+
+**GERÇEK ÇALIŞTIRILDI (gerçek relay + gerçek worker):** status
+`error_permanent → pending`, `last_error` temizlendi, `error_count` 0,
+**desired/synced 5'te KALDI** · `outbox:relay --once` yayınladı ·
+`queue:work --queue=outbox:consume` `ConsumeOutboxEvent`'i çalıştırdı
+(bağlam hatası YOK) · olay consumed, `ops_planned=1` · `CONTENT_PUSH` /
+`intent=REPAIR` operasyonu `...:resync:{olay}` anahtarıyla açıldı ·
+düzenlenmiş üründe sürüm **7** doğru okundu · ikinci talep İKİNCİ
+operasyonu üretti. Dev verisi geri alındı.
+
+### Bir önceki tur — §13 · Faz 3 · api_calls saklama taraması (`a452a27`)
 
 | Ne | Nerede |
 |---|---|
@@ -172,7 +257,7 @@ barkod ve `(int)`'e çevrilmez; `listPrice` zorunlu.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 539 yeşil olmalı
+docker compose exec app php artisan test      # 551 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -205,7 +290,8 @@ gelen hat (webhook → inbox → router), giden hat (`InventoryBatchBuilder`,
 `CircuitBreaker`), ürün aktarımı (`PushListing`, `PublishListing`),
 §6 bütünlük taramaları (iki seviye), §10 mutabakat SICAK katmanı,
 ön koşul kapısı + onay takibi, sipariş yoklaması, sipariş güncelleme +
-kargo, **api_calls saklama taraması** (`PruneApiCalls`).
+kargo, **api_calls saklama taraması** (`PruneApiCalls`), **resync yolu**
+(`RequestResync` + `ListingResyncRequestedConsumer`).
 
 **Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
 stok/fiyat itme, sipariş yoklaması).
@@ -213,19 +299,19 @@ stok/fiyat itme, sipariş yoklaması).
 **Panel (8 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
 siparişler · sipariş ayrıntısı · stok · kanallar · eşleştirme.
 
-**Testler:** 539 yeşil (1937 assertion), 58 test dosyası. P0'dan
-T1/T2/T3/T4/T5/T6/T7/T8/T9/T11/T12 yeşil. **T10 hâlâ yazılmamış** —
-yazılmamış tek P0/P1 testi ve sıradaki maddenin parçası.
+**Testler:** 551 yeşil (1960 assertion), 59 test dosyası.
+**P0/P1'in TAMAMI yeşil** — T1…T12, T10 dahil. Yazılmamış P0/P1 testi
+KALMADI.
 
 ### Kaldı — FAZ 3 (güvenilirlik), sırayla
 
-1. ~~**`PruneApiCalls`**~~ — **BİTTİ** (`a452a27`), ayrıntı yukarıda.
-2. **`RequestResync` + T10** (§18 · P1) — `error_permanent → pending`,
-   `ListingResyncRequested` olayı, `desired_version` ARTMAZ. **T10 yazılmamış
-   tek P0/P1 testi.** Panel butonu ERTELENİR. **SIRADAKİ İŞ.**
+1. ~~**`PruneApiCalls`**~~ — **BİTTİ** (`a452a27`).
+2. ~~**`RequestResync` + T10**~~ — **BİTTİ** (`9ec5ac0`), ayrıntı yukarıda.
+   Panel butonu hâlâ ERTELENMİŞ (Faz 4).
 3. **Fiyat senkron yolu** — `pushPrices` gövdeleri (Woo + Trendyol) HAZIR
    ama çağıranı YOK: `PushInventory`'nin fiyat karşılığı yazılmamış.
-   Dokümanın Faz 3 listesinde ayrıca yok ama gerçek eksik.
+   Dokümanın Faz 3 listesinde ayrıca yok ama gerçek eksik. **SIRADAKİ İŞ**
+   (ayrıntı ve dört uyarı "BURADAN DEVAM ET" bloğunda).
 4. **Ilık/soğuk mutabakat katmanları** — sıcak katman çalışıyor; §10 bütçe
    tablosundaki diğer iki katman yok.
 
@@ -410,6 +496,14 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **`(channel_type_code, external_account_id)` GLOBAL tekil** — aynı test
   içinde iki kez `connection()` çağırmak kısıtı ihlal eder (bu turda
   yaşandı).
+- **TÜKETİCİYİ DOĞRUDAN ÇAĞIRAN TEST YÖNLENDİRMEYİ SINAMAZ.** Yeni bir
+  outbox olay tipi eklediysen `ConsumeOutboxEvent`'in `match` dalını da
+  sına — dal yoksa olay "tanınmayan tür" sayılır, SESSİZCE consumed
+  damgalanır ve hiçbir iş üretilmez. Tüm birim testleri yeşil kalır
+  (mutasyonla bulundu, `RequestResync` turu).
+- **REPAIR NİYETİ AYIRT EDİCİ ÇIPA İSTER.** Kapı atlandığı için anahtar
+  tekilliği tek garantidir; çıpasız iki meşru talep tek anahtara düşer ve
+  ikincisi `insertOrIgnore` ile yutulur.
 - **SINIR TESTİ YAZDIYSAN İKİ OPERATÖR ALTINDA DA GEÇMEDİĞİNİ DOĞRULA.**
   `PruneApiCalls`'ta "tam sınırdaki satır silinmez" testi yazıldı ve yeşil
   geçti — ama `<` → `<=` mutasyonu altında DA geçti, yani hiçbir şey
@@ -436,8 +530,8 @@ hosts") ve bu turda da doğrulanamadı. `gh auth login` sonrası
 
 **2 · `--order-by=random` düşüşü bu turda da tekrar üretilemedi.** İki tur
 daha koşuldu, ikisi de yeşil (seed'ler: 1787087064 · 1787087092).
-Toplamda **ON ÜÇ ardışık temiz tur** (beş oturum). Bu turun
-seed'leri: 1787125986 · 1787126017. PHPUnit
+Toplamda **ON BEŞ ardışık temiz tur** (beş oturum). Bu turun
+seed'leri: 1787128466 · 1787128536. PHPUnit
 11'de `--seed` seçeneği YOK; seed çıktının sonunda "Random Order Seed"
 satırında raporlanır. Görülürse o satırdaki seed kaydedilmeli.
 
