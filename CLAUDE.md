@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 663 test yeşil olmalı
+docker compose exec app php artisan test      # 709 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-36 domain tablosu, 33 model, 663 test. Stok çekirdeği (`ApplyMovement`,
+35 tablo (çerçeve dışı), 33 model, 709 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -597,15 +597,54 @@ testin sonunda çağrılır.
   (`HandleInertiaRequests::share()`). Uydurma ad Inertia'ya HİÇ
   ULAŞMAZ ve kullanıcı butonun çalıştığını göremez.
 
+## Metrik kuralları (§11 · §13 · Faz 3 · madde 2)
+
+- **ANLIK GÖRÜNTÜ ALINIR, PANEL CANLI SORGU YAPMAZ.** Asıl sebep sorgu
+  ağırlığı değil: grafik GEÇMİŞ ister ve canlı sorgu yalnızca ŞU ANI
+  verir — "artıyor mu" sorusunu asla cevaplayamaz. `metric_snapshots`
+  bir ZAMAN SERİSİDİR; her tur EKLER, üzerine YAZMAZ.
+- **ÖLÇÜLEMEYEN METRİK SIFIR YAZMAZ.** Veri yoksa satır HİÇ yazılmaz;
+  sıfır yazılsaydı grafik "her şey mükemmel" derdi, oysa ölçüm
+  YAPILAMADI. İSTİSNA `outbox_consume_gap` ve `sync_delivery_gap`:
+  orada sıfır GERÇEK bir ölçümdür ve eşik zaten sıfırdır.
+- **`metric_snapshots` KİRACIYA AİT DEĞİLDİR** (§4: `tenant_id` kolonu
+  yok) — metriklerin çoğu sistem genelidir ve `tenant_id` zorunlu
+  olsaydı onlara uydurma kiracı yazmak gerekirdi. Kapsam `scope`
+  kolonunda metin: `system` · `tenant:{id}` · `connection:{id}`.
+  **BEDELİ: global scope BU TABLODA ÇALIŞMAZ** ve panel filtresi elle
+  yazılır.
+- **KAPSAM BİÇİMİ SÖZLEŞMEDİR.** `MetricScope` tek kaynaktır ve biçim
+  BEKLENEN METİNLE sınanır: yazan da okuyan da aynı yardımcıyı
+  çağırdığı için önek değişse ikisi BİRLİKTE kayar, davranış testleri
+  yeşil kalır ve eski satırlar HİÇ BULUNAMAZ.
+- **EŞİKLER KAPSAMLIDIR** (§11): fazla satış ve ölü iş KİRACI başına,
+  api gecikmesi ve 429 KANAL başına. Sistem geneli toplansaydı yüz
+  kiracılı kurulumda tek kiracının sorunu gürültüde kaybolur ve
+  "kiracı başına 5" kuralı hiç uygulanamazdı.
+- **EŞİK `Metric::threshold()` İÇİNDE TEK KAYNAKTIR** (§11 tablosu
+  birebir). Panelde yeniden tanımlansaydı biri değiştiğinde rozet
+  sessizce yanlış renk gösterirdi.
+- **ORAN ÖLÇÜLÜR, HAM SAYI DEĞİL** (hata oranı, sürüklenme): yüz
+  denemede beş hata ile on binde beş tamamen farklı sağlık durumlarıdır.
+- **`REMOTE_UNREACHABLE` SÜRÜKLENME SAYILMAZ** (§10 ile aynı kural) ama
+  paydada KALIR: kontrol edilmiştir.
+- **TARAMA `runAsSystem()` İLE TÜM KİRACILARI GÖRÜR.** Bağlam altında
+  koşsaydı sistem metrikleri SESSİZCE yanlış çıkardı.
+- **SIFIR OLAN KİRACI/KANAL İÇİN SATIR YAZILMAZ** — sorunsuz kiracılar
+  tabloyu saatlik doldurur ve gerçek sinyal binlerce "0" arasında
+  kaybolurdu.
+
 ## Henüz yazılmadı
 
-Metrikler/alarm (§13 · Faz 3 · madde 2) ve kanaldan ürün çekme
-(madde 5'in kalanı). Faz 4: panel cilası, onay durumu için ayrı ekran,
-abonelik/ödeme.
+Kanaldan ürün çekme (§13 · Faz 3 · madde 5'in kalanı) ve **uyarı
+e-postaları** (madde 2'nin kalan üçte biri — mail altyapısı HİÇ YOK:
+`config/mail.php` bile yok). Faz 4: panel cilası, onay durumu için ayrı
+ekran, abonelik/ödeme.
 
-**Faz 3'te BEŞ maddeden ÜÇÜ bitti** — mutabakat motoru, toplu içe
-aktarmanın CSV yarısı ve **ölü mektup ekranı + tek tıkla yeniden
-deneme** (`244a397`, madde 3 ve 4'ü birlikte kapatır).
+**Faz 3'te BEŞ maddeden DÖRDÜ bitti** — mutabakat motoru, toplu içe
+aktarmanın CSV yarısı, **ölü mektup ekranı + tek tıkla yeniden deneme**
+(`244a397`, madde 3 ve 4'ü birlikte kapatır) ve **metrik toplama +
+sağlık ekranı** (`8e27913`, madde 2'nin toplama+panel kısmı).
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
@@ -960,10 +999,10 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 §6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
 **§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
-maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde ON BİR
-ekran var: özet · ürünler · **toplu içe aktarma** · ürün kanalları ·
-siparişler · sipariş ayrıntısı · stok · mutabakat · **başarısız işlemler**
-· kanallar · eşleştirme.
+maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde ON İKİ
+ekran var: özet · ürünler · toplu içe aktarma · ürün kanalları ·
+siparişler · sipariş ayrıntısı · stok · mutabakat · başarısız işlemler ·
+**sistem sağlığı** · kanallar · eşleştirme.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
@@ -980,11 +1019,13 @@ Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
 **FAZ 3 SÜRÜYOR.** Dokümanın §13 · Faz 3 listesinde BEŞ madde var ve
-ÜÇÜ bitti: mutabakat motoru · toplu içe aktarmanın CSV yarısı · **ölü
+DÖRDÜ bitti: mutabakat motoru · toplu içe aktarmanın CSV yarısı · **ölü
 mektup ekranı + tek tıkla yeniden deneme** (madde 3 ve 4'ü birlikte
-kapatır — `/failures` hem hata gezgini hem ölü mektup ekranıdır).
-Eksikler: **metrikler/alarm** (16 sa) · **kanaldan ürün çekme**
-(~7 sa, §7'ye yeni yetenek arayüzü gerekebilir — MİMARİ karar).
+kapatır — `/failures` hem hata gezgini hem ölü mektup ekranıdır) ·
+**metrik toplama + sağlık ekranı** (madde 2'nin toplama+panel kısmı,
+`/metrics`). Eksikler: **kanaldan ürün çekme** (~7 sa, §7'ye yeni
+yetenek arayüzü gerekebilir — MİMARİ karar) ve **uyarı e-postaları**
+(mail altyapısı hiç yok).
 
 Faz durumu iddiasını devir notundan değil dokümanın §13 listesinden
 doğrula: geçmişte "Faz 3 kapandı" denip yanlış çıktı.
@@ -1031,10 +1072,10 @@ davranış dürüst, eksik olan yol. Adapter gövdeleri sözleşmeye uygun ve
 hazır; **fiyat senkronu ayrı bir çekirdek maddesidir** ve dokümanın Faz 2
 listesinde ayrıca yer almıyor.
 
-Panel tarafında bu iki madde ARTIK KAPANDI: **mutabakat ekranı**
-(`513480d`) ve **`RequestResync` + T10** (`9ec5ac0`), üstüne **ölü
-mektup ekranı + tek tıkla yeniden deneme** (`244a397`) de yazıldı.
-Faz 3'ten kalan: **metrikler/alarm** ve **kanaldan ürün çekme**.
+Panel tarafında kapananlar: **mutabakat ekranı** (`513480d`),
+**`RequestResync` + T10** (`9ec5ac0`), **ölü mektup ekranı + tek tıkla
+yeniden deneme** (`244a397`) ve **sağlık ekranı** (`8e27913`).
+Faz 3'ten kalan: **kanaldan ürün çekme** ve **uyarı e-postaları**.
 
 **Abonelik/ödeme Faz 4'tür (hafta 21–25), şimdi değil.** §13 · Faz 4:
 "Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa". Şema kararı

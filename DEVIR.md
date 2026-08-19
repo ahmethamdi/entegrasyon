@@ -1,7 +1,7 @@
 # Devir Notu — 19 Ağustos 2026 (Faz 3 sürüyor · Faz 4'ten iki madde)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz (`244a397`). Sıradaki
-madde SEÇİLMEDİ — seçenekler "SIRADAKİ İŞ" bölümünde.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz (`8e27913`). Faz 3'te
+TEK madde kaldı — ayrıntı "SIRADAKİ İŞ" bölümünde.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -9,7 +9,7 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 663 yeşil olmalı
+docker compose exec app php artisan test      # 709 yeşil olmalı
 ```
 
 ### Dokümanın gerçek faz tablosu (§13)
@@ -18,18 +18,18 @@ docker compose exec app php artisan test      # 663 yeşil olmalı
 |---|---|---|---|
 | Faz 1 — Woo dikey dilimi | 140 | 1–8 | BİTTİ |
 | Faz 2 — Trendyol + çift yönlü | 126 | 9–15 | BİTTİ |
-| Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **~68/84** |
+| Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **~80/84** |
 | Faz 4 — Ticarileşme | 90 | 21–25 | 20/90 |
 | Faz 5 — Tampon | 28 | 26 | başlamadı |
 
-**Toplam 468 saat · tahminen ~355 saat bitti → yaklaşık %76.**
+**Toplam 468 saat · tahminen ~367 saat bitti → yaklaşık %78.**
 
-### Faz 3'ün BEŞ maddesi — üçü bitti
+### Faz 3'ün BEŞ maddesi — dördü bitti
 
 | # | Madde | Saat | Durum |
 |---|---|---|---|
 | 1 | Mutabakat motoru (3 katman, 4 aday, onarım) | 30 | BİTTİ |
-| 2 | Metrik toplama, panel grafikleri, uyarı e-postaları | 16 | **HİÇ YOK** |
+| 2 | Metrik toplama, panel grafikleri, uyarı e-postaları | 16 | **toplama + panel BİTTİ** (`8e27913`); e-posta YOK |
 | 3 | Senkron geçmişi ekranı, hata gezgini, yeniden deneme | 14 | **BİTTİ** (`244a397`) |
 | 4 | Ölü mektup ekranı, bağlantı sağlığı, fazla satış ekranı | 10 | **BİTTİ** (`244a397`) |
 | 5 | Toplu içe aktarma (Excel/CSV) + kanaldan ürün çekme | 14 | **CSV BİTTİ**, kanaldan çekme YOK |
@@ -41,15 +41,20 @@ vardı; "fazla satış ekranı" `/inventory` ve `/reconciliation`'da.
 
 ## SIRADAKİ İŞ — KULLANICI SEÇECEK
 
-Faz 3'te kalan İKİ madde:
+Faz 3'te kalan:
 
-1. **Metrikler + alarm** (madde 2, 16 sa) — §17 "ölçülmeyen
-   güvenilirlik iddia edilemez" diyor; sistem çalışıyor ama ne kadar
-   iyi çalıştığı görünmüyor. Faz 3'ün kalan en büyük maddesi.
-2. **Kanaldan ürün çekme** (madde 5'in kalanı, ~7 sa) — Woo'da
+1. **Kanaldan ürün çekme** (madde 5'in kalanı, ~7 sa) — Woo'da
    `fetchListing` TEK ürün okuyor, toplu listeleme yeteneği YOK ve
    Trendyol'da hiç yazılmamış. §7'ye yeni yetenek arayüzü gerekebilir:
-   **MİMARİ karar, dokümana bakılmadan yapılmaz.**
+   **MİMARİ karar, dokümana bakılmadan yapılmaz.** Faz 3'ü kapatan son
+   madde.
+2. **Uyarı e-postaları** (madde 2'nin kalan üçte biri) — kullanıcı
+   kararıyla bu tura alınmadı. **Mail altyapısı HİÇ YOK**:
+   `config/mail.php`, `app/Mail`, `app/Notifications` yok ve SMTP
+   sağlayıcısı seçilmedi. Eşik aşımı ŞU AN panelde görünüyor
+   (`/metrics` rozetleri); e-posta onu bildirime çevirir. §12 ayrıca
+   "günlük özet: kiracı başına 10'dan fazla ölü iş → e-posta" istiyor
+   ve o eşik `Metric::DEAD_OPERATIONS` içinde ZATEN tanımlı.
 
 Sonra **Faz 4**: panel cilası · onay durumu ekranı · abonelik/ödeme
 (90 sa'lık fazın 70 saati).
@@ -62,13 +67,78 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 1 ve Faz 2 bitti; Faz 3'te 5 maddeden 3'ü, Faz 4'te 2 madde
-bitti.** **663 test yeşil** (2266 assertion), Pint temiz (305 dosya),
-altı ardışık rastgele sıralı tur temiz. Panelde ON BİR ekran.
+**Faz 1 ve Faz 2 bitti; Faz 3'te 5 maddeden 4'ü, Faz 4'te 2 madde
+bitti.** **709 test yeşil** (2341 assertion), Pint temiz (315 dosya),
+üç ardışık rastgele sıralı tur temiz. Panelde ON İKİ ekran.
 
 ## Bu turda ne eklendi
 
-### §12 · ÖLÜ MEKTUP EKRANI + TEK TIKLA YENİDEN DENEME (`244a397`)
+### §11 · METRİK TOPLAMA + SAĞLIK EKRANI (`8e27913`)
+
+| Ne | Nerede |
+|---|---|
+| Tablo | `metric_snapshots` (bigserial, `scope` metni, §4 birebir) |
+| Toplama | `Support/Observability/CaptureMetrics` (13 metrik) |
+| Enum | `Metric` — eşik + birim + kapsam türü + etiket, TEK KAYNAK |
+| Kapsam | `MetricScope` · `MetricScopeKind` · `MetricUnit` |
+| Komut | `metrics:capture`, SAATLİK (`routes/console.php`) |
+| Ekran | `MetricsController` + `Pages/Metrics/Index.vue` (`/metrics`) |
+| Testler | `CaptureMetricsTest` (28) + `MetricsScreenTest` (18) |
+
+**KAPATILAN BOŞLUK:** sistem çalışıyordu ama NE KADAR İYİ çalıştığı
+hiçbir yerde görünmüyordu. §17 maddeyi P0'a koyuyor: "ölçülmeyen
+güvenilirlik iddia edilemez."
+
+**ANLIK GÖRÜNTÜ ALINIR, PANEL CANLI SORGU YAPMAZ.** Asıl sebep sorgu
+ağırlığı değil: grafik GEÇMİŞ ister ve canlı sorgu yalnızca ŞU ANI
+verir — "artıyor mu" sorusunu asla cevaplayamaz. Tablo bir ZAMAN
+SERİSİDİR; her tur EKLER, üzerine yazmaz.
+
+**ÖLÇÜLEMEYEN METRİK SIFIR YAZMAZ.** Hiç tamamlanmış operasyon yoksa
+p95 hesaplanamaz ve satır HİÇ yazılmaz; sıfır yazılsaydı grafik "her şey
+mükemmel" derdi. İSTİSNA `outbox_consume_gap` ve `sync_delivery_gap`:
+orada sıfır GERÇEK bir ölçümdür ve eşik zaten sıfırdır.
+
+**`metric_snapshots` KİRACIYA AİT DEĞİLDİR** (§4: `tenant_id` yok) —
+metriklerin çoğu sistem genelidir. Bedeli: global scope BU TABLODA
+ÇALIŞMAZ ve panel filtresi `scope` üzerinden ELLE yazılır.
+
+**EŞİKLER KAPSAMLIDIR** (§11): fazla satış ve ölü iş KİRACI başına, api
+gecikmesi ve 429 KANAL başına. Sistem geneli toplansaydı yüz kiracılı
+kurulumda tek kiracının sorunu gürültüde kaybolurdu.
+
+**OTUZ BEŞ MUTASYON, OTUZ BEŞİ DE YAKALANDI** — biri ancak test
+eklendikten sonra: **`MetricScope::tenant()` hem YAZAN hem OKUYAN
+tarafta kullanıldığı için önek değişse ikisi BİRLİKTE kayıyor** ve
+davranış testleri yeşil kalıyordu. Ama tablo bir zaman serisidir: eski
+satırlar eski önekle yazılmıştır ve yeni okuyucu onları HİÇ BULAMAZ —
+grafik sessizce sıfırlanır. Biçim artık beklenen METİNLE sınanıyor
+(sözleşme testi). Kuyruk adlarının Horizon yapılandırmasıyla
+karşılaştırılmasıyla aynı gerekçe.
+
+**GERÇEK ÇALIŞTIRILDI (gerçek komut + gerçek veri + tarayıcı):**
+`metrics:capture` dev veritabanında 11 satır yazdı — kiracı kapsamlı
+olanlar ayrı ayrı, ölçülemeyenler (p95, hata oranı — son bir saatte veri
+yok) HİÇ yazılmadı. Beş tur koşturulup grafik doğrulandı.
+
+**GERÇEK ÇALIŞTIRMADA İKİ GÖRSEL BOŞLUK BULUNDU (testler yeşilken):**
+
+1. **SABİT SERİDE SPARKLINE KUTUNUN DİBİNE ÇİZİLİYORDU.** `span || 1`
+   kısayolu (yaygın kalıp) tüm noktaları `y=32`'ye koyuyor ve satıcı
+   "değer dibe vurdu" sanıyordu — oysa değer HİÇ DEĞİŞMEMİŞTİ. Beş
+   turun beşi de aynı değeri ölçünce beş kart birden yanıltıcı göründü.
+   Sabit seri artık ORTADAN çiziliyor.
+2. **EŞİĞE TAM DAYANAN DEĞER HİÇBİR ŞEY SÖYLEMİYORDU.** "Fazla satış
+   5 / eşik 5" aşım DEĞİLDİR (§11 "büyüktür" der) ve kırmızı
+   gösterilemez, ama sessizce sıradan göstermek satıcıyı bir adım
+   ötede olduğundan habersiz bırakıyordu. `nearThreshold` eklendi
+   (eşiğin %80'i); SIFIR EŞİKLİ metriklerde uyarı YOKTUR — her sağlıklı
+   ölçümü sarıya boyardı.
+
+**DEV VERİSİ GERİ ALINDI:** turun yazdığı 55 anlık görüntü silindi
+(tablo kalıcı, migration yerinde).
+
+### Bir önceki tur — §12 · ÖLÜ MEKTUP EKRANI + TEK TIKLA YENİDEN DENEME (`244a397`)
 
 | Ne | Nerede |
 |---|---|
@@ -480,7 +550,7 @@ silme partilenir; tur başına üst sınır var; transaction YOK.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 663 yeşil olmalı
+docker compose exec app php artisan test      # 709 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -488,8 +558,8 @@ npm run build                                 # YERELDE (container'da Node yok)
 Panel: `/` özet · `/products` ürünler · `/products/import` toplu içe
 aktarma · `/products/{id}/channels` kanala gönderme · `/orders`
 siparişler · `/inventory` stok · `/reconciliation` mutabakat ·
-**`/failures` başarısız işlemler** · `/channels` kanallar · `/mappings`
-eşleştirme
+`/failures` başarısız işlemler · **`/metrics` sistem sağlığı** ·
+`/channels` kanallar · `/mappings` eşleştirme
 
 Panel gerçek çalıştırması: `http://localhost:8080` ·
 `demo@entegrasyon.local` / `demo12345`
@@ -511,11 +581,12 @@ kargo, `PruneApiCalls`, resync yolu, fiyat senkron yolu.
 **Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
 stok/fiyat itme, sipariş yoklaması).
 
-**Panel (11 ekran):** özet · ürünler · ürün oluştur/düzenle · **toplu
-içe aktarma** · ürün-kanal · siparişler · sipariş ayrıntısı · stok ·
-mutabakat · **başarısız işlemler** · kanallar · eşleştirme.
+**Panel (12 ekran):** özet · ürünler · ürün oluştur/düzenle · toplu
+içe aktarma · ürün-kanal · siparişler · sipariş ayrıntısı · stok ·
+mutabakat · başarısız işlemler · **sistem sağlığı** · kanallar ·
+eşleştirme.
 
-**Testler:** 663 yeşil (2266 assertion).
+**Testler:** 709 yeşil (2341 assertion).
 **P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
 
 ### Kaldı — FAZ 4 (panel + abonelik)
@@ -611,6 +682,9 @@ Bu veri commit'lerde DEĞİL, yalnızca yerel veritabanında.
 
 Hepsi testler yeşilken bulundu:
 
+- **Sabit seride sparkline kutunun dibine çiziliyordu** — "değer dibe
+  vurdu" izlenimi, oysa değer hiç değişmemişti.
+- **Eşiğe tam dayanan metrik hiçbir şey söylemiyordu.**
 - **Yeniden deneme butonunun geri bildirimi hiç görünmüyordu** —
   uydurma flash anahtarı.
 - **Hata ekranı ham istisna metni gösteriyordu** — satıcı kaçış dizisi
@@ -666,6 +740,21 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
 ## Tekrar tekrar ısıran tuzaklar
 
+- **AYNI YARDIMCI HEM YAZAR HEM OKURSA BİÇİM MUTASYONU GİZLENİR.**
+  `MetricScope::tenant()` önekini değiştirmek hiçbir davranış testini
+  kırmıyordu: yazan da okuyan da aynı fonksiyonu çağırdığı için BİRLİKTE
+  kayıyorlar. Ama kalıcı veri eski biçimde durur ve yeni okuyucu onu HİÇ
+  BULAMAZ — grafik sessizce sıfırlanır. Biçim BEKLENEN METİNLE sınanmalı
+  (sözleşme testi). Kuyruk adlarının `config/horizon.php` ile
+  karşılaştırılması aynı gerekçedir.
+- **`span || 1` SPARKLINE'I DİBE ÇİZER.** Sabit seride `max - min = 0`
+  olur; sıfırı `1`e sabitlemek (yaygın kısayol) tüm noktaları kutunun EN
+  ALTINA koyar ve "değer dibe vurdu" izlenimi verir — oysa değer HİÇ
+  DEĞİŞMEDİ. Sabit seri ORTADAN çizilmeli.
+- **EŞİĞE TAM DAYANAN DEĞER SESSİZ KALIR.** `>` kuralı doğrudur (5 > 5
+  yanlıştır) ama satıcı bir adım ötede olduğunu göremez. Aşım ile
+  "yakın" AYRI işaretlenmeli; sıfır eşikli metrikte "yakın" YOKTUR —
+  her sağlıklı ölçümü sarıya boyardı.
 - **İKİ SAVUNMA VARSA BİRİ MUTASYONU GİZLER.** Ölü mektup ekranında
   toplu denemenin kiracı kapsaması hem operasyon sorgusunda hem
   `listing` ilişkisindeydi; ilişkininki yabancı satırı NULL'a düşürüp
