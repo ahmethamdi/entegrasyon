@@ -30,12 +30,24 @@ enum ItemStatus: string
     /** Doğrulama turunda eşleşti — onarım tuttu. */
     case REPAIRED = 'REPAIRED';
 
+    /**
+     * Üç tur üst üste sürüklenme — otomatik onarım DURDURULDU (§10).
+     *
+     * `DRIFT_DETECTED` bırakılsaydı kalem bir sonraki turda yine
+     * `drift_detected` sebebiyle aday olur ve panel onu "onarım bekliyor"
+     * gibi gösterirdi — oysa hiçbir onarım gelmeyecek. Kullanıcı sonsuza
+     * kadar bekleyen bir satıra bakardı.
+     */
+    case MANUAL_REVIEW = 'MANUAL_REVIEW';
+
     /** API hatası — sürüklenme DEĞİL, altyapı sorunu. */
     case REMOTE_UNREACHABLE = 'REMOTE_UNREACHABLE';
 
     /** Bu sınıflandırma sürüklenme sayılır mı — tur sayacını besler. */
     public function isDrift(): bool
     {
-        return $this === self::DRIFT_DETECTED || $this === self::REPAIR_QUEUED;
+        return $this === self::DRIFT_DETECTED
+            || $this === self::REPAIR_QUEUED
+            || $this === self::MANUAL_REVIEW;
     }
 }

@@ -14,6 +14,7 @@ use App\Domain\Reconciliation\Enums\ReconciliationScope;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
 use App\Domain\Reconciliation\Models\ReconciliationRun;
 use App\Domain\Reconciliation\Support\CandidateSelector;
+use App\Domain\Reconciliation\Support\DriftHistory;
 use App\Domain\Reconciliation\Support\SampledCandidates;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
@@ -31,9 +32,18 @@ use Throwable;
  *
  *   DETECT   adaylar seçilir, uzak durum TOPLU okunur (tek istek)
  *   RECORD   kalem yazılır, remote_hash ve last_observed_at damgalanır
- *   CLASSIFY MATCHED / DRIFT_DETECTED / REMOTE_MISSING / REMOTE_UNREACHABLE
- *   REPAIR   INVENTORY her zaman otomatik onarılır (§9 · domain politikası)
+ *   CLASSIFY MATCHED / REPAIRED / DRIFT_DETECTED / MANUAL_REVIEW /
+ *            REMOTE_MISSING / REMOTE_UNREACHABLE
+ *   REPAIR   INVENTORY otomatik onarılır (§9), ÜÇ TUR EMNİYETİNE kadar
  *   VERIFY   bir SONRAKİ tur — onarımdan hemen sonra okumak yanlış sonuç verir
+ *
+ * DEĞİŞMEZ KURAL — ONARIM DÖNGÜ EMNİYETİ (§10 · 3 tur kuralı):
+ *   Onarım sürüm kapısını ATLAR ve `desired_version`'ı ARTIRMAZ; bunun
+ *   bedeli, kanal 200 dönüp değişikliği UYGULAMIYORSA aynı farkın her
+ *   turda yeniden bulunup yeniden onarılmasıdır — sıcak katmanda beş
+ *   dakikada bir, SONSUZA KADAR. Üçüncü ardışık sürüklenmede otomatik
+ *   onarım DURUR ve kalem `MANUAL_REVIEW` işaretlenir. Sürüklenme yine
+ *   SAYILIR: emniyet onarımı durdurur, gerçeği gizlemez.
  *
  * DEĞİŞMEZ KURAL — KARŞILAŞTIRMA GİDEN DEĞERLE YAPILIR:
  *   Beklenen uzak değer `OutboundQuantity::forChannel()` yani
@@ -58,6 +68,7 @@ final class ReconcileConnection
         private readonly SampledCandidates $sampled,
         private readonly AdapterRegistry $registry,
         private readonly QueueRepair $queueRepair,
+        private readonly DriftHistory $history,
     ) {}
 
     /**
@@ -128,7 +139,18 @@ final class ReconcileConnection
 
             $checked++;
 
-            if ($item->status !== ItemStatus::DRIFT_DETECTED->value) {
+            if (! ItemStatus::from($item->status)->isDrift()) {
+                continue;
+            }
+
+            $drift++;
+
+            // §10 · ONARIM DÖNGÜ EMNİYETİ — kalem MANUAL_REVIEW yazıldıysa
+            // bu listing üç turdur sürükleniyor ve kanal bizim yazmamızı
+            // uygulamıyor demektir. Onarımı tekrarlamak yalnızca kota
+            // harcar; sürüklenme yine SAYILIR (gerçeği gizlemeyiz), ama
+            // operasyon AÇILMAZ.
+            if ($item->status === ItemStatus::MANUAL_REVIEW->value) {
                 continue;
             }
 
@@ -136,8 +158,6 @@ final class ReconcileConnection
             // Stokta tek otorite biziz; kanaldaki fark ya kanalın kendi
             // satışıdır (bize sipariş olarak gelir) ya sürüklenmedir.
             $this->queueRepair->run($item);
-
-            $drift++;
         }
 
         $run->forceFill([
@@ -214,7 +234,7 @@ final class ReconcileConnection
             ? null
             : $snapshot->quantityFor($listing->external_id);
 
-        [$status, $magnitude] = $this->classify($expectedRemote, $observedRemote);
+        [$status, $magnitude] = $this->classify($listing->id, $expectedRemote, $observedRemote);
 
         $item = ReconciliationItem::query()->create([
             'tenant_id' => $run->tenant_id,
@@ -244,9 +264,22 @@ final class ReconcileConnection
     }
 
     /**
+     * Sınıflandırma — GEÇMİŞE DUYARLIDIR.
+     *
+     * Eşleşme ve sürüklenme kararları tek başına şu anki değerlere
+     * bakarak verilemez; ikisinin de bir ÖNCESİ vardır (§10 · VERIFY):
+     *
+     *   · Eşleşme bir onarımın ARDINDAN geldiyse `REPAIRED`, yoksa
+     *     `MATCHED`. Ayrım denetim içindir: `MATCHED` "zaten doğruydu",
+     *     `REPAIRED` "bozuktu ve onarımımız TUTTU" demektir.
+     *   · Sürüklenme üçüncü kez ÜST ÜSTE görülüyorsa `MANUAL_REVIEW`.
+     *     `DRIFT_DETECTED` bırakılsaydı kalem bir sonraki turda yine
+     *     `drift_detected` sebebiyle aday olur ve panel onu "onarım
+     *     bekliyor" gibi gösterirdi — oysa hiçbir onarım gelmeyecek.
+     *
      * @return array{0: ItemStatus, 1: int|null}
      */
-    private function classify(int $expectedRemote, ?int $observedRemote): array
+    private function classify(string $listingId, int $expectedRemote, ?int $observedRemote): array
     {
         // Kanal bu kimliği hiç döndürmedi: ürün orada yok.
         // Otomatik onarım YAPILMAZ — yeniden listeleme kullanıcı onayı ister
@@ -256,10 +289,22 @@ final class ReconcileConnection
         }
 
         if ($expectedRemote === $observedRemote) {
-            return [ItemStatus::MATCHED, null];
+            return [
+                $this->history->awaitingRepairVerification($listingId)
+                    ? ItemStatus::REPAIRED
+                    : ItemStatus::MATCHED,
+                null,
+            ];
         }
 
-        return [ItemStatus::DRIFT_DETECTED, abs($expectedRemote - $observedRemote)];
+        $magnitude = abs($expectedRemote - $observedRemote);
+
+        return [
+            $this->history->autoRepairAllowed($listingId)
+                ? ItemStatus::DRIFT_DETECTED
+                : ItemStatus::MANUAL_REVIEW,
+            $magnitude,
+        ];
     }
 
     /**
