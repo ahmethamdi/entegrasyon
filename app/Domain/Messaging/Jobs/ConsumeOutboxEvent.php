@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Messaging\Jobs;
 
 use App\Domain\Messaging\Consumers\InventoryLevelChangedConsumer;
+use App\Domain\Messaging\Consumers\ListingResyncRequestedConsumer;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Support\Tenancy\TenantAwareJob;
 use Illuminate\Support\Facades\Log;
@@ -52,6 +53,12 @@ final class ConsumeOutboxEvent extends TenantAwareJob
 
         match ($event->event_type) {
             'InventoryLevelChanged' => app(InventoryLevelChangedConsumer::class)->handle($event),
+
+            // §9 · error_permanent'tan çıkış. BU DAL OLMADAN resync olayı
+            // "tanınmayan tür" sayılır, sessizce consumed damgalanır ve
+            // kullanıcının düzeltmesi hiçbir iş üretmez — durum pending
+            // görünür ama kanala hiçbir şey gitmez.
+            'ListingResyncRequested' => app(ListingResyncRequestedConsumer::class)->handle($event),
 
             // Tanınmayan olay türü consumed damgalanır: aksi halde seviye 1
             // bütünlük taraması onu sonsuza kadar yeniden yayınlardı.

@@ -45,7 +45,8 @@ final class OpenSyncOperation
 
     /**
      * @param  int  $eventVersion  Olayın taşıdığı iş sürümü
-     * @param  string|null  $reconciliationItemId  YALNIZCA intent = REPAIR
+     * @param  string|null  $reconciliationItemId  Mutabakat kaynaklı REPAIR'de zorunlu
+     * @param  string|null  $resyncAnchor  Resync kaynaklı REPAIR'de zorunlu (§9)
      * @return SyncOperation|null null = sürüm kapısı eledi veya iş zaten bitmiş
      */
     public function run(
@@ -55,17 +56,39 @@ final class OpenSyncOperation
         SyncIntent $intent = SyncIntent::NORMAL_SYNC,
         ?OutboxEvent $sourceEvent = null,
         ?string $reconciliationItemId = null,
+        ?string $resyncAnchor = null,
     ): ?SyncOperation {
-        if ($intent === SyncIntent::REPAIR && $reconciliationItemId === null) {
+        // REPAIR SÜRÜM KAPISINI ATLADIĞI İÇİN AYIRT EDİCİ BİR ÇIPA ZORUNLUDUR.
+        //
+        // Kapı atlandığında anahtar tekilliği, "aynı tetik iki kez işlenirse
+        // tek operasyon oluşur" garantisini taşıyan TEK mekanizmadır. Çıpasız
+        // bir REPAIR, sürüm zaten anahtarda olduğu için aynı listing+sürüm
+        // için üretilen her onarımı tek anahtara çöker ve ikinci meşru talep
+        // sessizce yutulurdu.
+        //
+        // İKİ MEŞRU KAYNAK, İKİ AYRI ÇIPA:
+        //   mutabakat → reconciliation_item_id (§10)
+        //   resync    → olay kimliği (§9 · error_permanent'tan çıkış)
+        // İkisi AYNI ANDA verilemez: hangi tetikten doğduğu belirsiz bir
+        // onarımın izi sürülemez.
+        if ($intent === SyncIntent::REPAIR && $reconciliationItemId === null && $resyncAnchor === null) {
             throw new InvalidArgumentException(
-                'REPAIR niyeti reconciliation_item_id taşımak zorundadır: '.
-                'onarım anahtarı bu kimlikten türetilir ve aynı sürüklenme '.
-                'kaydının iki kez işlenmesi tek operasyon üretmelidir.'
+                'REPAIR niyeti ayırt edici bir çıpa taşımak zorundadır '.
+                '(reconciliation_item_id veya resync çıpası): onarım anahtarı '.
+                'o kimlikten türetilir ve aynı tetiğin iki kez işlenmesi tek '.
+                'operasyon üretmelidir.'
+            );
+        }
+
+        if ($reconciliationItemId !== null && $resyncAnchor !== null) {
+            throw new InvalidArgumentException(
+                'Bir onarım operasyonu tek bir tetikten doğar: '.
+                'reconciliation_item_id ve resync çıpası birlikte verilemez.'
             );
         }
 
         return DB::transaction(function () use (
-            $listing, $domain, $eventVersion, $intent, $sourceEvent, $reconciliationItemId,
+            $listing, $domain, $eventVersion, $intent, $sourceEvent, $reconciliationItemId, $resyncAnchor,
         ): ?SyncOperation {
 
             // (1) Sync state satırını KİLİTLE.
@@ -122,8 +145,10 @@ final class OpenSyncOperation
                 $state->forceFill(['last_requested_at' => now()])->save();
             }
 
-            // (5) Anahtar niyete göre — iki biçim çakışmaz.
-            $key = $this->idempotencyKey($listing, $domain, $eventVersion, $intent, $reconciliationItemId);
+            // (5) Anahtar niyete göre — biçimler çakışmaz.
+            $key = $this->idempotencyKey(
+                $listing, $domain, $eventVersion, $intent, $reconciliationItemId, $resyncAnchor,
+            );
 
             // (6) IDEMPOTENT yaratma — istisnaya güvenme.
             DB::table('sync_operations')->insertOrIgnore([
@@ -160,14 +185,19 @@ final class OpenSyncOperation
     }
 
     /**
-     * İdempotency anahtarı — niyete göre iki biçim.
+     * İdempotency anahtarı — niyete ve tetiğe göre üç biçim.
      *
-     * NORMAL_SYNC  inv:{listing_id}:{version}
-     * REPAIR       inv:{listing_id}:{version}:repair:{reconciliation_item_id}
+     * NORMAL_SYNC       inv:{listing_id}:{version}
+     * REPAIR/mutabakat  inv:{listing_id}:{version}:repair:{reconciliation_item_id}
+     * REPAIR/resync     inv:{listing_id}:{version}:resync:{olay_kimliği}
      *
-     * Biçimler çakışmaz: aynı listing ve aynı iş sürümü için hem normal hem
-     * onarım operasyonu birlikte var olabilir. Bu bilinçlidir — onarım devam
-     * eden normal akışı iptal etmez.
+     * Biçimler çakışmaz: aynı listing ve aynı iş sürümü için normal, onarım ve
+     * resync operasyonu birlikte var olabilir. Bu bilinçlidir — onarım devam
+     * eden normal akışı iptal etmez, resync de mutabakatın onarımını ezmez.
+     *
+     * `repair` ve `resync` ayrı ön eklerdir: tek ön ek paylaşsalardı bir
+     * mutabakat kalemi kimliği ile bir olay kimliği teorik olarak aynı
+     * anahtara düşebilir ve iki farklı tetikten biri sessizce yutulurdu.
      */
     private function idempotencyKey(
         Listing $listing,
@@ -175,12 +205,17 @@ final class OpenSyncOperation
         int $eventVersion,
         SyncIntent $intent,
         ?string $reconciliationItemId,
+        ?string $resyncAnchor = null,
     ): string {
         $base = "{$domain->keyPrefix()}:{$listing->id}:{$eventVersion}";
 
-        return $intent === SyncIntent::REPAIR
-            ? "{$base}:repair:{$reconciliationItemId}"
-            : $base;
+        if ($intent !== SyncIntent::REPAIR) {
+            return $base;
+        }
+
+        return $resyncAnchor !== null
+            ? "{$base}:resync:{$resyncAnchor}"
+            : "{$base}:repair:{$reconciliationItemId}";
     }
 
     /**
