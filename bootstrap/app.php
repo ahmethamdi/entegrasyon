@@ -15,6 +15,7 @@ use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Support\Observability\CaptureMetricsCommand;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -56,6 +57,8 @@ return Application::configure(basePath: dirname(__DIR__))
         PollChannelOrdersCommand::class,
         // §13 · Faz 3 · api_calls saklama. Zamanlaması routes/console.php.
         PruneApiCallsCommand::class,
+        // §11 · metrik anlık görüntüleri. Zamanlaması routes/console.php.
+        CaptureMetricsCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [

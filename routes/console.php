@@ -157,3 +157,19 @@ Schedule::command('api-calls:prune')
     ->dailyAt('04:00')
     ->onOneServer()
     ->withoutOverlapping();
+
+// §11 · METRİK ANLIK GÖRÜNTÜLERİ — saatlik (§15 tablosu birebir).
+//
+// SAATLİK YETER VE GEREKİR. Daha sık koşmak on üç ağır toplama sorgusunu
+// (`percentile_cont` tam tarama ister) gereksiz sıklıkta çalıştırır; daha
+// seyrek koşmak grafiği okunamaz kılar — günde bir nokta ile "gecikme
+// öğleden sonra tırmanıyor" görülemez.
+//
+// BU BLOK OLMADAN TOPLAMA HİÇ ÇALIŞMAZ ve panel boş bir grafik gösterir:
+// sınıfın var olması onu kimsenin çağırdığı anlamına gelmez. §17 bu maddeyi
+// P0'a koyuyor ("ölçülmeyen güvenilirlik iddia edilemez") — zamanlanmamış
+// bir metrik toplayıcı yalnızca ölçtüğü yanılsamasını üretir.
+Schedule::command('metrics:capture')
+    ->hourly()
+    ->onOneServer()
+    ->withoutOverlapping();

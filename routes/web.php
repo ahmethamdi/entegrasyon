@@ -8,6 +8,7 @@ use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
@@ -124,6 +125,12 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     // ROTA MODEL BAĞLAMASI KULLANILMAZ: `SubstituteBindings` `tenant` ara
     // katmanından ÖNCE çalışır ve sorgu bağlamsız atılırdı. Kimlik gövdede
     // `string` taşınır ve kontrolcüde kiracı scope'u altında aranır.
+    // Metrik ekranı (§11, §13 · Faz 3 · madde 2). SALT OKUNUR: ölçüm
+    // saatlik `metrics:capture` turunun işidir ve panelden tetiklenmez.
+    // §17 bu maddeyi P0'a koyuyor — ölçülmeyen güvenilirlik iddia
+    // edilemez ve ölçülüp gösterilmeyen de aynı kapıya çıkar.
+    Route::get('/metrics', [MetricsController::class, 'index'])->name('metrics.index');
+
     Route::get('/failures', [SyncFailureController::class, 'index'])
         ->name('failures.index');
     Route::post('/failures/retry', [SyncFailureController::class, 'retry'])

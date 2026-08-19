@@ -62,6 +62,11 @@ final class ScheduledScansTest extends TestCase
             // yalnızca bir niyet olarak kalır ve en çok yazılan tablo
             // sınırsız büyür.
             'api-calls:prune',
+            // §11 · metrik anlık görüntüleri. Zamanlanmazsa panel BOŞ bir
+            // grafik gösterir ve §17'nin P0 maddesi ("ölçülmeyen
+            // güvenilirlik iddia edilemez") kâğıt üzerinde kalır: sınıfın
+            // var olması onu kimsenin çağırdığı anlamına gelmez.
+            'metrics:capture',
         ] as $command) {
             $this->assertContains(
                 $command,
@@ -112,6 +117,12 @@ final class ScheduledScansTest extends TestCase
         // ölçeğindedir; saatlik koşmak aynı işi 24 kez yapar. 03:00
         // taksonomi turudur, ikisi üst üste binmez.
         $this->assertSame('0 4 * * *', $commands['api-calls:prune']);
+
+        // §11 · metrikler: SAATLİK. Daha sık koşmak on üç ağır toplama
+        // sorgusunu (percentile_cont tam tarama ister) gereksiz sıklıkta
+        // çalıştırır; daha seyrek koşmak grafiği okunamaz kılar — günde
+        // bir nokta ile "gecikme öğleden sonra tırmanıyor" görülemez.
+        $this->assertSame('0 * * * *', $commands['metrics:capture']);
     }
 
     /**
@@ -172,6 +183,7 @@ final class ScheduledScansTest extends TestCase
             'reconcile:cold',
             'orders:poll',
             'api-calls:prune',
+            'metrics:capture',
         ] as $command) {
             $this->assertContains(
                 $command,
