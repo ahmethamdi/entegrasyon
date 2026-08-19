@@ -6,7 +6,7 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 551 yeşil olmalı
+docker compose exec app php artisan test      # 564 yeşil olmalı
 ```
 
 **Sıradaki iş: Faz 3 · madde 3 — FİYAT SENKRON YOLU (`PushPrices`).**
@@ -43,15 +43,78 @@ başlanmıyor** — ayrıntı aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 2 kapandı, Faz 3'te ÜÇ madde bitti:** sipariş güncelleme + kargo,
-`PruneApiCalls` ve **`RequestResync` + T10**. **T10 yazıldı — yazılmamış
-son P0/P1 testiydi; artık P0/P1'in tamamı yeşil.**
-**551 test yeşil** (1960 assertion), Pint temiz (280 dosya), iki random
-seed'de stabil.
+**Faz 2 kapandı, Faz 3'te DÖRT madde bitti:** sipariş güncelleme + kargo,
+`PruneApiCalls`, `RequestResync` + T10 ve **fiyat senkron yolu**.
+P0/P1'in tamamı yeşil. **564 test yeşil** (1987 assertion), Pint temiz
+(284 dosya), iki random seed'de stabil.
 
 ## Bu turda ne eklendi
 
-### §13 · Faz 3 · RequestResync + T10 (`9ec5ac0`)
+### §13 · Faz 3 · FİYAT SENKRON YOLU (`d17aa8a`)
+
+| Ne | Nerede |
+|---|---|
+| Tetikleyici | `Catalog/Actions/UpdateProduct` → `VariantPriceChanged` |
+| Tüketici | `Messaging/Consumers/VariantPriceChangedConsumer` (fan-out) |
+| Yönlendirme | `ConsumeOutboxEvent`'e `VariantPriceChanged` dalı |
+| Gruplama | `Sync/Support/PriceBatchBuilder` |
+| İş | `Sync/Jobs/PushPrices` (kuyruk **`price:high`**) |
+| Yük | `PricePushBatch` artık operasyon listesi taşıyor |
+| Kurtarma | `DetectStuckSyncOperations`'a PRICE dalı |
+| Testler | `PriceSyncTest` (13) + `JobSerializationTest`'e PushPrices |
+
+**KAPATILAN BOŞLUK:** `pushPrices` gövdeleri (Woo VE Trendyol) ilk günden
+beri hazırdı ama **çekirdekte çağıranı yoktu** — iki adapter'ın fiyat
+gövdesi de ULAŞILAMAZDI ve panelden fiyat düzeltmek kanala HİÇ yansımıyordu.
+
+**TETİKLEYİCİ DE MADDENİN PARÇASIYDI** (kullanıcı kararı: tam outbox yolu,
+stokun birebir aynısı). Stokta tetik `ApplyMovement`'ın ledger
+transaction'ında yaşar; fiyatın ledger'ı YOK ve `UpdateProduct` düz kolon
+güncelliyordu. Olay artık AYNI transaction'da yazılıyor — ayrı olsaydı
+araya düşen hata, fiyatı değişmiş ama olayı yazılmamış bir varyant bırakır
+ve hiçbir tarama onu görmezdi (dual write'ın tek çözümü outbox'tır, §6).
+
+**FİYAT GERÇEKTEN DEĞİŞTİ Mİ kontrolü KURUŞ ölçeğinde tam sayı üzerinden.**
+`decimal(12,2)` PHP'ye STRING döner ve float karşılaştırması iki yönden de
+yanıltır. Her kaydetme fiyat turu açsaydı kanal kotası boşa gider ve
+mutabakat gerçek sürüklenmeyi gürültüde kaybederdi.
+
+**Fiyat MUTLAK ve STRING taşınır** (§7 — para float taşınmaz). Yükte
+`origin_connection_id` YOKTUR ve olmamalı: değişiklik PANELDEN geldi,
+bastırılacak kaynak kanal yok.
+
+**DOKÜMANLA ÇELİŞKİ ELLE YAKALANDI — kuyruk adı.** `price:default`
+yazmıştım; §15 ve `config/horizon.php` **`price:high`** diyor. Uydurma
+kuyruk adı işin Redis'te sonsuza kadar beklemesi demekti, hiçbir hata
+görünmezdi ve tüm testler yeşil kalırdı. Düzeltildi ve **kuyruk adını
+Horizon yapılandırmasıyla karşılaştıran test** eklendi (yanlış adla
+kırmızıya döndüğü doğrulandı).
+
+**DOKUZ MUTASYON, DOKUZU DA YAKALANDI — biri ancak test eklendikten sonra:**
+yükten `operations` çıkarıldığında hiçbir test kırılmıyordu. O hâlde
+başarılı gönderim `synced_version`'ı ilerletmez, satır sonsuza kadar kirli
+görünür ve HER TURDA yeniden gönderilir — hiçbir hata da görünmez. Dikey
+dilim testi eklendi: çekirdek GERÇEK Woo adapter'ını sürüyor, sahte olan
+yalnızca HTTP.
+
+**Mevcut bir testin PREMİSİ BAYATLADI:** `DetectStuckSyncOperationsTest`'in
+"bilinmeyen operasyon türü" örneği `PRICE_PUSH`'tu; fiyat artık kurtarıldığı
+için o örnek dürüst değildi ve `MEDIA_PUSH`'a taşındı (medya yolu gerçekten
+hiç yazılmadı). Bırakılsaydı test yeşil kalırdı ama var olmayan bir
+davranışı sınardı.
+
+**GERÇEK ÇALIŞTIRILDI (gerçek relay + gerçek worker):** fiyat 2234.72 →
+1899.00 · olay yazıldı (`"1899.00"` STRING) · relay yayınladı ·
+`ConsumeOutboxEvent` fan-out yaptı (`ops_planned=2`, iki AYRI bağlantı —
+Woo + Trendyol) · `queue:work --queue=price:high` `PushPrices`'i İKİ kez
+çalıştırdı ve **`pushPrices` İLK KEZ gerçekten çağrıldı**:
+`POST /products/batch {"id":417452,"regular_price":"1899.00"}` · stub host
+kapalı olduğu için `NETWORK` sınıflandırıldı → `retrying`, `attempts=1`
+(doğru geçici hata yolu) · `api_calls` satırı yazıldı. Gruplama iki
+operasyonu AYRI yükte tuttu ve bu DOĞRU: gruplama bağlantı başınadır.
+Dev verisi geri alındı.
+
+### Bir önceki tur — §13 · Faz 3 · RequestResync + T10 (`9ec5ac0`)
 
 | Ne | Nerede |
 |---|---|
@@ -257,7 +320,7 @@ barkod ve `(int)`'e çevrilmez; `listPrice` zorunlu.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 551 yeşil olmalı
+docker compose exec app php artisan test      # 564 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -291,7 +354,8 @@ gelen hat (webhook → inbox → router), giden hat (`InventoryBatchBuilder`,
 §6 bütünlük taramaları (iki seviye), §10 mutabakat SICAK katmanı,
 ön koşul kapısı + onay takibi, sipariş yoklaması, sipariş güncelleme +
 kargo, **api_calls saklama taraması** (`PruneApiCalls`), **resync yolu**
-(`RequestResync` + `ListingResyncRequestedConsumer`).
+(`RequestResync` + `ListingResyncRequestedConsumer`), **fiyat senkron yolu**
+(`VariantPriceChanged` → `PushPrices`).
 
 **Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
 stok/fiyat itme, sipariş yoklaması).
@@ -299,7 +363,7 @@ stok/fiyat itme, sipariş yoklaması).
 **Panel (8 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
 siparişler · sipariş ayrıntısı · stok · kanallar · eşleştirme.
 
-**Testler:** 551 yeşil (1960 assertion), 59 test dosyası.
+**Testler:** 564 yeşil (1987 assertion), 60 test dosyası.
 **P0/P1'in TAMAMI yeşil** — T1…T12, T10 dahil. Yazılmamış P0/P1 testi
 KALMADI.
 
@@ -308,12 +372,11 @@ KALMADI.
 1. ~~**`PruneApiCalls`**~~ — **BİTTİ** (`a452a27`).
 2. ~~**`RequestResync` + T10**~~ — **BİTTİ** (`9ec5ac0`), ayrıntı yukarıda.
    Panel butonu hâlâ ERTELENMİŞ (Faz 4).
-3. **Fiyat senkron yolu** — `pushPrices` gövdeleri (Woo + Trendyol) HAZIR
-   ama çağıranı YOK: `PushInventory`'nin fiyat karşılığı yazılmamış.
-   Dokümanın Faz 3 listesinde ayrıca yok ama gerçek eksik. **SIRADAKİ İŞ**
-   (ayrıntı ve dört uyarı "BURADAN DEVAM ET" bloğunda).
+3. ~~**Fiyat senkron yolu**~~ — **BİTTİ** (`d17aa8a`), ayrıntı yukarıda.
+   Tetikleyici (`VariantPriceChanged`) dahil tam outbox yolu yazıldı.
 4. **Ilık/soğuk mutabakat katmanları** — sıcak katman çalışıyor; §10 bütçe
-   tablosundaki diğer iki katman yok.
+   tablosundaki diğer iki katman yok. **SIRADAKİ İŞ** (ayrıntı "BURADAN
+   DEVAM ET" bloğunda). **Faz 3'ün son maddesi.**
 
 **Trendyol'da kapsam dışı bırakılanlar** (eksik DEĞİL): `delist`,
 `fetchListing`, `acknowledgeOrder` — kargo §14 gereği kapsam dışı.
@@ -496,6 +559,20 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **`(channel_type_code, external_account_id)` GLOBAL tekil** — aynı test
   içinde iki kez `connection()` çağırmak kısıtı ihlal eder (bu turda
   yaşandı).
+- **KUYRUK ADI UYDURULAMAZ — HORIZON'UN DİNLEDİĞİ AD OLMALI.** Yanlış ada
+  atılan iş Redis'e yazılır, hiçbir worker onu almaz, HİÇBİR HATA GÖRÜNMEZ
+  ve tüm testler yeşil kalır. Adlar §15 tablosunda ve `config/horizon.php`
+  içinde: `orders:high` · `inventory:high` · **`price:high`** ·
+  `listing:default` · `inbox:process` · `outbox:consume` · `reconciliation` ·
+  `listing:bulk` · `maintenance`. `PriceSyncTest` bunu artık test ediyor.
+- **YÜK OPERASYON LİSTESİ TAŞIMAZSA `SyncResultRecorder` HİÇBİR ŞEY YAZAMAZ.**
+  Çağrı başarılı olur, `synced_version` yerinde kalır, satır sonsuza kadar
+  kirli görünür ve her turda yeniden gönderilir. Yeni bir push yolu
+  yazdıysan BAŞARI yolunu da sına (mutasyonla bulundu).
+- **MEVCUT BİR TESTİN PREMİSİ BAYATLAYABİLİR.** "Bilinmeyen operasyon türü"
+  örneği `PRICE_PUSH`'tu; fiyat yolu yazılınca o test yeşil kaldı ama artık
+  var olmayan bir davranışı sınıyordu. Bir yol yazdığında onu "yok" varsayan
+  testleri ARA.
 - **TÜKETİCİYİ DOĞRUDAN ÇAĞIRAN TEST YÖNLENDİRMEYİ SINAMAZ.** Yeni bir
   outbox olay tipi eklediysen `ConsumeOutboxEvent`'in `match` dalını da
   sına — dal yoksa olay "tanınmayan tür" sayılır, SESSİZCE consumed
@@ -530,13 +607,14 @@ hosts") ve bu turda da doğrulanamadı. `gh auth login` sonrası
 
 **2 · `--order-by=random` düşüşü bu turda da tekrar üretilemedi.** İki tur
 daha koşuldu, ikisi de yeşil (seed'ler: 1787087064 · 1787087092).
-Toplamda **ON BEŞ ardışık temiz tur** (beş oturum). Bu turun
-seed'leri: 1787128466 · 1787128536. PHPUnit
+Toplamda **ON YEDİ ardışık temiz tur** (beş oturum). Bu turun
+seed'leri: 1787131051 · 1787131148. PHPUnit
 11'de `--seed` seçeneği YOK; seed çıktının sonunda "Random Order Seed"
 satırında raporlanır. Görülürse o satırdaki seed kaydedilmeli.
 
-**3 · `pushPrices` çekirdekte çağrılmıyor** (yukarıda ayrıntısı). Adapter
-gövdeleri hazır; eksik olan `PushPrices` işi ve fiyat operasyonu açan yol.
+**3 · ~~`pushPrices` çekirdekte çağrılmıyor~~ — KAPANDI** (`d17aa8a`).
+`PushPrices` işi, `PriceBatchBuilder`, fan-out tüketicisi ve tetikleyici
+yazıldı; gerçek worker'da `pushPrices` ilk kez çağrıldı.
 
 **4 · `acknowledgeOrder` yazılmadı ve "yazılmamış yetenek" listesinde de
 YOK.** Sipariş onaylama Trendyol'da kargo akışının parçasıdır ve §14

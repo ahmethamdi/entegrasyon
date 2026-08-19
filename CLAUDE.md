@@ -104,7 +104,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 551 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 564 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -387,6 +387,36 @@ memory'deki "Repo Durumu" dosyasına bak.
   ikisini AYIRT ETMEK zorundadır; "zaten güncel" demek satıcıyı eksik
   eşleştirmeden habersiz bırakır (gerçek tarayıcı çalıştırmasında bulundu).
 
+## Fiyat senkron kuralları (§7 · §13 · Faz 3)
+
+- **TETİKLEYİCİ `UpdateProduct`'TA ve AYNI TRANSACTION İÇİNDE.** Fiyatın
+  ledger'ı yoktur (stokta tetik `ApplyMovement`'ın ledger transaction'ında
+  yaşar), bu yüzden olay kolonu yazan yere ait. Ayrı transaction'da
+  yazılsaydı araya düşen hata fiyatı değişmiş ama olayı yazılmamış bir
+  varyant bırakır ve hiçbir tarama onu görmezdi.
+- **FİYAT DEĞİŞMEDİYSE OLAY YAZILMAZ** ve karşılaştırma KURUŞ ölçeğinde
+  tam sayı üzerinden yapılır: `decimal(12,2)` PHP'ye STRING döner, float
+  karşılaştırması iki yönden de yanıltır. Her kaydetme fiyat turu açsaydı
+  kanal kotası boşa gider ve mutabakat gerçek sürüklenmeyi gürültüde
+  kaybederdi.
+- **FİYAT MUTLAK ve STRING taşınır** — yüzde indirim veya delta asla; para
+  float taşınmaz (yuvarlama kuruş kayması üretir).
+- **YÜKTE `origin_connection_id` YOKTUR.** Fiyat değişimi PANELDEN gelir,
+  bir kanaldan gelmez; bastırılacak kaynak kanal yoktur ve alan yazılsaydı
+  o kanal gereksizce elenirdi. (Stokta durum farklıdır: değişim sipariş
+  webhook'uyla bir kanaldan gelebilir.)
+- **KUYRUK `price:high`** (§15 tablosu, standard havuz, 45 sn). Uydurma
+  kuyruk adı işin Redis'te sonsuza kadar beklemesi demektir ve hiçbir hata
+  görünmez; `PriceSyncTest` adı Horizon yapılandırmasıyla karşılaştırır.
+- **`PriceBatchBuilder` yalnızca GRUPLAMA yapar**, fan-out yapmaz —
+  `InventoryBatchBuilder` ile aynı kural. Gruplama BAĞLANTI BAŞINADIR:
+  aynı varyantın Woo ve Trendyol listelemeleri AYRI yüklerde gider.
+- **KIRPMA YOK** — stoktan farklı. Negatif bakiye kırpması
+  `OutboundQuantity`'ye özgüdür; fiyatın negatif olma hâli yoktur.
+- **`PricePushBatch` OPERASYON LİSTESİ TAŞIR.** Taşımazsa
+  `SyncResultRecorder` hiçbir şey yazamaz: çağrı başarılı olur,
+  `synced_version` yerinde kalır ve satır her turda yeniden gönderilir.
+
 ## Resync kuralları (§9 · Karar 18 · T10)
 
 - **DURUM DEĞİŞİKLİĞİ TEK BAŞINA HİÇBİR İŞ ÜRETMEZ.** `error_permanent →
@@ -484,8 +514,7 @@ testin sonunda çağrılır.
 ## Henüz yazılmadı
 
 Mutabakat panel ekranı, ılık/soğuk mutabakat katmanları (sıcak katman
-yazıldı), **fiyat senkron yolu** (`PushPrices` — adapter gövdeleri hazır,
-çekirdekte çağıranı yok).
+yazıldı — §10 bütçe tablosundaki diğer iki katman).
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
@@ -496,12 +525,11 @@ günlük 04:00, partili silme + tur başına üst sınır.
 `UpdateOrderSnapshot` ve `UpdateFulfillment` **YAZILDI** (§13 · Faz 3) ve
 `OrderEventRouter`'a bağlandı.
 
-**FİYAT SENKRON YOLU ÇEKİRDEKTE YOK** — `pushPrices` gövdeleri (Woo ve
-Trendyol) hazır ama **çağıranı yok**: `SyncDomain::PRICE` ve `PRICE_PUSH`
-şemada/enum'da var, fiyat operasyonu açan ya da dispatch eden kod yok
-(`PushInventory`'nin fiyat karşılığı yazılmamış). Davranış dürüst —
-`DetectStuckSyncOperations` yalnızca `INVENTORY_PUSH` için iş atar,
-diğerine uyarı yazar. Dokümanın Faz 2 listesinde ayrıca yer almıyor.
+**FİYAT SENKRON YOLU YAZILDI** (§13 · Faz 3, `d17aa8a`) — tetikleyici
+`UpdateProduct` → `VariantPriceChanged` olayı → `VariantPriceChangedConsumer`
+(fan-out) → `PRICE_PUSH` → `PushPrices` (kuyruk `price:high`). Gruplama
+`PriceBatchBuilder`'da. `DetectStuckSyncOperations` artık PRICE'ı da
+kurtarır; kurtarmadığı `MEDIA_PUSH` (o yol hiç yazılmadı).
 
 **FAZ 2 KAPANDI.** `TrendyolAdapter`'ın istemci/kimlik/hız sınırı,
 taksonomi, katalog aktarımı, onay durumu, stok/fiyat itme ve **sipariş
@@ -795,12 +823,12 @@ kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
 Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
-**Faz 3 sürüyor** (güvenilirlik). ÜÇ madde kapandı:
-`UpdateOrderSnapshot` + `UpdateFulfillment`, **`PruneApiCalls`** ve
-**`RequestResync` + T10**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1
-testi kalmadı.** **Sıradaki: fiyat senkron yolu (`PushPrices`)** —
-adapter gövdeleri hazır, çekirdekte çağıranı yok; tetikleyici de bu
-maddenin parçası. Faz 4 abonelik/ödeme hâlâ hafta 21–25'tir ve şimdi
+**Faz 3 sürüyor** (güvenilirlik). DÖRT madde kapandı:
+`UpdateOrderSnapshot` + `UpdateFulfillment`, **`PruneApiCalls`**,
+**`RequestResync` + T10** ve **fiyat senkron yolu**. **P0/P1'in tamamı
+yeşil; yazılmamış P0/P1 testi kalmadı.** **Sıradaki: ılık/soğuk mutabakat
+katmanları (§10)** — Faz 3'ün son maddesi; kapsam/frekans/bütçe için
+DOKÜMANA bakılır. Faz 4 abonelik/ödeme hâlâ hafta 21–25'tir ve şimdi
 yazılmamalı.
 
 **YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
