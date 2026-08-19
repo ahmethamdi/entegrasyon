@@ -28,3 +28,8 @@ Thumbs.db
 
 # Playwright CLI oturum artıkları (tarayıcı doğrulaması)
 /.playwright-cli
+
+# Claude Code'un oturum başına ürettiği yerel izin ayarları.
+# Projeye ait bir yapılandırma DEĞİL: geliştiricinin o oturumda onayladığı
+# kabuk komutlarından oluşuyor ve makineden makineye değişir.
+/.claude
