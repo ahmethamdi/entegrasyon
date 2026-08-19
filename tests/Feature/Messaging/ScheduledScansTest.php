@@ -50,6 +50,10 @@ final class ScheduledScansTest extends TestCase
             // bu turla gelir. Zamanlanmazsa hiçbir Trendyol siparişi
             // alınmaz ve eksiklik panelde "sipariş yok" gibi görünür.
             'orders:poll',
+            // §13 · Faz 3 — api_calls saklama. Zamanlanmazsa `expires_at`
+            // yalnızca bir niyet olarak kalır ve en çok yazılan tablo
+            // sınırsız büyür.
+            'api-calls:prune',
         ] as $command) {
             $this->assertContains(
                 $command,
@@ -83,6 +87,11 @@ final class ScheduledScansTest extends TestCase
         // TEK giriş yolu budur; dakikalık koşmak kotayı beş katına çıkarır
         // ve düşük seviyeli satıcıyı 429'a sokardı.
         $this->assertSame('*/5 * * * *', $commands['orders:poll']);
+
+        // api_calls saklama: GÜNLÜK, 04:00. Saklama süreleri gün
+        // ölçeğindedir; saatlik koşmak aynı işi 24 kez yapar. 03:00
+        // taksonomi turudur, ikisi üst üste binmez.
+        $this->assertSame('0 4 * * *', $commands['api-calls:prune']);
     }
 
     /**
@@ -98,7 +107,11 @@ final class ScheduledScansTest extends TestCase
     public function scans_do_not_overlap(): void
     {
         foreach ($this->scheduledEvents() as $event) {
-            if (! str_contains((string) $event->command, 'detect')) {
+            // prune DE bu listede: tur başına üst sınıra dayanan bir saklama
+            // turu uzun sürer ve ikinci kopya aynı satırları seçmeye
+            // çalışırdı (aynı işi iki kez, boşa dönen DELETE'lerle).
+            if (! str_contains((string) $event->command, 'detect')
+                && ! str_contains((string) $event->command, 'prune')) {
                 continue;
             }
 
@@ -129,6 +142,7 @@ final class ScheduledScansTest extends TestCase
             'outbox:detect-unconsumed',
             'reconcile:hot',
             'orders:poll',
+            'api-calls:prune',
         ] as $command) {
             $this->assertContains(
                 $command,

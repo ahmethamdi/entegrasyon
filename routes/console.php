@@ -105,3 +105,22 @@ Schedule::command('orders:poll')
     ->everyFiveMinutes()
     ->onOneServer()
     ->withoutOverlapping();
+
+// §13 · Faz 3 · api_calls SAKLAMA — GÜNLÜK, gece 04:00.
+//
+// api_calls en çok yazılan tablodur ve `expires_at` ilk günden beri
+// doldurulur (2xx +7 gün, 4xx/5xx +90 gün) — ama silen bir şey olmadan o
+// alan yalnızca bir NİYETTİR ve tablo sınırsız büyür.
+//
+// GÜNLÜK YETER: saklama süreleri gün ölçeğindedir, saatlik koşmak aynı işi
+// 24 kez yapıp hiçbir şey kazandırmaz. 04:00 seçildi — taksonomi turu
+// 03:00'te bitiyor ve ikisi aynı bakım penceresinde üst üste binmiyor;
+// satış trafiği de en düşük.
+//
+// Tur başına üst sınır var (§ PruneApiCalls): birikim tek turda erimezse
+// kalanı yarın gider. withoutOverlapping bu yüzden zorunlu — sınıra dayanan
+// bir tur uzun sürer ve ikinci kopya aynı satırları seçmeye çalışırdı.
+Schedule::command('api-calls:prune')
+    ->dailyAt('04:00')
+    ->onOneServer()
+    ->withoutOverlapping();
