@@ -13,6 +13,7 @@ use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\SyncFailureController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -109,6 +110,24 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     // belirleyen tek ekran budur.
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])
         ->name('reconciliation.index');
+
+    // Ölü mektup ekranı (§12 · adım 4 ve 5, §13 · Faz 3 · madde 3+4).
+    // İlk üç adım (operasyon `dead`, sync state `error_*`, `failed_jobs`)
+    // zaten çalışıyordu; eksik olan panel ve butondu. Onlar olmadan ölü
+    // satır SONSUZA KADAR ölü kalır: `error_permanent` mutabakatta asla
+    // aday değildir ve o satıra başka hiçbir mekanizma dokunmaz.
+    //
+    // Yeniden deneme POST'tur: yan etkisi var (outbox olayı ve yeni
+    // operasyon üretir) ve GET olsaydı tarayıcı ön yüklemesi kullanıcı
+    // adına tüm başarısız işlemleri yeniden kuyruğa alırdı.
+    //
+    // ROTA MODEL BAĞLAMASI KULLANILMAZ: `SubstituteBindings` `tenant` ara
+    // katmanından ÖNCE çalışır ve sorgu bağlamsız atılırdı. Kimlik gövdede
+    // `string` taşınır ve kontrolcüde kiracı scope'u altında aranır.
+    Route::get('/failures', [SyncFailureController::class, 'index'])
+        ->name('failures.index');
+    Route::post('/failures/retry', [SyncFailureController::class, 'retry'])
+        ->name('failures.retry');
 });
 
 Route::post('/logout', [SessionController::class, 'destroy'])

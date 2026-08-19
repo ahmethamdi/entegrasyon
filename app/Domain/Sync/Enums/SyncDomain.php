@@ -31,6 +31,30 @@ enum SyncDomain: string
         };
     }
 
+    /**
+     * Operasyon türünden alanı geri okur — `operationType()`'ın tersi.
+     *
+     * `sync_operations`'ta `domain` KOLONU YOKTUR; alan yalnızca
+     * `operation_type` içinde yaşar. Ölü bir operasyonu yeniden denerken
+     * domain'in oradan okunması ZORUNLUDUR: sabit `INVENTORY` yazılsaydı
+     * ölü bir `PRICE_PUSH` için stok senkronu açılır, fiyat HİÇ gitmez ve
+     * kullanıcı butona bastığı hâlde sorunun çözülmediğini görürdü.
+     *
+     * Tanınmayan tür NULL döner — istisna fırlatmaz. Çağıran (panel)
+     * bunu "yeniden denenemez" diye ele alır; sessizce bir domain
+     * seçmek yanlış alanı senkronlardı.
+     */
+    public static function fromOperationType(string $operationType): ?self
+    {
+        foreach (self::cases() as $domain) {
+            if ($domain->operationType() === $operationType) {
+                return $domain;
+            }
+        }
+
+        return null;
+    }
+
     /** İdempotency anahtarının alan öneki. */
     public function keyPrefix(): string
     {

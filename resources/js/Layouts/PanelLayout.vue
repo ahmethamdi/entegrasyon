@@ -12,6 +12,7 @@ const nav = [
     { href: '/orders', label: 'Siparişler' },
     { href: '/inventory', label: 'Stok' },
     { href: '/reconciliation', label: 'Mutabakat' },
+    { href: '/failures', label: 'Hatalar' },
     { href: '/channels', label: 'Kanallar' },
     { href: '/mappings', label: 'Eşleştirme' },
 ];
