@@ -1,7 +1,8 @@
-# Devir Notu — 19 Ağustos 2026 (Faz 3 sürüyor · Faz 4'ten iki madde)
+# Devir Notu — 20 Ağustos 2026 (Faz 3'te 4/5 · Faz 4'ten iki madde)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz (`8e27913`). Faz 3'te
-TEK madde kaldı — ayrıntı "SIRADAKİ İŞ" bölümünde.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz ve **push edilmiş**
+(`860c40b`). Faz 3'te TEK çekirdek madde kaldı — ayrıntı "SIRADAKİ İŞ"
+bölümünde.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
