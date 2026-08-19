@@ -1,5 +1,9 @@
 # Devir Notu — 19 Ağustos 2026 (Faz 3 sürüyor · Faz 4'ten iki madde)
 
+**BU SOHBET UZADIĞI İÇİN DEVREDİLDİ.** Kod tarafında yarım iş YOK;
+çalışma ağacı temiz ve her şey push edilmiş (`d709262`). Sıradaki
+madde SEÇİLDİ ama başlanmadı — ayrıntı "SIRADAKİ İŞ" bölümünde.
+
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ## ÖNCE BUNU OKU — ÖNCEKİ DEVİR NOTU YANLIŞTI
@@ -38,19 +42,67 @@ docker compose exec app php artisan test      # 634 yeşil olmalı
 | 4 | Ölü mektup ekranı, bağlantı sağlığı, fazla satış ekranı | 10 | fazla satış VAR, **ölü mektup ekranı YOK** |
 | 5 | Toplu içe aktarma (Excel/CSV) + kanaldan ürün çekme | 14 | **CSV BİTTİ**, kanaldan çekme YOK |
 
-**Sıradaki iş — KULLANICIYA SOR.** Aralarında teknik bağımlılık yok:
+## SIRADAKİ İŞ — KULLANICI SEÇTİ, HENÜZ BAŞLANMADI
 
-1. **Ölü mektup + senkron geçmişi ekranı** (madde 3+4, ~24 sa) —
-   `RequestResync` çekirdekte HAZIR, sadece buton yok. Destek yükünü
-   düşüren ekranlar (§17: "destek yükünü belirleyen tek ekran").
-2. **Metrikler + alarm** (madde 2, 16 sa) — §17 "ölçülmeyen güvenilirlik
+**ÖLÜ MEKTUP EKRANI + TEK TIKLA YENİDEN DENEME** (Faz 3 · madde 3+4).
+Kullanıcı 19 Ağustos'ta bu maddeyi seçti; sohbet uzadığı için iş
+başlamadan devredildi. **Hiçbir kod yazılmadı, çalışma ağacı temiz.**
+
+### Bu turda çıkarılan hazırlık bulguları (tekrar araştırma yapma)
+
+**Doküman §12 · Dead letter — beş adım:**
+```
+1. sync_operations.status = 'dead'
+2. listing_sync_states.status = error_transient | error_permanent
+3. Laravel failed_jobs tablosunda tam yük
+4. Panelde "Başarısız işlemler" ekranında görünür        ← YAZILACAK
+5. Kullanıcı TEK TIKLA yeniden deneyebilir               ← YAZILACAK
+```
+İlk üç adım ZATEN ÇALIŞIYOR. Eksik olan yalnızca ekran ve buton.
+
+**`RequestResync` ÇEKİRDEKTE HAZIR** (`Sync/Actions/RequestResync.php`)
+ve butonun çağıracağı tek şey odur. İmza:
+`run(Listing $listing, SyncDomain $domain, string $reason): OutboxEvent`.
+Sebep sabiti: `RequestResync::REASON_MANUAL_RETRY`.
+
+**KRİTİK KURAL — durum yazmak YETMEZ.** Butonun
+`sync_operations.status = 'pending'` yazması YANLIŞTIR: kanonik veri
+değişmediği için kimse o operasyonu yeniden dispatch etmez ve satır
+sonsuza kadar bekler (§9 · Karar 18). `RequestResync` aynı transaction'da
+`ListingResyncRequested` olayı yazar — asıl iş odur.
+
+**ESKİ ÖLÜ OPERASYON `dead` KALMALI.** Yeniden deneme YENİ operasyon
+açar (REPAIR niyetiyle); eskisini `pending`'e çevirmek "bu satır beş kez
+denendi ve öldü" denetim izini siler.
+
+**ŞEMA NOTLARI** (tinker'da doğrulandı):
+- `sync_operations`'ta **`listing_id` ve `domain` kolonu YOK.** Listing
+  kimliği `entity_id`'de (`entity_type = 'listing'`), domain ise
+  `operation_type`'ta (`INVENTORY_PUSH` / `PRICE_PUSH` / `CONTENT_PUSH` /
+  `MEDIA_PUSH`).
+- `SyncDomain::operationType()` domain → tip çevirir; **ters yön METODU
+  YOK**, yazılması gerekecek. Domain sabit `INVENTORY` yazılırsa ölü bir
+  `PRICE_PUSH` için stok senkronu açılır ve fiyat hiç gitmez.
+- `SyncOperationStatus` case'leri: `pending` · `retrying` · `completed` ·
+  `superseded` · **`dead`** (`FAILED` YOK).
+- Hata sınıfı `last_error_class` kolonunda; ekranda GÖSTERİLMELİ çünkü
+  `AUTHENTICATION` (anahtar yenile) ile `VALIDATION` (ürün verisini
+  düzelt) kullanıcıya farklı iş yaptırır.
+
+**Rota adı önerisi:** `GET /failures` + `POST /failures/retry`. Rota
+model bağlaması KULLANILMAZ (kiracı ara katmanından önce çalışır);
+kimlik `string` alınır ve kontrolcüde kiracı scope'u altında aranır.
+
+### Sonra gelenler (sıra kullanıcının)
+
+1. **Metrikler + alarm** (madde 2, 16 sa) — §17 "ölçülmeyen güvenilirlik
    iddia edilemez" diyor; sistem çalışıyor ama ne kadar iyi çalıştığı
    görünmüyor.
-3. **Kanaldan ürün çekme** (madde 5'in kalanı) — Woo'da `fetchListing`
+2. **Kanaldan ürün çekme** (madde 5'in kalanı) — Woo'da `fetchListing`
    TEK ürün okuyor, toplu listeleme yeteneği YOK ve Trendyol'da hiç
    yazılmamış. §7'ye yeni yetenek arayüzü gerekebilir: MİMARİ karar,
    dokümana bakılmadan yapılmaz.
-4. **Faz 4'ün kalanı**: panel cilası · onay durumu ekranı ·
+3. **Faz 4'ün kalanı**: panel cilası · onay durumu ekranı ·
    abonelik/ödeme (90 sa'lık fazın 70 saati).
 
 **EKRAN İŞİ ÇIKARSA TARAYICIDA DOĞRULA** — bu kural iki turdur
