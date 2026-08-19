@@ -1,4 +1,4 @@
-# Devir Notu — 19 Ağustos 2026 (Faz 3 · üç madde bitti)
+# Devir Notu — 19 Ağustos 2026 (Faz 3 · dört madde bitti)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -9,37 +9,38 @@ docker compose up -d
 docker compose exec app php artisan test      # 564 yeşil olmalı
 ```
 
-**Sıradaki iş: Faz 3 · madde 3 — FİYAT SENKRON YOLU (`PushPrices`).**
+**Sıradaki iş: Faz 3 · madde 4 — ILIK/SOĞUK MUTABAKAT KATMANLARI (§10).**
+**Faz 3'ün SON maddesi.**
 
-`pushPrices` gövdeleri (Woo VE Trendyol) HAZIR ama **çekirdekte çağıranı
-YOK**: `SyncDomain::PRICE` ve `PRICE_PUSH` şemada/enum'da var, fiyat
-operasyonu açan ya da dispatch eden hiçbir kod yok. `PushInventory`'nin
-fiyat karşılığı hiç yazılmamış — yani iki adapter'ın da `pushPrices`
-gövdesi bugün ULAŞILAMAZ.
+Sıcak katman çalışıyor: `reconcile:hot` (5 dakikalık), `CandidateSelector`
+DÖRT ayrı aday sorgusu (recently_sold 100 / previous_error 90 /
+stale_sync 80 / drift_detected 70), `ReconcileConnection` beş adım
+(DETECT/RECORD/CLASSIFY/REPAIR/VERIFY), bağlantı başına en fazla 50 listing.
+§10'un bütçe tablosunda **iki katman daha** var ve ikisi de yazılmadı.
 
-Yapılacak: `PushPrices` işi (`Sync/Jobs/`) + fiyat operasyonunu açan yol.
-`PushInventory` birebir örnek: koruma katmanı (rate limiter + circuit
-breaker), `SyncResultRecorder`, boş yükte deneme AÇILMAZ, kiracı bağlamı
-yükte taşınır ve `handle()` başında kurulur.
+**ÖNCE DOKÜMANA BAK** (§10 · bütçe tablosu): kapsam, frekans ve bağlantı
+başına listing bütçesi orada tanımlı — buradan tahmin etme. PDF
+`~/Desktop/Entegrasyon-Mimari-v2.2.pdf`; `pdftotext -layout` ile metne
+çevirip `grep -n "ılık\|soğuk\|katman"` ile bul.
 
-Dört şeye dikkat: (a) fiyatın tetikleyicisi ne olacak — stok gibi outbox
-olayı mı, panelden düzenleme mi? `UpdateProduct` fiyat değiştiğinde bugün
-outbox olayı YAZMIYOR, o yüzden **tetikleyici de bu maddenin parçası**;
-(b) `DetectStuckSyncOperations` yalnızca `INVENTORY_PUSH` için iş atıyor,
-`PRICE_PUSH` dalı oraya EKLENMELİ yoksa kurtarma taraması fiyatı hiç
-kurtarmaz; (c) `PricePushBatch` değer nesnesi zaten var
-(`Sync/Support/`); (d) yeni kuyruk işi `JobSerializationTest`'e eklenmeli.
+Beklenen biçim: aynı `ReconcileConnection` beş adımı YENİDEN KULLANILIR,
+değişen şey **aday seçimi** ve **bütçe**. Yeni komut(lar) `bootstrap/app.php`
+kaydı + `routes/console.php` zamanlaması ister — İKİSİ AYRI koşul ve
+`ScheduledScansTest` ikisini ayrı ayrı doğrular.
 
-**Panel işine GİRME** (çalışma sırası kararı). Dokümanın Faz 2/Faz 3
-listelerinde bu madde ayrıca YOK ama gerçek bir eksik — devir notunun
-yol haritasında 3. sırada.
+Dikkat edilecek §10 kuralları: `error_permanent` ASLA aday değildir ·
+karşılaştırma `max(available, 0)` ile yapılır (ham kanonik değerle
+yapılsaydı her fazla satış kalıcı sürüklenme sayılır ve SONSUZ ONARIM
+DÖNGÜSÜ doğardı) · onarım sürüm kapısını ATLAR ve `desired_version`'ı
+ARTIRMAZ · doğrulama AYRI turda · uzak durum TOPLU okunur ·
+`REMOTE_MISSING` ve `REMOTE_UNREACHABLE` otomatik onarım AÇMAZ.
+
+**Panel işine GİRME** (çalışma sırası kararı) — mutabakat panel ekranı
+Faz 4'te listeli. Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay)
+SIRAYA KONDU ama **Faz 3 + Faz 4 bitmeden başlanmıyor** — ayrıntı aşağıda.
 
 Yazdıktan sonra **GERÇEK çalıştır** — bu projede her tur ölümcül hata
 yeşil testlerin altından çıktı.
-
-Panel işine GİRME (çalışma sırası kararı). Yeni pazaryerleri (Hepsiburada,
-Amazon, Etsy, eBay) SIRAYA KONDU ama **Faz 3 + Faz 4 bitmeden
-başlanmıyor** — ayrıntı aşağıda.
 
 ## Tek cümlede durum
 
