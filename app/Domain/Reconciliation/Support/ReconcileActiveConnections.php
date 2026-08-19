@@ -6,6 +6,7 @@ namespace App\Domain\Reconciliation\Support;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Reconciliation\Actions\ReconcileConnection;
+use App\Domain\Reconciliation\Enums\ReconciliationScope;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -38,10 +39,13 @@ final class ReconcileActiveConnections
     ) {}
 
     /**
+     * @param  int|null  $budget  null → katmanın kendi bütçesi (§10 tablosu)
      * @return int İşlenen bağlantı sayısı
      */
-    public function sweep(string $scope = 'hot', int $budget = 50): int
-    {
+    public function sweep(
+        ReconciliationScope $scope = ReconciliationScope::HOT,
+        ?int $budget = null,
+    ): int {
         // Bağlantı listesi sistem bağlamında okunur; işlem kiracı
         // bağlamında yapılır.
         $connections = TenantContext::runAsSystem(
@@ -81,7 +85,7 @@ final class ReconcileActiveConnections
                 Log::warning('reconciliation.connection_failed', [
                     'connection' => $connection->id,
                     'tenant' => $connection->tenant_id,
-                    'scope' => $scope,
+                    'scope' => $scope->value,
                     'error' => $e->getMessage(),
                 ]);
             }

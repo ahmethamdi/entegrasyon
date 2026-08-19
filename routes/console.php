@@ -67,6 +67,39 @@ Schedule::command('reconcile:hot')
     ->onOneServer()
     ->withoutOverlapping();
 
+// §10 · ILIK KATMAN — SAATLİK, geniş kapsam.
+//
+// Sıcak katmanın DAR penceresine sığmayanı toplar: son 24 saatte satılmış
+// ama son 30 dakikada satmamış listing, ve 24 saattir bekleyen iş. Bütçe
+// altı katı (300), çünkü kapsam da geniş.
+//
+// SICAK KATMANLA AYNI EŞİKLERİ KULLANSAYDI HİÇBİR ŞEY EKLEMEZDİ: 300'lük
+// bütçesini sıcak turun her beş dakikada bir zaten baktığı satırlarla
+// doldururdu.
+Schedule::command('reconcile:warm')
+    ->hourly()
+    ->onOneServer()
+    ->withoutOverlapping();
+
+// §10 · SOĞUK KATMAN — GÜNLÜK, örneklemeli uzun kuyruk.
+//
+// TETİKLEYİCİSİ OLMAYAN SÜRÜKLENMEYİ YAKALAYAN TEK KATMAN. Sıcak ve ılık
+// katmanların dört sebep sorgusu bir OLAY arar (taze satış, geçici hata,
+// bekleyen iş, sürüklenme geçmişi); satmayan ve hata almamış bir listing
+// kanal panelinden elle değiştirildiğinde o dört sorgunun hiçbirine
+// takılmaz. Örneklem `last_observed_at NULLS FIRST` sırasıyla ilerler, yani
+// hiç bakılmamış satır BAŞA gelir ve her satıra sırayla gelinmesi garanti
+// edilir.
+//
+// GÜNLÜK VE 05:00: bütçe zaten oransal (aktif listing'lerin %2'si) ve uzun
+// kuyruk tanımı gereği yavaş değişir; saatlik koşmak aynı satırları
+// gereksizce yeniden okurdu. 03:00 taksonomi, 04:00 api_calls saklama —
+// üçü aynı bakım penceresinde üst üste binmiyor.
+Schedule::command('reconcile:cold')
+    ->dailyAt('05:00')
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // §13 · Faz 2 · TAKSONOMİ — kanal kategori ağacı.
 //
 // GÜNLÜK, SAATLİK DEĞİL: kategori ağacı sık değişmez ve 30 bin satırlık bir

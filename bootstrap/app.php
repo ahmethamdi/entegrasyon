@@ -8,7 +8,9 @@ use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
 use App\Domain\Orders\Console\PollChannelOrdersCommand;
+use App\Domain\Reconciliation\Console\ReconcileColdCommand;
 use App\Domain\Reconciliation\Console\ReconcileHotCommand;
+use App\Domain\Reconciliation\Console\ReconcileWarmCommand;
 use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
 use App\Http\Middleware\EstablishTenantContext;
@@ -41,8 +43,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // hiç çalışmaz (ScheduledScansTest bu ikisini ayrı ayrı doğrular).
         DetectUnconsumedEventsCommand::class,
         DetectStuckSyncOperationsCommand::class,
-        // §10 · mutabakat. Zamanlaması routes/console.php içinde.
+        // §10 · mutabakatın ÜÇ KATMANI — ayrı komutlar, ayrı frekanslar.
+        // Zamanlamaları routes/console.php içinde.
         ReconcileHotCommand::class,
+        ReconcileWarmCommand::class,
+        ReconcileColdCommand::class,
         // §13 · Faz 2 · taksonomi. Zamanlaması routes/console.php içinde.
         SyncTaxonomyCommand::class,
         // §13 · Faz 2 · onay durumu takibi. Zamanlaması routes/console.php.

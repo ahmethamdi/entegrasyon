@@ -10,9 +10,11 @@ use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Support\OutboundQuantity;
 use App\Domain\Reconciliation\Enums\ItemStatus;
+use App\Domain\Reconciliation\Enums\ReconciliationScope;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
 use App\Domain\Reconciliation\Models\ReconciliationRun;
 use App\Domain\Reconciliation\Support\CandidateSelector;
+use App\Domain\Reconciliation\Support\SampledCandidates;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
@@ -53,27 +55,31 @@ final class ReconcileConnection
 {
     public function __construct(
         private readonly CandidateSelector $candidates,
+        private readonly SampledCandidates $sampled,
         private readonly AdapterRegistry $registry,
         private readonly QueueRepair $queueRepair,
     ) {}
 
+    /**
+     * @param  int|null  $budget  null → katmanın kendi bütçesi (§10 tablosu)
+     */
     public function run(
         ChannelConnection $connection,
-        string $scope = 'hot',
-        int $budget = 50,
+        ReconciliationScope $scope = ReconciliationScope::HOT,
+        ?int $budget = null,
         string $triggerReason = 'scheduled',
     ): ReconciliationRun {
         $run = ReconciliationRun::query()->create([
             'tenant_id' => TenantContext::idOrFail(),
             'channel_connection_id' => $connection->id,
-            'scope' => $scope,
+            'scope' => $scope->value,
             'trigger_reason' => $triggerReason,
             'started_at' => now(),
             'status' => 'running',
         ]);
 
         // ── DETECT ────────────────────────────────────────────────────
-        $candidates = $this->candidates->for($connection, $budget);
+        $candidates = $this->selectCandidates($connection, $scope, $budget);
 
         $run->forceFill(['candidates_count' => count($candidates)])->save();
 
@@ -143,6 +149,48 @@ final class ReconcileConnection
     }
 
     // ---------------------------------------------------------------- iç
+
+    /**
+     * Katmana göre aday seçimi — §10'un üç katmanı arasındaki TEK fark.
+     *
+     * Beş adımlı akış (DETECT/RECORD/CLASSIFY/REPAIR/VERIFY) üç katmanda da
+     * AYNIDIR; değişen yalnızca hangi satırların seçildiği ve kaç tanesinin
+     * okunduğudur. Akış katman başına kopyalansaydı üç kopya zamanla
+     * ayrışır ve örneğin `max(available, 0)` karşılaştırması birinde
+     * düzeltilip ötekilerde eski hâliyle kalırdı.
+     *
+     * SOĞUK KATMAN DÖRT SEBEP SORGUSUNU ÇALIŞTIRMAZ: kapsamı "rastgele
+     * örneklem — uzun kuyruk"tur ve tam olarak o dört sebebin hiçbirine
+     * takılmayan satırı arar. Dört sorgu burada da koşsaydı soğuk katman
+     * ılık katmanın günlük bir kopyası olurdu.
+     *
+     * SOĞUK BÜTÇE ORANSALDIR ve burada hesaplanır — çağıranın verdiği
+     * `$budget` yalnızca ÜST SINIRI belirler. Sabit 500 kullanılsaydı 50
+     * listing'i olan bir bağlantıda günlük tur katalogun TAMAMINI okur ve
+     * "tam katalog taraması hiçbir katmanda yok" kuralı sessizce
+     * çiğnenirdi.
+     *
+     * @return list<array{listing_id: string, reason: string, priority: int}>
+     */
+    private function selectCandidates(
+        ChannelConnection $connection,
+        ReconciliationScope $scope,
+        ?int $budget,
+    ): array {
+        $cap = $budget ?? $scope->budget();
+
+        if ($scope->usesReasonQueries()) {
+            return $this->candidates->for($connection, $cap, $scope);
+        }
+
+        return $this->sampled->for(
+            $connection,
+            $this->sampled->budgetFor(
+                activeListings: $this->sampled->activeListingCount($connection),
+                cap: $cap,
+            ),
+        );
+    }
 
     /**
      * Kanonik ile uzak durumu karşılaştırır ve kalemi yazar.

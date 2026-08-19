@@ -26,6 +26,8 @@ use Tests\TestCase;
  *   sync:detect-stuck          5 dakika   (seviye 2)
  *   outbox:detect-unconsumed  10 dakika   (seviye 1)
  *   reconcile:hot              5 dakika   (§10 · sıcak katman)
+ *   reconcile:warm             saatlik    (§10 · ılık katman)
+ *   reconcile:cold             günlük     (§10 · soğuk katman)
  *
  * outbox:relay BU LİSTEDE YOKTUR ve olmamalıdır: o bir kuyruk işi veya
  * zamanlanmış komut değil, supervisor altında sürekli çalışan bir süreçtir.
@@ -46,6 +48,12 @@ final class ScheduledScansTest extends TestCase
             'sync:detect-stuck',
             'outbox:detect-unconsumed',
             'reconcile:hot',
+            // §10 · diğer İKİ katman. Zamanlanmazlarsa sıcak katmanın dar
+            // penceresine sığmayan sürüklenme (ılık) ve hiçbir
+            // tetikleyicisi olmayan sürüklenme (soğuk) ASLA görülmez —
+            // ikisi de kod incelemesinde kusursuz görünür.
+            'reconcile:warm',
+            'reconcile:cold',
             // §13 · Faz 2 — Trendyol webhook GÖNDERMEZ; sipariş yalnızca
             // bu turla gelir. Zamanlanmazsa hiçbir Trendyol siparişi
             // alınmaz ve eksiklik panelde "sipariş yok" gibi görünür.
@@ -80,6 +88,18 @@ final class ScheduledScansTest extends TestCase
         // edilirse o kadar çok yanlış stokla satış yapılır.
         $this->assertSame('*/5 * * * *', $commands['reconcile:hot']);
 
+        // §10 · ılık katman SAATLİK. Beş dakikalık olsaydı 300'lük
+        // bütçesiyle sıcak katmanın işini altı kat pahalıya tekrar eder,
+        // günlük olsaydı 24 saatlik penceresi kendi frekansına eşitlenir ve
+        // pencere dışına düşen satışlar hiç görülmezdi.
+        $this->assertSame('0 * * * *', $commands['reconcile:warm']);
+
+        // §10 · soğuk katman GÜNLÜK, 05:00. Uzun kuyruk tanımı gereği yavaş
+        // değişir ve bütçe zaten oransaldır; saatlik koşmak aynı satırları
+        // gereksizce yeniden okurdu. 03:00 taksonomi, 04:00 api_calls —
+        // üçü aynı bakım penceresinde üst üste binmiyor.
+        $this->assertSame('0 5 * * *', $commands['reconcile:cold']);
+
         // Gelen hat kurtarması: dakikalık. Kaybedilen şey SİPARİŞTİR.
         $this->assertSame('* * * * *', $commands['inbox:recover']);
 
@@ -110,8 +130,15 @@ final class ScheduledScansTest extends TestCase
             // prune DE bu listede: tur başına üst sınıra dayanan bir saklama
             // turu uzun sürer ve ikinci kopya aynı satırları seçmeye
             // çalışırdı (aynı işi iki kez, boşa dönen DELETE'lerle).
+            //
+            // reconcile DE bu listede ve gerekçesi daha ağır: mutabakat
+            // turu ağ çağrısı yapar ve üç katmanın üçü de uzun sürebilir.
+            // İki kopya aynı adayları seçer, aynı listing'i İKİ KEZ okur
+            // (kanal kotasını iki katına çıkarır) ve aynı sürüklenme için
+            // iki kalem yazardı.
             if (! str_contains((string) $event->command, 'detect')
-                && ! str_contains((string) $event->command, 'prune')) {
+                && ! str_contains((string) $event->command, 'prune')
+                && ! str_contains((string) $event->command, 'reconcile')) {
                 continue;
             }
 
@@ -141,6 +168,8 @@ final class ScheduledScansTest extends TestCase
             'sync:detect-stuck',
             'outbox:detect-unconsumed',
             'reconcile:hot',
+            'reconcile:warm',
+            'reconcile:cold',
             'orders:poll',
             'api-calls:prune',
         ] as $command) {
@@ -158,6 +187,13 @@ final class ScheduledScansTest extends TestCase
     {
         $this->artisan('outbox:detect-unconsumed')->assertSuccessful();
         $this->artisan('sync:detect-stuck')->assertSuccessful();
+
+        // §10 · üç katman da gerçekten koşabilmeli. Bir komut yalnızca
+        // KAYITLI olabilir ve ilk `handle()` satırında patlayabilir; kayıt
+        // testi bunu görmez.
+        $this->artisan('reconcile:hot')->assertSuccessful();
+        $this->artisan('reconcile:warm')->assertSuccessful();
+        $this->artisan('reconcile:cold')->assertSuccessful();
     }
 
     /**

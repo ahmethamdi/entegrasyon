@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Reconciliation\Support;
 
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Reconciliation\Enums\ReconciliationScope;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,17 @@ use Illuminate\Support\Facades\DB;
  * Mutabakat adaylarını seçer — her sebep AYRI sorgu.
  *
  * Mimari Karar Dokümanı v2.2 · §10 · Aday seçimi.
+ *
+ * PENCERELER KATMANDAN GELİR (`ReconciliationScope`), SORGUYA GÖMÜLÜ
+ * DEĞİLDİR: sıcak katman son 30 dakikanın satışına ve bir saattir bekleyen
+ * işe bakar, ılık katman aynı sorgularla 24 saatlik pencerelere bakar.
+ * Gömülü olsaydı ılık katman bu dosyanın bir KOPYASI olarak yazılır ve iki
+ * kopya zamanla ayrışırdı — biri düzeltilir, öteki eski kuralı sessizce
+ * uygulamaya devam ederdi.
+ *
+ * SOĞUK KATMAN BURAYA HİÇ UĞRAMAZ: kapsamı "rastgele örneklem — uzun
+ * kuyruk"tur ve dört sebebin hiçbirine takılmayan satırı arar. Onun sorgusu
+ * `SampledCandidates` içindedir.
  *
  * DÖRT AYRI SORGU, TEK UNION DEĞİL: her sorgu kendi kısmi indeksini
  * kullanır (`movements_type_time_idx`, `sync_states_dirty_idx`,
@@ -51,29 +63,37 @@ final class CandidateSelector
     /**
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    public function for(ChannelConnection $connection, int $budget): array
-    {
+    public function for(
+        ChannelConnection $connection,
+        int $budget,
+        ReconciliationScope $scope = ReconciliationScope::HOT,
+    ): array {
         $tenantId = TenantContext::idOrFail();
 
         $found = [
-            ...$this->recentlySold($tenantId, $connection->id),
+            ...$this->recentlySold($tenantId, $connection->id, $scope),
             ...$this->previousError($tenantId, $connection->id),
-            ...$this->staleSync($tenantId, $connection->id),
-            ...$this->driftDetected($tenantId, $connection->id),
+            ...$this->staleSync($tenantId, $connection->id, $scope),
+            ...$this->driftDetected($tenantId, $connection->id, $scope),
         ];
 
         return $this->mergeByHighestPriority($found, $budget);
     }
 
     /**
-     * (1) Son 30 dakikada satış olan varyantlar.
+     * (1) Son X içinde satış olan varyantlar — pencere KATMANDAN gelir.
      *
      * En yüksek öncelik: satış olan satır hem en çok değişen hem de
      * sürüklenmesi en pahalı olandır (fazla satış riski).
      *
+     * Sıcak katman 30 dakika, ılık katman 24 saat (§10 · kapsam sütunu).
+     * Interval PARAMETRE OLARAK BAĞLANAMAZ (`interval ?` sözdizimi geçersiz);
+     * `?::interval` cast'i ile bağlanır — metni sorguya gömmek katman
+     * değerini SQL enjeksiyon yüzeyine taşırdı.
+     *
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    private function recentlySold(string $tenantId, string $connectionId): array
+    private function recentlySold(string $tenantId, string $connectionId, ReconciliationScope $scope): array
     {
         $rows = DB::select(<<<'SQL'
             SELECT DISTINCT l.id AS listing_id
@@ -83,12 +103,18 @@ final class CandidateSelector
                      ON s.listing_id = l.id AND s.domain = ?
              WHERE m.tenant_id = ?
                AND m.type = 'SALE'
-               AND m.occurred_at > clock_timestamp() - interval '30 minutes'
+               AND m.occurred_at > clock_timestamp() - ?::interval
                AND l.tenant_id = ?
                AND l.channel_connection_id = ?
                AND l.lifecycle_status = 'live'
                AND coalesce(s.status, 'pending') <> 'error_permanent'
-        SQL, [SyncDomain::INVENTORY->value, $tenantId, $tenantId, $connectionId]);
+        SQL, [
+            SyncDomain::INVENTORY->value,
+            $tenantId,
+            $scope->soldWithin(),
+            $tenantId,
+            $connectionId,
+        ]);
 
         return $this->label($rows, 'recently_sold');
     }
@@ -120,14 +146,19 @@ final class CandidateSelector
     }
 
     /**
-     * (3) Bekleyen ve takılmış senkronlar.
+     * (3) Bekleyen ve takılmış senkronlar — eşik KATMANDAN gelir.
      *
      * `is_dirty` ÜRETİLMİŞ KOLONDUR ve kısmi indeks onun üzerine kuruludur;
      * `desired_version > synced_version` yüklemi doğrudan indekslenemezdi.
      *
+     * EŞİK SICAKTA 1 SAAT, ILIKTA 24 SAATTİR ve bu fark bilinçlidir: sıcak
+     * katman bir saattir bekleyen satırı her beş dakikada bir zaten
+     * görüyor. Ilık katman aynı eşiği kullansaydı 300'lük bütçesini sıcak
+     * katmanın çoktan baktığı satırlarla doldurur ve HİÇBİR ŞEY EKLEMEZDİ.
+     *
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    private function staleSync(string $tenantId, string $connectionId): array
+    private function staleSync(string $tenantId, string $connectionId, ReconciliationScope $scope): array
     {
         $rows = DB::select(<<<'SQL'
             SELECT l.id AS listing_id
@@ -137,11 +168,17 @@ final class CandidateSelector
                AND s.domain = ?
                AND s.is_dirty
                AND s.status <> 'error_permanent'
-               AND s.last_requested_at < clock_timestamp() - interval '1 hour'
+               AND s.last_requested_at < clock_timestamp() - ?::interval
                AND l.tenant_id = ?
                AND l.channel_connection_id = ?
                AND l.lifecycle_status = 'live'
-        SQL, [$tenantId, SyncDomain::INVENTORY->value, $tenantId, $connectionId]);
+        SQL, [
+            $tenantId,
+            SyncDomain::INVENTORY->value,
+            $scope->pendingFor(),
+            $tenantId,
+            $connectionId,
+        ]);
 
         return $this->label($rows, 'stale_sync');
     }
@@ -155,7 +192,7 @@ final class CandidateSelector
      *
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    private function driftDetected(string $tenantId, string $connectionId): array
+    private function driftDetected(string $tenantId, string $connectionId, ReconciliationScope $scope): array
     {
         $rows = DB::select(<<<'SQL'
             SELECT DISTINCT l.id AS listing_id
@@ -165,12 +202,18 @@ final class CandidateSelector
                      ON s.listing_id = l.id AND s.domain = ?
              WHERE ri.tenant_id = ?
                AND ri.status IN ('REPAIR_QUEUED', 'DRIFT_DETECTED')
-               AND ri.checked_at > clock_timestamp() - interval '24 hours'
+               AND ri.checked_at > clock_timestamp() - ?::interval
                AND l.tenant_id = ?
                AND l.channel_connection_id = ?
                AND l.lifecycle_status = 'live'
                AND coalesce(s.status, 'pending') <> 'error_permanent'
-        SQL, [SyncDomain::INVENTORY->value, $tenantId, $tenantId, $connectionId]);
+        SQL, [
+            SyncDomain::INVENTORY->value,
+            $tenantId,
+            $scope->driftWithin(),
+            $tenantId,
+            $connectionId,
+        ]);
 
         return $this->label($rows, 'drift_detected');
     }

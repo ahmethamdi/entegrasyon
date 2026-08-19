@@ -16,6 +16,7 @@ use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Reconciliation\Actions\QueueRepair;
 use App\Domain\Reconciliation\Actions\ReconcileConnection;
+use App\Domain\Reconciliation\Enums\ReconciliationScope;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
 use App\Domain\Reconciliation\Models\ReconciliationRun;
 use App\Domain\Sync\Enums\SyncDomain;
@@ -607,7 +608,7 @@ final class ReconcileInventoryTest extends TestCase
     ): ReconciliationRun {
         return $this->asTenant($tenant, fn () => app(ReconcileConnection::class)->run(
             connection: $connection,
-            scope: 'hot',
+            scope: ReconciliationScope::HOT,
             budget: $budget,
         ));
     }
