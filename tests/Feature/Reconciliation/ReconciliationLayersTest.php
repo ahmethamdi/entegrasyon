@@ -825,11 +825,21 @@ final class ReconciliationLayersTest extends TestCase
         ));
     }
 
+    /**
+     * SON KALEM `id` ÜZERİNDEN SEÇİLİR, `checked_at` ÜZERİNDEN DEĞİL.
+     *
+     * `checked_at` SANİYE hassasiyetlidir; aynı testte arka arkaya koşan
+     * iki tur aynı damgayı taşır ve "son" belirsiz kalır. Bu, rastgele
+     * sıralı koşuda ARALIKLI düşüş üretti (`cold_layer_labels_every_
+     * candidate_as_sampled` beş turda bir kırmızıya döndü: sıcak turun
+     * kalemi soğuk turunkinden sonra gelmiş sayıldı). `id` UUIDv7'dir —
+     * zaman sıralı ve saniye içinde de ayırt edici.
+     */
     private function itemFor(Tenant $tenant, Listing $listing): ReconciliationItem
     {
         return $this->asTenant($tenant, fn () => ReconciliationItem::query()
             ->where('listing_id', $listing->id)
-            ->latest('checked_at')
+            ->orderByDesc('id')
             ->firstOrFail());
     }
 }

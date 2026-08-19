@@ -139,13 +139,19 @@ final class DashboardController extends Controller
     /**
      * Son senkron operasyonları — "ne oldu" sorusunun cevabı.
      *
+     * SIRALAMA `id` ÜZERİNDEN: `created_at` SANİYE hassasiyetlidir ve
+     * fan-out tek bir olaydan onlarca operasyonu AYNI SANİYEDE açar —
+     * o satırların sırası belirsiz kalır ve "son 15" her yenilemede
+     * farklı bir alt küme gösterebilirdi. `id` UUIDv7'dir: zaman sıralı
+     * ve saniye içinde de ayırt edici.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function recentOperations(): array
     {
         return SyncOperation::query()
             ->with('connection.channelType:code,name')
-            ->latest('created_at')
+            ->orderByDesc('id')
             ->limit(15)
             ->get()
             ->map(fn (SyncOperation $op): array => [

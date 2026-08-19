@@ -613,11 +613,16 @@ final class ReconcileInventoryTest extends TestCase
         ));
     }
 
+    /**
+     * SON KALEM `id` ÜZERİNDEN SEÇİLİR — `checked_at` SANİYE hassasiyetli
+     * ve aynı saniyede yazılan iki kalemde sıra belirsiz kalır. `id`
+     * UUIDv7'dir; zaman sıralı ve saniye içinde de ayırt edici.
+     */
     private function itemFor(Tenant $tenant, Listing $listing): ReconciliationItem
     {
         return $this->asTenant($tenant, fn () => ReconciliationItem::query()
             ->where('listing_id', $listing->id)
-            ->latest('checked_at')
+            ->orderByDesc('id')
             ->firstOrFail());
     }
 

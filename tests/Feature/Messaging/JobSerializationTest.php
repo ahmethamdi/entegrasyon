@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Messaging;
 
+use App\Domain\Catalog\Jobs\ImportProductsJob;
 use App\Domain\Messaging\Jobs\ConsumeOutboxEvent;
 use App\Domain\Messaging\Jobs\ProcessInboxMessage;
 use App\Domain\Sync\Jobs\PushInventory;
@@ -47,6 +48,7 @@ final class JobSerializationTest extends TestCase
             'PushInventory' => new PushInventory('operation-id', 'tenant-id'),
             'PushListing' => new PushListing('operation-id', 'tenant-id'),
             'PushPrices' => new PushPrices('operation-id', 'tenant-id'),
+            'ImportProductsJob' => new ImportProductsJob('tenant-id', 'import-id'),
         ];
     }
 

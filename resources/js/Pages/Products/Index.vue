@@ -45,12 +45,27 @@ function statusClass(status) {
                 </h1>
             </div>
 
-            <Link
-                href="/products/create"
-                class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
-            >
-                Ürün ekle
-            </Link>
+            <div class="flex items-center gap-2">
+                <!--
+                    Toplu içe aktarma ürün ekleme AKIŞININ YANINDA durur:
+                    satıcı "ürün ekle"ye bakarken 500 ürünü tek tek
+                    giremeyeceğini fark eder ve alternatifi tam orada
+                    görmeli.
+                -->
+                <Link
+                    href="/products/import"
+                    class="rounded border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                >
+                    Toplu içe aktar
+                </Link>
+
+                <Link
+                    href="/products/create"
+                    class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
+                >
+                    Ürün ekle
+                </Link>
+            </div>
         </div>
 
         <div

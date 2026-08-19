@@ -11,6 +11,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ReconciliationController;
 use Illuminate\Support\Facades\Route;
 
@@ -54,6 +55,19 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+
+    // Toplu içe aktarma (§13 · Faz 3). Yükleme dosyayı KAYDEDER ve
+    // `listing:bulk` kuyruğuna iş atar — istekte işlenseydi 500 satırlık
+    // dosya zaman aşımına uğrar, kullanıcı yeniler ve dosya İKİ KEZ
+    // işlenirdi.
+    //
+    // BU ROTA `/products/{product}/edit`'TEN ÖNCE GELİR: sonra gelseydi
+    // Laravel `import` kelimesini bir ürün kimliği sanar ve ekran 404
+    // verirdi.
+    Route::get('/products/import', [ProductImportController::class, 'index'])
+        ->name('products.import.index');
+    Route::post('/products/import', [ProductImportController::class, 'store'])
+        ->name('products.import.store');
     Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
 
