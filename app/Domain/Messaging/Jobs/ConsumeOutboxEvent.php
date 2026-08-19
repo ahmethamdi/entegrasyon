@@ -6,6 +6,7 @@ namespace App\Domain\Messaging\Jobs;
 
 use App\Domain\Messaging\Consumers\InventoryLevelChangedConsumer;
 use App\Domain\Messaging\Consumers\ListingResyncRequestedConsumer;
+use App\Domain\Messaging\Consumers\VariantPriceChangedConsumer;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Support\Tenancy\TenantAwareJob;
 use Illuminate\Support\Facades\Log;
@@ -59,6 +60,11 @@ final class ConsumeOutboxEvent extends TenantAwareJob
             // kullanıcının düzeltmesi hiçbir iş üretmez — durum pending
             // görünür ama kanala hiçbir şey gitmez.
             'ListingResyncRequested' => app(ListingResyncRequestedConsumer::class)->handle($event),
+
+            // §7 · fiyat senkronu. Bu dal olmadan fiyat olayı "tanınmayan
+            // tür" sayılır, sessizce consumed damgalanır ve panelden yapılan
+            // fiyat düzeltmesi kanala HİÇ gitmez.
+            'VariantPriceChanged' => app(VariantPriceChangedConsumer::class)->handle($event),
 
             // Tanınmayan olay türü consumed damgalanır: aksi halde seviye 1
             // bütünlük taraması onu sonsuza kadar yeniden yayınlardı.

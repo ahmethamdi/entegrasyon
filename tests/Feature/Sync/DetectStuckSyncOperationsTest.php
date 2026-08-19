@@ -302,10 +302,16 @@ final class DetectStuckSyncOperationsTest extends TestCase
     /**
      * Bilinmeyen operasyon türü için İŞ ATILMAZ, uyarı yazılır.
      *
-     * operation_type işin hangi sınıf olduğunu belirler. PRICE_PUSH için
-     * PushInventory atmak yanlış yükü gönderirdi; henüz yazılmamış bir iş
-     * türünü sessizce yutmak ise operasyonu sonsuza kadar takılı bırakırdı.
-     * Doğru davranış: bulundu olarak SAYMA ve gürültü çıkar.
+     * operation_type işin hangi sınıf olduğunu belirler. Yanlış iş atmak
+     * yanlış yükü gönderirdi; henüz yazılmamış bir iş türünü sessizce yutmak
+     * ise operasyonu sonsuza kadar takılı bırakırdı. Doğru davranış: bulundu
+     * olarak SAYMA ve gürültü çıkar.
+     *
+     * ÖRNEK MEDIA_PUSH'TUR, ARTIK PRICE_PUSH DEĞİL: fiyat yolu §13 · Faz 3'te
+     * yazıldı (`PushPrices`) ve tarama artık onu KURTARIR. Medya yolu ise
+     * gerçekten hiç yazılmadı — örneğin dürüst kalması için tür değiştirildi.
+     * Fiyat örneği bırakılsaydı test yeşil kalırdı ama sınadığı şey artık
+     * var olmayan bir davranış olurdu.
      */
     #[Test]
     public function unknown_operation_type_is_logged_not_dispatched(): void
@@ -316,14 +322,14 @@ final class DetectStuckSyncOperationsTest extends TestCase
 
         $this->asSystem(fn () => DB::table('sync_operations')
             ->where('id', $operation->id)
-            ->update(['operation_type' => 'PRICE_PUSH']));
+            ->update(['operation_type' => 'MEDIA_PUSH']));
 
         Log::shouldReceive('info')->zeroOrMoreTimes();
         Log::shouldReceive('warning')
             ->once()
             ->withArgs(fn (string $message, array $context): bool => $message === 'sync.stuck_operation_no_job'
                 && $context['operation'] === $operation->id
-                && $context['operation_type'] === 'PRICE_PUSH');
+                && $context['operation_type'] === 'MEDIA_PUSH');
 
         $found = $this->scan();
 

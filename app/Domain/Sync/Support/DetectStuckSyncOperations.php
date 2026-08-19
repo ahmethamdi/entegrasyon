@@ -6,6 +6,7 @@ namespace App\Domain\Sync\Support;
 
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Jobs\PushInventory;
+use App\Domain\Sync\Jobs\PushPrices;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -76,7 +77,20 @@ final class DetectStuckSyncOperations
             // atmak yanlış yükü gönderir; sessizce yutmak operasyonu
             // sonsuza kadar takılı bırakır. Doğru davranış: gürültü çıkar
             // ve kurtarılmış SAYMA.
-            if ($operation->operation_type !== SyncDomain::INVENTORY->operationType()) {
+            //
+            // CONTENT ve MEDIA burada YOK ve bu bilinçlidir: içerik gönderimi
+            // panelden açık bir eylemle başlar (`PublishListing`) ve
+            // kullanıcı sonucu ekranda görür; medya yolu ise hiç yazılmadı.
+            // Stok ve fiyat ise KENDİLİĞİNDEN akar — kaybolduklarında onları
+            // fark edecek bir kullanıcı yoktur, bu yüzden kurtarma tam olarak
+            // onlar için gerekir.
+            $job = match ($operation->operation_type) {
+                SyncDomain::INVENTORY->operationType() => [PushInventory::class, 'inventory:high'],
+                SyncDomain::PRICE->operationType() => [PushPrices::class, 'price:high'],
+                default => null,
+            };
+
+            if ($job === null) {
                 Log::warning('sync.stuck_operation_no_job', $context);
 
                 continue;
@@ -84,7 +98,9 @@ final class DetectStuckSyncOperations
 
             Log::info('sync.stuck_operation_redispatched', $context);
 
-            PushInventory::dispatch($operation->id, $operation->tenant_id)->onQueue('inventory:high');
+            [$jobClass, $queue] = $job;
+
+            $jobClass::dispatch($operation->id, $operation->tenant_id)->onQueue($queue);
 
             $redispatched[] = $operation->id;
         }

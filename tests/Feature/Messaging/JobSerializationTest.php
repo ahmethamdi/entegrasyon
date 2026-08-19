@@ -8,6 +8,7 @@ use App\Domain\Messaging\Jobs\ConsumeOutboxEvent;
 use App\Domain\Messaging\Jobs\ProcessInboxMessage;
 use App\Domain\Sync\Jobs\PushInventory;
 use App\Domain\Sync\Jobs\PushListing;
+use App\Domain\Sync\Jobs\PushPrices;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -45,6 +46,7 @@ final class JobSerializationTest extends TestCase
             'ProcessInboxMessage' => new ProcessInboxMessage('tenant-id', 'message-id'),
             'PushInventory' => new PushInventory('operation-id', 'tenant-id'),
             'PushListing' => new PushListing('operation-id', 'tenant-id'),
+            'PushPrices' => new PushPrices('operation-id', 'tenant-id'),
         ];
     }
 

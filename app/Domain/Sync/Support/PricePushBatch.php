@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Support;
 
+use App\Domain\Sync\Models\SyncOperation;
+
 /**
  * Kanala gönderilecek fiyat yükü.
  *
@@ -14,11 +16,29 @@ namespace App\Domain\Sync\Support;
  */
 final readonly class PricePushBatch
 {
-    /** @param list<array{listing_id: string, external_id: string, price: string, compare_at_price?: string|null, version: int}> $items */
+    /**
+     * @param  list<array{listing_id: string, external_id: string, price: string, compare_at_price?: string|null, version: int}>  $items
+     * @param  list<SyncOperation>  $operations  Yükte temsil edilen operasyonlar
+     */
     public function __construct(
         public string $channelConnectionId,
         public array $items,
+        private array $operations = [],
     ) {}
+
+    /**
+     * Bu yükün sonucunun yazılacağı operasyonlar.
+     *
+     * Yük kalem listesi taşır, sonuç OPERASYON'a yazılır: bir çağrının
+     * başarısı N operasyonun durumunu birden ilerletir ve `SyncResultRecorder`
+     * bu listeyi kullanır. Yükte OLMAYAN operasyona dokunulmaz.
+     *
+     * @return list<SyncOperation>
+     */
+    public function operations(): array
+    {
+        return $this->operations;
+    }
 
     public function count(): int
     {
