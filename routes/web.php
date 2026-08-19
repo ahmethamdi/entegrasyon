@@ -11,6 +11,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ReconciliationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -87,6 +88,13 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     // çözer; başka kiracının siparişi 404 verir.
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+
+    // Mutabakat ekranı (§13 · Faz 4 · panel, §10). SALT OKUNUR: sürüklenme
+    // tespiti ve onarımı zamanlanmış turların işidir ve panelden
+    // tetiklenmez. Ekranın işi GÖRÜNÜRLÜK — §17'ye göre destek yükünü
+    // belirleyen tek ekran budur.
+    Route::get('/reconciliation', [ReconciliationController::class, 'index'])
+        ->name('reconciliation.index');
 });
 
 Route::post('/logout', [SessionController::class, 'destroy'])
