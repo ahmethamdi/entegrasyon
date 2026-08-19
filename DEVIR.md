@@ -2,6 +2,34 @@
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
+## BURADAN DEVAM ET
+
+```bash
+docker compose up -d
+docker compose exec app php artisan test      # 532 yeşil olmalı
+```
+
+**Sıradaki iş: Faz 3 · madde 1 — `PruneApiCalls`.**
+
+`api_calls` her kanal çağrısında yazılıyor ve `expires_at` DOLDURULUYOR
+(2xx +7 gün, 4xx/5xx +90 gün) ama **silen hiçbir şey yok**: tablo
+sınırsız büyüyor. Yapılacak: `expires_at < now()` satırlarını silen bir
+tarama (`Support/` altında sade sınıf) + ince komut kabuğu + günlük
+zamanlama.
+
+Üç şeye dikkat: (a) `Command::run()` REZERVE imzadır, mantık `Support/`
+altına; (b) komut `bootstrap/app.php` içinde AÇIKÇA kaydedilmeli VE
+`routes/console.php` içinde zamanlanmalı — ikisi ayrı koşul ve
+`ScheduledScansTest` ikisini ayrı doğruluyor; (c) silme toplu (chunk)
+yapılmalı, tek dev DELETE tabloyu kilitler.
+
+Yazdıktan sonra **komutu GERÇEK çalıştır** — bu projede her tur ölümcül
+hata yeşil testlerin altından çıktı.
+
+Panel işine GİRME (çalışma sırası kararı). Yeni pazaryerleri (Hepsiburada,
+Amazon, Etsy, eBay) SIRAYA KONDU ama **Faz 3 + Faz 4 bitmeden
+başlanmıyor** — ayrıntı aşağıda.
+
 ## Tek cümlede durum
 
 **Faz 2 kapandı, Faz 3 başladı.** İlk Faz 3 maddesi bitti:
