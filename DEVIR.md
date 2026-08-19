@@ -97,8 +97,9 @@ gönderme · `/orders` siparişler · `/inventory` stok · `/channels` kanallar 
 
 **Kullanıcının açık talimatı:** "front'una en son bakarız, bir her şeyi
 bitirelim." Yeni sohbette **panel/görsel işlere girme**. Panel cilası zaten
-§13 · Faz 4'te listeli. Bu turda da yeni ekran yazılmadı — Faz 2'nin
-altı maddesinin hiçbiri panel işi içermedi.
+§13 · Faz 4'te listeli. Karar hâlâ yürürlükte: Faz 2'nin altı maddesinde
+de, Faz 3'ün ilk maddesinde de yeni ekran yazılmadı ve sıradaki Faz 3
+maddelerinin hiçbiri panel işi içermiyor.
 
 Bu, ekran işi ÇIKTIĞINDA tarayıcıda doğrulama kuralını iptal ETMEZ.
 
