@@ -1,4 +1,4 @@
-# Devir Notu — 18 Ağustos 2026 (Faz 3 · sipariş güncelleme ve kargo)
+# Devir Notu — 19 Ağustos 2026 (Faz 3 sürüyor + yeni pazaryeri sırası)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -106,28 +106,95 @@ Bu, ekran işi ÇIKTIĞINDA tarayıcıda doğrulama kuralını iptal ETMEZ.
 **Panelde bilerek ertelenenler:** mutabakat ekranı · `RequestResync` +
 T10 · onay durumu için ayrı ekran.
 
-## Sıradaki adım — FAZ 3 SÜRÜYOR
+## YOL HARİTASI — NE BİTTİ, NE KALDI (19 Ağustos 2026)
 
-Faz 3'ün ilk maddesi (`UpdateOrderSnapshot` + `UpdateFulfillment`)
-kapandı. Kalanlar, hiçbirinde panel işi yok:
+### Bitti
 
-1. **`PruneApiCalls`** (en küçük, en düşük risk) — `api_calls` her çağrıda
-   yazılıyor ve `expires_at` DOLDURULUYOR (2xx +7 gün, 4xx/5xx +90 gün)
-   ama **SİLEN yok**: tablo sınırsız büyüyor. Günlük bir komut + zamanlama
-   yeterli. `bootstrap/app.php` kaydı + `routes/console.php` zamanlaması
-   AYRI koşullar, `ScheduledScansTest` ikisini de doğrulasın.
-2. **`RequestResync` + T10** (§18 · P1) — `error_permanent → pending`
-   geçişi ve `ListingResyncRequested` olayı. `desired_version`
-   ARTIRILMAZ. Panel butonu ERTELENİR (çalışma sırası kararı).
-3. **Ilık/soğuk mutabakat katmanları** — sıcak katman yazıldı ve
-   çalışıyor; §10 bütçe tablosundaki diğer iki katman yok.
+**Çekirdek:** stok ledger'ı (`ApplyMovement`, `LockInventoryRows`), outbox
+relay + fan-out, adapter mimarisi (7 yetenek arayüzü), sipariş alımı,
+gelen hat (webhook → inbox → router), giden hat (`InventoryBatchBuilder`,
+`PushInventory`, `SyncResultRecorder`), koruma katmanı (`ChannelRateLimiter`,
+`CircuitBreaker`), ürün aktarımı (`PushListing`, `PublishListing`),
+§6 bütünlük taramaları (iki seviye), §10 mutabakat SICAK katmanı,
+ön koşul kapısı + onay takibi, sipariş yoklaması, sipariş güncelleme +
+kargo.
 
-**Çekirdekte kalan bilinen boşluk: fiyat senkron yolu.** `pushPrices`
-gövdeleri (Woo + Trendyol) hazır ama çağıranı yok — `PushInventory`'nin
-fiyat karşılığı yazılmamış. Dokümanın Faz 3 listesinde ayrıca yer
-almıyor ama gerçek bir eksik.
+**Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
+stok/fiyat itme, sipariş yoklaması).
 
-**Abonelik/ödeme Faz 4'tür** (hafta 21–25) — şimdi yazılmamalı.
+**Panel (8 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
+siparişler · sipariş ayrıntısı · stok · kanallar · eşleştirme.
+
+**Testler:** 532 yeşil (1919 assertion), 57 test dosyası. P0'dan
+T1/T2/T3/T4/T5/T6/T7/T8/T9/T11/T12 yeşil.
+
+### Kaldı — FAZ 3 (güvenilirlik), sırayla
+
+1. **`PruneApiCalls`** — `api_calls` sınırsız büyüyor; `expires_at`
+   DOLDURULUYOR ama silen yok. Günlük komut + zamanlama. `bootstrap/app.php`
+   kaydı ve `routes/console.php` zamanlaması AYRI koşullar.
+2. **`RequestResync` + T10** (§18 · P1) — `error_permanent → pending`,
+   `ListingResyncRequested` olayı, `desired_version` ARTMAZ. **T10 yazılmamış
+   tek P0/P1 testi.** Panel butonu ERTELENİR.
+3. **Fiyat senkron yolu** — `pushPrices` gövdeleri (Woo + Trendyol) HAZIR
+   ama çağıranı YOK: `PushInventory`'nin fiyat karşılığı yazılmamış.
+   Dokümanın Faz 3 listesinde ayrıca yok ama gerçek eksik.
+4. **Ilık/soğuk mutabakat katmanları** — sıcak katman çalışıyor; §10 bütçe
+   tablosundaki diğer iki katman yok.
+
+**Trendyol'da kapsam dışı bırakılanlar** (eksik DEĞİL): `delist`,
+`fetchListing`, `acknowledgeOrder` — kargo §14 gereği kapsam dışı.
+
+### Kaldı — FAZ 4 (panel + abonelik)
+
+- **Panel cilası** (§13 · Faz 4, 20 sa): boş durumlar, yükleniyor, mobil düzen.
+- **Mutabakat panel ekranı** — `reconciliation_items` yazılıyor, gösterilmiyor.
+- **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal ekranında var).
+- **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
+  alınmış, YAZILMADI ve şimdi yazılmamalı — kota neyi sınırladığını
+  senkron davranışından alır.
+
+### KULLANICI KARARI — YENİ PAZARYERLERİ (19 Ağustos 2026)
+
+**Kullanıcının açık talebi:** "sadece trendyol woocommerce shopify
+istemiyorum; hepsiburada, amazon, ebay, etsy gibi platformlar da olsun —
+ama önce bunları bitirelim, sadece sıraya koy."
+
+**Bu maddeler FAZ 3 VE FAZ 4 BİTTİKTEN SONRA ele alınır. Şimdi
+yazılmıyor.** Sıra (kullanıcı aksini söylemedikçe):
+
+1. **Hepsiburada** — TR pazarı, Trendyol'a en yakın model (taksonomi +
+   zorunlu öznitelik + onay süreci). Trendyol'un `ListingMapper` ·
+   `TaxonomyClient` · `TrackApprovalStatus` kalıbı doğrudan örnek olur;
+   en düşük riskli ikinci pazaryeri.
+2. **Amazon (SP-API)** — en büyük iş değeri, en yüksek karmaşıklık: LWA
+   OAuth + rate limit modeli farklı, feed tabanlı asenkron aktarım
+   (`submitFeed` → `getFeedResult` yoklaması), FBA/FBM ayrımı. Muhtemelen
+   §7'ye yeni bir yetenek arayüzü gerekir (feed durumu yoklama) — bu
+   MİMARİ bir karardır ve dokümana bakılmadan yapılmaz.
+3. **Etsy** — OAuth 2.0 + PKCE, taksonomi yerine "taxonomy_id" + shop
+   section modeli; envanter uç noktası varyant bazlı ve Woo'dan farklı.
+4. **eBay** — en farklı model: Inventory API (offer/inventory item ayrımı)
+   + politika nesneleri (payment/return/fulfillment policy) bağlantı
+   kurulumunda zorunlu. `channel_connections.settings` bunu taşıyabilir
+   ama bağlama akışı ekstra adım ister.
+
+**Shopify BU LİSTEDE DEĞİL** — kullanıcı açıkça istemedi. Memory'deki
+"Teknoloji Kararları" notu "Laravel + Node Shopify app" diyor; o karar
+artık geçerli değil ve Shopify kapsam dışıdır.
+
+**MİMARİ SÖZ:** yeni kanal eklemek çekirdeği DEĞİŞTİRMEMELİ. Kanal başına
+yazılması gereken şey bir adapter + (varsa) mapper/normalizer'dır; stok
+matematiği, outbox, fan-out, kilit ve mutabakat aynı kalır. Yeni bir kanal
+çekirdeğe dokunmayı gerektiriyorsa **önce dokümana bakılır** (§7 yetenek
+arayüzleri), `if ($channel === '...')` YAZILMAZ. Amazon'un feed modeli bu
+sözü en çok zorlayacak maddedir.
+
+**Her yeni kanal için gereken asgari iş** (Trendyol turlarından ölçü):
+istemci + kimlik + hız sınırı (≈8 sa) · taksonomi varsa (≈12 sa) ·
+eşleştirme zaten YAZILDI ve kanaldan bağımsız · katalog aktarımı + onay
+(≈16 sa) · stok/fiyat itme (≈8 sa) · sipariş yoklaması veya webhook
+(≈16 sa). Yani kanal başına kabaca **40–60 saat**, Amazon'da daha fazla.
 
 ## Demo verisi panelde duruyor
 

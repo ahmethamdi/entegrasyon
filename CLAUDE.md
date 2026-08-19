@@ -734,6 +734,26 @@ düşürüyor, iptal geri ekliyor.
 `UpdateOrderSnapshot` + `UpdateFulfillment`. Faz 4 abonelik/ödeme hâlâ
 hafta 21–25'tir ve şimdi yazılmamalı.
 
+**YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
+Kullanıcının kararı: **Hepsiburada → Amazon → Etsy → eBay**. Bu maddeler
+**Faz 3 ve Faz 4 bittikten sonra** ele alınır. **Shopify KAPSAM DIŞI** —
+kullanıcı açıkça istemedi; memory'deki eski "Node Shopify app" kararı
+artık geçerli değil.
+
+Sıranın gerekçesi: Hepsiburada Trendyol'un modeline en yakın (taksonomi +
+zorunlu öznitelik + onay), o yüzden en düşük riskli ikinci pazaryeri.
+Amazon en yüksek iş değeri ama en karmaşık: SP-API feed tabanlı asenkron
+aktarım (`submitFeed` → sonuç yoklaması) muhtemelen §7'ye YENİ bir
+yetenek arayüzü gerektirir — bu MİMARİ bir karardır, dokümana bakmadan
+yapılmaz. Etsy OAuth+PKCE ve farklı envanter modeli; eBay'de
+offer/inventory item ayrımı + zorunlu politika nesneleri bağlama akışına
+ekstra adım ekler.
+
+**Yeni kanal çekirdeği DEĞİŞTİRMEZ**: kanal başına bir adapter (+ mapper/
+normalizer) yazılır; stok matematiği, outbox, fan-out, kilit ve mutabakat
+aynı kalır. `if ($channel === '...')` YAZILMAZ — yetenek `instanceof` ile
+okunur. Kanal başına kabaca 40–60 saat (Amazon'da fazlası).
+
 **`pushPrices`'ın ÇEKİRDEKTE ÇAĞIRANI YOK** — bu turda bulundu ve
 Woo'yu da kapsıyor. `SyncDomain::PRICE` ve `PRICE_PUSH` şemada var ama
 fiyat operasyonu açan/dispatch eden hiçbir kod yok: `PushInventory`'nin
