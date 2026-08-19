@@ -1,4 +1,4 @@
-# Devir Notu — 19 Ağustos 2026 (Faz 3 sürüyor + yeni pazaryeri sırası)
+# Devir Notu — 19 Ağustos 2026 (Faz 3 · iki madde bitti)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -6,25 +6,28 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 532 yeşil olmalı
+docker compose exec app php artisan test      # 539 yeşil olmalı
 ```
 
-**Sıradaki iş: Faz 3 · madde 1 — `PruneApiCalls`.**
+**Sıradaki iş: Faz 3 · madde 2 — `RequestResync` + T10 (§18 · P1).**
 
-`api_calls` her kanal çağrısında yazılıyor ve `expires_at` DOLDURULUYOR
-(2xx +7 gün, 4xx/5xx +90 gün) ama **silen hiçbir şey yok**: tablo
-sınırsız büyüyor. Yapılacak: `expires_at < now()` satırlarını silen bir
-tarama (`Support/` altında sade sınıf) + ince komut kabuğu + günlük
-zamanlama.
+Bugün kodda HİÇ karşılığı yok; tek iz `ErrorClass.php:54`'teki sözleşme
+notu: "`error_permanent → pending` geçişi `ListingResyncRequested` olayı
+üretmek ZORUNDADIR (§9, Karar 18)". **T10 yazılmamış tek P0/P1 testidir.**
 
-Üç şeye dikkat: (a) `Command::run()` REZERVE imzadır, mantık `Support/`
-altına; (b) komut `bootstrap/app.php` içinde AÇIKÇA kaydedilmeli VE
-`routes/console.php` içinde zamanlanmalı — ikisi ayrı koşul ve
-`ScheduledScansTest` ikisini ayrı doğruluyor; (c) silme toplu (chunk)
-yapılmalı, tek dev DELETE tabloyu kilitler.
+Yapılacak: `error_permanent` durumundaki listing'i `pending`'e döndüren
+action + `ListingResyncRequested` olayı. Üç kurala dikkat:
+(a) **`desired_version` ARTMAZ** — artarsa sürüm kapısı gönderimi eler ve
+ürün sessizce hiç gitmez (ön koşul kapısında aynı tuzak yaşandı);
+(b) eski hata metni TEMİZLENİR; (c) `error_permanent` mutabakatta asla
+aday değildir (`CandidateSelector`) — satır ancak bu geçişle akışa girer,
+yani bu action o kilidi açan tek yoldur.
 
-Yazdıktan sonra **komutu GERÇEK çalıştır** — bu projede her tur ölümcül
-hata yeşil testlerin altından çıktı.
+**Panel butonu ERTELENİR** (çalışma sırası kararı) — action ve olay
+çekirdek tarafında yazılır, ekran Faz 4'te.
+
+Yazdıktan sonra **GERÇEK çalıştır** — bu projede her tur ölümcül hata
+yeşil testlerin altından çıktı.
 
 Panel işine GİRME (çalışma sırası kararı). Yeni pazaryerleri (Hepsiburada,
 Amazon, Etsy, eBay) SIRAYA KONDU ama **Faz 3 + Faz 4 bitmeden
@@ -32,14 +35,71 @@ başlanmıyor** — ayrıntı aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 2 kapandı, Faz 3 başladı.** İlk Faz 3 maddesi bitti:
-`UpdateOrderSnapshot` + `UpdateFulfillment` yazıldı ve
-`OrderEventRouter`'a bağlandı. **532 test yeşil** (1919 assertion), Pint
-temiz, iki random seed'de stabil.
+**Faz 2 kapandı, Faz 3'te iki madde bitti:** sipariş güncelleme + kargo
+(`UpdateOrderSnapshot` / `UpdateFulfillment`) ve **`PruneApiCalls`**.
+**539 test yeşil** (1937 assertion), Pint temiz (277 dosya), iki random
+seed'de stabil.
 
 ## Bu turda ne eklendi
 
-### §13 · Faz 3 · sipariş güncelleme ve kargo (`ab4bffe`)
+### §13 · Faz 3 · api_calls saklama taraması (`a452a27`)
+
+| Ne | Nerede |
+|---|---|
+| Tarama | `Channels/Support/PruneApiCalls.php` |
+| Komut | `Channels/Console/PruneApiCallsCommand.php` (`api-calls:prune`) |
+| Kayıt | `bootstrap/app.php` · Zamanlama `routes/console.php` (04:00) |
+| Testler | `PruneApiCallsTest` (7) + `ScheduledScansTest`'e 3 iddia |
+
+**KAPATILAN BOŞLUK:** `expires_at` ilk günden beri doldurulyordu (2xx
++7 gün, 4xx/5xx +90 gün) ama **silen hiçbir şey yoktu** — saklama
+politikası yalnızca bir niyetti ve en çok yazılan tablo sınırsız
+büyüyordu.
+
+**ÖLÇÜT `expires_at`, DURUM KODU DEĞİL.** Saklama süresi satır
+YAZILIRKEN kararlaşır ve o alanda donar; tarama yeniden yorumlasaydı
+politika iki yerde yaşar ve geçmiş satırlar yazıldıkları günün kuralıyla
+değil BUGÜNÜN kuralıyla silinirdi.
+
+**SİLME PARTİLENİR** (varsayılan 5.000) — tek dev DELETE en çok yazılan
+tabloyu dakikalarca kilitler. **TUR BAŞINA ÜST SINIR VAR** (500.000):
+bitene kadar dönen tarama günlük bakım penceresini saatlerce tutar ve
+`withoutOverlapping` yüzünden sonraki turlar hiç başlamaz — tarama kendi
+kuyruğunu kilitler. Kalan satırlar YARIN silinir.
+
+**TRANSACTION YOK ve bu bilinçli:** her parti kendi başına atomiktir ve
+silinen günlük satırının geri alınmasına gerek yoktur. Turu sarmak,
+silinen her satırın kilidini tur sonuna kadar tutar — tam olarak
+kaçınılan şey.
+
+**Zamanlama 04:00** — taksonomi 03:00'te bitiyor, ikisi aynı bakım
+penceresinde üst üste binmiyor.
+
+**Sekiz mutasyon: DÖRDÜ yakalandı, DÖRDÜ HAYATTA KALDI VE KALMALI.**
+Yakalananlar: yüklem · partileme · zamanlama · artisan kaydı (son ikisi
+AYRI koşullar ve AYRI testlerle yakalandı). Hayatta kalanlar ve gerekçe
+(hepsi koda yazıldı, sahte test YAZILMADI):
+- **`<` → `<=`** — `expires_at` hassasiyeti SIFIR (saniyeye yuvarlanır),
+  `clock_timestamp()` mikrosaniye taşır: eşitlik ulaşılamaz. Boundary
+  testi bu yüzden yeniden yazıldı — ilk hâli iki operatör altında da
+  geçiyordu, yani **sahte yeşildi**.
+- **`while` koşulu → `while (true)`** — `min()` clamp'i sınırı zaten
+  uyguluyor (`LIMIT 0` → `$affected === 0` → break). Koşul boşa dönen o
+  son sorguyu engellemek için duruyor.
+- **`clock_timestamp()` → `now()`** — tur transaction DIŞINDA çalıştığı
+  için ikisi bugün aynı. Kural, "TRANSACTION YOK" kararı bir gün geri
+  alınırsa diye duruyor; donmanın gerçekliği PostgreSQL'de doğrulandı
+  (`now()` dondu, `clock_timestamp()` ilerledi).
+- **`runAsSystem` kaldırma** — `api_calls`'un MODELİ YOK, tablo
+  `DB::table()` ile okunuyor ve global scope hiç uygulanmıyor.
+
+**GERÇEK ÇALIŞTIRILDI:** dev veritabanında 48 satır → 3 süresi geçen
+silindi, 43 mevcut + 2 canlı satır duruyor. `--chunk=2` ile partileme
+gözlendi, ikinci tur `0` döndü (idempotent), `schedule:list` `0 4 * * *`
+gösteriyor, log satırı yazıldı. Test satırları sonra silindi (dev DB
+yine 43).
+
+### Bir önceki tur — §13 · Faz 3 · sipariş güncelleme ve kargo (`ab4bffe`)
 
 | Ne | Nerede |
 |---|---|
@@ -112,7 +172,7 @@ barkod ve `(int)`'e çevrilmez; `listPrice` zorunlu.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 532 yeşil olmalı
+docker compose exec app php artisan test      # 539 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -145,7 +205,7 @@ gelen hat (webhook → inbox → router), giden hat (`InventoryBatchBuilder`,
 `CircuitBreaker`), ürün aktarımı (`PushListing`, `PublishListing`),
 §6 bütünlük taramaları (iki seviye), §10 mutabakat SICAK katmanı,
 ön koşul kapısı + onay takibi, sipariş yoklaması, sipariş güncelleme +
-kargo.
+kargo, **api_calls saklama taraması** (`PruneApiCalls`).
 
 **Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
 stok/fiyat itme, sipariş yoklaması).
@@ -153,17 +213,16 @@ stok/fiyat itme, sipariş yoklaması).
 **Panel (8 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
 siparişler · sipariş ayrıntısı · stok · kanallar · eşleştirme.
 
-**Testler:** 532 yeşil (1919 assertion), 57 test dosyası. P0'dan
-T1/T2/T3/T4/T5/T6/T7/T8/T9/T11/T12 yeşil.
+**Testler:** 539 yeşil (1937 assertion), 58 test dosyası. P0'dan
+T1/T2/T3/T4/T5/T6/T7/T8/T9/T11/T12 yeşil. **T10 hâlâ yazılmamış** —
+yazılmamış tek P0/P1 testi ve sıradaki maddenin parçası.
 
 ### Kaldı — FAZ 3 (güvenilirlik), sırayla
 
-1. **`PruneApiCalls`** — `api_calls` sınırsız büyüyor; `expires_at`
-   DOLDURULUYOR ama silen yok. Günlük komut + zamanlama. `bootstrap/app.php`
-   kaydı ve `routes/console.php` zamanlaması AYRI koşullar.
+1. ~~**`PruneApiCalls`**~~ — **BİTTİ** (`a452a27`), ayrıntı yukarıda.
 2. **`RequestResync` + T10** (§18 · P1) — `error_permanent → pending`,
    `ListingResyncRequested` olayı, `desired_version` ARTMAZ. **T10 yazılmamış
-   tek P0/P1 testi.** Panel butonu ERTELENİR.
+   tek P0/P1 testi.** Panel butonu ERTELENİR. **SIRADAKİ İŞ.**
 3. **Fiyat senkron yolu** — `pushPrices` gövdeleri (Woo + Trendyol) HAZIR
    ama çağıranı YOK: `PushInventory`'nin fiyat karşılığı yazılmamış.
    Dokümanın Faz 3 listesinde ayrıca yok ama gerçek eksik.
@@ -297,6 +356,17 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **Adapter'a `max($q, 0)`** — `InventoryPushItem` negatifi kurucuda reddeder.
 - **`ctype_digit` yerine yalnızca `(int)`, `"sınırsız"` girdisiyle** —
   `(int) "sınırsız"` zaten `0`. Kural `"600, 300"` ile sınanır.
+- **`PruneApiCalls`'ta `expires_at < ` → `<=`** — kolon saniye
+  hassasiyetli (`datetime_precision = 0`), `clock_timestamp()` mikrosaniye
+  taşır; eşitlik ulaşılamaz.
+- **`PruneApiCalls`'ta `while ($deleted < $maxRows)` → `while (true)`** —
+  `min($chunkSize, $maxRows - $deleted)` clamp'i sınırı zaten uyguluyor;
+  bütçe dolunca `LIMIT 0` hiçbir satır silmez ve döngü break'ten çıkar.
+- **`PruneApiCalls`'ta `clock_timestamp()` → `now()`** — tur transaction
+  DIŞINDA çalışıyor, ikisi bugün aynı. Kural "TRANSACTION YOK" kararı geri
+  alınırsa diye duruyor.
+- **`PruneApiCalls`'ta `runAsSystem` kaldırma** — `api_calls`'un modeli
+  YOK, global scope hiç uygulanmıyor (`SyncTaxonomy` ile aynı biçim).
 
 ## Tekrar tekrar ısıran tuzaklar
 
@@ -340,6 +410,16 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **`(channel_type_code, external_account_id)` GLOBAL tekil** — aynı test
   içinde iki kez `connection()` çağırmak kısıtı ihlal eder (bu turda
   yaşandı).
+- **SINIR TESTİ YAZDIYSAN İKİ OPERATÖR ALTINDA DA GEÇMEDİĞİNİ DOĞRULA.**
+  `PruneApiCalls`'ta "tam sınırdaki satır silinmez" testi yazıldı ve yeşil
+  geçti — ama `<` → `<=` mutasyonu altında DA geçti, yani hiçbir şey
+  sınamıyordu. Sebep: satır bir GÜN sonrasına kuruluydu, oysa iki
+  operatörün farkı yalnızca TAM EŞİTLİKTE görünür. Gerçek sınırı kurmaya
+  çalışınca kolonun saniye hassasiyeti çıktı ve eşitliğin ulaşılamaz
+  olduğu anlaşıldı. **Sınır testi kurarken farkın göründüğü ÖLÇEĞİ kullan**
+  (gün değil saniye) ve mutasyonla doğrula.
+- **`api_calls`'un MODELİ YOK** — tablo `DB::table()` ile yazılıp okunuyor,
+  `insertGetId()` bigserial döndürür.
 - **`TrendyolAdapterTest`'teki "yazılmamış yetenek" listesi madde kapandıkça
   KÜÇÜLTÜLMELİ.** Önceki turda `pushInventory`/`pushPrices`, bu turda
   `fetchOrders`/`parseOrderEvent` çıkarıldı. **Listede kalan: `delist`,
@@ -356,7 +436,8 @@ hosts") ve bu turda da doğrulanamadı. `gh auth login` sonrası
 
 **2 · `--order-by=random` düşüşü bu turda da tekrar üretilemedi.** İki tur
 daha koşuldu, ikisi de yeşil (seed'ler: 1787087064 · 1787087092).
-Toplamda **ON BİR ardışık temiz tur** (dört oturum). PHPUnit
+Toplamda **ON ÜÇ ardışık temiz tur** (beş oturum). Bu turun
+seed'leri: 1787125986 · 1787126017. PHPUnit
 11'de `--seed` seçeneği YOK; seed çıktının sonunda "Random Order Seed"
 satırında raporlanır. Görülürse o satırdaki seed kaydedilmeli.
 

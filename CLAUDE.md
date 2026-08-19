@@ -104,7 +104,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 532 test. Stok çekirdeği (`ApplyMovement`,
+34 domain tablosu, 33 model, 539 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -454,8 +454,11 @@ testin sonunda çağrılır.
 
 ## Henüz yazılmadı
 
-`PruneApiCalls`, `RequestResync` (+ T10), mutabakat panel ekranı,
-ılık/soğuk mutabakat katmanları (sıcak katman yazıldı).
+`RequestResync` (+ T10), mutabakat panel ekranı, ılık/soğuk mutabakat
+katmanları (sıcak katman yazıldı).
+
+`PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
+günlük 04:00, partili silme + tur başına üst sınır.
 
 `UpdateOrderSnapshot` ve `UpdateFulfillment` **YAZILDI** (§13 · Faz 3) ve
 `OrderEventRouter`'a bağlandı.
@@ -530,6 +533,35 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   `try/catch`'te toplanır.
 - **`delist` silmez, taslağa çeker.** Silme geri alınamaz ve kanaldaki
   yorumları, sıralamayı, SEO geçmişini de götürür.
+
+## api_calls saklama kuralları (§13 · Faz 3)
+
+- **ÖLÇÜT `expires_at`, DURUM KODU DEĞİL.** Saklama süresi satır
+  YAZILIRKEN kararlaşır (`ChannelHttpClient::expiryFor()`: 2xx +7 gün,
+  4xx/5xx +90 gün) ve o alanda donar. `PruneApiCalls` durum kodunu yeniden
+  yorumlamaz — yorumlasaydı politika iki yerde yaşar, biri değiştiğinde
+  diğeri sessizce eski kuralı uygular ve geçmiş satırlar yazıldıkları
+  günün kuralıyla değil bugünün kuralıyla silinirdi.
+- **SİLME PARTİLENİR** (`DELETE ... WHERE id IN (SELECT ... LIMIT n)`;
+  PostgreSQL DELETE üzerinde LIMIT kabul etmez). Tek dev DELETE en çok
+  yazılan tabloyu dakikalarca kilitler; senkron durmaz (günlükleme hatası
+  çağrıyı düşürmez) ama iz kaybolur ve iz tam olarak sorun anında gerekir.
+- **TUR BAŞINA ÜST SINIR VAR.** Bitene kadar dönen tarama günlük bakım
+  penceresini saatlerce tutar ve `withoutOverlapping` yüzünden sonraki
+  turlar hiç başlamaz — tarama kendi kuyruğunu kilitler. Kalan satırlar
+  YARIN silinir; gecikmenin bedeli diskte biraz fazla günlüktür.
+- **TRANSACTION YOK ve bu bilinçlidir.** Her parti kendi başına atomiktir
+  ve silinen bir günlük satırının geri alınmasına gerek yoktur. Turu tek
+  transaction'a sarmak, silinen her satırın kilidini tur sonuna kadar
+  tutar ve tam olarak kaçınılmak istenen kilit birikimini üretir. Bu karar
+  geri alınırsa `clock_timestamp()` kuralı KRİTİK hale gelir.
+- **Zamanlama günlük 04:00** — saklama süreleri gün ölçeğindedir, saatlik
+  koşmak aynı işi 24 kez yapar. Taksonomi turu 03:00'te bitiyor, ikisi
+  aynı bakım penceresinde üst üste binmiyor.
+- **`api_calls`'un MODELİ YOK** — tablo `DB::table()` ile yazılıp okunur
+  ve `id` bigserial'dır. `runAsSystem()` sarmalayıcısı bu yüzden bugün
+  davranış katmaz; niyeti belgelemek ve tabloya bir gün model eklenirse
+  taramanın tek kiracıya daralmaması için duruyor.
 
 ## Koruma katmanı kuralları
 
@@ -730,8 +762,11 @@ kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
 Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
-**Faz 3 başladı** (güvenilirlik). İlk madde kapandı:
-`UpdateOrderSnapshot` + `UpdateFulfillment`. Faz 4 abonelik/ödeme hâlâ
+**Faz 3 sürüyor** (güvenilirlik). İki madde kapandı:
+`UpdateOrderSnapshot` + `UpdateFulfillment`, ve **`PruneApiCalls`**.
+**Sıradaki: `RequestResync` + T10** (§18 · P1) — `error_permanent →
+pending` geçişi, `ListingResyncRequested` olayı, `desired_version`
+ARTMAZ. T10 yazılmamış tek P0/P1 testidir. Faz 4 abonelik/ödeme hâlâ
 hafta 21–25'tir ve şimdi yazılmamalı.
 
 **YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
