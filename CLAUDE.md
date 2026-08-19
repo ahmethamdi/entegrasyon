@@ -104,7 +104,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-34 domain tablosu, 33 model, 605 test. Stok çekirdeği (`ApplyMovement`,
+35 domain tablosu, 34 model, 634 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -810,6 +810,47 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **Ekran SALT OKUNURDUR**: sürüklenme tespiti ve onarımı zamanlanmış
   turların işidir, panelden tetiklenmez.
 
+## Toplu içe aktarma kuralları (§13 · Faz 3 · madde 5)
+
+- **AYRIŞTIRMA İLE YAZMA AYRIDIR.** `CsvProductParser` saf ve yan
+  etkisizdir (veritabanına dokunmaz, kiracı bağlamı istemez); yazma
+  `ImportProducts` action'ının işidir. Birleştirilselerdi ondalık ayırıcı,
+  BOM ve kolon eşleme kuralları ancak veritabanı kurup ürün yaratarak
+  test edilebilirdi.
+- **TÜRKÇE EXCEL BİÇİMİ BİRİNCİ SINIF VATANDAŞTIR.** Gerçek dosya üç şeyi
+  birden taşır: **BOM** (atılmazsa ilk kolonun adı `"\u{FEFF}sku"` olur ve
+  dosya "sku kolonu yok" diye reddedilir), **noktalı virgül ayırıcı**
+  (virgül ondalık olduğunda Excel öyle kaydeder) ve **virgüllü ondalık**
+  (`(float) "1.299,90"` = **1.0** — kuruşlar değil LİRALAR düşer). Virgül
+  varsa nokta BİNLİK ayırıcıdır ve atılır.
+- **KOLONLAR ADIYLA EŞLENİR, KONUMLA DEĞİL.** Satıcının Excel'inde kolon
+  sırası sabit değildir; konumla eşlenseydi fiyat kolonu stok sanılır ve
+  500 ürün yanlış fiyatla kanala giderdi.
+- **AÇILIŞ STOĞU LEDGER ÜZERİNDEN GİRER** — `CreateProduct` çağrılır,
+  `inventory_levels` satırına DOKUNULMAZ. Doğrudan yazmak 500 satırlık
+  dosyada 500 bozuk bakiye ve 500 sahte sürüklenme demektir.
+- **VAR OLAN SKU GÜNCELLENİR ama STOK SATIRDAN YAZILMAZ.** Satıcının en
+  sık işi toplu fiyat güncellemesidir. Stok yalnızca ledger yollarından
+  değişir; var olan üründe uygulansaydı SATILMIŞ mallar bir dosya
+  yüklemesiyle geri gelir ve bakiye kalıcı bozulurdu — sessiz, geri
+  alınamaz ve fazla satışa yol açar. `applyUpdate()` stok parametresi
+  ALMAZ ve `UpdateProduct` da almaz.
+- **TEK BOZUK SATIR DOSYAYI DÜŞÜRMEZ** ve tur **TEK TRANSACTION'A
+  SARILMAZ.** 437. satırdaki hata önceki 436 ürünü geri alsaydı kullanıcı
+  her denemede baştan başlardı. Her satır kendi transaction'ında atomik.
+- **BAŞLIK HATASI SATIR HATASINDAN AYRIDIR.** Zorunlu kolon hiç yoksa
+  dosya HİÇ işlenmez ve tek mesajla anlatılır; 500 hata satırı basmak
+  kullanıcıya "dosyandaki `fiyat` kolonu eksik" demekten kötüdür. Eksik
+  kolon KULLANICININ gördüğü adla raporlanır (`fiyat`, `price` değil).
+- **KUYRUK `listing:bulk`** (§15) ve `reconciliation` ile havuz PAYLAŞMAZ
+  — §15'in açık kuralı: toplu içe aktarma yeni müşteri kurulumunun tam
+  ortasıdır ve mutabakat turlarını atlatırsa ürünün temel iddiası tam o
+  anda çalışmaz.
+- **YENİDEN DENEME YOK** (`$tries = 1`): içe aktarma idempotent DEĞİLDİR.
+  Yeniden denense ilk turda yaratılanlar ikinci turda GÜNCELLEME sayılır
+  ve rapor yanıltır; ayrıca yarıda kalan turda hangi satırın işlendiği
+  bilinmiyor. Hata satıra yazılır, yeniden yükleme kararı KULLANICININDIR.
+
 ## Panel kuralları
 
 - **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
@@ -880,8 +921,8 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 §6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
 **§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
 maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde dokuz ekran
-var: özet · ürünler · ürün kanalları · siparişler · sipariş ayrıntısı · stok ·
-**mutabakat** · kanallar · **eşleştirme**.
+var: özet · ürünler · **toplu içe aktarma** · ürün kanalları · siparişler ·
+sipariş ayrıntısı · stok · mutabakat · kanallar · eşleştirme.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
@@ -897,7 +938,14 @@ kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
 Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
-**FAZ 3 KAPANDI** (güvenilirlik). BEŞ maddenin beşi de bitti:
+**FAZ 3 SÜRÜYOR.** ÖNEMLİ DÜZELTME: daha önce "Faz 3 kapandı" yazıyordu
+ve bu YANLIŞTI — o ifade devir notundaki dört maddelik alt listeyi
+kastediyordu, dokümanın §13 · Faz 3 listesini değil. Dokümanın listesinde
+BEŞ madde var ve İKİSİ bitti (mutabakat motoru · toplu içe aktarmanın CSV
+yarısı). Eksikler: metrikler/alarm · senkron geçmişi ekranı · ölü mektup
+ekranı · kanaldan ürün çekme.
+
+Devir notundaki alt liste (hepsi bitti):
 `UpdateOrderSnapshot` + `UpdateFulfillment`, **`PruneApiCalls`**,
 **`RequestResync` + T10**, **fiyat senkron yolu** ve **ılık/soğuk
 mutabakat katmanları**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1 testi

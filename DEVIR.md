@@ -1,44 +1,138 @@
-# Devir Notu — 19 Ağustos 2026 (Faz 4 · iki madde bitti)
+# Devir Notu — 19 Ağustos 2026 (Faz 3 sürüyor · Faz 4'ten iki madde)
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
+
+## ÖNCE BUNU OKU — ÖNCEKİ DEVİR NOTU YANLIŞTI
+
+Önceki not "FAZ 3 KAPANDI" diyordu. **YANLIŞ.** O ifade, benim devir
+notunda tuttuğum dört maddelik alt listeyi (fiyat senkronu · resync ·
+prune · mutabakat katmanları) kastediyordu; **dokümanın §13 · Faz 3
+listesi başka.** Doğrusu aşağıdaki tabloda.
 
 ## BURADAN DEVAM ET
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 605 yeşil olmalı
+docker compose exec app php artisan test      # 634 yeşil olmalı
 ```
 
-**FAZ 3 KAPANDI. FAZ 4'te İKİ MADDE BİTTİ:** onarım döngü emniyeti
-(çekirdek ön koşuldu) ve **mutabakat panel ekranı**.
+### Dokümanın gerçek faz tablosu (§13)
 
-**Sıradaki iş — KULLANICIYA SOR.** Faz 4'te kalan üç madde arasında
-teknik bağımlılık yok; sıra bir öncelik kararıdır:
+| Faz | Saat | Hafta | Durum |
+|---|---|---|---|
+| Faz 1 — Woo dikey dilimi | 140 | 1–8 | BİTTİ |
+| Faz 2 — Trendyol + çift yönlü | 126 | 9–15 | BİTTİ |
+| Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **~58/84** |
+| Faz 4 — Ticarileşme | 90 | 21–25 | 20/90 |
+| Faz 5 — Tampon | 28 | 26 | başlamadı |
 
-1. **Panel cilası** (§13 · Faz 4, 20 sa) — boş durumlar, yükleniyor
-   göstergeleri, mobil düzen. Mevcut DOKUZ ekrana dokunur.
-2. **Onay durumu için ayrı ekran** — rozet ve red sebebi bugün ürün-kanal
-   ekranında var; ayrı ekran §13'te listeli. En küçük madde.
-3. **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
-   ALINMIŞ (`tenants.plan_code` var; §4 · `plans` kiracısız+seed,
-   `subscriptions` `UNIQUE(tenant_id) WHERE status='active'`; §3 · `Plan`,
-   `Subscription`, `UsageRecord`) ama YAZILMADI. En büyük madde. Kota neyi
-   sınırladığını senkron davranışından alır ve o davranış artık OTURDU —
-   teknik ön koşul ilk kez sağlandı.
+**Toplam 468 saat · tahminen ~345 saat bitti → yaklaşık %74.**
 
-**EKRAN İŞİ ÇIKARSA TARAYICIDA DOĞRULA** — bu kural bu turda ilk kez
-uygulandı ve işe yaradı (mutabakat ekranı Playwright ile sürüldü).
+### Faz 3'ün BEŞ maddesi — ikisi bitti
 
-Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) **Faz 4'ten
-SONRA** — sıra ve gerekçeler aşağıda, değişmedi.
+| # | Madde | Saat | Durum |
+|---|---|---|---|
+| 1 | Mutabakat motoru (3 katman, 4 aday, onarım) | 30 | BİTTİ |
+| 2 | Metrik toplama, panel grafikleri, uyarı e-postaları | 16 | **HİÇ YOK** |
+| 3 | Senkron geçmişi ekranı, hata gezgini, yeniden deneme | 14 | çekirdek var (`RequestResync`), **EKRAN YOK** |
+| 4 | Ölü mektup ekranı, bağlantı sağlığı, fazla satış ekranı | 10 | fazla satış VAR, **ölü mektup ekranı YOK** |
+| 5 | Toplu içe aktarma (Excel/CSV) + kanaldan ürün çekme | 14 | **CSV BİTTİ**, kanaldan çekme YOK |
+
+**Sıradaki iş — KULLANICIYA SOR.** Aralarında teknik bağımlılık yok:
+
+1. **Ölü mektup + senkron geçmişi ekranı** (madde 3+4, ~24 sa) —
+   `RequestResync` çekirdekte HAZIR, sadece buton yok. Destek yükünü
+   düşüren ekranlar (§17: "destek yükünü belirleyen tek ekran").
+2. **Metrikler + alarm** (madde 2, 16 sa) — §17 "ölçülmeyen güvenilirlik
+   iddia edilemez" diyor; sistem çalışıyor ama ne kadar iyi çalıştığı
+   görünmüyor.
+3. **Kanaldan ürün çekme** (madde 5'in kalanı) — Woo'da `fetchListing`
+   TEK ürün okuyor, toplu listeleme yeteneği YOK ve Trendyol'da hiç
+   yazılmamış. §7'ye yeni yetenek arayüzü gerekebilir: MİMARİ karar,
+   dokümana bakılmadan yapılmaz.
+4. **Faz 4'ün kalanı**: panel cilası · onay durumu ekranı ·
+   abonelik/ödeme (90 sa'lık fazın 70 saati).
+
+**EKRAN İŞİ ÇIKARSA TARAYICIDA DOĞRULA** — bu kural iki turdur
+uygulanıyor ve iki turda da işe yaradı.
+
+Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) **Faz 3 + Faz 4
+bittikten SONRA** — sıra ve gerekçeler aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 2 ve Faz 3 kapandı; Faz 4'te iki madde bitti.** P0/P1'in tamamı
-yeşil. **605 test yeşil** (2110 assertion), Pint temiz (293 dosya),
-rastgele sıralı turlar temiz. Panelde DOKUZ ekran.
+**Faz 1 ve Faz 2 bitti; Faz 3'te 5 maddeden 2'si, Faz 4'te 2 madde
+bitti.** **634 test yeşil** (2195 assertion), Pint temiz (303 dosya),
+sekiz ardışık rastgele sıralı tur temiz. Panelde ON ekran.
 
 ## Bu turda ne eklendi
+
+### §13 · Faz 3 · madde 5 · TOPLU İÇE AKTARMA — CSV (`f234303`)
+
+| Ne | Nerede |
+|---|---|
+| Ayrıştırıcı | `Catalog/Support/CsvProductParser` (+ `CsvParseResult`) |
+| Action | `Catalog/Actions/ImportProducts` (+ `ImportResult`) |
+| İş | `Catalog/Jobs/ImportProductsJob` (kuyruk **`listing:bulk`**) |
+| Durum | `product_imports` tablosu + `ProductImport` modeli |
+| Ekran | `Products/Import.vue` · GET+POST `/products/import` |
+| Testler | `CsvProductImportTest` (16) + `ProductImportScreenTest` (12) |
+
+**KAPATILAN BOŞLUK:** satıcı 500 ürününü panelden tek tek giremiyordu.
+§17 bu maddeyi "TEMEL" önceliğe koyuyor: ödeme mekanizması olsa bile
+ürünlerini sisteme sokamayan satıcı sistemi kullanamaz.
+
+**AYRIŞTIRMA İLE YAZMA AYRI.** `CsvProductParser` saf ve yan etkisizdir;
+birleştirilselerdi ondalık ayırıcı / BOM / kolon eşleme kuralları ancak
+veritabanı kurup ürün yaratarak test edilebilirdi.
+
+**TÜRKÇE EXCEL BİÇİMİ BİRİNCİ SINIF VATANDAŞ** — gerçek dosya BOM +
+noktalı virgül + virgüllü ondalık taşır:
+- BOM atılmazsa ilk kolonun adı `"\u{FEFF}sku"` olur ve dosya "sku
+  kolonu yok" diye reddedilir — kullanıcı gözüyle kolon ORADA.
+- `(float) "1.299,90"` PHP'de **1.0** eder. Kuruşlar değil LİRALAR
+  düşer. Virgül varsa nokta BİNLİK ayırıcıdır ve atılır.
+- Virgül ondalık olduğunda Excel alan ayırıcısını noktalı virgüle
+  çevirir; yalnızca virgül desteklenseydi Türkçe kaydedilmiş her dosya
+  tek kolon olarak okunurdu.
+
+**KOLONLAR ADIYLA EŞLENİR, KONUMLA DEĞİL** — konumla eşlenseydi fiyat
+kolonu stok sanılır ve 500 ürün yanlış fiyatla kanala giderdi.
+
+**AÇILIŞ STOĞU LEDGER ÜZERİNDEN GİRER** — `CreateProduct` çağrılır,
+`inventory_levels` satırına DOKUNULMAZ. Doğrudan yazmak 500 satırlık
+dosyada 500 bozuk bakiye ve 500 sahte sürüklenme demekti.
+
+**VAR OLAN SKU GÜNCELLENİR (kullanıcı kararı) ama STOK SATIRDAN
+YAZILMAZ.** Satıcının en sık işi toplu fiyat güncellemesidir. Stok
+yalnızca ledger yollarından değişir; var olan üründe uygulansaydı
+SATILMIŞ mallar bir dosya yüklemesiyle geri gelir ve bakiye kalıcı
+bozulurdu — maddenin en tehlikeli hatası: sessiz, geri alınamaz, fazla
+satışa yol açar. `applyUpdate()` stok parametresi ALMAZ.
+
+**TEK BOZUK SATIR DOSYAYI DÜŞÜRMEZ** ve tur **TEK TRANSACTION'A
+SARILMAZ**: 437. satırdaki hata önceki 436 ürünü geri alsaydı kullanıcı
+her denemede baştan başlardı.
+
+**KUYRUK `listing:bulk`** (§15) ve `reconciliation` ile havuz PAYLAŞMAZ
+— §15'in açık kuralı. **Yeniden deneme YOK** (`$tries = 1`): içe aktarma
+idempotent DEĞİLDİR ve yarıda kalan turda hangi satırın işlendiği
+bilinmiyor.
+
+**ON BEŞ MUTASYON, ON BEŞİ DE YAKALANDI** — biri ancak test eklendikten
+sonra: `catch (Throwable)` daraltıldığında hiçbir test kırılmıyordu,
+çünkü mevcut "bozuk satır" testlerinin hepsi AYRIŞTIRMADA eleniyor ve
+yazma yoluna hiç ulaşmıyordu. Yani maddenin en kritik kuralı yazma
+tarafında HİÇ SINANMAMIŞTI. Ayrıştırmayı GEÇİP yazarken patlayan satır
+testi eklendi (300 karakterlik başlık; `products.title` 255 sınırlı).
+
+**GERÇEK ÇALIŞTIRILDI (gerçek worker + gerçek Türkçe Excel dosyası):**
+BOM + noktalı virgül + `"1.299,90"` içeren 5 satırlık dosya
+`listing:bulk` kuyruğuna atıldı, `queue:work --queue=listing:bulk` işi
+ALDI ve tamamladı. 3 ürün yazıldı (1299.90 / 449.50 / 59.90 doğru
+okundu), 2 bozuk satır satır numarasıyla raporlandı. Ledger doğrulandı:
+`type=IMPORT`, `delta=12`, `source=product_creation` ve ledger toplamı =
+projeksiyon. Ekran Playwright ile sürüldü. Dev verisi geri alındı.
 
 ### §13 · Faz 4 · MUTABAKAT PANEL EKRANI (`513480d`)
 
@@ -337,8 +431,11 @@ Sıra kullanıcının kararına bağlı; teknik bağımlılık yok.
   koşuldu: ekran onu göstermek zorundaydı.
 - ~~**Mutabakat panel ekranı**~~ — **BİTTİ** (`513480d`), tarayıcıda
   doğrulandı.
+- ~~**Toplu içe aktarma (CSV)**~~ — **BİTTİ** (`f234303`), gerçek
+  worker'da ve tarayıcıda doğrulandı. Bu Faz 3 · madde 5'in CSV
+  yarısıdır; **KANALDAN ÜRÜN ÇEKME hâlâ YOK.**
 - **Panel cilası** (§13 · Faz 4, 20 sa): boş durumlar, yükleniyor, mobil.
-  Artık DOKUZ ekrana dokunur.
+  Artık ON ekrana dokunur.
 - **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal
   ekranında var). En küçük madde.
 - **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
@@ -469,6 +566,30 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
 ## Tekrar tekrar ısıran tuzaklar
 
+- **`latest('<timestamp>')` KULLANMA — kodda da testte de.** Bu turda İKİ
+  mutabakat testinde ve BİR controller'da bulundu; beş turda bir rastgele
+  düşüş üretiyordu. Zaman damgaları SANİYE hassasiyetli ve aynı saniyede
+  yazılan satırlarda sıra belirsiz. UUIDv7 birincil anahtar zaman
+  sıralıdır: **`orderByDesc('id')` kullan.** `DashboardController` örneği
+  daha sinsiydi — fan-out tek olaydan onlarca operasyonu aynı saniyede
+  açıyor ve "son 15" her yenilemede farklı bir alt küme gösterebiliyordu
+  (testi yoktu, o yüzden düşüş de görünmüyordu).
+- **PENCERE/LİMİT VARSA TESTİN ÖLÇEĞİ O PENCEREYİ AŞMALI.** `DriftHistory`
+  yalnızca son 10 kalemi okuyor; altı turluk test mutasyonu yakalayamadı
+  çünkü eski kalemler hâlâ penceredeydi. Ölçek 14'e çıkarılınca yakalandı.
+- **UUIDv7 ANAHTAR, SIRALAMASIZ TESTİ SAHTE YEŞİL TUTAR.** Kimlikler zaman
+  sıralı olduğundan satırlar YARATILIŞ sırasında gelir; beklediğin satırı
+  ÖNCE yaratırsan sıralamanın tamamen kaldırılması testi kırmaz. Elenmesini
+  ya da sonda gelmesini beklediğin satırı ÖNCE yarat.
+- **`(float) "1.299,90"` = 1.0** — Türkçe Excel biçimi. Kuruşlar değil
+  LİRALAR düşer. Virgül varsa nokta BİNLİK ayırıcıdır ve atılır. Türkçe
+  Excel ayrıca BOM ekler ve alan ayırıcısını NOKTALI VİRGÜLE çevirir;
+  üçü birden ele alınmalı.
+- **PostgreSQL'de `max(uuid)` YOKTUR** — `MAX(id)` ile "grup başına son
+  satır" sorgusu doğrudan patlar. `DISTINCT ON (col) ... ORDER BY col, id
+  DESC` kullanılır.
+- **`TenantAwareJob::handle()` FINAL'dir** — alt sınıf `handleForTenant()`
+  yazar ve bağımlılığı `app()` ile alır (imza değiştirilemez).
 - **`Http::fake()` her adrese cevap verir.**
 - **İkinci `Http::fake()` ilkini DEĞİŞTİRMEZ** — `Http::sequence()` kullan.
 - **Adapter bağlam DIŞINDA çağrılabilir** — kimlik `runAsSystem()` ile okunur.
