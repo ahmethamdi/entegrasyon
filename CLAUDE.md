@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 532 test yeşil olmalı
+docker compose exec app php artisan test      # 663 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -88,9 +88,11 @@ Kullanıcının kararı: **yeni panel ekranı yazılmıyor**, Faz 2'nin kalan
 maddeleri (stok/fiyat itme, sipariş yoklaması) çekirdek tarafında
 bitiriliyor. Panel cilası zaten §13 · Faz 4'te listeli.
 
-Bu, **ekran işi çıktığında tarayıcıda doğrulama** kuralını iptal etmez —
-bir ekran yazılırsa yine tarayıcıda sürülür. Karar yeni ekran YAZMAMAK
-üzerinedir; mevcut sekiz ekran çalışıyor ve dokunulmuyor.
+Bu karar KAPSAMINI DOLDURDU: çekirdek tarafında Faz 3'ten kalan madde
+kalmadı ve o tarihten sonra üç panel ekranı daha yazıldı (mutabakat,
+toplu içe aktarma, başarısız işlemler). **Ekran işi çıktığında
+tarayıcıda doğrulama** kuralı yürürlükte ve ÜÇ TURDA DA gerçek boşluk
+buldu.
 
 ## Modül sınırı
 
@@ -104,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-35 domain tablosu, 34 model, 634 test. Stok çekirdeği (`ApplyMovement`,
+36 domain tablosu, 33 model, 663 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -561,11 +563,49 @@ testin sonunda çağrılır.
   Sync state satırı yoksa **yaratılır**: hiç senkronlanmamış listing tam da
   sürüklenmeye en açık olandır ve gözlemi atmak öğrenileni çöpe atmaktır.
 
+## Ölü mektup ekranı kuralları (§12 · §13 · Faz 3 · madde 3+4)
+
+- **§12'nin BEŞ ADIMININ İLK ÜÇÜ ZATEN ÇALIŞIYORDU** (operasyon `dead`,
+  sync state `error_*`, `failed_jobs`); ekran ve buton dördüncü ve
+  beşinci adımdır. Onlar olmadan ölü satır SONSUZA KADAR ölü kalır:
+  `error_permanent` mutabakatta ASLA aday değildir (§10) ve o satıra
+  başka hiçbir mekanizma dokunmaz.
+- **DURUM YAZMAK YETMEZ** (§9 · Karar 18). Buton
+  `sync_operations.status = 'pending'` YAZMAZ; `RequestResync` çağırır
+  ve o, aynı transaction'da `ListingResyncRequested` yazar. Kanonik veri
+  değişmediği için durum değişikliği tek başına hiçbir iş üretmez.
+- **ESKİ ÖLÜ OPERASYON `dead` KALIR.** Yeniden deneme YENİ operasyon
+  açar (`intent=REPAIR`, anahtar `resync:` ön ekli). Eskisini
+  `pending`'e çevirmek "beş kez denendi ve öldü" denetim izini silerdi.
+- **DOMAIN OPERASYON TÜRÜNDEN OKUNUR** (`SyncDomain::
+  fromOperationType()`). `sync_operations`'ta `domain` kolonu YOK.
+  Sabit `INVENTORY` yazılsaydı ölü bir `PRICE_PUSH` için stok senkronu
+  açılır ve fiyat HİÇ gitmezdi. Tanınmayan tür NULL döner ve satır
+  ATLANIR — uydurma bir domain yanlış alanı senkronlardı.
+- **HATA SINIFI VE TAVSİYE GÖSTERİLİR, ÖZET KALICI/GEÇİCİ AYIRIR.**
+  `AUTHENTICATION` (anahtarı yenile) ile `VALIDATION` (veriyi düzelt)
+  kullanıcıya FARKLI iş yaptırır; tek sayıda birleştirilselerdi satıcı
+  "hepsini yeniden dene"ye basar ve müdahale bekleyenler aynı hatayla
+  yeniden ölürdü.
+- **SON DENEMENİN MESAJI OKUNUR**, ilkininki değil — sıralama
+  `attempt_number` üzerinden (zaman damgası saniye hassasiyetli).
+- **GUZZLE GÖVDEYİ 120 KARAKTERDE KESER** ve `(truncated...)` ekler;
+  `json_decode` TEK BAŞINA YETMEZ ve ham metin basılırsa satıcı
+  `ürün` okur. Kırpık gövdeden `message` regex ile çekilir,
+  yarım kaçış dizisi atılır, metnin yarım olduğu `…` ile belirtilir.
+- **FLASH ANAHTARI `success`** — panelin paylaştığı ad budur
+  (`HandleInertiaRequests::share()`). Uydurma ad Inertia'ya HİÇ
+  ULAŞMAZ ve kullanıcı butonun çalıştığını göremez.
+
 ## Henüz yazılmadı
 
-Panel cilası, onay durumu için ayrı ekran, abonelik/ödeme (§13 · Faz 4).
-**Çekirdek tarafında Faz 3'ten kalan madde YOK** ve **mutabakat panel
-ekranı YAZILDI** (`513480d`).
+Metrikler/alarm (§13 · Faz 3 · madde 2) ve kanaldan ürün çekme
+(madde 5'in kalanı). Faz 4: panel cilası, onay durumu için ayrı ekran,
+abonelik/ödeme.
+
+**Faz 3'te BEŞ maddeden ÜÇÜ bitti** — mutabakat motoru, toplu içe
+aktarmanın CSV yarısı ve **ölü mektup ekranı + tek tıkla yeniden
+deneme** (`244a397`, madde 3 ve 4'ü birlikte kapatır).
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
@@ -920,9 +960,10 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 §6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
 **§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
-maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde dokuz ekran
-var: özet · ürünler · **toplu içe aktarma** · ürün kanalları · siparişler ·
-sipariş ayrıntısı · stok · mutabakat · kanallar · eşleştirme.
+maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde ON BİR
+ekran var: özet · ürünler · **toplu içe aktarma** · ürün kanalları ·
+siparişler · sipariş ayrıntısı · stok · mutabakat · **başarısız işlemler**
+· kanallar · eşleştirme.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
@@ -938,12 +979,15 @@ kapısı + onay takibi**, **stok/fiyat itme** ve **sipariş yoklaması**.
 Faz 2 demosu uçtan uca doğrulandı: yoklanan Trendyol siparişi stoğu
 düşürüyor, iptal geri ekliyor.
 
-**FAZ 3 SÜRÜYOR.** ÖNEMLİ DÜZELTME: daha önce "Faz 3 kapandı" yazıyordu
-ve bu YANLIŞTI — o ifade devir notundaki dört maddelik alt listeyi
-kastediyordu, dokümanın §13 · Faz 3 listesini değil. Dokümanın listesinde
-BEŞ madde var ve İKİSİ bitti (mutabakat motoru · toplu içe aktarmanın CSV
-yarısı). Eksikler: metrikler/alarm · senkron geçmişi ekranı · ölü mektup
-ekranı · kanaldan ürün çekme.
+**FAZ 3 SÜRÜYOR.** Dokümanın §13 · Faz 3 listesinde BEŞ madde var ve
+ÜÇÜ bitti: mutabakat motoru · toplu içe aktarmanın CSV yarısı · **ölü
+mektup ekranı + tek tıkla yeniden deneme** (madde 3 ve 4'ü birlikte
+kapatır — `/failures` hem hata gezgini hem ölü mektup ekranıdır).
+Eksikler: **metrikler/alarm** (16 sa) · **kanaldan ürün çekme**
+(~7 sa, §7'ye yeni yetenek arayüzü gerekebilir — MİMARİ karar).
+
+Faz durumu iddiasını devir notundan değil dokümanın §13 listesinden
+doğrula: geçmişte "Faz 3 kapandı" denip yanlış çıktı.
 
 Devir notundaki alt liste (hepsi bitti):
 `UpdateOrderSnapshot` + `UpdateFulfillment`, **`PruneApiCalls`**,
@@ -987,9 +1031,10 @@ davranış dürüst, eksik olan yol. Adapter gövdeleri sözleşmeye uygun ve
 hazır; **fiyat senkronu ayrı bir çekirdek maddesidir** ve dokümanın Faz 2
 listesinde ayrıca yer almıyor.
 
-Panel tarafında hâlâ açık: **mutabakat panel ekranı** (`reconciliation_items`
-yazılıyor ama gösterilmiyor) ve **`RequestResync` + T10** (§18 · P1, faz
-1.6'da listeli ama yazılmadı).
+Panel tarafında bu iki madde ARTIK KAPANDI: **mutabakat ekranı**
+(`513480d`) ve **`RequestResync` + T10** (`9ec5ac0`), üstüne **ölü
+mektup ekranı + tek tıkla yeniden deneme** (`244a397`) de yazıldı.
+Faz 3'ten kalan: **metrikler/alarm** ve **kanaldan ürün çekme**.
 
 **Abonelik/ödeme Faz 4'tür (hafta 21–25), şimdi değil.** §13 · Faz 4:
 "Planlar, abonelik, kota, ödeme entegrasyonu (iyzico) — 26 sa". Şema kararı

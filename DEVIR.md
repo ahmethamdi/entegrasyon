@@ -1,23 +1,15 @@
 # Devir Notu — 19 Ağustos 2026 (Faz 3 sürüyor · Faz 4'ten iki madde)
 
-**BU SOHBET UZADIĞI İÇİN DEVREDİLDİ.** Kod tarafında yarım iş YOK;
-çalışma ağacı temiz ve her şey push edilmiş (`d709262`). Sıradaki
-madde SEÇİLDİ ama başlanmadı — ayrıntı "SIRADAKİ İŞ" bölümünde.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz (`244a397`). Sıradaki
+madde SEÇİLMEDİ — seçenekler "SIRADAKİ İŞ" bölümünde.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
-
-## ÖNCE BUNU OKU — ÖNCEKİ DEVİR NOTU YANLIŞTI
-
-Önceki not "FAZ 3 KAPANDI" diyordu. **YANLIŞ.** O ifade, benim devir
-notunda tuttuğum dört maddelik alt listeyi (fiyat senkronu · resync ·
-prune · mutabakat katmanları) kastediyordu; **dokümanın §13 · Faz 3
-listesi başka.** Doğrusu aşağıdaki tabloda.
 
 ## BURADAN DEVAM ET
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 634 yeşil olmalı
+docker compose exec app php artisan test      # 663 yeşil olmalı
 ```
 
 ### Dokümanın gerçek faz tablosu (§13)
@@ -26,98 +18,144 @@ docker compose exec app php artisan test      # 634 yeşil olmalı
 |---|---|---|---|
 | Faz 1 — Woo dikey dilimi | 140 | 1–8 | BİTTİ |
 | Faz 2 — Trendyol + çift yönlü | 126 | 9–15 | BİTTİ |
-| Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **~58/84** |
+| Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **~68/84** |
 | Faz 4 — Ticarileşme | 90 | 21–25 | 20/90 |
 | Faz 5 — Tampon | 28 | 26 | başlamadı |
 
-**Toplam 468 saat · tahminen ~345 saat bitti → yaklaşık %74.**
+**Toplam 468 saat · tahminen ~355 saat bitti → yaklaşık %76.**
 
-### Faz 3'ün BEŞ maddesi — ikisi bitti
+### Faz 3'ün BEŞ maddesi — üçü bitti
 
 | # | Madde | Saat | Durum |
 |---|---|---|---|
 | 1 | Mutabakat motoru (3 katman, 4 aday, onarım) | 30 | BİTTİ |
 | 2 | Metrik toplama, panel grafikleri, uyarı e-postaları | 16 | **HİÇ YOK** |
-| 3 | Senkron geçmişi ekranı, hata gezgini, yeniden deneme | 14 | çekirdek var (`RequestResync`), **EKRAN YOK** |
-| 4 | Ölü mektup ekranı, bağlantı sağlığı, fazla satış ekranı | 10 | fazla satış VAR, **ölü mektup ekranı YOK** |
+| 3 | Senkron geçmişi ekranı, hata gezgini, yeniden deneme | 14 | **BİTTİ** (`244a397`) |
+| 4 | Ölü mektup ekranı, bağlantı sağlığı, fazla satış ekranı | 10 | **BİTTİ** (`244a397`) |
 | 5 | Toplu içe aktarma (Excel/CSV) + kanaldan ürün çekme | 14 | **CSV BİTTİ**, kanaldan çekme YOK |
 
-## SIRADAKİ İŞ — KULLANICI SEÇTİ, HENÜZ BAŞLANMADI
+**Madde 3 ve 4 aynı ekranla kapandı** — `/failures` hem hata gezgini
+hem ölü mektup ekranıdır ve tek tıkla yeniden deneme onun butonudur.
+Madde 4'ün "bağlantı sağlığı" parçası `/channels` ekranında zaten
+vardı; "fazla satış ekranı" `/inventory` ve `/reconciliation`'da.
 
-**ÖLÜ MEKTUP EKRANI + TEK TIKLA YENİDEN DENEME** (Faz 3 · madde 3+4).
-Kullanıcı 19 Ağustos'ta bu maddeyi seçti; sohbet uzadığı için iş
-başlamadan devredildi. **Hiçbir kod yazılmadı, çalışma ağacı temiz.**
+## SIRADAKİ İŞ — KULLANICI SEÇECEK
 
-### Bu turda çıkarılan hazırlık bulguları (tekrar araştırma yapma)
+Faz 3'te kalan İKİ madde:
 
-**Doküman §12 · Dead letter — beş adım:**
-```
-1. sync_operations.status = 'dead'
-2. listing_sync_states.status = error_transient | error_permanent
-3. Laravel failed_jobs tablosunda tam yük
-4. Panelde "Başarısız işlemler" ekranında görünür        ← YAZILACAK
-5. Kullanıcı TEK TIKLA yeniden deneyebilir               ← YAZILACAK
-```
-İlk üç adım ZATEN ÇALIŞIYOR. Eksik olan yalnızca ekran ve buton.
+1. **Metrikler + alarm** (madde 2, 16 sa) — §17 "ölçülmeyen
+   güvenilirlik iddia edilemez" diyor; sistem çalışıyor ama ne kadar
+   iyi çalıştığı görünmüyor. Faz 3'ün kalan en büyük maddesi.
+2. **Kanaldan ürün çekme** (madde 5'in kalanı, ~7 sa) — Woo'da
+   `fetchListing` TEK ürün okuyor, toplu listeleme yeteneği YOK ve
+   Trendyol'da hiç yazılmamış. §7'ye yeni yetenek arayüzü gerekebilir:
+   **MİMARİ karar, dokümana bakılmadan yapılmaz.**
 
-**`RequestResync` ÇEKİRDEKTE HAZIR** (`Sync/Actions/RequestResync.php`)
-ve butonun çağıracağı tek şey odur. İmza:
-`run(Listing $listing, SyncDomain $domain, string $reason): OutboxEvent`.
-Sebep sabiti: `RequestResync::REASON_MANUAL_RETRY`.
+Sonra **Faz 4**: panel cilası · onay durumu ekranı · abonelik/ödeme
+(90 sa'lık fazın 70 saati).
 
-**KRİTİK KURAL — durum yazmak YETMEZ.** Butonun
-`sync_operations.status = 'pending'` yazması YANLIŞTIR: kanonik veri
-değişmediği için kimse o operasyonu yeniden dispatch etmez ve satır
-sonsuza kadar bekler (§9 · Karar 18). `RequestResync` aynı transaction'da
-`ListingResyncRequested` olayı yazar — asıl iş odur.
-
-**ESKİ ÖLÜ OPERASYON `dead` KALMALI.** Yeniden deneme YENİ operasyon
-açar (REPAIR niyetiyle); eskisini `pending`'e çevirmek "bu satır beş kez
-denendi ve öldü" denetim izini siler.
-
-**ŞEMA NOTLARI** (tinker'da doğrulandı):
-- `sync_operations`'ta **`listing_id` ve `domain` kolonu YOK.** Listing
-  kimliği `entity_id`'de (`entity_type = 'listing'`), domain ise
-  `operation_type`'ta (`INVENTORY_PUSH` / `PRICE_PUSH` / `CONTENT_PUSH` /
-  `MEDIA_PUSH`).
-- `SyncDomain::operationType()` domain → tip çevirir; **ters yön METODU
-  YOK**, yazılması gerekecek. Domain sabit `INVENTORY` yazılırsa ölü bir
-  `PRICE_PUSH` için stok senkronu açılır ve fiyat hiç gitmez.
-- `SyncOperationStatus` case'leri: `pending` · `retrying` · `completed` ·
-  `superseded` · **`dead`** (`FAILED` YOK).
-- Hata sınıfı `last_error_class` kolonunda; ekranda GÖSTERİLMELİ çünkü
-  `AUTHENTICATION` (anahtar yenile) ile `VALIDATION` (ürün verisini
-  düzelt) kullanıcıya farklı iş yaptırır.
-
-**Rota adı önerisi:** `GET /failures` + `POST /failures/retry`. Rota
-model bağlaması KULLANILMAZ (kiracı ara katmanından önce çalışır);
-kimlik `string` alınır ve kontrolcüde kiracı scope'u altında aranır.
-
-### Sonra gelenler (sıra kullanıcının)
-
-1. **Metrikler + alarm** (madde 2, 16 sa) — §17 "ölçülmeyen güvenilirlik
-   iddia edilemez" diyor; sistem çalışıyor ama ne kadar iyi çalıştığı
-   görünmüyor.
-2. **Kanaldan ürün çekme** (madde 5'in kalanı) — Woo'da `fetchListing`
-   TEK ürün okuyor, toplu listeleme yeteneği YOK ve Trendyol'da hiç
-   yazılmamış. §7'ye yeni yetenek arayüzü gerekebilir: MİMARİ karar,
-   dokümana bakılmadan yapılmaz.
-3. **Faz 4'ün kalanı**: panel cilası · onay durumu ekranı ·
-   abonelik/ödeme (90 sa'lık fazın 70 saati).
-
-**EKRAN İŞİ ÇIKARSA TARAYICIDA DOĞRULA** — bu kural iki turdur
-uygulanıyor ve iki turda da işe yaradı.
+**EKRAN İŞİ ÇIKARSA TARAYICIDA DOĞRULA** — bu kural üç turdur
+uygulanıyor ve **üç turda da gerçek boşluk buldu** (bu turda İKİ tane).
 
 Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) **Faz 3 + Faz 4
 bittikten SONRA** — sıra ve gerekçeler aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 1 ve Faz 2 bitti; Faz 3'te 5 maddeden 2'si, Faz 4'te 2 madde
-bitti.** **634 test yeşil** (2195 assertion), Pint temiz (303 dosya),
-sekiz ardışık rastgele sıralı tur temiz. Panelde ON ekran.
+**Faz 1 ve Faz 2 bitti; Faz 3'te 5 maddeden 3'ü, Faz 4'te 2 madde
+bitti.** **663 test yeşil** (2266 assertion), Pint temiz (305 dosya),
+altı ardışık rastgele sıralı tur temiz. Panelde ON BİR ekran.
 
 ## Bu turda ne eklendi
+
+### §12 · ÖLÜ MEKTUP EKRANI + TEK TIKLA YENİDEN DENEME (`244a397`)
+
+| Ne | Nerede |
+|---|---|
+| Controller | `Http/Controllers/SyncFailureController` |
+| Ters çevirim | `SyncDomain::fromOperationType()` (YENİ) |
+| Ekran | `Pages/Failures/Index.vue` |
+| Rota | GET `/failures` · POST `/failures/retry` |
+| Navigasyon | `PanelLayout` — Mutabakat ile Kanallar arasında |
+| Testler | `DeadLetterScreenTest` (29) |
+
+**KAPATILAN BOŞLUK:** §12'nin beş adımının İLK ÜÇÜ zaten çalışıyordu
+(operasyon `dead`, sync state `error_*`, `failed_jobs`); eksik olan
+panel ve butondu. Onlar olmadan ölü satır SONSUZA KADAR ölü kalır:
+`error_permanent` mutabakatta ASLA aday değildir (§10) ve o satıra
+başka hiçbir mekanizma dokunmaz.
+
+**DURUM YAZMAK YETMEZ** (§9 · Karar 18). Buton `sync_operations.status
+= 'pending'` YAZMAZ — kanonik veri değişmediği için kimse o operasyonu
+yeniden dispatch etmez. `RequestResync` çağrılır ve aynı transaction'da
+`ListingResyncRequested` yazar; **asıl iş odur.**
+
+**ESKİ ÖLÜ OPERASYON `dead` KALIR.** Yeniden deneme YENİ operasyon açar
+(`intent=REPAIR`, anahtar `resync:` ön ekli — mutabakatın `repair:`
+ön ekinden ayrı). Eskisini `pending`'e çevirmek "beş kez denendi ve
+öldü" denetim izini silerdi.
+
+**DOMAIN OPERASYON TÜRÜNDEN OKUNUR.** `sync_operations`'ta `domain`
+kolonu YOK; alan `operation_type` içinde yaşıyor. `SyncDomain::
+fromOperationType()` bu turda yazıldı (tanınmayan tür NULL döner,
+istisna fırlatmaz). Sabit `INVENTORY` yazılsaydı ölü bir `PRICE_PUSH`
+için stok senkronu açılır ve fiyat HİÇ gitmezdi.
+
+**HATA SINIFI VE TAVSİYE GÖSTERİLİR, ÖZET KALICI/GEÇİCİ AYIRIR.**
+`AUTHENTICATION` (anahtarı yenile) ile `VALIDATION` (veriyi düzelt)
+kullanıcıya FARKLI iş yaptırır. Gizlenseydi "yeniden dene" tek çare
+gibi görünür ve kullanıcı aynı hatayı sonsuza kadar üretirdi.
+
+**YİRMİ MUTASYON, YİRMİSİ DE YAKALANDI** — ama ÜÇÜ ancak test
+eklendikten sonra:
+
+1. **İKİ SAVUNMADAN BİRİ MUTASYONU GİZLİYORDU.** Toplu denemenin kiracı
+   kapsaması hem operasyon sorgusunda hem de `listing` ilişkisinde
+   vardı; ilişki de kapsanmış olduğu için yabancı satır NULL dönüp
+   atlanıyordu ve **operasyon sorgusundan kapsama TAMAMEN kaldırılsa
+   bile test yeşil kalıyordu**. Kurgu ikinci savunmayı DEVRE DIŞI
+   bıraktı (yabancı operasyon davranan kiracının listing'ini işaret
+   ediyor) ve tek koruma yalnızlaştırıldı. **YENİ KURAL: iki savunma
+   varsa test onları AYRI AYRI sınamalı; yoksa biri sessizce
+   düştüğünde hiçbir şey kırmaz.**
+2. **`sync_attempts` ham sorgusunun kiracı filtresi test edilmemişti** —
+   `DB::table()` global scope'a tabi değil (bu projede BEŞİNCİ tur).
+3. **Özetin kalıcı/geçici ayrımı hiç okunmuyordu.**
+
+**GERÇEK ÇALIŞTIRILDI (gerçek TLS stub + gerçek worker + tarayıcı):**
+Yerel stub (`host.docker.internal:9912`) 400 döndürdü → adapter
+`VALIDATION` sınıflandırdı → operasyon **`dead`**, sync state
+**`error_permanent`** (§12 · adım 1-2). 404 ile iki geçici ölüm daha
+üretildi. Panelde üç satır, özet 3/1, uyarı kutusu ve tavsiye metni
+doğrulandı. **"Hepsini yeniden dene" üç `ListingResyncRequested`
+yazdı, tüketici üç `intent=REPAIR` operasyonu açtı ve eski üçü `dead`
+kaldı** — §12 · adım 5'in tam kanıtı.
+
+**GERÇEK ÇALIŞTIRMADA İKİ BOŞLUK BULUNDU (testler yeşilken):**
+
+1. **FLASH ANAHTARI UYDURULMUŞTU.** `status` yazılmıştı;
+   `HandleInertiaRequests::share()` yalnızca `success`/`warning`
+   paylaşıyor. İstek başarılı oluyor, olay yazılıyor ama kullanıcı
+   **HİÇBİR geri bildirim görmüyordu** — butonun çalışıp çalışmadığını
+   bilemez ve tekrar tekrar basardı. Hiçbir test flash mesajını
+   okumuyordu. **Kuyruk adı uydurma tuzağının panel karşılığı budur.**
+2. **HATA MESAJI HAM İSTİSNA METNİYDİ** ve satıcı
+   `ürün` okuyordu — ekranın TÜM AMACINI boşa çıkarıyordu.
+   Guzzle gövdeyi **120 karakterde kesip** `(truncated...)` eklediği
+   için `json_decode` **TEK BAŞINA YETMEZ**: gerçek kanal mesajları
+   neredeyse HER ZAMAN daha uzundur ve yalnızca tam gövdeyi çözen bir
+   ayrıştırıcı **pratikte HİÇ çalışmazdı**. Kırpık gövdeden `message`
+   alanı çekiliyor, yarım kaçış dizisi ve `(truncated...)` işareti
+   atılıyor, metnin yarım olduğu `…` ile belli ediliyor.
+
+**DEV VERİSİ GERİ ALINDI:** stub durduruldu, sertifika güven
+deposundan silindi, bağlantı gerçek adresine döndü, demo kimlik bilgisi
+ve bu turun operasyon/olay/state satırları silindi, üç stok düzeltmesi
+ledger'dan geri alındı ve **ledger = projeksiyon eşitliği üç varyantta
+da doğrulandı** (`on_hand_after` zinciri de tutarlı: düzeltmeler hep en
+son hareketti).
+
+### Bir önceki tur
 
 ### §13 · Faz 3 · madde 5 · TOPLU İÇE AKTARMA — CSV (`f234303`)
 
@@ -442,14 +480,19 @@ silme partilenir; tur başına üst sınır var; transaction YOK.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 581 yeşil olmalı
+docker compose exec app php artisan test      # 663 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
 
-Panel: `/` özet · `/products` ürünler · `/products/{id}/channels` kanala
-gönderme · `/orders` siparişler · `/inventory` stok · `/channels` kanallar ·
-`/mappings` eşleştirme
+Panel: `/` özet · `/products` ürünler · `/products/import` toplu içe
+aktarma · `/products/{id}/channels` kanala gönderme · `/orders`
+siparişler · `/inventory` stok · `/reconciliation` mutabakat ·
+**`/failures` başarısız işlemler** · `/channels` kanallar · `/mappings`
+eşleştirme
+
+Panel gerçek çalıştırması: `http://localhost:8080` ·
+`demo@entegrasyon.local` / `demo12345`
 
 ## YOL HARİTASI — NE BİTTİ, NE KALDI (19 Ağustos 2026)
 
@@ -468,11 +511,11 @@ kargo, `PruneApiCalls`, resync yolu, fiyat senkron yolu.
 **Kanallar (2):** WooCommerce (tam) · Trendyol (taksonomi, katalog, onay,
 stok/fiyat itme, sipariş yoklaması).
 
-**Panel (9 ekran):** özet · ürünler · ürün oluştur/düzenle · ürün-kanal ·
-siparişler · sipariş ayrıntısı · stok · **mutabakat** · kanallar ·
-eşleştirme.
+**Panel (11 ekran):** özet · ürünler · ürün oluştur/düzenle · **toplu
+içe aktarma** · ürün-kanal · siparişler · sipariş ayrıntısı · stok ·
+mutabakat · **başarısız işlemler** · kanallar · eşleştirme.
 
-**Testler:** 605 yeşil (2110 assertion), 63 test dosyası.
+**Testler:** 663 yeşil (2266 assertion).
 **P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
 
 ### Kaldı — FAZ 4 (panel + abonelik)
@@ -568,6 +611,11 @@ Bu veri commit'lerde DEĞİL, yalnızca yerel veritabanında.
 
 Hepsi testler yeşilken bulundu:
 
+- **Yeniden deneme butonunun geri bildirimi hiç görünmüyordu** —
+  uydurma flash anahtarı.
+- **Hata ekranı ham istisna metni gösteriyordu** — satıcı kaçış dizisi
+  okuyordu ve ekranın amacı boşa çıkıyordu.
+- **İki savunmadan biri kiracı sızıntısı mutasyonunu gizliyordu.**
 - **Bütçe tabanı örneklem havuzuyla ayrışıyordu** (§10 soğuk katman).
 - **Komut kayıtlı ve zamanlı olup YANLIŞ KATMANI sürebiliyordu.**
 - **`supports_webhooks` eager-load'da seçilmiyordu** — webhook kapısı ölüydü.
@@ -618,6 +666,25 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
 ## Tekrar tekrar ısıran tuzaklar
 
+- **İKİ SAVUNMA VARSA BİRİ MUTASYONU GİZLER.** Ölü mektup ekranında
+  toplu denemenin kiracı kapsaması hem operasyon sorgusunda hem
+  `listing` ilişkisindeydi; ilişkininki yabancı satırı NULL'a düşürüp
+  atlıyordu ve **operasyon sorgusundan kapsama tamamen kaldırılsa bile
+  test yeşildi**. Tek satırlık bir eager-load değişikliği o savunmayı
+  sessizce düşürür. Testte ikinci savunmayı **DEVRE DIŞI BIRAK** ve
+  korumayı yalnızlaştır.
+- **FLASH ANAHTARI UYDURULAMAZ — PANELİN PAYLAŞTIĞI AD OLMALI.**
+  `HandleInertiaRequests::share()` yalnızca `success` ve `warning`
+  paylaşıyor. `status` gibi bir ad Inertia'ya HİÇ ULAŞMAZ: istek
+  başarılı olur, iş yapılır, kullanıcı hiçbir geri bildirim görmez.
+  Kuyruk adı uydurma tuzağının panel karşılığı. **Testler görmez** —
+  hiçbiri flash okumuyorsa.
+- **GUZZLE HATA GÖVDESİNİ 120 KARAKTERDE KESER** ve `(truncated...)`
+  ekler; JSON kapanmaz ve `json_decode` düşer. Gerçek kanal mesajları
+  neredeyse her zaman daha uzun olduğu için **yalnızca tam gövdeyi
+  çözen bir ayrıştırıcı pratikte HİÇ çalışmaz** — kırpık gövdeden
+  `message` alanı regex ile çekilmeli, yarım kaçış dizisi (`\u00`)
+  atılmalı. Ham metin ekrana basılırsa satıcı `ürün` okur.
 - **`latest('<timestamp>')` KULLANMA — kodda da testte de.** Bu turda İKİ
   mutabakat testinde ve BİR controller'da bulundu; beş turda bir rastgele
   düşüş üretiyordu. Zaman damgaları SANİYE hassasiyetli ve aynı saniyede
