@@ -1,11 +1,15 @@
-# Devir Notu — 20 Ağustos 2026 (FAZ 4 SÜRÜYOR — onboarding + abonelik şeması/kotası bitti)
+# Devir Notu — 20 Ağustos 2026 (FAZ 4 SÜRÜYOR — onboarding + ABONELİK/ÖDEME bitti)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `d02b984`
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `6f89fe1`
 (+ bu devir notu commit'i). **FAZ 3 KAPALI** ve **FAZ 4 SÜRÜYOR**:
-onboarding akışı (20 sa) ve **abonelik şeması + kotası** bu turda
-yazıldı. Abonelik maddesinin ÇEKİRDEK yarısı bitti; kalan **Stripe
-tahsilat hattı** (checkout + webhook). Faz durumu iddiası devir
-notundan değil **dokümanın §13 listesinden** doğrulandı.
+onboarding akışı (20 sa) ve **abonelik/ödeme maddesinin TAMAMI** (26 sa)
+bu turda yazıldı — şema + kota (`d02b984`) ve **Stripe tahsilat hattı**
+(`6f89fe1`). Faz durumu iddiası devir notundan değil **dokümanın §13
+listesinden** doğrulandı.
+
+**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ** — bilinen tek açık uç.
+`.env`'de `STRIPE_SECRET` yok; ekran bunu AÇIKÇA söylüyor ve düğmeler
+devre dışı. Anahtar tanımlanınca uçtan uca doğrulanmalı.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -13,7 +17,7 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 801 yeşil olmalı
+docker compose exec app php artisan test      # 829 yeşil olmalı
 ```
 
 ### KULLANICI KARARI — ÖDEME STRIPE İLE (20 Ağustos 2026)
@@ -78,29 +82,36 @@ Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 |---|---|---|
 | Onboarding akışı | 20 | **BİTTİ** (`a118b3a`) |
 | Abonelik: şema + kota | ~14 | **BİTTİ** (`d02b984`) |
-| Abonelik: **Stripe tahsilat** (checkout + webhook) | ~12 | **SIRADAKİ** |
-| Panel cilası (boş durumlar, yükleniyor, mobil — ON İKİ ekran) | 20 | kaldı |
+| Abonelik: Stripe tahsilat (checkout + webhook) | ~12 | **BİTTİ** (`6f89fe1`) |
+| Panel cilası (boş durumlar, yükleniyor, mobil — **ON ÜÇ** ekran) | 20 | **SIRADAKİ** |
 | Türkçe yardım dokümantasyonu | 12 | kaldı |
 | Güvenlik kontrol listesi + yük testi | 12 | kaldı |
+| Onay durumu ekranı | küçük | kaldı |
 
 Fazın 20 saati zaten bitmişti (mutabakat panel ekranı `513480d` ve ona
 bağlı işler); onboarding ve abonelik şeması/kotasıyla birlikte
 **~55/90 saat bitti → ~35 saat kaldı.**
 
-**SIRADAKİ İŞ — STRIPE TAHSİLAT HATTI.** Çekirdek yarı bitti: planlar,
-abonelik şeması ve kota çalışıyor ve GERÇEK yollara bağlı. Kalan
-parça, Stripe Checkout oturumu açmak ve webhook'la abonelik durumunu
-güncellemek.
+**ABONELİK/ÖDEME MADDESİ KAPANDI** (26 sa). Şema, kota, checkout ve
+webhook yazıldı; panelde `/billing` ekranı var.
 
-**ANAHTAR GEREKİYOR (test modu).** `.env`'e KULLANICI yazar, kod
-`config()` ile okur; anahtar sohbete YAZILMAZ ve koda GÖMÜLMEZ.
-Gerekli alanlar: `STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`.
+**AÇIK UÇ — GERÇEK ANAHTARLA SÜRÜLMEDİ.** `.env`'de `STRIPE_SECRET`
+tanımlı değil; ekran bunu açıkça söylüyor ve satın alma düğmeleri
+devre dışı. **Anahtarı KULLANICI yazar** (`STRIPE_KEY`,
+`STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`) — sohbete yazılmaz, koda
+gömülmez. Sonra yapılacaklar:
 
-**WEBHOOK'TA PROJENİN GELEN HAT KURALLARI AYNEN GEÇERLİ:** HMAC ham
-gövde üzerinden (`Stripe-Signature`) ve JSON ayrıştırmadan ÖNCE; rota
-`web` grubunda DEĞİL (CSRF muaf, oturumsuz); her durumda 2xx;
-tekilleştirme olay kimliğiyle. `subscriptions.external_ref` kısmi
-tekilliği ikinci bir abonelik satırını zaten engelliyor.
+1. Stripe panelinde webhook uç noktası tanımla:
+   `https://<alan-adı>/webhooks/stripe` · olaylar:
+   `checkout.session.completed`, `customer.subscription.updated`,
+   `customer.subscription.deleted`
+2. Yerelde denemek için: `stripe listen --forward-to
+   localhost:8080/webhooks/stripe` (CLI kendi `whsec_` sırrını verir)
+3. Test kartıyla (`4242 4242 4242 4242`) uçtan uca sür: plan seç →
+   ödeme → webhook → abonelik `active` → kota yükseldi mi
+
+**SIRADAKİ İŞ — PANEL CİLASI** (20 sa): boş durumlar, yükleniyor
+göstergeleri, mobil düzen. Artık ON ÜÇ ekrana dokunur.
 
 **Panel cilası maddesi onboarding'den SONRA gelmeli** — boş durum
 metinleri artık şeridin söylediğiyle çelişmemeli. Ekranların çoğunda
@@ -126,13 +137,66 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 ## Tek cümlede durum
 
 **Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı); **Faz
-4'te ~55/90 saat bitti** — onboarding akışı ve abonelik şeması/kotası
-bu turda kapandı. **801 test yeşil** (2592 assertion), Pint temiz, iki
-ardışık rastgele sıralı tur temiz (seed **1787239065** ·
-**1787239123**). Panelde ON İKİ ekran + her ekranda onboarding şeridi.
-Sıradaki iş **Stripe tahsilat hattı**.
+4'te ~66/90 saat bitti** — onboarding akışı ve **abonelik/ödeme
+maddesinin tamamı** bu turda kapandı. **829 test yeşil** (2673
+assertion), Pint temiz, iki ardışık rastgele sıralı tur temiz (seed
+**1787255323** · **1787255363**). Panelde **ON ÜÇ** ekran + her ekranda
+onboarding şeridi. Sıradaki iş **panel cilası**.
 
 ## Bu turda ne eklendi
+
+### §13 · Faz 4 · STRIPE TAHSİLAT HATTI (`6f89fe1`) — ABONELİK MADDESİNİ KAPATIR
+
+| Ne | Nerede |
+|---|---|
+| Webhook | `Http/Controllers/StripeWebhookController` (`/webhooks/stripe`) |
+| Uygulama | `Domain/Billing/Actions/SyncSubscriptionFromStripe` |
+| Panel | `Http/Controllers/BillingController` + `Pages/Billing/Index.vue` |
+| Yapılandırma | `config/entegrasyon.php` → `stripe.*` (`.env`) |
+| Testler | `StripeWebhookTest` (15) · `BillingScreenTest` (13) |
+
+**LARAVEL CASHIER KULLANILMADI** (kullanıcı kararı): kendi
+`subscriptions` tablosunu dayatıyor ve §4'e göre yazdığımız şemayla
+çakışırdı. Ham `stripe/stripe-php` ile yazıldı; şema AYNEN kaldı.
+
+**ABONELİK DURUMUNUN TEK GERÇEK KAYNAĞI STRIPE'TIR.** Panel yalnızca
+checkout oturumu açar ve YÖNLENDİRİR; aboneliği WEBHOOK yazar. Panel
+yazsaydı ödeme alınmadan kota açılır ve kullanıcı ödeme sayfasında
+vazgeçse bile abonelik açık kalırdı.
+
+**İMZA HAM GÖVDE ÜZERİNDEN ve AYRIŞTIRMADAN ÖNCE.** Kanal
+webhook'larıyla aynı kural; bedeli daha ağır çünkü doğrulanmamış bir
+`checkout.session.completed` ÜCRETSİZ ABONELİK açmak demektir.
+Tolerans 300 sn (tekrar saldırısı).
+
+**PLAN YÜKSELTMEDE ESKİ AKTİF ABONELİK AYNI TRANSACTION'DA KAPATILIR.**
+Kapatılmasaydı `UNIQUE(tenant_id) WHERE aktif` INSERT'i eler ve **ödeme
+alınmışken abonelik AÇILMAZDI** — en kötü hata biçimi.
+
+**BEŞ MUTASYON SÜRÜLDÜ, ÜÇÜ YAKALANDI, İKİSİ GERÇEK BOŞLUK BULDU:**
+
+1. **`canceled` → `active` eşlemesi HAYATTA KALDI.** Silme testi
+   `deleted` bayrağını kullandığı için eşleme tablosuna HİÇ
+   uğramıyordu; oysa Stripe iptali `subscription.updated` +
+   `status: canceled` ile de bildirir ve o yolda iptal edilmiş abonelik
+   AKTİF kalıp kota vermeye devam ederdi. Üç test eklendi.
+2. **Gizli plan kapısı HAYATTA KALDI** — test Stripe yapılandırılmamışken
+   koştuğu için istek SONRAKİ kapıya takılıyor ve aynı alan hatasını
+   üretiyordu. **İki savunma mutasyonu gizler** tuzağının bu projedeki
+   yeni tekrarı. Testler artık Stripe'ı yapılandırılmış varsayıyor ve
+   mesajı BEKLENEN METİNLE sınıyor.
+
+Yakalananlar: geçersiz imzanın kabulü, idempotency çıpasının
+kaldırılması, bilinmeyen durumun `active`'e düşmesi.
+
+**BOZUK BİÇİMLİ OLAYDA `data.object` DÜZ DİZİ GELEBİLİYOR** ve
+`toArray()` ölümcül hata veriyordu — 500 dönmek Stripe'a uç noktayı
+kapattırırdı (yazarken bulundu, testle korunuyor).
+
+**TARAYICIDA DOĞRULANDI:** demo kiracısı `/billing` ekranında
+"6/25 ürün" (yeşil) ve "2/1 kanal" (**KIRMIZI** — kota aşılmış)
+görüyor; Kurumsal planda "sınırsız" yazıyor (sıfır DEĞİL) ve ödeme
+yapılandırılmadığı için ekran bunu AÇIKÇA söylüyor.
 
 ### §13 · Faz 4 · ABONELİK ŞEMASI + KOTA (`d02b984`)
 
@@ -902,7 +966,7 @@ silme partilenir; tur başına üst sınır var; transaction YOK.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 801 yeşil olmalı
+docker compose exec app php artisan test      # 829 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -912,7 +976,7 @@ aktarma (**CSV + kanaldan çekme**) · `/products/{id}/channels` kanala
 gönderme · `/orders`
 siparişler · `/inventory` stok · `/reconciliation` mutabakat ·
 `/failures` başarısız işlemler · **`/metrics` sistem sağlığı** ·
-`/channels` kanallar · `/mappings` eşleştirme
+`/channels` kanallar · `/mappings` eşleştirme · **`/billing` abonelik**
 
 Panel gerçek çalıştırması: `http://localhost:8080` ·
 `demo@entegrasyon.local` / `demo12345`
@@ -941,7 +1005,7 @@ içe aktarma (**iki kaynak: CSV + kanal**) · ürün-kanal · siparişler ·
 sipariş ayrıntısı · stok · mutabakat · başarısız işlemler · **sistem
 sağlığı** · kanallar · eşleştirme.
 
-**Testler:** 801 yeşil (2592 assertion).
+**Testler:** 829 yeşil (2673 assertion).
 **P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
 
 **Faz 4:** onboarding akışı (`a118b3a`) — dört adım, VERİDEN türetilen
@@ -975,11 +1039,11 @@ teknik bağımlılık yok.
 - ~~**Abonelik: şema + kota**~~ — **BİTTİ** (`d02b984`). `plans` ·
   `subscriptions` · `EnforceQuota`; ürün ve kanal yollarına bağlı ve
   tarayıcıda doğrulandı. İki kota: ürün sayısı · kanal sayısı.
-- **Abonelik: Stripe tahsilat hattı** (~12 sa) — checkout oturumu +
-  webhook. **Test modu anahtarı `.env`'e KULLANICI yazar**
-  (`STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`); kod
-  `config()` ile okur. Webhook'ta gelen hat kuralları aynen geçerli
-  (HMAC ham gövde üzerinden, CSRF muaf rota, her durumda 2xx).
+- ~~**Abonelik: Stripe tahsilat hattı**~~ — **BİTTİ** (`6f89fe1`).
+  Checkout + webhook + `/billing` ekranı. **AÇIK UÇ: gerçek anahtarla
+  sürülmedi** — `.env`'e KULLANICI yazar (`STRIPE_KEY`,
+  `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`) ve sonra test kartıyla
+  uçtan uca doğrulanmalı.
 - **Türkçe yardım dokümantasyonu** (12 sa).
 - **Güvenlik kontrol listesi + yük testi** (12 sa).
 - **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal

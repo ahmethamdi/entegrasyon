@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 801 test yeşil olmalı
+docker compose exec app php artisan test      # 829 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-38 tablo (çerçeve dışı), 36 model, 801 test. Stok çekirdeği (`ApplyMovement`,
+38 tablo (çerçeve dışı), 36 model, 829 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -746,12 +746,17 @@ yeniden deneme (`244a397`, madde 3 ve 4'ü birlikte kapatır) · toplu içe
 aktarma (CSV + **kanaldan ürün çekme**, `f234303` + `99008b8`).
 
 **FAZ 4 SÜRÜYOR** (90 sa · hafta 21–25). **Onboarding akışı BİTTİ**
-(20 sa, `a118b3a`) ve **abonelik ŞEMASI + KOTASI BİTTİ**
-(`d02b984` — maddenin çekirdek yarısı). Kalan: **Stripe tahsilat
-hattı** (checkout + webhook, maddenin ikinci yarısı) · panel cilası
-(20 sa) · Türkçe yardım dokümantasyonu (12 sa) · güvenlik kontrol
-listesi + yük testi (12 sa). Onay durumu için ayrı ekran küçük bir
-artık madde.
+(20 sa, `a118b3a`) ve **ABONELİK/ÖDEME MADDESİ BİTTİ** (26 sa):
+şema + kota (`d02b984`) ve Stripe tahsilat hattı (`6f89fe1`).
+Kalan: panel cilası (20 sa) · Türkçe yardım dokümantasyonu (12 sa) ·
+güvenlik kontrol listesi + yük testi (12 sa). Onay durumu için ayrı
+ekran küçük bir artık madde.
+
+**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ** — `.env`'de
+`STRIPE_SECRET` tanımlı değil ve ekran bunu açıkça söylüyor. Anahtar
+tanımlanınca checkout akışı uçtan uca doğrulanmalı (test modu:
+`sk_test_...`). Webhook'u yerelde denemek için `stripe listen
+--forward-to localhost:8080/webhooks/stripe` kullanılır.
 
 **ÖDEME SAĞLAYICISI STRIPE'TIR, iyzico DEĞİL** — kullanıcı kararı
 (20 Ağustos 2026). Doküman §13 · Faz 4 "iyzico" diyor; bu **bilinçli
@@ -1050,6 +1055,41 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   ve rapor yanıltır; ayrıca yarıda kalan turda hangi satırın işlendiği
   bilinmiyor. Hata satıra yazılır, yeniden yükleme kararı KULLANICININDIR.
 
+## Stripe tahsilat kuralları (§13 · Faz 4 · `6f89fe1`)
+
+- **ABONELİK DURUMUNUN TEK GERÇEK KAYNAĞI STRIPE'TIR.** Panel yalnızca
+  checkout oturumu açar ve YÖNLENDİRİR; aboneliği **webhook yazar**.
+  Panel yazsaydı ödeme alınmadan kota açılır ve kullanıcı ödeme
+  sayfasında vazgeçse bile abonelik açık kalırdı.
+- **İMZA HAM GÖVDE ÜZERİNDEN, AYRIŞTIRMADAN ÖNCE** — kanal
+  webhook'larıyla aynı kural. Burada bedeli daha ağır: doğrulanmamış bir
+  `checkout.session.completed` **ÜCRETSİZ ABONELİK** açmak demektir.
+  Tolerans 300 sn (tekrar saldırısı).
+- **TANINMAYAN OLAY 2xx ALIR.** Hata dönmek Stripe'a uç noktayı "bozuk"
+  saydırır ve sonunda webhook'u DEVRE DIŞI bıraktırır — o noktadan sonra
+  GERÇEK ödemeler de gelmez. `data.object` düz dizi gelebilir;
+  `toArray()` körlemesine çağrılırsa 500 döner ve aynı sonucu doğurur.
+- **TEKRAR İKİNCİ ABONELİK AÇMAZ** — çıpa `external_ref` kısmi
+  tekilliği (Stripe olayları EN AZ BİR KEZ gönderilir).
+- **PLAN YÜKSELTMEDE ESKİ AKTİF ABONELİK AYNI TRANSACTION'DA
+  KAPATILIR.** Kapatılmasaydı `UNIQUE(tenant_id) WHERE aktif` INSERT'i
+  eler ve **ödeme alınmışken abonelik AÇILMAZDI** — en kötü hata biçimi.
+- **KİRACI VE PLAN `metadata` İLE TAŞINIR** (hem oturuma hem abonelik
+  nesnesine yazılır — `customer.subscription.*` olayları oturum
+  metadata'sını TAŞIMAZ). Yazılmazsa ödeme alınır ama abonelik açılamaz.
+- **DURUM EŞLEMESİ TEK KAYNAKTIR** (`STATUS_MAP`) ve Stripe'ın
+  `canceled` yazımını §4'ün `cancelled` yazımına çevirir. **İptal İKİ
+  yoldan gelir**: `subscription.deleted` VEYA `subscription.updated` +
+  `status: canceled`; ikincisi eşlenmezse iptal edilmiş abonelik AKTİF
+  kalır ve kota vermeye devam eder (mutasyonla bulundu).
+- **BİLİNMEYEN DURUM `past_due`'YA DÜŞER, `active`'e DEĞİL** — güvenli
+  taraf kotayı VERMEMEKTİR.
+- **ANAHTARLAR `.env`'DEN OKUNUR**, koda gömülmez. `webhook_secret`
+  gizli anahtarla AYNI DEĞİLDİR; karıştırılırsa doğrulama her istekte
+  başarısız olur. Anahtar yoksa ekran bunu AÇIKÇA söyler.
+- **Laravel Cashier KULLANILMADI** — kendi `subscriptions` tablosunu
+  dayatıyor ve §4 şemasıyla çakışırdı (kullanıcı kararı).
+
 ## Abonelik ve kota kuralları (§13 · Faz 4 · `d02b984`)
 
 - **SAĞLAYICI STRIPE'TIR** (kullanıcı kararı) — doküman "iyzico" diyor,
@@ -1237,13 +1277,13 @@ Devir notundaki alt liste (hepsi bitti):
 mutabakat katmanları**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1 testi
 kalmadı.**
 
-**FAZ 4 SÜRÜYOR** (hafta 21–25, ~55/90 sa). **Onboarding akışı BİTTİ**
+**FAZ 4 SÜRÜYOR** (hafta 21–25, ~66/90 sa). **Onboarding akışı BİTTİ**
 (`a118b3a`) — dört adım, VERİDEN türetilen ilerleme, her panel
-ekranında şerit. **Abonelik ŞEMASI + KOTASI BİTTİ** (`d02b984`):
-`plans` · `subscriptions` · `EnforceQuota`, ürün ve kanal yollarına
-bağlı. Kalan: **Stripe tahsilat hattı** (checkout + webhook) · panel
-cilası · Türkçe yardım dokümantasyonu · güvenlik kontrol listesi + yük
-testi · onay durumu ekranı (küçük artık madde). Yeni pazaryerleri (Hepsiburada
+ekranında şerit. **ABONELİK/ÖDEME BİTTİ**: şema + kota (`d02b984`) ve
+**Stripe tahsilat hattı** (`6f89fe1` — checkout + webhook, panelde
+`/billing`). Kalan: panel cilası · Türkçe yardım dokümantasyonu ·
+güvenlik kontrol listesi + yük testi · onay durumu ekranı (küçük artık
+madde). Panelde artık ON ÜÇ ekran var. Yeni pazaryerleri (Hepsiburada
 → Amazon → Etsy → eBay) Faz 4'ten SONRA. Çalışma sırası kararı ("önce
 çekirdek, panel sona") kapsamını doldurdu.
 
