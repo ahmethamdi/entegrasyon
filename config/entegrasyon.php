@@ -43,4 +43,26 @@ return [
         'maintenance' => 'maintenance',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Uyarı bildirimleri
+    |--------------------------------------------------------------------------
+    |
+    | Mimari Karar Dokümanı v2.2 · §11 ("eşik aşımında e-posta") ve §12
+    | ("sistem geneli: eşik aşarsa yönetici uyarısı").
+    |
+    | ADRES KODA GÖMÜLMEZ. Sistem ve bağlantı kapsamlı uyarıların kiracısı
+    | yoktur; alıcıları buradan okunur. TANIMSIZSA o uyarılar GÖNDERİLMEZ
+    | ve bu bilinçli bir kapıdır — uydurma bir adrese göndermek ya da
+    | sessizce ilk kullanıcıya düşmek, uyarının yanlış kişiye gitmesi
+    | demektir. Gönderilmeyen uyarı uygulama günlüğüne yazılır.
+    |
+    | Kiracı kapsamlı uyarılar bu ayardan BAĞIMSIZDIR: onlar kiracının
+    | sahiplerine gider ve adresleri `tenant_users` üzerinden bulunur.
+    |
+    */
+    'alerts' => [
+        'admin_email' => env('ALERT_ADMIN_EMAIL'),
+    ],
+
 ];

@@ -67,6 +67,11 @@ final class ScheduledScansTest extends TestCase
             // güvenilirlik iddia edilemez") kâğıt üzerinde kalır: sınıfın
             // var olması onu kimsenin çağırdığı anlamına gelmez.
             'metrics:capture',
+            // §11 · §12 — eşik aşımı uyarıları. Zamanlanmazsa hiçbir
+            // uyarı e-postası GİTMEZ ve satıcı fazla satışını, ölü
+            // işlerini yalnızca panele bakarsa öğrenir; §12'nin
+            // "günlük özet" maddesi kâğıt üzerinde kalır.
+            'alerts:dispatch',
         ] as $command) {
             $this->assertContains(
                 $command,
@@ -123,6 +128,13 @@ final class ScheduledScansTest extends TestCase
         // çalıştırır; daha seyrek koşmak grafiği okunamaz kılar — günde
         // bir nokta ile "gecikme öğleden sonra tırmanıyor" görülemez.
         $this->assertSame('0 * * * *', $commands['metrics:capture']);
+
+        // §11 · §12 · uyarılar: GÜNLÜK, 09:00. §12 açıkça "günlük özet"
+        // diyor ve tekrar koruması da gün ölçeğinde (`alert_deliveries`
+        // tekilliği). Saatlik koşsaydı ilk tur gönderir, kalan 23'ü
+        // çıpaya takılıp boşuna sorgu atardı. Saat İNSAN okusun diye
+        // seçildi: gece yarısı giden uyarı sabaha kadar okunmaz.
+        $this->assertSame('0 9 * * *', $commands['alerts:dispatch']);
     }
 
     /**
@@ -184,6 +196,7 @@ final class ScheduledScansTest extends TestCase
             'orders:poll',
             'api-calls:prune',
             'metrics:capture',
+            'alerts:dispatch',
         ] as $command) {
             $this->assertContains(
                 $command,

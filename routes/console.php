@@ -173,3 +173,26 @@ Schedule::command('metrics:capture')
     ->hourly()
     ->onOneServer()
     ->withoutOverlapping();
+
+// §11 · §12 · EŞİK AŞIMI UYARILARI — GÜNLÜK.
+//
+// §12 açıkça "GÜNLÜK özet" diyor ve tekrar koruması da gün ölçeğindedir
+// (`alert_deliveries` tekilliği `(alert_key, sent_on)`). Saatlik koşmak
+// aynı işi 24 kez yapar: ilk tur uyarıyı gönderir, kalan 23'ü çıpaya
+// takılıp hiçbir şey yapmadan döner — yalnızca boşuna sorgu.
+//
+// SAAT 09:00: uyarı İNSAN okusun diye gönderilir ve gece yarısı giden
+// bir e-posta sabaha kadar okunmaz. Bakım penceresiyle de çakışmaz —
+// taksonomi 03:00, api-calls budama 04:00.
+//
+// METRİK TOPLAMADAN SONRA ÇALIŞMALI: tarama ÖLÇMEZ, `metric_snapshots`
+// tablosunu OKUR. Saatlik toplama 09:00'da zaten koşmuş olur; boş
+// tabloda bu tur hiçbir uyarı bulamaz ve sessizce sıfırla döner.
+//
+// BU BLOK OLMADAN UYARI HİÇ GİTMEZ: sınıfın var olması onu kimsenin
+// çağırdığı anlamına gelmez (`inbox:recover` tam olarak böyle bir tur
+// boyunca ölü kalmıştı).
+Schedule::command('alerts:dispatch')
+    ->dailyAt('09:00')
+    ->onOneServer()
+    ->withoutOverlapping();
