@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Messaging;
 
+use App\Domain\Catalog\Jobs\ImportProductsFromChannelJob;
 use App\Domain\Catalog\Jobs\ImportProductsJob;
 use App\Domain\Messaging\Jobs\ConsumeOutboxEvent;
 use App\Domain\Messaging\Jobs\ProcessInboxMessage;
@@ -49,6 +50,7 @@ final class JobSerializationTest extends TestCase
             'PushListing' => new PushListing('operation-id', 'tenant-id'),
             'PushPrices' => new PushPrices('operation-id', 'tenant-id'),
             'ImportProductsJob' => new ImportProductsJob('tenant-id', 'import-id'),
+            'ImportProductsFromChannelJob' => new ImportProductsFromChannelJob('tenant-id', 'import-id'),
         ];
     }
 

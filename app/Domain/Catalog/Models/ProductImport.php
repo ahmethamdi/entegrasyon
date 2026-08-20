@@ -20,11 +20,14 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $filename
  * @property string $warehouse_id
  * @property string $status
+ * @property string $source
+ * @property string|null $channel_connection_id
  * @property int $created_count
  * @property int $updated_count
+ * @property int $skipped_count
  * @property array<int, array{line: int, message: string}>|null $errors
  * @property string|null $last_error
- * @property string $payload
+ * @property string|null $payload
  */
 class ProductImport extends Model
 {
@@ -36,8 +39,11 @@ class ProductImport extends Model
         'filename',
         'warehouse_id',
         'status',
+        'source',
+        'channel_connection_id',
         'created_count',
         'updated_count',
+        'skipped_count',
         'errors',
         'last_error',
         'payload',
@@ -51,8 +57,15 @@ class ProductImport extends Model
             'errors' => 'array',
             'created_count' => 'integer',
             'updated_count' => 'integer',
+            'skipped_count' => 'integer',
             'started_at' => 'datetime',
             'finished_at' => 'datetime',
         ];
+    }
+
+    /** Kanaldan mı çekildi, dosyadan mı yüklendi. */
+    public function isFromChannel(): bool
+    {
+        return $this->source === 'channel';
     }
 }

@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Registry;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
@@ -94,6 +95,11 @@ final class AdapterRegistry
     {
         return [
             'catalog' => $adapter instanceof SupportsCatalog,
+            // `catalog`'tan AYRI anahtar: ürün GÖNDERMEK ile kanaldan ürün
+            // ÇEKMEK farklı yeteneklerdir ve bir kanal yalnızca birini
+            // destekleyebilir. Tek anahtara bağlansaydı panel, içe aktarmayı
+            // desteklemeyen kanalda da düğmeyi gösterirdi.
+            'catalog_import' => $adapter instanceof SupportsCatalogImport,
             'inventory' => $adapter instanceof SupportsInventory,
             'pricing' => $adapter instanceof SupportsPricing,
             'orders' => $adapter instanceof SupportsOrders,

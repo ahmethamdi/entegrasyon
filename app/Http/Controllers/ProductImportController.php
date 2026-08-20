@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Catalog\Jobs\ImportProductsFromChannelJob;
 use App\Domain\Catalog\Jobs\ImportProductsJob;
 use App\Domain\Catalog\Models\ProductImport;
+use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Throwable;
 
 /**
  * Toplu ürün içe aktarma ekranı.
@@ -43,20 +49,27 @@ final class ProductImportController extends Controller
     /** 500 satırlık bir CSV ~100 KB; 2 MB fazlasıyla yeterli. */
     private const MAX_KILOBYTES = 2048;
 
+    public function __construct(private readonly AdapterRegistry $registry) {}
+
     public function index(): InertiaResponse
     {
         $imports = ProductImport::query()
             ->orderByDesc('id')
             ->limit(self::HISTORY_LIMIT)
-            ->get(['id', 'filename', 'status', 'created_count', 'updated_count', 'errors', 'last_error', 'created_at', 'finished_at']);
+            ->get(['id', 'filename', 'status', 'source', 'created_count', 'updated_count', 'skipped_count', 'errors', 'last_error', 'created_at', 'finished_at']);
 
         return Inertia::render('Products/Import', [
             'rows' => $imports->map(fn (ProductImport $import): array => [
                 'id' => $import->id,
                 'filename' => $import->filename,
                 'status' => $import->status,
+                // KAYNAK GÖSTERİLİR: aynı listede duran iki tur farklı
+                // şeyler yapmıştır ve satıcı hangisinin dosyadan hangisinin
+                // kanaldan geldiğini bilmelidir.
+                'source' => $import->source,
                 'created' => $import->created_count,
                 'updated' => $import->updated_count,
+                'skipped' => $import->skipped_count,
                 // Hata listesi SATIR NUMARASI taşır: sayı tek başına
                 // kullanıcıya ne yapacağını söylemez.
                 'errors' => $import->errors ?? [],
@@ -68,7 +81,40 @@ final class ProductImportController extends Controller
                 'required' => ['sku', 'baslik', 'fiyat', 'stok'],
                 'optional' => ['aciklama', 'marka', 'barkod', 'kategori'],
             ],
+            'connections' => $this->importableConnections(),
         ]);
+    }
+
+    /**
+     * Kanaldan içe aktarma turu başlatır.
+     *
+     * Tur KUYRUKTA çalışır — CSV yüklemesiyle aynı gerekçe ve burada daha
+     * güçlü: kanal turu 50 sayfaya kadar HTTP isteği yapar.
+     */
+    public function storeFromChannel(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'connection_id' => ['required', 'string'],
+        ]);
+
+        $connection = $this->importableConnection($validated['connection_id']);
+
+        $import = ProductImport::query()->create([
+            'tenant_id' => TenantContext::idOrFail(),
+            'filename' => $connection->label ?: $connection->external_account_id,
+            'warehouse_id' => $this->defaultWarehouseId($request),
+            'status' => 'pending',
+            'source' => 'channel',
+            'channel_connection_id' => $connection->id,
+            // Kanal turunda gövde YOKTUR — ürünler çalışma anında çekilir.
+            'payload' => null,
+        ]);
+
+        // İŞ EN SONDA ATILIR — CSV yolundaki gerekçenin aynısı.
+        ImportProductsFromChannelJob::dispatch($import->tenant_id, $import->id);
+
+        return redirect('/products/import')
+            ->with('success', "{$import->filename} kanalından ürünler çekiliyor.");
     }
 
     public function store(Request $request): RedirectResponse
@@ -121,5 +167,91 @@ final class ProductImportController extends Controller
         abort_if($warehouse === null, 409, 'Kiracının varsayılan deposu yok.');
 
         return $warehouse->id;
+    }
+
+    // ------------------------------------------------------------- kanal
+
+    /**
+     * İçe aktarmayı destekleyen AKTİF bağlantılar.
+     *
+     * Yetenek `instanceof` ile okunur (§7); `if ($channel === '...')`
+     * YAZILMAZ. Desteklemeyen kanal listede HİÇ görünmez — düğmeyi gösterip
+     * sonra hata vermek satıcıya iş yaptırıp geri almaktır.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function importableConnections(): array
+    {
+        return ChannelConnection::query()
+            // adapter_class DA YÜKLENİR: registry onu okuyarak yetenekleri
+            // çözer. Seçilmezse yetenekler SESSİZCE boşalır ve liste boş
+            // gelir (bu tuzak projede birkaç kez çıktı).
+            ->with('channelType:code,name,adapter_class')
+            ->where('status', 'active')
+            ->orderBy('label')
+            ->get()
+            ->filter(fn (ChannelConnection $c): bool => $this->supportsImport($c))
+            ->map(fn (ChannelConnection $c): array => [
+                'id' => $c->id,
+                'label' => $c->label ?: $c->external_account_id,
+                'channel' => $c->channelType?->name ?? $c->channel_type_code,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Gönderilen bağlantı gerçekten içe aktarılabilir mi.
+     *
+     * Üç kapı da `ValidationException` ile alan hatasına çevrilir, 404/500
+     * ile değil: kullanıcı yanlış bir şey seçmiştir, sunucu bozulmamıştır.
+     */
+    private function importableConnection(string $connectionId): ChannelConnection
+    {
+        $connection = ChannelConnection::query()
+            ->with('channelType:code,name,adapter_class')
+            ->find($connectionId);
+
+        if ($connection === null) {
+            throw ValidationException::withMessages(['connection_id' => 'Kanal bulunamadı.']);
+        }
+
+        if ($connection->status !== 'active') {
+            throw ValidationException::withMessages([
+                'connection_id' => sprintf(
+                    '%s bağlantısı aktif değil; önce sağlık kontrolünü geçmesi gerekiyor.',
+                    $connection->label ?: $connection->external_account_id,
+                ),
+            ]);
+        }
+
+        if (! $this->supportsImport($connection)) {
+            throw ValidationException::withMessages([
+                'connection_id' => sprintf(
+                    '%s kanalı kanaldan ürün çekmeyi desteklemiyor.',
+                    $connection->channelType?->name ?? $connection->channel_type_code,
+                ),
+            ]);
+        }
+
+        return $connection;
+    }
+
+    private function supportsImport(ChannelConnection $connection): bool
+    {
+        try {
+            return $this->registry->capabilitiesFor($connection)['catalog_import'] ?? false;
+        } catch (Throwable $e) {
+            // SESSİZCE YUTULMAZ: bu catch bir turda `adapter_class`
+            // seçilmediğini gizlemişti ve yetenekler sebepsiz boş
+            // görünmüştü.
+            Log::warning('products.import_capabilities_unavailable', [
+                'connection' => $connection->id,
+                'channel_type' => $connection->channel_type_code,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 }

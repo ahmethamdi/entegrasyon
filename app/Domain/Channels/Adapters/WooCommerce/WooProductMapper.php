@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Adapters\WooCommerce;
 
 use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\RemoteListing;
+use App\Domain\Sync\Support\RemoteProduct;
 use DateTimeImmutable;
 
 /**
@@ -53,6 +54,78 @@ final class WooProductMapper
         // Kanala özgü öznitelikler kanonik alanları EZMEZ; çakışma olursa
         // kanonik kazanır, yoksa panelde görünen ile gönderilen ayrışır.
         return [...$payload->attributes, ...$product];
+    }
+
+    /**
+     * Woo ürün gövdesinden İÇE AKTARILABİLİR ürün.
+     *
+     * `toRemoteListing()` ile aynı gövdeyi okur ama FARKLI soruyu
+     * cevaplar: o "benim listemin kanaldaki hâli ne", bu "kanaldaki bu
+     * ürünü kataloğuma nasıl yazarım". Çıpa bu yüzden `id` değil `sku`
+     * ve alanlar `CreateProduct`'ın imzasına göre seçilir.
+     *
+     * SKU BOŞSA `null` YAZILIR, uydurulmaz: Woo'da SKU zorunlu değildir
+     * ve kanal kimliğini SKU yapmak satıcı aynı ürünü kendi SKU'suyla
+     * yüklediğinde KOPYA ürün üretirdi.
+     *
+     * FİYAT `regular_price`'TAN OKUNUR, `price`'tan değil: `price`
+     * indirim varsa indirimli değeri taşır ve içe aktarma satıcının liste
+     * fiyatını KALICI olarak indirimli değere düşürürdü. İndirim
+     * kampanyası biter, kanonik fiyat düşük kalır ve o fiyat sonraki
+     * senkronda tüm kanallara YAYILIR.
+     *
+     * @param  array<string, mixed>  $product
+     */
+    public static function toRemoteProduct(array $product): RemoteProduct
+    {
+        $sku = isset($product['sku']) ? trim((string) $product['sku']) : '';
+
+        return new RemoteProduct(
+            externalId: (string) ($product['id'] ?? ''),
+            sku: $sku !== '' ? $sku : null,
+            title: isset($product['name']) ? (string) $product['name'] : null,
+            price: isset($product['regular_price']) && $product['regular_price'] !== ''
+                ? (string) $product['regular_price']
+                : null,
+            quantity: isset($product['stock_quantity']) && $product['stock_quantity'] !== null
+                ? (int) $product['stock_quantity']
+                : null,
+            description: isset($product['description']) ? (string) $product['description'] : null,
+            // Woo'da marka çekirdek alan DEĞİLDİR (eklenti taksonomisi);
+            // yoksa null kalır ve içe aktarma onu boş geçer.
+            brand: self::firstBrandName($product),
+            barcode: null,
+            status: isset($product['status']) ? (string) $product['status'] : null,
+            raw: $product,
+        );
+    }
+
+    /**
+     * Woo'nun `brands` taksonomisinden ilk marka adı.
+     *
+     * Eklentiye bağlıdır ve çoğu mağazada HİÇ YOKTUR; bulunamazsa `null`
+     * döner. Boş dize DEĞİL `null`: boş dize bir marka adı değildir ve
+     * kanonik alana yazılırsa panel "markası var ama boş" gösterirdi.
+     *
+     * @param  array<string, mixed>  $product
+     */
+    private static function firstBrandName(array $product): ?string
+    {
+        $brands = $product['brands'] ?? null;
+
+        if (! is_array($brands)) {
+            return null;
+        }
+
+        $first = $brands[0] ?? null;
+
+        if (! is_array($first) || ! isset($first['name'])) {
+            return null;
+        }
+
+        $name = trim((string) $first['name']);
+
+        return $name !== '' ? $name : null;
     }
 
     /**

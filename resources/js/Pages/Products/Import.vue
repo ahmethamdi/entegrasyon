@@ -6,6 +6,10 @@ import PanelLayout from '../../Layouts/PanelLayout.vue';
 defineProps({
     rows: { type: Array, default: () => [] },
     columns: { type: Object, default: () => ({ required: [], optional: [] }) },
+    // İçe aktarmayı DESTEKLEYEN aktif bağlantılar. Desteklemeyen kanal
+    // listeye hiç girmez — düğmeyi gösterip sonra hata vermek satıcıya iş
+    // yaptırıp geri almaktır.
+    connections: { type: Array, default: () => [] },
 });
 
 const page = usePage();
@@ -30,6 +34,27 @@ function submit() {
 
 function onFileChange(event) {
     form.file = event.target.files[0] ?? null;
+}
+
+const channelForm = useForm({ connection_id: '' });
+
+function submitChannel() {
+    channelForm.post('/products/import/channel', { preserveScroll: true });
+}
+
+/**
+ * Kaynak etiketi — aynı listede duran iki tur farklı şeyler yapmıştır.
+ *
+ * Dosya turunda satıcı dosyayı düzeltip yeniden yükler; kanal turunda
+ * kanaldaki ürünü düzeltir. Ayrılmasaydı hangi işi yapacağını bilemezdi.
+ */
+const sources = {
+    csv: { text: 'DOSYA', class: 'bg-stone-100 text-stone-700' },
+    channel: { text: 'KANAL', class: 'bg-sky-100 text-sky-800' },
+};
+
+function sourceFor(source) {
+    return sources[source] ?? sources.csv;
 }
 
 /**
@@ -115,6 +140,66 @@ function toggleErrors(id) {
                         {{ form.processing ? 'Yükleniyor…' : 'Yükle' }}
                     </button>
                 </form>
+
+                <!--
+                    KANALDAN ÇEKME — aynı ekranın ikinci kaynağı.
+                    Satıcının ürünleri ZATEN bir kanalda duruyor; CSV'ye
+                    döküp yeniden yüklemesini istemek, sistemin bağlandığı
+                    kanaldan okuyabildiği veriyi elle taşıtmak demektir.
+                -->
+                <form
+                    class="mt-6 rounded border border-stone-200 bg-white p-6"
+                    @submit.prevent="submitChannel"
+                >
+                    <label class="block text-sm font-medium text-stone-700">
+                        Kanaldan çek
+                    </label>
+
+                    <p v-if="connections.length === 0" class="mt-2 text-sm text-stone-600">
+                        Ürün çekmeyi destekleyen aktif bir kanal bağlantısı yok.
+                        Önce Kanallar ekranından bir mağaza bağla.
+                    </p>
+
+                    <template v-else>
+                        <select
+                            v-model="channelForm.connection_id"
+                            class="mt-2 block w-full rounded border border-stone-300 px-3 py-2 text-sm"
+                        >
+                            <option value="">Kanal seç…</option>
+                            <option
+                                v-for="connection in connections"
+                                :key="connection.id"
+                                :value="connection.id"
+                            >
+                                {{ connection.label }} — {{ connection.channel }}
+                            </option>
+                        </select>
+
+                        <p v-if="channelForm.errors.connection_id" class="mt-2 text-sm text-red-700">
+                            {{ channelForm.errors.connection_id }}
+                        </p>
+
+                        <!--
+                            STOK SINIRI BURADA DA SÖYLENİR ve kanal turunda
+                            DAHA KRİTİKTİR: kanaldaki stok bayat olabilir ve
+                            var olan ürüne uygulansaydı satılmış mallar geri
+                            gelirdi.
+                        -->
+                        <p class="mt-3 text-xs leading-relaxed text-stone-500">
+                            Kanaldaki ürünler SKU ile eşleştirilir. Yeni SKU'lar açılır,
+                            var olanların yalnızca içeriği güncellenir —
+                            <span class="font-medium text-stone-700">stoğa dokunulmaz.</span>
+                        </p>
+
+                        <button
+                            type="submit"
+                            class="mt-4 rounded bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:opacity-50"
+                            :disabled="channelForm.processing || !channelForm.connection_id"
+                        >
+                            {{ channelForm.processing ? 'Başlatılıyor…' : 'Ürünleri çek' }}
+                        </button>
+                    </template>
+                </form>
             </div>
 
             <div class="rounded border border-stone-200 bg-white p-6">
@@ -157,25 +242,34 @@ function toggleErrors(id) {
             </div>
         </div>
 
-        <h2 class="mt-10 text-sm font-medium text-stone-900">Geçmiş yüklemeler</h2>
+        <h2 class="mt-10 text-sm font-medium text-stone-900">Geçmiş içe aktarmalar</h2>
 
         <div class="mt-3 overflow-x-auto rounded border border-stone-200 bg-white">
             <table class="w-full text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50">
                     <tr class="text-left text-xs uppercase tracking-wide text-stone-500">
-                        <th class="px-4 py-3 font-medium">Dosya</th>
+                        <th class="px-4 py-3 font-medium">Kaynak</th>
                         <th class="px-4 py-3 font-medium">Durum</th>
                         <th class="px-4 py-3 text-right font-medium">Yeni</th>
                         <th class="px-4 py-3 text-right font-medium">Güncellenen</th>
+                        <th class="px-4 py-3 text-right font-medium">Atlanan</th>
                         <th class="px-4 py-3 text-right font-medium">Hata</th>
-                        <th class="px-4 py-3 font-medium">Yüklendi</th>
+                        <th class="px-4 py-3 font-medium">Başladı</th>
                     </tr>
                 </thead>
 
                 <tbody class="divide-y divide-stone-100">
                     <template v-for="row in rows" :key="row.id">
                         <tr class="hover:bg-stone-50">
-                            <td class="px-4 py-3 font-mono text-stone-900">{{ row.filename }}</td>
+                            <td class="px-4 py-3">
+                                <span
+                                    class="mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium tracking-wide"
+                                    :class="sourceFor(row.source).class"
+                                >
+                                    {{ sourceFor(row.source).text }}
+                                </span>
+                                <span class="font-mono text-stone-900">{{ row.filename }}</span>
+                            </td>
 
                             <td class="px-4 py-3">
                                 <span
@@ -191,6 +285,15 @@ function toggleErrors(id) {
 
                             <td class="px-4 py-3 text-right font-mono text-stone-900">{{ row.created }}</td>
                             <td class="px-4 py-3 text-right font-mono text-stone-900">{{ row.updated }}</td>
+
+                            <!--
+                                ATLANAN AYRI SAYILIR: "47 ürün geldi" ile
+                                "47 geldi, 3 atlandı" farklı şeylerdir ve
+                                ikincisi satıcıya yapacak bir iş verir.
+                            -->
+                            <td class="px-4 py-3 text-right font-mono" :class="row.skipped > 0 ? 'text-amber-900' : 'text-stone-400'">
+                                {{ row.skipped }}
+                            </td>
 
                             <td class="px-4 py-3 text-right">
                                 <button
@@ -215,14 +318,23 @@ function toggleErrors(id) {
                             düzelteceğini bilmeli.
                         -->
                         <tr v-if="expanded === row.id" class="bg-stone-50">
-                            <td colspan="6" class="px-4 py-3">
+                            <td colspan="7" class="px-4 py-3">
                                 <ul class="space-y-1">
                                     <li
                                         v-for="(error, index) in row.errors"
                                         :key="index"
                                         class="text-xs text-stone-700"
                                     >
-                                        <span class="font-mono text-stone-900">{{ error.line }}. satır:</span>
+                                        <!--
+                                            SATIR NUMARASI YALNIZCA DOSYA
+                                            TURUNDA ANLAMLIDIR. Kanal turunda
+                                            satır yoktur ve `0` yazılsaydı
+                                            kullanıcı dosyasının sıfırıncı
+                                            satırını aramaya giderdi.
+                                        -->
+                                        <span v-if="error.line > 0" class="font-mono text-stone-900">
+                                            {{ error.line }}. satır:
+                                        </span>
                                         {{ error.message }}
                                     </li>
                                 </ul>
@@ -231,8 +343,8 @@ function toggleErrors(id) {
                     </template>
 
                     <tr v-if="rows.length === 0">
-                        <td colspan="6" class="px-4 py-12 text-center text-sm text-stone-600">
-                            Henüz dosya yüklenmedi.
+                        <td colspan="7" class="px-4 py-12 text-center text-sm text-stone-600">
+                            Henüz içe aktarma yapılmadı.
                         </td>
                     </tr>
                 </tbody>

@@ -521,6 +521,132 @@ final class WooCommerceAdapterTest extends TestCase
         $this->assertSame($connection->id, $first->connection()->id);
     }
 
+    // ------------------------------------------------- katalog içe aktarma
+
+    /**
+     * Sayfa okuma `X-WP-TotalPages` başlığından imleç türetir.
+     *
+     * §7 · SupportsCatalogImport. İmleç OPAKTIR ama Woo'da sayfa
+     * numarasıdır; son sayfada `hasMore` false olmalı, yoksa tur sonsuza
+     * kadar boş sayfa çeker ve kotayı yakardı.
+     */
+    #[Test]
+    public function fetching_a_product_page_derives_the_cursor_from_the_page_header(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake([
+            '*' => Http::response(
+                [['id' => 7, 'sku' => 'WOO-1', 'name' => 'Ürün', 'regular_price' => '19.90', 'stock_quantity' => 4]],
+                200,
+                ['X-WP-TotalPages' => '3'],
+            ),
+        ]);
+
+        $page = $this->asTenant($tenant, fn () => $this->adapterFor($connection)->fetchProductPage());
+
+        $this->assertCount(1, $page->products);
+        $this->assertSame('WOO-1', $page->products[0]->sku);
+        $this->assertSame('19.90', $page->products[0]->price);
+        $this->assertSame(4, $page->products[0]->quantity);
+
+        $this->assertTrue($page->hasMore);
+        $this->assertSame('2', $page->nextCursor, 'İmleç bir sonraki sayfaya işaret etmeli.');
+
+        Http::assertSent(function (Request $request): bool {
+            $this->assertStringContainsString('products', $request->url());
+            $this->assertStringContainsString('page=1', $request->url());
+
+            return true;
+        });
+    }
+
+    #[Test]
+    public function the_last_page_reports_no_more_results(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake(['*' => Http::response([], 200, ['X-WP-TotalPages' => '2'])]);
+
+        $page = $this->asTenant($tenant, fn () => $this->adapterFor($connection)->fetchProductPage('2'));
+
+        $this->assertFalse($page->hasMore, 'Son sayfada tur DURMALI.');
+        $this->assertNull($page->nextCursor);
+    }
+
+    /**
+     * FİYAT `regular_price`'TAN OKUNUR, `price`'tan DEĞİL.
+     *
+     * `price` indirim varsa indirimli değeri taşır; içe aktarma satıcının
+     * LİSTE fiyatını kalıcı olarak indirimli değere düşürürdü ve kampanya
+     * bitince o düşük fiyat tüm kanallara yayılırdı.
+     */
+    #[Test]
+    public function the_list_price_is_read_not_the_discounted_price(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake([
+            '*' => Http::response([[
+                'id' => 9,
+                'sku' => 'İNDİRİM',
+                'name' => 'Kampanyalı',
+                'regular_price' => '100.00',
+                'price' => '60.00',
+                'sale_price' => '60.00',
+            ]], 200, ['X-WP-TotalPages' => '1']),
+        ]);
+
+        $page = $this->asTenant($tenant, fn () => $this->adapterFor($connection)->fetchProductPage());
+
+        $this->assertSame(
+            '100.00',
+            $page->products[0]->price,
+            'İndirimli fiyat kanonik fiyata YAZILMAMALI.',
+        );
+    }
+
+    /**
+     * SKU'SUZ ÜRÜN REDDEDİLMEZ, İŞARETLENİR.
+     *
+     * Woo'da SKU zorunlu değildir. Adapter burada reddetseydi ürün sessizce
+     * kaybolur ve satıcı eksiğin nedenini bulamazdı; ayıklama ve raporlama
+     * içe aktarma action'ının işidir.
+     */
+    #[Test]
+    public function a_product_without_a_sku_comes_back_marked_not_dropped(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake([
+            '*' => Http::response(
+                [['id' => 11, 'sku' => '', 'name' => 'SKU yok']],
+                200,
+                ['X-WP-TotalPages' => '1'],
+            ),
+        ]);
+
+        $page = $this->asTenant($tenant, fn () => $this->adapterFor($connection)->fetchProductPage());
+
+        $this->assertCount(1, $page->products, 'Ürün DÜŞÜRÜLMEMELİ.');
+        $this->assertNull($page->products[0]->sku, 'Boş SKU null olmalı, uydurulmamalı.');
+        $this->assertFalse($page->products[0]->isImportable());
+    }
+
+    /** Yetenek `instanceof` ile okunur — panelde kanal adı kontrol edilmez. */
+    #[Test]
+    public function the_registry_reports_the_catalog_import_capability(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        $capabilities = $this->asTenant(
+            $tenant,
+            fn (): array => app(AdapterRegistry::class)->capabilitiesFor($connection),
+        );
+
+        $this->assertTrue($capabilities['catalog_import']);
+    }
+
     // ---------------------------------------------------------------- yardımcılar
 
     /** @return array{0: Tenant, 1: ChannelConnection} */

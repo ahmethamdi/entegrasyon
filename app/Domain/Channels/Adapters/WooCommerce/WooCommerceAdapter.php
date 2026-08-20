@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
@@ -30,6 +31,8 @@ use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
+use App\Domain\Sync\Support\RemoteProduct;
+use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
 use DateTimeImmutable;
@@ -66,7 +69,7 @@ use Throwable;
  * Webhook bir yetenek değil taşıma biçimidir — SupportsWebhooks arayüzü
  * YOKTUR. İmza doğrulama ve olay kimliği çıkarma ChannelAdapter'ın parçası.
  */
-final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
+final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
 {
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -326,6 +329,65 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
         $product = $response->json();
 
         return is_array($product) ? WooProductMapper::toRemoteListing($product) : null;
+    }
+
+    // ------------------------------------------------- katalog içe aktarma
+
+    /**
+     * Kanaldaki ürünleri sayfa sayfa okur — §7 · SupportsCatalogImport.
+     *
+     * İMLEÇ SAYFA NUMARASIDIR ve `fetchOrders()` ile aynı biçimdedir;
+     * `X-WP-TotalPages` başlığı toplam sayfayı verir.
+     *
+     * `status` FİLTRESİ YOKTUR — taslak ve özel ürünler de gelir. Satıcının
+     * kanalda taslak tuttuğu ürün onun kataloğunun parçasıdır; süzülseydi
+     * içe aktarma sessizce eksik çalışır ve satıcı neyin gelmediğini
+     * anlayamazdı. Ne yapılacağına içe aktarma action'ı karar verir.
+     *
+     * VARYASYONLAR ÇEKİLMEZ: `type=variable` ürünün varyasyonları ayrı uç
+     * noktadadır (`products/{id}/variations`). Bu tur ürün seviyesinde
+     * çalışır ve kanonik modelde tek varyantlı ürün yaratır — varyasyon
+     * desteği ayrı bir maddedir. Sessizce yarım varyant yaratmak, satıcının
+     * bedenlerinden yalnızca birinin stoğunu senkronlamak demek olurdu.
+     */
+    public function fetchProductPage(?string $cursor = null): RemoteProductPage
+    {
+        $page = $cursor === null ? 1 : (int) $cursor;
+
+        $response = $this->client->get('products', [
+            'per_page' => 100,
+            'page' => $page,
+            'orderby' => 'id',
+            'order' => 'asc',
+        ]);
+
+        $response->throw();
+
+        $products = array_values(array_filter((array) $response->json(), 'is_array'));
+
+        $totalPages = (int) ($response->header('X-WP-TotalPages') ?: 1);
+
+        return new RemoteProductPage(
+            products: array_map(
+                static fn (array $product): RemoteProduct => WooProductMapper::toRemoteProduct($product),
+                $products,
+            ),
+            nextCursor: $page < $totalPages ? (string) ($page + 1) : null,
+            hasMore: $page < $totalPages,
+        );
+    }
+
+    /**
+     * Tur başına en fazla 50 sayfa — 100'lük sayfayla 5.000 ürün.
+     *
+     * Sınır KOTA değil EMNİYETTİR: bozuk bir kanal `X-WP-TotalPages`'i
+     * sürekli büyük döndürürse tur sonsuza kadar sürerdi. Kalan ürünler
+     * kullanıcının ikinci turunda gelir; içe aktarma var olan SKU'yu
+     * günceller, yani tekrar zararsızdır.
+     */
+    public function maxImportPages(): int
+    {
+        return 50;
     }
 
     // ---------------------------------------------------------------- sipariş

@@ -70,6 +70,10 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
         ->name('products.import.index');
     Route::post('/products/import', [ProductImportController::class, 'store'])
         ->name('products.import.store');
+    // Kanaldan ürün çekme (§13 · Faz 3 · madde 5). Aynı ekranın ikinci
+    // kaynağı; AYNI durum satırını ve raporu kullanır.
+    Route::post('/products/import/channel', [ProductImportController::class, 'storeFromChannel'])
+        ->name('products.import.channel');
     Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
 
