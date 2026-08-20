@@ -12,6 +12,10 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             ChannelTypeSeeder::class,
+            // §4: `plans` kiracısız + seed. `free` planı
+            // `EnforceQuota::DEFAULT_PLAN_CODE` ile sabittir ve
+            // aboneliği olmayan her kiracı ona düşer.
+            PlanSeeder::class,
         ]);
     }
 }

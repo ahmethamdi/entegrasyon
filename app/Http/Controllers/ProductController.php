@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Billing\Actions\EnforceQuota;
+use App\Domain\Billing\Enums\QuotaMetric;
+use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Catalog\Actions\CreateProduct;
 use App\Domain\Catalog\Actions\UpdateProduct;
 use App\Domain\Catalog\Exceptions\DuplicateSkuException;
@@ -77,6 +80,20 @@ final class ProductController extends Controller
             // Serbest metindir — ayrı bir iç kategori tablosu yoktur (§4).
             'internal_category_id' => ['nullable', 'string', 'max:255'],
         ]);
+
+        // Plan kotası (§13 · Faz 4). Kota YARATMAYI engeller; var olan
+        // ürünlere ve onların senkronuna DOKUNMAZ. `DuplicateSkuException`
+        // ile aynı kalıpla alan hatasına çevrilir — kullanıcı 500 değil
+        // ne yapması gerektiğini söyleyen bir mesaj görür.
+        // Plan kotası (§13 · Faz 4). Kota YARATMAYI engeller; var olan
+        // ürünlere ve onların senkronuna DOKUNMAZ. `DuplicateSkuException`
+        // ile aynı kalıpla alan hatasına çevrilir — kullanıcı 500 değil
+        // ne yapması gerektiğini söyleyen bir mesaj görür.
+        try {
+            app(EnforceQuota::class)->check(QuotaMetric::PRODUCTS);
+        } catch (QuotaExceededException $e) {
+            throw ValidationException::withMessages(['sku' => $e->userMessage()]);
+        }
 
         try {
             $product = $createProduct->run(

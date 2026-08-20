@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Billing\Actions\EnforceQuota;
+use App\Domain\Billing\Enums\QuotaMetric;
+use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Channels\Actions\CheckChannelHealth;
 use App\Domain\Channels\Actions\ConnectChannel;
 use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\StoreUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -84,6 +88,21 @@ final class ChannelConnectionController extends Controller
             'consumer_key' => ['required', 'string', 'max:255'],
             'consumer_secret' => ['required', 'string', 'max:255'],
         ]);
+
+        // Plan kotası (§13 · Faz 4) — YALNIZCA GERÇEKTEN YENİ mağazada.
+        //
+        // `ConnectChannel` aynı hesabı `firstOrNew` ile yeniden kullanır
+        // ve bu, ANAHTAR YENİLEME akışıdır: yeni bağlantı eklemez.
+        // Ayrım yapılmasaydı kotası dolu bir satıcı süresi dolmuş
+        // anahtarını güncelleyemez ve kanalı KALICI olarak ölürdü —
+        // üstelik tam da ödeme yapmasını istediğimiz anda.
+        if ($this->wouldAddNewConnection($validated['channel_type_code'], $validated['store_url'])) {
+            try {
+                app(EnforceQuota::class)->check(QuotaMetric::CHANNELS);
+            } catch (QuotaExceededException $e) {
+                throw ValidationException::withMessages(['store_url' => $e->userMessage()]);
+            }
+        }
 
         try {
             $connection = $connect->run(
@@ -223,6 +242,34 @@ final class ChannelConnectionController extends Controller
                 'kind' => $type->kind,
             ])
             ->all();
+    }
+
+    /**
+     * Bu istek GERÇEKTEN yeni bir bağlantı mı açacak?
+     *
+     * `ConnectChannel` hesabı `(channel_type_code, external_account_id)`
+     * ile arar ve bulursa YENİDEN KULLANIR. Kota yalnızca satır sayısını
+     * ARTIRACAK istekte uygulanır; anahtar yenileme kotadan etkilenmez.
+     *
+     * Adres AYNI NORMALLEŞTİRME ile çözülür (`StoreUrl`): şema ve sondaki
+     * eğik çizgi atılmadan karşılaştırılsaydı `https://magaza.com/` ile
+     * `magaza.com` farklı sanılır ve yeniden bağlama kotaya takılırdı.
+     * Ayrıştırılamayan adres burada SESSİZCE geçilir — hatayı
+     * `ConnectChannel` zaten alan hatasına çevirir ve iki yerde
+     * doğrulamak mesajı ikiye böler.
+     */
+    private function wouldAddNewConnection(string $channelTypeCode, string $storeUrl): bool
+    {
+        try {
+            $host = StoreUrl::parse($storeUrl)->host;
+        } catch (\InvalidArgumentException) {
+            return true;
+        }
+
+        return ! ChannelConnection::query()
+            ->where('channel_type_code', $channelTypeCode)
+            ->where('external_account_id', $host)
+            ->exists();
     }
 
     private function isAccountUniquenessViolation(Throwable $e): bool
