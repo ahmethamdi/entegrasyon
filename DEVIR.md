@@ -1,8 +1,7 @@
 # Devir Notu — 20 Ağustos 2026 (Faz 3'te 5/5 çekirdek · yalnızca uyarı e-postaları kaldı)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `99008b8`
-ve **HENÜZ PUSH EDİLMEDİ** (`main` uzak daldan bir commit önde) —
-kullanıcının kararına bırakıldı. **Faz 3'ün BEŞ maddesinin BEŞİ DE çekirdek tarafında
+Kod tarafında yarım iş YOK; çalışma ağacı temiz ve **push edilmiş**
+(`d68549d`). **Faz 3'ün BEŞ maddesinin BEŞİ DE çekirdek tarafında
 bitti**; geriye yalnızca madde 2'nin uyarı e-postası üçte biri kaldı ve
 onun altyapısı HİÇ YOK — ayrıntı "SIRADAKİ İŞ" bölümünde.
 
