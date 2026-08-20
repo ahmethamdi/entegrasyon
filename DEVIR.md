@@ -1,9 +1,10 @@
-# Devir Notu — 20 Ağustos 2026 (Faz 3'te 5/5 çekirdek · yalnızca uyarı e-postaları kaldı)
+# Devir Notu — 20 Ağustos 2026 (FAZ 3 TAMAMEN KAPANDI — beş maddenin beşi de bitti)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz ve **push edilmiş**
-(`d68549d`). **Faz 3'ün BEŞ maddesinin BEŞİ DE çekirdek tarafında
-bitti**; geriye yalnızca madde 2'nin uyarı e-postası üçte biri kaldı ve
-onun altyapısı HİÇ YOK — ayrıntı "SIRADAKİ İŞ" bölümünde.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `bbe2852`
+(+ bu devir notu commit'i). **FAZ 3 KAPANDI**: dokümanın §13 · Faz 3 listesindeki BEŞ
+maddenin BEŞİ DE bitti. Son madde uyarı e-postalarıydı (madde 2'nin
+kalan üçte biri) ve bu turda yazıldı. Faz durumu iddiası devir notundan
+değil **dokümanın §13 listesinden** doğrulandı.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -11,7 +12,7 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 737 yeşil olmalı
+docker compose exec app php artisan test      # 759 yeşil olmalı
 ```
 
 ### Dokümanın gerçek faz tablosu (§13)
@@ -20,18 +21,18 @@ docker compose exec app php artisan test      # 737 yeşil olmalı
 |---|---|---|---|
 | Faz 1 — Woo dikey dilimi | 140 | 1–8 | BİTTİ |
 | Faz 2 — Trendyol + çift yönlü | 126 | 9–15 | BİTTİ |
-| Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **~79/84 · yalnızca e-posta kaldı** |
+| Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **84/84 · BİTTİ** |
 | Faz 4 — Ticarileşme | 90 | 21–25 | 20/90 |
 | Faz 5 — Tampon | 28 | 26 | başlamadı |
 
-**Toplam 468 saat · tahminen ~374 saat bitti → yaklaşık %80.**
+**Toplam 468 saat · tahminen ~379 saat bitti → yaklaşık %81.**
 
-### Faz 3'ün BEŞ maddesi — beşi de çekirdek tarafında bitti
+### Faz 3'ün BEŞ maddesi — BEŞİ DE BİTTİ
 
 | # | Madde | Saat | Durum |
 |---|---|---|---|
 | 1 | Mutabakat motoru (3 katman, 4 aday, onarım) | 30 | BİTTİ |
-| 2 | Metrik toplama, panel grafikleri, uyarı e-postaları | 16 | **toplama + panel BİTTİ** (`8e27913`); e-posta YOK |
+| 2 | Metrik toplama, panel grafikleri, uyarı e-postaları | 16 | **BİTTİ** — toplama + panel (`8e27913`) + e-posta (`bbe2852`) |
 | 3 | Senkron geçmişi ekranı, hata gezgini, yeniden deneme | 14 | **BİTTİ** (`244a397`) |
 | 4 | Ölü mektup ekranı, bağlantı sağlığı, fazla satış ekranı | 10 | **BİTTİ** (`244a397`) |
 | 5 | Toplu içe aktarma (Excel/CSV) + kanaldan ürün çekme | 14 | **BİTTİ** — CSV (`f234303`) + kanaldan çekme (`99008b8`) |
@@ -44,154 +45,208 @@ vardı; "fazla satış ekranı" `/inventory` ve `/reconciliation`'da.
 **Madde 5 de tek ekranla kapandı** — `/products/import` artık İKİ
 kaynak taşıyor (CSV dosyası · kanal bağlantısı). Yeni ekran açılmadı.
 
-## SIRADAKİ İŞ — FAZ 4
+**Madde 2 bu turda TAMAMEN kapandı** — toplama ve panel zaten vardı,
+eksik olan bildirimdi: eşik aşımı yalnızca `/metrics` rozetlerinde
+görünüyordu ve **kimse bakmadıkça hiçbir yerde görünmüyordu.**
 
-Faz 3'te kalan TEK madde:
+## SIRADAKİ İŞ — FAZ 4 (90 sa · hafta 21–25)
 
-1. **Uyarı e-postaları** (madde 2'nin kalan üçte biri) — kullanıcı
-   kararıyla iki turdur ertelendi. **Mail altyapısı HİÇ YOK**:
-   `config/mail.php`, `app/Mail`, `app/Notifications` yok ve SMTP
-   sağlayıcısı seçilmedi. Eşik aşımı ŞU AN panelde görünüyor
-   (`/metrics` rozetleri); e-posta onu bildirime çevirir. §12 ayrıca
-   "günlük özet: kiracı başına 10'dan fazla ölü iş → e-posta" istiyor
-   ve o eşik `Metric::DEAD_OPERATIONS` içinde ZATEN tanımlı.
+Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 
-**Asıl sıradaki iş FAZ 4'tür**: panel cilası (20 sa) · onay durumu
-ekranı · abonelik/ödeme iyzico (26 sa) — 90 sa'lık fazın 70 saati.
+| Madde | Saat |
+|---|---|
+| Panel cilası (boş durumlar, yükleniyor, mobil — artık ON İKİ ekran) | 20 |
+| Onboarding akışı | 20 |
+| Abonelik/ödeme (planlar, kota, iyzico) | 26 |
+| Türkçe yardım dokümantasyonu | 12 |
+| Güvenlik kontrol listesi + yük testi | 12 |
+
+Fazın 20 saati zaten bitti (mutabakat panel ekranı `513480d` ve ona
+bağlı işler) → **70 saat kaldı.**
+
+**Onay durumu için ayrı ekran** fazın en küçük kalıntısıdır: rozet ve
+red sebebi ürün-kanal ekranında ZATEN var; eksik olan yalnızca toplu
+görünüm.
+
+**Abonelik/ödeme artık teknik olarak da yazılabilir**: kota neyi
+sınırladığını senkron davranışından alır ve o davranış OTURDU.
 
 **EKRAN İŞİ ÇIKARSA TARAYICIDA DOĞRULA** — bu kural dört turdur
 uygulanıyor ve **dört turda da gerçek boşluk ya da gerçek kanıt
-üretti**; bu turda yetenek kapısının panelde GERÇEKTEN çalıştığı ancak
-tarayıcıda görüldü (dört Trendyol bağlantısı listede YOK).
+üretti**. Bu tur ekran işi DEĞİLDİ ama kural gerçek çalıştırma
+biçiminde uygulandı ve **yine gerçek bir hata buldu** (aşağıda).
 
 Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) **Faz 4
 bittikten SONRA** — sıra ve gerekçeler aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 1 ve Faz 2 bitti; Faz 3'ün beş maddesi de çekirdek tarafında
-bitti (yalnızca uyarı e-postaları kaldı, altyapısı YOK), Faz 4'te 2
-madde bitti.** **737 test yeşil** (2432 assertion), Pint temiz (325
-dosya), iki ardışık rastgele sıralı tur temiz. Panelde ON İKİ ekran.
+**Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı: beş
+maddenin beşi de kapalı); **Faz 4'te 20/90 saat bitti** ve sıradaki iş
+odur. **759 test yeşil** (2509 assertion), Pint temiz (334 dosya), iki
+ardışık rastgele sıralı tur temiz. Panelde ON İKİ ekran.
 
 ## Bu turda ne eklendi
 
-### §13 · Faz 3 · madde 5 · KANALDAN ÜRÜN ÇEKME (`99008b8`)
+### §11 · §12 · §13 · Faz 3 · madde 2 · UYARI E-POSTALARI (`bbe2852`) — FAZ 3'Ü KAPATIR
 
 | Ne | Nerede |
 |---|---|
-| **YENİ yetenek arayüzü** | `Channels/Contracts/SupportsCatalogImport` (§7'nin SEKİZİNCİSİ) |
-| Uzak model | `Sync/Support/RemoteProduct` + `RemoteProductPage` |
-| Action | `Catalog/Actions/ImportProductsFromChannel` (+ `ChannelImportResult`) |
-| İş | `Catalog/Jobs/ImportProductsFromChannelJob` (kuyruk **`listing:bulk`**, `$tries = 1`, timeout 300) |
-| Adapter | `WooCommerceAdapter::fetchProductPage()` + `WooProductMapper::toRemoteProduct()` |
-| Registry | `AdapterRegistry` — yeni anahtar `catalog_import` |
-| Şema | `product_imports` GENİŞLETİLDİ (`source`, `channel_connection_id`, `skipped_count`; `payload` nullable) |
-| Ekran | `ProductImportController::storeFromChannel()` + `Products/Import.vue` (İKİNCİ kaynak) |
-| Testler | `ChannelProductImportTest` (11) + `ChannelImportScreenTest` (12) + `WooCommerceAdapterTest` (+5) |
+| Tarama | `Support/Observability/DispatchAlerts` |
+| Komut | `Support/Observability/DispatchAlertsCommand` (`alerts:dispatch`, GÜNLÜK 09:00) |
+| Çıpa biçimi | `Support/Observability/AlertKey` — TEK KAYNAK |
+| Gönderim | `Support/Observability/AlertMailer` (sağlayıcıdan BAĞIMSIZ) |
+| Model | `Support/Observability/AlertDelivery` |
+| Mailable | `Mail/MetricAlertMail` + `resources/views/mail/metric-alert.blade.php` |
+| Şema | `alert_deliveries` (`2026_08_20_000200`) — `UNIQUE(alert_key, sent_on)` |
+| Kapsam ayrımı | `MetricScope::tenantIdOf()` / `connectionIdOf()` (YENİ) |
+| Biçimleme | `MetricUnit::format()` (YENİ, sunucu tarafı) |
+| Yapılandırma | `config/entegrasyon.php` → `alerts.admin_email` (`ALERT_ADMIN_EMAIL`) |
+| Kayıt + zamanlama | `bootstrap/app.php` · `routes/console.php` |
+| Testler | `DispatchAlertsTest` (17) + `MetricUnitFormatTest` (5) + `ScheduledScansTest`'e 3 yerde iddia |
 
-**KAPATILAN BOŞLUK:** satıcı zaten Woo'da satıyorsa ürünlerini sisteme
-sokmanın TEK yolu CSV'ye elle dökmekti. Faz 3'ün son maddesi buydu.
+**KAPATILAN BOŞLUK:** eşik aşımı ölçülüyordu, saklanıyordu ve panelde
+rozetle gösteriliyordu — ama **kimse `/metrics`'e bakmadıkça hiçbir
+yerde görünmüyordu.** Uyarı, ölçümü BİLDİRİME çevirir. Faz 3'ün son
+maddesi buydu.
 
-**MİMARİ SAPMA — SEKİZİNCİ YETENEK ARAYÜZÜ EKLENDİ (KULLANICI ONAYLI).**
-Doküman DONDURULMUŞ ve §7 yedi arayüz tanımlıyor; §13 bu teslimatı
-listeliyor ama ona KARŞILIK GELEN ARAYÜZ TANIMLAMIYOR. Gerekçe:
+**KULLANICI KARARI — SMTP SAĞLAYICISI ŞİMDİLİK SEÇİLMEDİ, `log`
+sürücüsünde kalınıyor.** Kod Laravel'in `Mail` cephesiyle
+SAĞLAYICIDAN BAĞIMSIZ yazıldı: Mailgun/Postmark/SES'e geçiş TEK bir
+`.env` satırıdır (`MAIL_MAILER`) ve **KOD DEĞİŞMEZ.** Sağlayıcı
+seçimi bir yapılandırma kararıdır, mimari karar değil.
 
-- **`SupportsCatalog`'un iki okuma metodu da YEREL bir kayıttan
-  başlar** — `findExistingListing(Variant)` ve `fetchListing(Listing)`.
-  İçe aktarma TERS soruyu sorar: "kanalda BENDE OLMAYAN ne var?"
-  `fetchListing` bunu KARŞILAYAMAZ, çünkü var olan bir `Listing`
-  satırı ister — oysa içe aktarmanın işi tam olarak o satırı YARATMAK.
-- **`SupportsCatalog`'a EKLENMEDİ**, çünkü Trendyol o arayüzü uyguluyor
-  ve toplu ürün listeleme orada AYRI bir uç noktadır (bu turda kapsam
-  dışı). Eklenseydi Trendyol ya istisna fırlatacaktı (panel yeteneği
-  AYIRT EDEMEZ) ya da sessizce boş dönecekti — §7'nin açık yasağı:
-  **"yazılmamış yetenek SESSİZCE BAŞARILI DÖNMEZ."**
-- **§7'nin "`SupportsProductMatching` yok — tek metot için ayrı arayüz
-  açma" notuyla ÇELİŞMEZ.** Orada reddedilen metot `SupportsCatalog`'a
-  DOĞAL olarak aitti ve o arayüzü uygulayan HER kanalda anlamlıydı;
-  burada metot bazı kanallarda TAMAMEN YOKTUR — yani gerçekten ayrı bir
-  yetenektir.
-- Yetenek `instanceof` ile okunur; `if ($channel === '...')` YAZILMADI.
+**KULLANICI KARARI — YÖNETİCİ ADRESİ YAPILANDIRMADAN OKUNUR**
+(`ALERT_ADMIN_EMAIL` → `alerts.admin_email`). Koda gömülü adres YOK:
+gömülü olsaydı adres her kurulumda aynı olurdu ve değiştirmek deploy
+gerektirirdi.
 
-**VAR OLAN SKU'DA STOK YAZILMAZ — maddenin EN TEHLİKELİ hatası.**
-Kanalın stoğu BAYAT olabilir (biz henüz itmemiş olabiliriz ya da kanal
-uygulamamış olabilir). Uygulansaydı satıcının SATILMIŞ malları bir içe
-aktarma turuyla geri gelir, bakiye SESSİZCE bozulur ve fazla satışa yol
-açardı. Kanal stoğu YALNIZCA YENİ ürün için ve YALNIZCA açılış ledger
-hareketi olarak yazılır — o anda ezilecek kanonik bir bakiye YOKTUR.
-CSV yarısındaki `applyUpdate()` kuralının birebir aynısı.
+**AYNI UYARI AYNI GÜN İKİ KEZ GİTMEZ — maddenin EN ÖNEMLİ kuralı.**
+Eşik aşımı KALICI bir durumdur ve her turda yeniden ölçülür; koruma
+olmasaydı aynı uyarı tur tur giderdi, gelen kutusu dolar ve **insanlar
+uyarıları OKUMAYI BIRAKIR** — ondan sonra gerçek bir olay da fark
+edilmez. Çıpa `alert_deliveries (alert_key, sent_on)` tekilliğidir;
+yarış `insertOrIgnore` ile çözülür.
 
-**FİYAT `regular_price`'TAN OKUNUR, `price`'TAN DEĞİL.** `price`
-indirimli değeri taşır; onu içe aktarmak satıcının liste fiyatını
-KALICI olarak düşürür ve kampanya bitince o düşük fiyat TÜM kanallara
-yayılır. **NULL fiyat "değişmedi" demektir, "sıfırla" değil**
-(`UpdateProduct` null fiyata dokunmaz).
+**ÇIPA GÖNDERİMDEN ÖNCE YAZILIR.** Sonra yazılsaydı paralel iki tur
+İKİSİ DE gönderir ve ihlali ancak e-posta çıktıktan SONRA fark
+ederdik — geri alınamaz. **"Yazdı ama gönderemedi" hâli BİLİNÇLİ
+OLARAK KABUL EDİLİYOR**: bir uyarıyı kaçırmak, aynı uyarıyı iki kez
+göndermekten iyidir.
 
-**`internal_category_id` ASLA EZİLMEZ.** O alan satıcının EŞLEŞTİRME
-çıpasıdır (§13 · eşleştirme) ve kanal verisinde KARŞILIĞI YOKTUR; null
-geçilseydi her içe aktarma turu eşleştirmeleri sessizce koparırdı.
+**`sent_on` TARİHTİR, ZAMAN DAMGASI DEĞİL.** Tekilliğin cevaplaması
+gereken soru "AYNI GÜN mü" — zaman damgasıyla iki gönderim ASLA
+çakışmaz ve kısıt hiçbir şey korumazdı.
 
-**SKU'SUZ ÜRÜN ATLANIR ama SAYILIR ve ADIYLA RAPORLANIR.** Woo SKU
-zorunlu tutmaz. Sessizce düşülseydi satıcı "50 ürünüm vardı, 47 geldi"
-der ve NEDENİNİ bulmanın yolu olmazdı. Kanal kimliğinden SKU
-UYDURULMAZ — sonraki turda KOPYA ürün üretirdi.
+**TARAMA ÖLÇMEZ, OKUR.** Değerler `metric_snapshots`'tan gelir; on üç
+ağır toplama sorgusu YENİDEN KOŞTURULMAZ. Koşturulsaydı iki gerçek
+kaynağı doğardı — turlar farklı anlarda çalıştığı için panel bir değeri,
+e-posta BAŞKA bir değeri gösterirdi — ve `percentile_cont` maliyeti iki
+kez ödenirdi.
 
-**SAYFA ÜST SINIRI BİR EMNİYETTİR** (`maxImportPages()`): bozuk bir
-kanal `hasMore: true` döndürmeye devam ederse tur SONSUZA KADAR döner.
-Sınıra dayanmak KULLANICIYA SÖYLENİR — sessiz kırpma YOK.
+**EŞİK `Metric::threshold()` İÇİNDE TEK KAYNAKTIR** ve karşılaştırma
+`Metric::breaches()` ile yapılır; `>` / `>=` yeniden YAZILMAZ. **Eşiğe
+TAM DAYANAN değer aşım DEĞİLDİR** (§11 "büyüktür" der) — aksi hâlde
+panel yeşil gösterirken e-posta giderdi.
 
-**TEK BOZUK ÜRÜN TURU DÜŞÜRMEZ; bozuk SAYFA turu durdurur ama YAZILANI
-KORUR** — tur TEK TRANSACTION'A SARILMAZ (CSV yarısıyla aynı gerekçe).
-**Desteklemeyen kanal sessizce boş dönmez.**
+**SON ÖLÇÜM `id` İLE SEÇİLİR, `captured_at` İLE DEĞİL.** Damga saniye
+hassasiyetlidir ve iki tur aynı damgayı taşıyabilir. `MetricsController`
+ile AYNI kural: ayrışsalardı panel bir değere "son", uyarı BAŞKA bir
+değere "son" derdi. `DISTINCT ON` kullanılır — **`MAX(id)` İMKÂNSIZ**
+(PostgreSQL'de uuid için `max()` toplam fonksiyonu YOK).
 
-**İKİNCİ TABLO AÇILMADI, `product_imports` GENİŞLETİLDİ.** Ayrı tablo,
-durum makinesinin (pending/running/completed/failed + sayaçlar) İKİ
-YERDE yaşaması demekti ve ikisi zamanla ayrışırdı.
+**KİRACI uyarısı satıcının SAHİPLERİNE, SİSTEM ve BAĞLANTI uyarısı
+YÖNETİCİYE gider.** Bağlantı uyarıları (api gecikmesi, 429) da
+yöneticiye gider çünkü onlar satıcının DÜZELTEMEYECEĞİ altyapı
+sorunlarıdır. Yönlendirme tam da bu ayrıma dayandığı için
+`MetricScope::idOf()` YETMEZ — o metot kapsam TÜRÜNÜ ayırt etmiyor;
+bu turda `tenantIdOf()` ve `connectionIdOf()` eklendi.
 
-**İMLEÇ OPAKTIR ve `hasMore` `nextCursor !== null`'DAN AYRI BİR
-ALANDIR** (`OrderPage`'in kardeşi). `RemoteProduct`'ın çıpası ise
-**SKU'dur** — `RemoteListing`'in aksine `externalId` değil; içe
-aktarmada eşleşme SKU üzerinden kurulur ve SKU yoksa `isImportable()`
-false döner.
+**YÖNETİCİ ADRESİ TANIMSIZSA GÖNDERİLMEZ ve ÇIPA DA YAZILMAZ.** Çıpa
+yazılsaydı o günün uyarısı YANARDI: adres yapılandırıldıktan sonra bile
+bir daha hiç gönderilemezdi. Atlanan uyarı günlüğe yazılır
+(`alerts.no_recipient`) — sessizce kaybolmaz.
 
-**SEKİZ MUTASYON, SEKİZİ DE YAKALANDI:** (1) var olan SKU'ya kanal
-stoğunu uygulamak, (2) atlanan sayacını kaldırmak, (3) sayfa üst
-sınırını kaldırmak, (4) `applyUpdate`'te `internal_category`'yi
-null'lamak, (5) null fiyatı 0'a cast etmek, (6) desteklemeyen kanal
-için sessiz boş başarı dönmek, (7) sayfa hatasında sayaçları
-sıfırlamak, (8) imleci ilerletmemek.
+**DAVETİ KABUL ETMEMİŞ ÜYEYE GÖNDERİLMEZ** (`accepted_at` NULL):
+adres DOĞRULANMAMIŞTIR ve uyarı bir yabancının gelen kutusuna düşerdi.
 
-**MUTASYON 3 GERÇEK ZAMAN YEDİ — VE ASIL BEDELİ SONRAKİ TURLARA
-ÇIKARDI.** Sayfa üst sınırı kaldırılınca test SONSUZA KADAR döner;
-turu öldürmek `entegrasyon_test` üzerinde **BAYAT bir PostgreSQL
-backend'i** bırakıyor, o backend kilidi tutuyor ve `RefreshDatabase`'in
-`DROP TABLE`'ı bloklanıyor. Sonuç: SONRAKİ her test turu asılı kalıyor
-ve **sanki sonraki mutasyonlar "takılıyormuş" gibi görünüyor** — oysa
-kod sağlam. Çözüm ve tuzağın kaydı aşağıdaki "Tekrar tekrar ısıran
-tuzaklar" bölümünde.
+**§12'NİN "KİRACI BAŞINA 10'DAN FAZLA ÖLÜ İŞ" MADDESİ AYRI YOL
+DEĞİLDİR.** `Metric::DEAD_OPERATIONS` zaten KİRACI başına ölçüyor ve
+eşiği 10. Ayrı bir özet yolu açılsaydı eşik İKİ YERDE yaşar ve zamanla
+ayrışırdı.
 
-**GERÇEK ÇALIŞTIRILDI (gerçek HTTP + gerçek worker + tarayıcı):**
-Yerel bir PHP stub'ı `wc/v3 products`'ı İKİ SAYFA hâlinde sundu.
-`queue:work --queue=listing:bulk --stop-when-empty` işi ALDI. Stub
-günlüğü `page=1` ve `page=2`'yi `per_page=100&orderby=id&order=asc` ile
-doğruladı. Sonuçlar:
+**MAILABLE `ShouldQueue` UYGULAMAZ.** Tarama zaten zamanlanmış bir
+komutta koşuyor; kuyruğa alınsaydı gönderim aynı-gün çıpasından
+AYRIŞIRDI ve başarısız bir iş, çıpası yazılmış ama e-postası HİÇ
+gitmemiş bir satır bırakırdı — **satıra bakan hiç kimse bunu
+anlayamaz.**
 
-1. Yeni `STUB-YENI` ürünü yaratıldı — açılış stoğu 12, **TEK ledger
-   hareketiyle**, fiyat **149.90** (yani `regular_price`; 99.90'lık
-   indirimli `price` DEĞİL).
-2. Var olan `TSH-201`'in başlığı ve fiyatı güncellendi ama **`on_hand`
-   −3'te KALDI ve hareket sayısı 2'de KALDI** — kanal stoğu 500 iddia
-   etmesine RAĞMEN. Maddenin en tehlikeli kuralının gerçek kanıtı.
-3. SKU'suz ürün atlandı ve ADIYLA raporlandı.
-4. `on_hand = Σ on_hand_delta` **TÜM VERİTABANINDA** tuttu.
-5. Tarayıcıda **dört aktif Trendyol bağlantısı listede GÖRÜNMEDİ** —
-   yetenek kapısı uçtan uca çalışıyor; yalnızca Woo bağlantısı var.
-   Konsol hatası yok.
+**ALICILAR AYRI AYRI E-POSTA ALIR**, tek `to()` çağrısına dizi
+verilmez: verilseydi sahipler birbirlerinin adreslerini görürdü.
 
-**DEV VERİSİ GERİ ALINDI:** `TSH-201` "Oversize Tisort" / 249.90'a,
-bağlantı `base_url`'ü `https://demo-magaza.com`'a döndürüldü; stub
-ürünü ve turun `product_imports` satırları silindi.
+**GÖVDE DEĞERİ VE EŞİĞİ BİRLİKTE GÖSTERİR** ("9 — eşik 5"): tek başına
+bir sayı hiçbir şey söylemez. Ayrıca metriğe özgü TAVSİYE taşır ve
+doğru ekrana yönlendirir — ölü mektup ekranının "hata sınıfı ve tavsiye
+gösterilir" kuralının aynısı.
+
+**SEKİZ MUTASYON, SEKİZİ DE YAKALANDI — ama BİRİ ancak SÖZLEŞME TESTİ
+EKLENDİKTEN SONRA.** `AlertKey` önekini değiştirmek HİÇBİR testi
+kırmıyordu: yazan da okuyan da aynı yardımcıyı çağırdığı için BİRLİKTE
+kayıyorlar. Ama kalıcı veri eski biçimde durur, DÜNKÜ satırlar bir daha
+HİÇ BULUNAMAZ ve tekrar koruması SESSİZCE yok olur — satıcı aynı
+uyarıyı ikinci kez alır. Test artık BEKLENEN METİNLE (literal)
+sınıyor. **Bu, geçmiş bir turda `MetricScope` üzerinde hayatta kalan
+mutasyonun BİREBİR AYNISIDIR** — tuzak listesinde kayıtlı ve bu turda
+TEKRARLADI.
+
+Diğer yedi: (1) aynı gün tekrar korumasını kaldırmak, (2) `breaches()`
+→ `>=`, (3) `accepted_at` filtresini kaldırmak, (4) kiracı filtresini
+kaldırmak (çapraz kiracı sızıntısı), (5) `captured_at` ile sıralamak,
+(6) alıcı yokken çıpayı yazmak, (7) kiracı uyarısını yöneticiye
+yönlendirmek.
+
+**GERÇEK ÇALIŞTIRMADA GERÇEK BİR HATA BULUNDU (testler yeşilken) —
+TURUN ASIL BULGUSU.** `MetricUnit::format(0)` **BOŞ DİZE** döndürüyordu:
+`decimal()` yardımcısı `rtrim(..., '0')`'ı SAYININ TAMAMINA uyguluyor ve
+`"0"` `""`'e çöküyordu. E-posta "uyarı eşiği: " diye bitiyordu, arkası
+BOŞ. Sıfır eşikli iki metrik (`outbox_consume_gap`, `sync_delivery_gap`)
+tam da **uyarı üreten metriklerdi** — yani hata HER uyarı e-postasında
+görünecekti. Aynı kırpma `10`'u da `1` yapardı. Düzeltme: kırpma
+yalnızca ONDALIK KISMA uygulanıyor. `MetricUnitFormatTest` artık on üç
+metriğin eşiğini de süpürüyor; boş eşikli bir e-posta ÜRETİLEMEZ.
+
+**GERÇEK ÇALIŞTIRILDI (gerçek komut + gerçek veri + gerçek posta
+sürücüsü):**
+
+1. `metrics:capture` 11 metrik yazdı; İKİ sistem metriği eşiği aştı.
+2. **Yönetici adresi TANIMSIZKEN 2 uyarı ATLANDI** ve
+   `alerts.no_recipient` olarak günlüğe yazıldı — çıpa YAZILMADI.
+3. Adres tanımlandıktan sonra 2 uyarı GİTTİ.
+4. **İkinci ve üçüncü turlar İKİSİNİ DE BASTIRDI** — aynı gün tekrar
+   koruması gerçek turda kanıtlandı.
+5. Kiracı uyarısı `demo@entegrasyon.local` adresine gitti (**yöneticiye
+   DEĞİL**); gövde "9 — eşik 5" ve tavsiye stok ekranını gösteriyordu.
+
+**`config/mail.php` VARDIR** (Laravel varsayılanı, `MAIL_MAILER=log`) —
+devir notunun "mail altyapısı HİÇ YOK, `config/mail.php` bile yok"
+iddiası YANLIŞTI. Eksik olan `app/Mail` ve `app/Notifications`'tı.
+
+**DEV VERİSİ GERİ ALINDI:** `alert_deliveries` ve `metric_snapshots`
+boşaltıldı, günlük dosyası kırpıldı (tablolar kalıcı, migration
+yerinde).
+
+### Bir önceki tur — §13 · Faz 3 · madde 5 · KANALDAN ÜRÜN ÇEKME (`99008b8`)
+
+Faz 3 · madde 5'i kapattı. §7'ye **SEKİZİNCİ yetenek arayüzü**
+eklendi (`SupportsCatalogImport`, kullanıcı onaylı sapma):
+`SupportsCatalog`'un iki okuma metodu da YEREL bir kayıttan başlar,
+içe aktarma ise TERS soruyu sorar ("kanalda BENDE OLMAYAN ne var?").
+Var olan SKU'da **kanal stoğu YAZILMAZ** (satılmış mallar geri gelir
+ve bakiye sessizce bozulurdu); fiyat `regular_price`'tan okunur;
+`internal_category_id` asla ezilmez; SKU'suz ürün atlanır ama ADIYLA
+raporlanır. Sekiz mutasyonun sekizi de yakalandı. Gerçek HTTP + gerçek
+worker + tarayıcıda doğrulandı: `TSH-201`'in `on_hand`'i kanal 500
+iddia etmesine RAĞMEN −3'te KALDI.
 
 ### Bir önceki tur — §11 · METRİK TOPLAMA + SAĞLIK EKRANI (`8e27913`)
 
@@ -670,7 +725,7 @@ silme partilenir; tur başına üst sınır var; transaction YOK.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 737 yeşil olmalı
+docker compose exec app php artisan test      # 759 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -691,15 +746,15 @@ Panel gerçek çalıştırması: `http://localhost:8080` ·
 
 **Çekirdek:** stok ledger'ı (`ApplyMovement`, `LockInventoryRows`), outbox
 relay + fan-out, adapter mimarisi (**8 yetenek arayüzü** — sekizincisi
-bu turda eklendi: `SupportsCatalogImport`), sipariş alımı,
+geçmiş turda eklendi: `SupportsCatalogImport`), sipariş alımı,
 gelen hat (webhook → inbox → router), giden hat (`InventoryBatchBuilder`,
 `PushInventory`, `SyncResultRecorder`), koruma katmanı (`ChannelRateLimiter`,
 `CircuitBreaker`), ürün aktarımı (`PushListing`, `PublishListing`),
 §6 bütünlük taramaları (iki seviye), **§10 mutabakatın ÜÇ KATMANI DA**
 + **onarım döngü emniyeti (3 tur kuralı)**,
 ön koşul kapısı + onay takibi, sipariş yoklaması, sipariş güncelleme +
-kargo, `PruneApiCalls`, resync yolu, fiyat senkron yolu, **kanaldan ürün
-çekme**.
+kargo, `PruneApiCalls`, resync yolu, fiyat senkron yolu, kanaldan ürün
+çekme, **metrik toplama + uyarı e-postaları (`alerts:dispatch`)**.
 
 **Kanallar (2):** WooCommerce (tam — **içe aktarma dahil**) · Trendyol
 (taksonomi, katalog, onay, stok/fiyat itme, sipariş yoklaması).
@@ -709,12 +764,13 @@ içe aktarma (**iki kaynak: CSV + kanal**) · ürün-kanal · siparişler ·
 sipariş ayrıntısı · stok · mutabakat · başarısız işlemler · **sistem
 sağlığı** · kanallar · eşleştirme.
 
-**Testler:** 737 yeşil (2432 assertion).
+**Testler:** 759 yeşil (2509 assertion).
 **P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
 
 ### Kaldı — FAZ 4 (panel + abonelik)
 
-Sıra kullanıcının kararına bağlı; teknik bağımlılık yok.
+**Faz 3'ten kalan madde YOK.** Sıra kullanıcının kararına bağlı;
+teknik bağımlılık yok.
 
 - ~~**Onarım döngü emniyeti**~~ — **BİTTİ** (`355c7a4`). Çekirdek ön
   koşuldu: ekran onu göstermek zorundaydı.
@@ -725,16 +781,21 @@ Sıra kullanıcının kararına bağlı; teknik bağımlılık yok.
 - ~~**Kanaldan ürün çekme**~~ — **BİTTİ** (`99008b8`), gerçek HTTP +
   gerçek worker + tarayıcıda doğrulandı. Faz 3 · madde 5'i kapatır;
   §7'ye SEKİZİNCİ yetenek arayüzü eklendi (kullanıcı onaylı sapma).
-- **Uyarı e-postaları** (Faz 3 · madde 2'nin kalanı) — Faz 3'ten kalan
-  TEK madde. Mail altyapısı HİÇ YOK.
+- ~~**Uyarı e-postaları**~~ — **BİTTİ** (`bbe2852`), gerçek komut +
+  gerçek posta sürücüsüyle doğrulandı. **FAZ 3'Ü KAPATIR.** SMTP
+  sağlayıcısı şimdilik `log`; geçiş TEK bir `.env` satırıdır ve KOD
+  DEĞİŞMEZ.
 - **Panel cilası** (§13 · Faz 4, 20 sa): boş durumlar, yükleniyor, mobil.
   Artık ON İKİ ekrana dokunur.
+- **Onboarding akışı** (§13 · Faz 4, 20 sa).
+- **Abonelik/ödeme** (26 sa · hafta 21–25): planlar, kota, iyzico. Şema
+  kararı alınmış, YAZILMADI. Kota neyi sınırladığını senkron
+  davranışından alır ve o davranış artık OTURDU — yani bu madde artık
+  teknik olarak da yazılabilir durumda.
+- **Türkçe yardım dokümantasyonu** (12 sa).
+- **Güvenlik kontrol listesi + yük testi** (12 sa).
 - **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal
   ekranında var). En küçük madde.
-- **Abonelik/ödeme** (hafta 21–25): planlar, kota, iyzico. Şema kararı
-  alınmış, YAZILMADI. Kota neyi sınırladığını senkron davranışından alır
-  ve o davranış artık OTURDU — yani bu madde artık teknik olarak da
-  yazılabilir durumda.
 
 **Trendyol'da kapsam dışı bırakılanlar** (eksik DEĞİL): `delist`,
 `fetchListing`, `acknowledgeOrder` — kargo §14 gereği kapsam dışı.
@@ -810,7 +871,11 @@ Bu veri commit'lerde DEĞİL, yalnızca yerel veritabanında.
 
 Hepsi testler yeşilken bulundu:
 
-- **Kanal stoğunun var olan SKU'ya uygulanması** (mutasyon 1, bu tur) —
+- **`MetricUnit::format(0)` BOŞ DİZE döndürüyordu** (bu tur) — `rtrim`
+  sayının TAMAMINA uygulanıyordu. Uyarı e-postası "uyarı eşiği: " diye
+  bitiyordu ve sıfır eşikli iki metrik tam da uyarı ÜRETENLERDİ: hata
+  HER e-postada görünecekti. Aynı kırpma `10`'u `1` yapardı.
+- **Kanal stoğunun var olan SKU'ya uygulanması** (mutasyon, geçmiş tur) —
   satılmış mallar bir içe aktarma turuyla geri gelir, bakiye sessizce
   bozulur ve fazla satışa yol açardı.
 - **Sabit seride sparkline kutunun dibine çiziliyordu** — "değer dibe
@@ -886,13 +951,26 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
   ihtimali olan bir mutasyonu koşarken süreyi başka bir yolla sınırla
   (arka planda çalıştırıp kendin öldür), yoksa tuzak her seferinde
   yeniden kurulur.
-- **AYNI YARDIMCI HEM YAZAR HEM OKURSA BİÇİM MUTASYONU GİZLENİR.**
-  `MetricScope::tenant()` önekini değiştirmek hiçbir davranış testini
-  kırmıyordu: yazan da okuyan da aynı fonksiyonu çağırdığı için BİRLİKTE
-  kayıyorlar. Ama kalıcı veri eski biçimde durur ve yeni okuyucu onu HİÇ
-  BULAMAZ — grafik sessizce sıfırlanır. Biçim BEKLENEN METİNLE sınanmalı
-  (sözleşme testi). Kuyruk adlarının `config/horizon.php` ile
-  karşılaştırılması aynı gerekçedir.
+- **AYNI YARDIMCI HEM YAZAR HEM OKURSA BİÇİM MUTASYONU GİZLENİR — İKİ
+  TURDA İKİ KEZ ISIRDI.** Önce `MetricScope::tenant()`, sonra
+  `AlertKey`: her ikisinde de öneki değiştirmek hiçbir davranış testini
+  kırmadı, çünkü yazan da okuyan da aynı fonksiyonu çağırıyor ve
+  BİRLİKTE kayıyorlar. Ama kalıcı veri eski biçimde durur ve yeni
+  okuyucu onu HİÇ BULAMAZ. Bedeli her iki yerde de farklı ve her ikisi
+  de sessiz: `MetricScope`'ta grafik sıfırlanır, `AlertKey`'de DÜNKÜ
+  gönderim satırı bulunamaz ve **aynı gün tekrar koruması yok olur** —
+  satıcı aynı uyarıyı ikinci kez alır. **KURAL: kalıcı veriye yazılan
+  BİÇİMİ üreten her yardımcı, BEKLENEN LİTERAL METİNLE sınanır
+  (sözleşme testi)** — davranış testi bunu ASLA göremez. Kuyruk
+  adlarının `config/horizon.php` ile karşılaştırılması aynı gerekçedir.
+  Yeni bir "anahtar/kapsam/önek üreten yardımcı" yazdığında sözleşme
+  testini AYNI TURDA yaz.
+- **`rtrim($s, '0')` SAYININ TAMAMINA UYGULANIRSA `"0"` → `""` VE
+  `"10"` → `"1"`.** Gereksiz sıfırları atmanın yaygın kısayolu, sıfır
+  değerini TAMAMEN SİLER: e-posta "uyarı eşiği: " diye biter ve satıcı
+  eşiği HİÇ göremez. Kırpma yalnızca ONDALIK KISMA uygulanır.
+  Biçimleme yardımcısı yazdıysan **sıfırı ve ondalıksız tam sayıyı
+  AYRI AYRI sına** — sıfır eşikli metrikler tam da uyarı üretenlerdi.
 - **`span || 1` SPARKLINE'I DİBE ÇİZER.** Sabit seride `max - min = 0`
   olur; sıfırı `1`e sabitlemek (yaygın kısayol) tüm noktaları kutunun EN
   ALTINA koyar ve "değer dibe vurdu" izlenimi verir — oysa değer HİÇ
@@ -991,7 +1069,9 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 - **YENİ KUYRUK İŞİ `JobSerializationTest`'E DE EKLENİR.** Testler işi
   doğrudan kurup `handle()` çağırdığı için serileştirme gidiş-dönüşü
   hiç yaşanmaz; o test kuyruğa giren HER işi yazıp geri okur.
-  `ImportProductsFromChannelJob` bu turda oraya eklendi.
+  `ImportProductsFromChannelJob` geçmiş turda oraya eklendi. **Bu turun
+  `alerts:dispatch` yolu kuyruk işi AÇMAZ** — Mailable bilinçli olarak
+  `ShouldQueue` uygulamıyor (gerekçesi yukarıda).
 - **YENİ YETENEK ARAYÜZÜ `AdapterRegistry::capabilitiesOf()`'A DA
   EKLENİR.** Arayüz yazılıp adapter uygulasa bile registry anahtarı
   (`catalog_import`) yoksa panel yeteneği HİÇ GÖRMEZ ve kanal seçim
@@ -1035,8 +1115,8 @@ Düzeltmenin kendisi (`6e2217e`) yerinde.
 VE KAPATILDI.** Sebep bir testin `latest('started_at')` kullanmasıydı
 (yukarıda). Bu, beş oturumdur aranan ESKİ düşüşle aynı şey OLMAYABİLİR —
 eski düşüş hiç tekrar üretilemedi ve o turdan beri de görünmedi. Bu
-turun İKİ ardışık rastgele turu da temiz: seed'ler **1787221199** ve
-**1787221244**. PHPUnit 11'de `--seed` seçeneği YOK; seed çıktının
+turun İKİ ardışık rastgele turu da temiz: seed'ler **1787225710** ve
+**1787225751**. PHPUnit 11'de `--seed` seçeneği YOK; seed çıktının
 sonunda raporlanır ve düşüş görülürse KAYDEDİLMELİ.
 
 **3 · `acknowledgeOrder` yazılmadı ve "yazılmamış yetenek" listesinde de

@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 737 test yeşil olmalı
+docker compose exec app php artisan test      # 759 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-35 tablo (çerçeve dışı), 33 model, 737 test. Stok çekirdeği (`ApplyMovement`,
+36 tablo (çerçeve dışı), 34 model, 759 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -684,22 +684,74 @@ testin sonunda çağrılır.
   değiştiğinde diğeri sessizce eski kalırdı. Kullanıcı için ikisi de
   "bir içe aktarma turu"dur; kaynak bir KOLONDUR.
 
+## Uyarı e-postası kuralları (§11 · §12 · `bbe2852`)
+
+- **AYNI UYARI AYNI GÜN İKİ KEZ GİTMEZ** — bu maddenin varlık sebebi.
+  Eşik aşımı KALICI bir durumdur ve her turda yeniden ölçülür; koruma
+  olmasaydı aynı uyarı tur tur gider, gelen kutusu dolar ve İNSANLAR
+  UYARILARI OKUMAYI BIRAKIRDI — o noktadan sonra gerçek bir olay da
+  fark edilmez. Çıpa `alert_deliveries (alert_key, sent_on)` tekilliği.
+- **ÇIPA GÖNDERİMDEN ÖNCE YAZILIR** ve yarışı `insertOrIgnore` çözer.
+  Sonra yazılsaydı iki paralel tur aynı uyarıyı iki kez gönderir ve
+  ihlal ancak e-posta gittikten SONRA fark edilirdi. "Yazdım ama
+  gönderemedim" BİLİNÇLİ olarak kabul edilir: bir uyarıyı kaçırmak,
+  aynı uyarıyı iki kez göndermekten iyidir.
+- **`sent_on` DATE'tir, timestamp DEĞİL.** Tekillik "aynı gün" sorusunu
+  cevaplamalı; timestamp saniye taşıdığı için iki gönderim asla
+  çakışmaz ve kısıt hiçbir şey korumazdı.
+- **TARAMA ÖLÇMEZ, `metric_snapshots`'ı OKUR.** On üç ağır toplama
+  sorgusu yeniden koşsaydı iki gerçek kaynağı doğardı (turlar farklı
+  anlarda çalışır) ve `percentile_cont` maliyeti iki kez ödenirdi.
+- **EŞİK `Metric::threshold()` İÇİNDE TEK KAYNAK**; karşılaştırma
+  `breaches()` ile yapılır, `>` / `>=` yeniden YAZILMAZ. **Eşiğe TAM
+  dayanan değer AŞIM DEĞİLDİR** (§11 "büyüktür") — yoksa panel yeşilken
+  e-posta giderdi.
+- **SON ÖLÇÜM `id` İLE SEÇİLİR, `captured_at` İLE DEĞİL** —
+  `MetricsController` ile AYNI kural (saniye hassasiyeti). `DISTINCT ON`
+  kullanılır; `MAX(id)` PostgreSQL'de uuid için YOKTUR.
+- **KİRACI uyarısı SAHİPLERE, SİSTEM ve BAĞLANTI uyarısı YÖNETİCİYE**
+  gider. Bağlantı uyarısı (api gecikmesi, 429) satıcının
+  düzeltebileceği bir şey değil, altyapı sorunudur.
+- **YÖNETİCİ ADRESİ TANIMSIZSA GÖNDERİLMEZ ve ÇIPA DA YAZILMAZ** —
+  yazılsaydı o günün uyarısı yanar ve adres tanımlanınca bir daha
+  gönderilemezdi. Atlanan uyarı `alerts.no_recipient` ile günlüğe
+  yazılır, SESSİZCE kaybolmaz.
+- **DAVETİ KABUL ETMEMİŞ ÜYEYE GÖNDERİLMEZ** (`accepted_at` NULL):
+  adres doğrulanmış sayılmaz ve uyarı yabancı gelen kutusuna düşerdi.
+- **§12'NİN "KİRACI BAŞINA 10'DAN FAZLA ÖLÜ İŞ" MADDESİ AYRI YOL
+  DEĞİLDİR** — `DEAD_OPERATIONS` metriği zaten kiracı başına ölçüyor ve
+  eşiği 10. Ayrı özet yazılsaydı eşik İKİ YERDE yaşar ve ayrışırdı.
+- **SAĞLAYICI KODA GÖMÜLMEZ.** Laravel'in `Mail` cephesi kullanılır;
+  seçim `.env`'deki `MAIL_MAILER` ile yapılır ve KOD DEĞİŞMEZ. Yerelde
+  `log` sürücüsü kullanılıyor (e-postalar `storage/logs`'a düşer).
+- **Mailable `ShouldQueue` UYGULAMAZ:** tarama zaten zamanlanmış bir
+  komutta çalışır; kuyruğa atmak gönderimi aynı gün çıpasından AYIRIR
+  ve düşen bir iş, çıpası yazılmış ama e-postası hiç gitmemiş bir kayıt
+  bırakırdı — kaydı gören kimse bunu anlayamazdı.
+- **DEĞER VE EŞİK BİRLİKTE gösterilir** ("9 — eşik 5"): sayı tek başına
+  bir şey söylemez. Metrik başına TAVSİYE de yazılır ve doğru ekrana
+  yönlendirir (ölü mektup ekranındaki kuralın aynısı).
+- **`MetricUnit::format()` SIFIRI BOŞ DİZEYE DÜŞÜRMEZ.** Kırpma
+  yalnızca ONDALIK kısma uygulanır; tüm sayıya uygulanırsa `"0"` boşa
+  düşer ve eşiği sıfır olan metrikler e-postada eşiksiz görünür —
+  GERÇEK ÇALIŞTIRMADA bulundu ve o iki metrik tam da uyarı üreten
+  metriklerdi. Aynı kırpma `10`'u `1`'e de düşürürdü.
+
 ## Henüz yazılmadı
 
-**Uyarı e-postaları** (§13 · Faz 3 · madde 2'nin kalan üçte biri) —
-mail altyapısı HİÇ YOK: `config/mail.php`, `app/Mail`,
-`app/Notifications` yok ve SMTP sağlayıcısı seçilmedi. Eşik aşımı ŞU AN
-`/metrics` rozetlerinde görünüyor; e-posta onu bildirime çevirir. §12
-ayrıca "günlük özet: kiracı başına 10'dan fazla ölü iş → e-posta"
-istiyor ve o eşik `Metric::DEAD_OPERATIONS` içinde ZATEN tanımlı.
+**FAZ 3 KAPANDI** — dokümanın §13 · Faz 3 listesindeki BEŞ maddenin
+BEŞİ de bitti: mutabakat motoru · **metrik toplama + panel + uyarı
+e-postaları** (`8e27913` + `bbe2852`) · ölü mektup ekranı + tek tıkla
+yeniden deneme (`244a397`, madde 3 ve 4'ü birlikte kapatır) · toplu içe
+aktarma (CSV + **kanaldan ürün çekme**, `f234303` + `99008b8`).
 
-Faz 4: panel cilası, onay durumu için ayrı ekran, abonelik/ödeme.
+**Sıradaki FAZ 4** (90 sa · hafta 21–25): abonelik/ödeme iyzico (26 sa)
+· onboarding akışı (20 sa) · panel cilası (20 sa) · Türkçe yardım
+dokümantasyonu (12 sa) · güvenlik kontrol listesi + yük testi (12 sa).
+Onay durumu için ayrı ekran küçük bir artık madde.
 
-**Faz 3'ün BEŞ maddesinin BEŞİ de çekirdek tarafında bitti** — mutabakat
-motoru, toplu içe aktarma (CSV + **kanaldan ürün çekme**, `99008b8`),
-**ölü mektup ekranı + tek tıkla yeniden deneme** (`244a397`, madde 3 ve
-4'ü birlikte kapatır) ve **metrik toplama + sağlık ekranı** (`8e27913`).
-Yalnızca uyarı e-postaları kaldı.
+Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) Faz 4'ten SONRA.
+Shopify KAPSAM DIŞI.
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
