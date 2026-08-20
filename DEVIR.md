@@ -20,6 +20,72 @@ docker compose up -d
 docker compose exec app php artisan test      # 829 yeşil olmalı
 ```
 
+### ⏭ YARIN İLK İŞ — STRIPE'I GERÇEK ANAHTARLA SÜRMEK
+
+Kod hazır ve testlerle korunuyor (28 test); eksik olan yalnızca
+anahtarlar. **Stripe CLI KURULDU** (`brew`, sürüm 1.50.3) ama `stripe
+login` YAPILMADI — o adım tarayıcı ister ve kullanıcının yapması
+gerekir.
+
+**Kullanıcının yapacakları (sırayla):**
+
+```bash
+stripe login                                              # tarayıcı açar
+stripe listen --forward-to localhost:8080/webhooks/stripe # AÇIK KALMALI
+```
+
+İkinci komut ekrana `whsec_...` yazar. Sonra `.env`'e üç satır:
+
+```
+STRIPE_KEY=pk_test_...          # Stripe paneli → Developers → API keys
+STRIPE_SECRET=sk_test_...       # aynı sayfa, "Reveal" gerekir
+STRIPE_WEBHOOK_SECRET=whsec_... # `stripe listen` çıktısından
+```
+
+**ANAHTAR SOHBETE YAZILMAZ, KODA GÖMÜLMEZ** — kullanıcı `.env`'e
+yazar, kod `config()` ile okur.
+
+**Anahtarlar yazılınca yapılacaklar:**
+
+1. `docker compose exec app php artisan config:clear`
+2. Tarayıcıda `/billing` → "Bu plana geç" (düğmeler artık etkin)
+3. Stripe ödeme sayfası → test kartı `4242 4242 4242 4242`
+   (tarih: gelecekte herhangi biri, CVC: herhangi 3 hane)
+4. **Kontrol edilecekler:** webhook geldi mi (`stripe listen`
+   terminalinde görünür) · `subscriptions` satırı `active` mi ·
+   `tenants.plan_code` güncellendi mi · `/billing` yeni planı
+   gösteriyor mu · **kota yükseldi mi** (demo kiracısı 2/1 kanalla
+   kırmızıydı; `pro` planda 2/5 olmalı)
+5. Plan yükseltmeyi de sına: ikinci kez satın al → **eski abonelik
+   `cancelled`, yenisi `active`** olmalı ve `UNIQUE(tenant_id) WHERE
+   aktif` kısıtı İHLAL EDİLMEMELİ
+
+**DOĞRULAMA DURUMU (20 Ağustos, anahtarsız):** webhook uç noktası
+imzasız istekte 500 + `stripe.webhook_secret_missing` günlüğü veriyor —
+bu DOĞRU davranış (sır yokken doğrulama yapılamaz, kabul edilmez) ve
+**419 CSRF DEĞİL**, yani rota doğru şekilde muaf. Rotalar kayıtlı,
+`APP_URL=http://localhost:8080` doğru.
+
+**GERÇEK ÇALIŞTIRMA KURALI BURADA DA GEÇERLİ** — bu projede her turda
+gerçek bir hata buldu ve Stripe'ta da bulması beklenir.
+
+Sonra: **panel cilası** (Faz 4'ün sıradaki maddesi, 20 sa).
+
+### AÇIK UÇ — PROJE İSMİ HENÜZ SEÇİLMEDİ
+
+Kullanıcı isim arıyor ve **bulunca haber verecek**. Sekiz tur öneri
+yapıldı, hiçbiri tutmadı; `kanalca.com` boş çıktı ama beğenilmedi,
+`voltexio` elde ama elektrik çağrışımı nedeniyle elendi.
+
+**İSİM KODU ETKİLEMİYOR:** namespace `App\...` ve görünen ad
+`VITE_APP_NAME`'den okunuyor. İsim yalnızca **8 dosyada** geçiyor
+(`config/entegrasyon.php` · `resources/js/app.js` · `PanelLayout.vue` ·
+`Login.vue` · `Register.vue` · `app.blade.php` ·
+`MetricAlertMail.php` · `mail/metric-alert.blade.php`) ve çoğu yorum
+veya görünen metin. **Değiştirmek ~yarım saat.**
+
+**İsim Stripe'ı veya başka bir işi BEKLETMEZ.**
+
 ### KULLANICI KARARI — ÖDEME STRIPE İLE (20 Ağustos 2026)
 
 **Abonelik ve ödeme STRIPE üzerinden yazılacak, iyzico ile DEĞİL.**

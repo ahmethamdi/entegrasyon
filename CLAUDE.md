@@ -753,10 +753,14 @@ güvenlik kontrol listesi + yük testi (12 sa). Onay durumu için ayrı
 ekran küçük bir artık madde.
 
 **GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ** — `.env`'de
-`STRIPE_SECRET` tanımlı değil ve ekran bunu açıkça söylüyor. Anahtar
-tanımlanınca checkout akışı uçtan uca doğrulanmalı (test modu:
-`sk_test_...`). Webhook'u yerelde denemek için `stripe listen
---forward-to localhost:8080/webhooks/stripe` kullanılır.
+`STRIPE_SECRET` tanımlı değil ve ekran bunu açıkça söylüyor.
+**Stripe CLI KURULDU** (brew, 1.50.3) ama `stripe login` YAPILMADI
+(tarayıcı ister, kullanıcı yapar). Anahtar tanımlanınca checkout akışı
+uçtan uca doğrulanmalı (test modu `sk_test_...`, test kartı
+`4242 4242 4242 4242`). Webhook'u yerelde denemek için `stripe listen
+--forward-to localhost:8080/webhooks/stripe` — komut kendi `whsec_`
+sırrını verir ve terminal AÇIK KALMALI. Ayrıntılı adımlar DEVIR.md'nin
+"YARIN İLK İŞ" bölümünde.
 
 **ÖDEME SAĞLAYICISI STRIPE'TIR, iyzico DEĞİL** — kullanıcı kararı
 (20 Ağustos 2026). Doküman §13 · Faz 4 "iyzico" diyor; bu **bilinçli
