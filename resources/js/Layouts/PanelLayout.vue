@@ -16,6 +16,7 @@ const nav = [
     { href: '/metrics', label: 'Sağlık' },
     { href: '/channels', label: 'Kanallar' },
     { href: '/mappings', label: 'Eşleştirme' },
+    { href: '/billing', label: 'Abonelik' },
 ];
 
 const currentPath = computed(() => page.url.split('?')[0]);

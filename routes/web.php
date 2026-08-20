@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
+use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
@@ -134,6 +135,15 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     // §17 bu maddeyi P0'a koyuyor — ölçülmeyen güvenilirlik iddia
     // edilemez ve ölçülüp gösterilmeyen de aynı kapıya çıkar.
     Route::get('/metrics', [MetricsController::class, 'index'])->name('metrics.index');
+
+    // Abonelik ve ödeme (§13 · Faz 4). Ödeme başlatma POST'tur: yan
+    // etkisi var (Stripe'ta oturum açar) ve GET olsaydı tarayıcı ön
+    // yüklemesi kullanıcı adına ödeme sayfası açardı.
+    //
+    // ABONELİK BURADA YAZILMAZ — webhook yazar (`/webhooks/stripe`).
+    Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
+    Route::post('/billing/checkout', [BillingController::class, 'checkout'])
+        ->name('billing.checkout');
 
     Route::get('/failures', [SyncFailureController::class, 'index'])
         ->name('failures.index');

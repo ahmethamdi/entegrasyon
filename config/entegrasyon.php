@@ -65,4 +65,22 @@ return [
         'admin_email' => env('ALERT_ADMIN_EMAIL'),
     ],
 
+    /*
+    | Ödeme sağlayıcısı — §13 · Faz 4.
+    |
+    | KULLANICI KARARI: Stripe (doküman "iyzico" diyor; sapma onaylı).
+    |
+    | ANAHTARLAR KODA GÖMÜLMEZ ve `.env`'den okunur. Gömülü anahtar
+    | depoya sızar ve iptal edilene kadar herkes hesabı kullanabilir.
+    |
+    | `webhook_secret` AYRI bir sırdır ve gizli anahtarla AYNI DEĞİLDİR:
+    | imza doğrulaması onunla yapılır. Karıştırılırsa doğrulama HER
+    | ZAMAN başarısız olur ve hiçbir ödeme işlenmez.
+    */
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    ],
+
 ];
