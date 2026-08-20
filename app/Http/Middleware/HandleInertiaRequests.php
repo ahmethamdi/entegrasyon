@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Identity\Support\OnboardingProgress;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -62,6 +63,28 @@ class HandleInertiaRequests extends Middleware
                 'success' => $request->session()->get('success'),
                 'warning' => $request->session()->get('warning'),
             ],
+
+            // Onboarding ilerlemesi (§13 · Faz 4). HER panel ekranında
+            // paylaşılır, yalnızca özette değil: kullanıcı kurulumun
+            // ortasında herhangi bir ekrana gidebilir ve şerit orada da
+            // yolu göstermelidir.
+            //
+            // Kiracı bağlamı YOKKEN hesaplanmaz — giriş ve kayıt ekranları
+            // kiracısızdır ve tenant-scoped sorgu orada İSTİSNA fırlatırdı
+            // (izolasyon kuralı: bağlam yokken sessizce veri dönmez).
+            //
+            // `Closure` ile sarılır ve KİRACI KONTROLÜ DE İÇERİDE yapılır.
+            // `share()` `web` grubunda, `tenant` ise ROTA seviyesinde
+            // çalışır — yani bu metot bağlam kurulmadan ÖNCE çağrılır ve
+            // dışarıda okunan `$tenant` her zaman null olurdu. Kapanış
+            // yanıt üretilirken çalıştığı için bağlamı kurulmuş görür.
+            //
+            // Yan fayda: Inertia kısmi yenilemede (partial reload)
+            // çağrılmayan prop'u atlar ve üç `exists()` sorgusu boşuna
+            // koşmaz.
+            'onboarding' => fn (): ?array => $request->attributes->get('tenant') === null
+                ? null
+                : (new OnboardingProgress)->forCurrentTenant(),
         ];
     }
 }
