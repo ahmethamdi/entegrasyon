@@ -1,8 +1,10 @@
-# Devir Notu — 20 Ağustos 2026 (FAZ 4 BAŞLADI — onboarding akışı bitti)
+# Devir Notu — 20 Ağustos 2026 (FAZ 4 SÜRÜYOR — onboarding + abonelik şeması/kotası bitti)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `a118b3a`
-(+ bu devir notu commit'i). **FAZ 3 KAPALI** ve **FAZ 4 BAŞLADI**:
-onboarding akışı (20 sa) bu turda yazıldı. Faz durumu iddiası devir
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `d02b984`
+(+ bu devir notu commit'i). **FAZ 3 KAPALI** ve **FAZ 4 SÜRÜYOR**:
+onboarding akışı (20 sa) ve **abonelik şeması + kotası** bu turda
+yazıldı. Abonelik maddesinin ÇEKİRDEK yarısı bitti; kalan **Stripe
+tahsilat hattı** (checkout + webhook). Faz durumu iddiası devir
 notundan değil **dokümanın §13 listesinden** doğrulandı.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
@@ -11,7 +13,7 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 772 yeşil olmalı
+docker compose exec app php artisan test      # 801 yeşil olmalı
 ```
 
 ### KULLANICI KARARI — ÖDEME STRIPE İLE (20 Ağustos 2026)
@@ -75,14 +77,30 @@ Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 | Madde | Saat | Durum |
 |---|---|---|
 | Onboarding akışı | 20 | **BİTTİ** (`a118b3a`) |
+| Abonelik: şema + kota | ~14 | **BİTTİ** (`d02b984`) |
+| Abonelik: **Stripe tahsilat** (checkout + webhook) | ~12 | **SIRADAKİ** |
 | Panel cilası (boş durumlar, yükleniyor, mobil — ON İKİ ekran) | 20 | kaldı |
-| Abonelik/ödeme (planlar, kota, **STRIPE**) | 26 | kaldı |
 | Türkçe yardım dokümantasyonu | 12 | kaldı |
 | Güvenlik kontrol listesi + yük testi | 12 | kaldı |
 
 Fazın 20 saati zaten bitmişti (mutabakat panel ekranı `513480d` ve ona
-bağlı işler); onboarding ile birlikte **40/90 saat bitti → 50 saat
-kaldı.**
+bağlı işler); onboarding ve abonelik şeması/kotasıyla birlikte
+**~55/90 saat bitti → ~35 saat kaldı.**
+
+**SIRADAKİ İŞ — STRIPE TAHSİLAT HATTI.** Çekirdek yarı bitti: planlar,
+abonelik şeması ve kota çalışıyor ve GERÇEK yollara bağlı. Kalan
+parça, Stripe Checkout oturumu açmak ve webhook'la abonelik durumunu
+güncellemek.
+
+**ANAHTAR GEREKİYOR (test modu).** `.env`'e KULLANICI yazar, kod
+`config()` ile okur; anahtar sohbete YAZILMAZ ve koda GÖMÜLMEZ.
+Gerekli alanlar: `STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`.
+
+**WEBHOOK'TA PROJENİN GELEN HAT KURALLARI AYNEN GEÇERLİ:** HMAC ham
+gövde üzerinden (`Stripe-Signature`) ve JSON ayrıştırmadan ÖNCE; rota
+`web` grubunda DEĞİL (CSRF muaf, oturumsuz); her durumda 2xx;
+tekilleştirme olay kimliğiyle. `subscriptions.external_ref` kısmi
+tekilliği ikinci bir abonelik satırını zaten engelliyor.
 
 **Panel cilası maddesi onboarding'den SONRA gelmeli** — boş durum
 metinleri artık şeridin söylediğiyle çelişmemeli. Ekranların çoğunda
@@ -108,12 +126,80 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 ## Tek cümlede durum
 
 **Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı); **Faz
-4'te 40/90 saat bitti** — onboarding akışı bu turda kapandı. **772 test
-yeşil** (2543 assertion), Pint temiz (336 dosya), iki ardışık rastgele
-sıralı tur temiz (seed **1787234985** · **1787235027**). Panelde ON İKİ
-ekran + her ekranda onboarding şeridi.
+4'te ~55/90 saat bitti** — onboarding akışı ve abonelik şeması/kotası
+bu turda kapandı. **801 test yeşil** (2592 assertion), Pint temiz, iki
+ardışık rastgele sıralı tur temiz (seed **1787239065** ·
+**1787239123**). Panelde ON İKİ ekran + her ekranda onboarding şeridi.
+Sıradaki iş **Stripe tahsilat hattı**.
 
 ## Bu turda ne eklendi
+
+### §13 · Faz 4 · ABONELİK ŞEMASI + KOTA (`d02b984`)
+
+| Ne | Nerede |
+|---|---|
+| Şema | `2026_08_20_000300_create_billing_tables` (`plans` · `subscriptions`) |
+| Modeller | `Domain/Billing/Models/Plan` · `Subscription` |
+| Kota | `Domain/Billing/Actions/EnforceQuota` |
+| Metrik | `Domain/Billing/Enums/QuotaMetric` (SÖZLEŞME) |
+| Hata | `Domain/Billing/Exceptions/QuotaExceededException` |
+| Seed | `database/seeders/PlanSeeder` (free · starter · pro · business) |
+| Bağlandığı yollar | `ProductController::store` · `ChannelConnectionController::store` |
+| Testler | `EnforceQuotaTest` (11) · `SubscriptionSchemaTest` (7) · `PlanLimitContractTest` (6) · `QuotaEnforcementPathsTest` (5) |
+
+**KULLANICI KARARI — İKİ KOTA:** ürün sayısı ve kanal bağlantısı
+sayısı. İkisi de sektör standardı, müşterinin anlaması kolay ve ANLIK
+sayım.
+
+**`usage_records` YAZILMADI ve bu BİLİNÇLİ.** §4 onu DÖNEMSEL ölçüm
+için tanımlıyor ("fiyatlandırma verisi geriye dönük üretilemez") ama
+iki kota da anlık `COUNT`; şimdi yazmak hiçbir yerden yazılmayan boş
+bir tablo bırakırdı. Sipariş/senkron başına ücretlendirmeye geçilirse
+eklenir.
+
+**KOTA STOK VE SİPARİŞ AKIŞINA DOKUNMAZ** — §14'ün ön koşul kapısıyla
+AYNI tasarım hedefi ve testte ledger snapshot'ıyla korunuyor. Sipariş
+ASLA reddedilmez; ödeme sorunu yüzünden stok bozmak veya sipariş
+kaybetmek, çözdüğünden büyük zarar verir.
+
+**KOTA YARATMAYI ENGELLER, VAR OLANI SİLMEZ.** Plan düşünce limitin
+üstündeki ürünler silinmez ve senkronları durmaz.
+
+**LİMİT YOKSA SINIRSIZDIR, SIFIR DEĞİL** — yeni bir kota türü
+eklendiğinde tüm mevcut planların o kotada sıfıra düşüp herkesi
+kilitlemesini önler.
+
+**ANAHTAR YENİLEME KOTADAN ETKİLENMEZ.** `ConnectChannel` aynı hesabı
+`firstOrNew` ile yeniden kullanır; ayrım yapılmasaydı kotası dolu
+satıcı süresi dolmuş anahtarını güncelleyemez ve kanalı KALICI
+ölürdü — üstelik tam da ödeme yapmasını istediğimiz anda.
+
+**`external_ref` SAĞLAYICIDAN BAĞIMSIZ ADLANDIRILDI** (§4) ve KISMİ
+TEKİL: Stripe olayları EN AZ BİR KEZ gönderilir ve tekrar ikinci bir
+abonelik satırı doğururdu. NULL'lar tekilliği ihlal etmez.
+
+**ALTI MUTASYON, ALTISI DA YAKALANDI:** (1) `>=` → `>`, (2) iptal
+edilmiş aboneliğin kota vermesi, (3) null limitin sıfıra düşmesi,
+(4) kiracı scope'unun kalkması, (5) anahtar yenilemenin de
+engellenmesi, (6) **kota çağrısının ürün yolundan tamamen
+kaldırılması** — bu sonuncusu `pushPrices` boşluğunun (yazıldı ama
+çağıranı yok) aynısıdır ve `QuotaEnforcementPathsTest` tam bunun için
+yazıldı.
+
+**SÖZLEŞME TESTİ EKLENDİ.** `plans.limits` anahtarları BEKLENEN
+METİNLE sınanıyor: yazan (seed) ve okuyan (`limitFor`) aynı enum'u
+çağırdığı için mutasyon ikisini BİRLİKTE kaydırır, davranış testleri
+yeşil kalır ama üretimdeki satırlar eski anahtarı taşır ve kota
+SESSİZCE kalkardı. `MetricScope` ve `AlertKey` tuzağının ÜÇÜNCÜ
+tekrarı — bu kez ÖNCEDEN yazıldı.
+
+**GERÇEK ÇALIŞTIRILDI:** planlar seed edildi (4 plan, doğru JSONB
+anahtarlarıyla). Demo kiracısı `free` plana düşüyor ve **2/1 kanalla
+kotası DOLU** (planlardan önce yaratıldığı için); tarayıcıda üçüncü
+kanalı eklemeyi denedi ve **"Kanal bağlantısı kotası doldu: 2/1. Daha
+fazla kanal bağlamak için planını yükselt."** mesajını gördü. **VAR
+OLAN iki kanal `active` kaldı ve çalışmaya devam ediyor** — kuralın
+gerçek kanıtı budur.
 
 ### §13 · Faz 4 · ONBOARDING AKIŞI (`a118b3a`) — FAZ 4'ÜN İLK MADDESİ
 
@@ -816,7 +902,7 @@ silme partilenir; tur başına üst sınır var; transaction YOK.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 772 yeşil olmalı
+docker compose exec app php artisan test      # 801 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -855,7 +941,7 @@ içe aktarma (**iki kaynak: CSV + kanal**) · ürün-kanal · siparişler ·
 sipariş ayrıntısı · stok · mutabakat · başarısız işlemler · **sistem
 sağlığı** · kanallar · eşleştirme.
 
-**Testler:** 772 yeşil (2543 assertion).
+**Testler:** 801 yeşil (2592 assertion).
 **P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
 
 **Faz 4:** onboarding akışı (`a118b3a`) — dört adım, VERİDEN türetilen
@@ -886,11 +972,14 @@ teknik bağımlılık yok.
   Artık ON İKİ ekrana + onboarding şeridine dokunur. **Onboarding'den
   SONRA gelmeli**: boş durum metinleri şeridin söylediğiyle
   çelişmemeli.
-- **Abonelik/ödeme** (26 sa · hafta 21–25): planlar, kota, **STRIPE**
-  (kullanıcı kararı — doküman "iyzico" diyor, sapma onaylı). Şema
-  kararı alınmış, YAZILMADI. Kota neyi sınırladığını senkron
-  davranışından alır ve o davranış artık OTURDU — yani bu madde artık
-  teknik olarak da yazılabilir durumda.
+- ~~**Abonelik: şema + kota**~~ — **BİTTİ** (`d02b984`). `plans` ·
+  `subscriptions` · `EnforceQuota`; ürün ve kanal yollarına bağlı ve
+  tarayıcıda doğrulandı. İki kota: ürün sayısı · kanal sayısı.
+- **Abonelik: Stripe tahsilat hattı** (~12 sa) — checkout oturumu +
+  webhook. **Test modu anahtarı `.env`'e KULLANICI yazar**
+  (`STRIPE_KEY`, `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`); kod
+  `config()` ile okur. Webhook'ta gelen hat kuralları aynen geçerli
+  (HMAC ham gövde üzerinden, CSRF muaf rota, her durumda 2xx).
 - **Türkçe yardım dokümantasyonu** (12 sa).
 - **Güvenlik kontrol listesi + yük testi** (12 sa).
 - **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal

@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 772 test yeşil olmalı
+docker compose exec app php artisan test      # 801 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-36 tablo (çerçeve dışı), 34 model, 772 test. Stok çekirdeği (`ApplyMovement`,
+38 tablo (çerçeve dışı), 36 model, 801 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -746,7 +746,9 @@ yeniden deneme (`244a397`, madde 3 ve 4'ü birlikte kapatır) · toplu içe
 aktarma (CSV + **kanaldan ürün çekme**, `f234303` + `99008b8`).
 
 **FAZ 4 SÜRÜYOR** (90 sa · hafta 21–25). **Onboarding akışı BİTTİ**
-(20 sa, `a118b3a`). Kalan: abonelik/ödeme (26 sa) · panel cilası
+(20 sa, `a118b3a`) ve **abonelik ŞEMASI + KOTASI BİTTİ**
+(`d02b984` — maddenin çekirdek yarısı). Kalan: **Stripe tahsilat
+hattı** (checkout + webhook, maddenin ikinci yarısı) · panel cilası
 (20 sa) · Türkçe yardım dokümantasyonu (12 sa) · güvenlik kontrol
 listesi + yük testi (12 sa). Onay durumu için ayrı ekran küçük bir
 artık madde.
@@ -1048,6 +1050,53 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   ve rapor yanıltır; ayrıca yarıda kalan turda hangi satırın işlendiği
   bilinmiyor. Hata satıra yazılır, yeniden yükleme kararı KULLANICININDIR.
 
+## Abonelik ve kota kuralları (§13 · Faz 4 · `d02b984`)
+
+- **SAĞLAYICI STRIPE'TIR** (kullanıcı kararı) — doküman "iyzico" diyor,
+  sapma onaylı. `subscriptions.external_ref` §4'te SAĞLAYICIDAN BAĞIMSIZ
+  adlandırılmıştır ve `stripe_subscription_id` DEĞİLDİR: sağlayıcı
+  değişirse şema değişmemelidir.
+- **KOTA STOK VE SİPARİŞ AKIŞINA DOKUNMAZ** — §14'ün ön koşul kapısıyla
+  AYNI tasarım hedefi. Sipariş ASLA reddedilmez (pazaryeri onu kabul
+  etmiştir) ve kotası dolu kiracının stoğu güncellenmeye DEVAM EDER.
+  Ödeme sorunu yüzünden stok bozmak veya sipariş kaybetmek,
+  çözdüğünden büyük zarar verir. `QuotaEnforcementPathsTest` bunu
+  ledger snapshot'ıyla korur.
+- **KOTA YARATMAYI ENGELLER, VAR OLANI SİLMEZ.** Plan düşünce limitin
+  üstündeki ürünler SİLİNMEZ ve senkronları DURMAZ; yalnızca yenisi
+  eklenemez. Silmek geri alınamaz ve kanaldaki listelemeleri götürürdü.
+- **LİMİT YOKSA SINIRSIZDIR, SIFIR DEĞİL.** `limits` JSONB'sinde
+  bulunmayan anahtar "bu planda o kota YOK" demektir; sıfır sayılsaydı
+  yeni bir kota türü eklendiği an TÜM planlar o kotada sıfıra düşer ve
+  bütün kiracılar aniden engellenirdi.
+- **ABONELİK YOKSA VARSAYILAN PLANA (`free`) DÜŞÜLÜR**, sınırsız
+  SAYILMAZ. İPTAL EDİLMİŞ abonelik kota VERMEZ — verseydi bir kez abone
+  olup iptal eden kiracı ücretli limitleri sonsuza kadar kullanırdı.
+  `trialing` VERİR (deneme ücretli gibi davranmalı), `past_due` VERMEZ.
+- **ANAHTAR YENİLEME KOTADAN ETKİLENMEZ.** `ConnectChannel` aynı hesabı
+  `firstOrNew` ile yeniden kullanır; ayrım yapılmasaydı kotası dolu
+  satıcı süresi dolmuş anahtarını güncelleyemez ve kanalı KALICI
+  ölürdü — üstelik tam da ödeme yapmasını istediğimiz anda.
+- **`plans` KİRACIYA AİT DEĞİLDİR** (§4: "Kiracısız, seed") —
+  `channel_categories` ile aynı ayrım: katalog ÜRÜNÜN gerçeği, seçim
+  satıcının kararı. Anahtar `code`, uuid değil.
+- **`UNIQUE(tenant_id) WHERE aktif` KISMİ TEKİLLİKTİR.** İptal edilmiş
+  abonelik SİLİNMEZ ve tarihçe olarak durur; tam tekillik konsaydı plan
+  değiştiren kiracının eski satırı silinir ve gelir geçmişi kaybolurdu.
+- **`external_ref` KISMİ TEKİLDİR** — webhook tekrarına karşı çıpa
+  (Stripe olayları EN AZ BİR KEZ gönderilir). NULL olabilir ve birden
+  çok NULL tekilliği ihlal etmez.
+- **`limits` ANAHTARLARI SÖZLEŞMEDİR** ve `PlanLimitContractTest`
+  BEKLENEN METİNLE sınar. Yazan (seed) ve okuyan (`limitFor`) aynı
+  enum'u çağırdığı için mutasyon ikisini BİRLİKTE kaydırır, davranış
+  testleri yeşil kalır ama üretimdeki satırlar eski anahtarı taşır ve
+  kota SESSİZCE kalkardı.
+- **`usage_records` YAZILMADI ve bu bilinçlidir** — iki kota da ANLIK
+  sayımdır. §4 o tabloyu DÖNEMSEL ölçüm için tanımlar; sipariş/senkron
+  başına ücretlendirmeye geçilirse yazılır.
+- **KOTA AŞIMI ALAN HATASIDIR, 500 DEĞİL** (`DuplicateSkuException` ile
+  aynı kalıp) ve mesaj DEĞER + LİMİT + TAVSİYE taşır.
+
 ## Onboarding kuralları (§13 · Faz 4 · `a118b3a`)
 
 - **İLERLEME SAKLANMAZ, TÜRETİLİR.** `tenants`'ta onboarding kolonu YOK
@@ -1188,11 +1237,13 @@ Devir notundaki alt liste (hepsi bitti):
 mutabakat katmanları**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1 testi
 kalmadı.**
 
-**FAZ 4 SÜRÜYOR** (hafta 21–25, 40/90 sa). **Onboarding akışı BİTTİ**
+**FAZ 4 SÜRÜYOR** (hafta 21–25, ~55/90 sa). **Onboarding akışı BİTTİ**
 (`a118b3a`) — dört adım, VERİDEN türetilen ilerleme, her panel
-ekranında şerit. Kalan: panel cilası · abonelik/ödeme (**STRIPE**) ·
-Türkçe yardım dokümantasyonu · güvenlik kontrol listesi + yük testi ·
-onay durumu ekranı (küçük artık madde). Yeni pazaryerleri (Hepsiburada
+ekranında şerit. **Abonelik ŞEMASI + KOTASI BİTTİ** (`d02b984`):
+`plans` · `subscriptions` · `EnforceQuota`, ürün ve kanal yollarına
+bağlı. Kalan: **Stripe tahsilat hattı** (checkout + webhook) · panel
+cilası · Türkçe yardım dokümantasyonu · güvenlik kontrol listesi + yük
+testi · onay durumu ekranı (küçük artık madde). Yeni pazaryerleri (Hepsiburada
 → Amazon → Etsy → eBay) Faz 4'ten SONRA. Çalışma sırası kararı ("önce
 çekirdek, panel sona") kapsamını doldurdu.
 
