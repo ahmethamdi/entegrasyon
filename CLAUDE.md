@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 709 test yeşil olmalı
+docker compose exec app php artisan test      # 737 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-35 tablo (çerçeve dışı), 33 model, 709 test. Stok çekirdeği (`ApplyMovement`,
+35 tablo (çerçeve dışı), 33 model, 737 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -634,17 +634,72 @@ testin sonunda çağrılır.
   tabloyu saatlik doldurur ve gerçek sinyal binlerce "0" arasında
   kaybolurdu.
 
+## Kanaldan ürün çekme kuralları (§13 · Faz 3 · madde 5 · `99008b8`)
+
+- **§7'YE SEKİZİNCİ YETENEK ARAYÜZÜ EKLENDİ** — `SupportsCatalogImport`.
+  Bilinçli ve KULLANICI ONAYLI sapma: §13 maddeyi istiyor ama §7'de
+  karşılığı yok. `SupportsCatalog`'un iki okuma metodu da YEREL kayıttan
+  başlar (`findExistingListing(Variant)`, `fetchListing(Listing)`); içe
+  aktarma TERSİNİ sorar — "kanalda ne var ki bende YOK". `fetchListing`
+  bu iş için kullanılamaz: elde `Listing` satırı olmasını şart koşar,
+  oysa içe aktarmanın amacı o satırı YARATMAKTIR.
+- **`SupportsCatalog`'A EKLENMEDİ.** Trendyol onu uygular ama toplu
+  listeleme orada AYRI uç noktadır. Eklenseydi Trendyol ya istisna
+  fırlatırdı (panel yeteneği ayırt edemezdi) ya sessizce boş dönerdi
+  (§7'nin açık yasağı). Registry anahtarı `catalog_import` ve
+  `catalog`'tan AYRIDIR: bir kanal yalnızca birini destekleyebilir.
+- **VAR OLAN SKU'DA STOK YAZILMAZ** — bu maddenin EN TEHLİKELİ hatası.
+  Kanaldaki stok BAYAT olabilir (biz henüz göndermemişizdir ya da kanal
+  uygulamamıştır). Uygulansaydı SATILMIŞ mallar bir içe aktarma turuyla
+  geri gelir, bakiye sessizce bozulur ve fazla satışa yol açardı. Kanal
+  stoğu YALNIZCA yeni üründe ve YALNIZCA açılış hareketi olarak yazılır —
+  o an ezilecek kanonik bakiye YOKTUR. `applyUpdate()` stok parametresi
+  ALMAZ (`UpdateProduct` de almaz) ve bu, kuralın koda gömülü hâlidir.
+- **FİYAT `regular_price`'TAN OKUNUR, `price`'TAN DEĞİL.** `price`
+  indirim varsa indirimli değeri taşır; kanonik fiyata yazılsaydı
+  satıcının LİSTE fiyatı kalıcı düşer ve kampanya bitince o düşük fiyat
+  TÜM kanallara yayılırdı.
+- **NULL FİYAT "DEĞİŞMEDİ" DEMEKTİR, "SIFIRLA" DEĞİL** — `UpdateProduct`
+  null fiyata dokunmaz. `(float)` dönüşümü yapılsaydı fiyat göndermeyen
+  kanal ürünü 0.00'a düşürürdü.
+- **`internal_category_id` ASLA EZİLMEZ** — satıcının eşleştirme
+  çıpasıdır ve kanal verisinde karşılığı yoktur; null geçilseydi her tur
+  eşleştirmeleri sessizce koparırdı.
+- **SKU'SUZ ÜRÜN ATLANIR ama SAYILIR ve ADIYLA raporlanır.** Woo'da SKU
+  zorunlu DEĞİLDİR. Sessizce düşseydi satıcı "50 ürünüm vardı, 47'si
+  geldi" der ve sebebini bulamazdı. Kanal kimliğinden SKU UYDURULMAZ:
+  satıcı aynı ürünü kendi SKU'suyla yüklediğinde KOPYA ürün doğardı.
+- **SAYFA ÜST SINIRI EMNİYETTİR** (`maxImportPages()`): `hasMore` sonsuza
+  kadar `true` dönen bozuk kanal turu bitirmezdi. Sınıra takılan tur
+  kullanıcıya SÖYLER — sessiz kırpma yok (§13).
+- **İMLEÇ OPAKTIR** (`OrderPage` ile aynı kural) ve `hasMore`
+  `nextCursor !== null` ile AYNI ŞEY DEĞİLDİR: kanal son sayfada bile
+  imleç döndürebilir; turu durduran `hasMore`'dur.
+- **TEK BOZUK ÜRÜN TURU DÜŞÜRMEZ; SAYFA HATASI DURDURUR ama YAZILANLARI
+  KORUR.** Ayrım bilinçli: ürün bozukluğu o ürüne özgüdür, sayfa
+  çekilemiyorsa kanal konuşmuyordur. Tur TEK TRANSACTION'A SARILMAZ.
+- **`product_imports` GENİŞLETİLDİ, İKİNCİ TABLO AÇILMADI** (`source`,
+  `channel_connection_id`, `skipped_count`; `payload` nullable oldu).
+  İki tablo olsaydı `status`/`errors` sözleşmesi iki yerde yaşar ve biri
+  değiştiğinde diğeri sessizce eski kalırdı. Kullanıcı için ikisi de
+  "bir içe aktarma turu"dur; kaynak bir KOLONDUR.
+
 ## Henüz yazılmadı
 
-Kanaldan ürün çekme (§13 · Faz 3 · madde 5'in kalanı) ve **uyarı
-e-postaları** (madde 2'nin kalan üçte biri — mail altyapısı HİÇ YOK:
-`config/mail.php` bile yok). Faz 4: panel cilası, onay durumu için ayrı
-ekran, abonelik/ödeme.
+**Uyarı e-postaları** (§13 · Faz 3 · madde 2'nin kalan üçte biri) —
+mail altyapısı HİÇ YOK: `config/mail.php`, `app/Mail`,
+`app/Notifications` yok ve SMTP sağlayıcısı seçilmedi. Eşik aşımı ŞU AN
+`/metrics` rozetlerinde görünüyor; e-posta onu bildirime çevirir. §12
+ayrıca "günlük özet: kiracı başına 10'dan fazla ölü iş → e-posta"
+istiyor ve o eşik `Metric::DEAD_OPERATIONS` içinde ZATEN tanımlı.
 
-**Faz 3'te BEŞ maddeden DÖRDÜ bitti** — mutabakat motoru, toplu içe
-aktarmanın CSV yarısı, **ölü mektup ekranı + tek tıkla yeniden deneme**
-(`244a397`, madde 3 ve 4'ü birlikte kapatır) ve **metrik toplama +
-sağlık ekranı** (`8e27913`, madde 2'nin toplama+panel kısmı).
+Faz 4: panel cilası, onay durumu için ayrı ekran, abonelik/ödeme.
+
+**Faz 3'ün BEŞ maddesinin BEŞİ de çekirdek tarafında bitti** — mutabakat
+motoru, toplu içe aktarma (CSV + **kanaldan ürün çekme**, `99008b8`),
+**ölü mektup ekranı + tek tıkla yeniden deneme** (`244a397`, madde 3 ve
+4'ü birlikte kapatır) ve **metrik toplama + sağlık ekranı** (`8e27913`).
+Yalnızca uyarı e-postaları kaldı.
 
 `PruneApiCalls` **YAZILDI** (§13 · Faz 3, `a452a27`) — `api-calls:prune`,
 günlük 04:00, partili silme + tur başına üst sınır.
