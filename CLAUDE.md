@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 759 test yeşil olmalı
+docker compose exec app php artisan test      # 772 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-36 tablo (çerçeve dışı), 34 model, 759 test. Stok çekirdeği (`ApplyMovement`,
+36 tablo (çerçeve dışı), 34 model, 772 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -745,10 +745,21 @@ e-postaları** (`8e27913` + `bbe2852`) · ölü mektup ekranı + tek tıkla
 yeniden deneme (`244a397`, madde 3 ve 4'ü birlikte kapatır) · toplu içe
 aktarma (CSV + **kanaldan ürün çekme**, `f234303` + `99008b8`).
 
-**Sıradaki FAZ 4** (90 sa · hafta 21–25): abonelik/ödeme iyzico (26 sa)
-· onboarding akışı (20 sa) · panel cilası (20 sa) · Türkçe yardım
-dokümantasyonu (12 sa) · güvenlik kontrol listesi + yük testi (12 sa).
-Onay durumu için ayrı ekran küçük bir artık madde.
+**FAZ 4 SÜRÜYOR** (90 sa · hafta 21–25). **Onboarding akışı BİTTİ**
+(20 sa, `a118b3a`). Kalan: abonelik/ödeme (26 sa) · panel cilası
+(20 sa) · Türkçe yardım dokümantasyonu (12 sa) · güvenlik kontrol
+listesi + yük testi (12 sa). Onay durumu için ayrı ekran küçük bir
+artık madde.
+
+**ÖDEME SAĞLAYICISI STRIPE'TIR, iyzico DEĞİL** — kullanıcı kararı
+(20 Ağustos 2026). Doküman §13 · Faz 4 "iyzico" diyor; bu **bilinçli
+ve kullanıcı onaylı bir sapmadır**. Şema kararı DEĞİŞMEZ
+(`tenants.plan_code` zaten var; `plans` kiracısız+seed,
+`subscriptions` `UNIQUE(tenant_id) WHERE status='active'`).
+Sağlayıcıya özgü kimlikler (`stripe_customer_id`) tahsilat
+katmanında yaşar, çekirdek kota mantığında değil. Webhook alımında
+projenin gelen hat kuralları geçerli: **HMAC ham gövde üzerinden**
+(`Stripe-Signature`), CSRF muaf rota, tekilleştirme olay kimliğiyle.
 
 Yeni pazaryerleri (Hepsiburada → Amazon → Etsy → eBay) Faz 4'ten SONRA.
 Shopify KAPSAM DIŞI.
@@ -1037,6 +1048,40 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   ve rapor yanıltır; ayrıca yarıda kalan turda hangi satırın işlendiği
   bilinmiyor. Hata satıra yazılır, yeniden yükleme kararı KULLANICININDIR.
 
+## Onboarding kuralları (§13 · Faz 4 · `a118b3a`)
+
+- **İLERLEME SAKLANMAZ, TÜRETİLİR.** `tenants`'ta onboarding kolonu YOK
+  ve §4 de tanımlamıyor; eklenmedi. Gerekçe projenin iki yerleşik
+  kararının aynısı: `is_dirty` generated column'dır (§4) ve
+  `DriftHistory` sayacı ayrı kolonda TUTMAZ (§10) — ayrı sayaç, adımı
+  bitiren HER yolun onu da güncellemesini zorunlu kılar ve biri
+  unutulunca iki gerçek kaynağı SESSİZCE ayrışır. Burada tuzak daha
+  keskin: adım "bitti" damgalanıp veri sonradan giderse (bağlantı
+  sağlıksızlığa düşer, ürün silinir) kayıtlı ilerleme **YALAN söyler**.
+- **KANAL ADIMI `active` İSTER, VARLIK YETMEZ.** "Sağlık kontrolü
+  geçmeden bağlantı `active` olmaz" (§13 · faz 1.4). `pending` bağlantı
+  kanalla HİÇ konuşamamıştır; adım kapatılsaydı kullanıcı ürün
+  göndermeye başlar ve hepsi `AUTHENTICATION` ile KALICI hataya düşerdi.
+- **SENKRON ADIMI `completed` İSTER, AÇILMA YETMEZ.** `pending` kuyrukta
+  bekliyordur, `dead` tam olarak BAŞARISIZ olmuştur; ikisini de saymak
+  ürünün temel iddiasının çalışmadığı anda "kurulum bitti" demektir.
+  **`superseded` DE SAYILMAZ** — terminaldir ama hiç gönderilmemiştir (§8).
+- **KİRACI KONTROLÜ KAPANIŞIN İÇİNDE YAPILIR.** `share()` `web`
+  grubunda, `tenant` ise ROTA seviyesinde çalışır — yani `share()`
+  bağlam kurulmadan ÖNCE çağrılır ve dışarıda okunan `$tenant` HER
+  ZAMAN null olurdu (gerçek çalıştırmada bulundu). Kapanış yanıt
+  üretilirken çalıştığı için bağlamı kurulmuş görür.
+- **ŞERİT LAYOUT'TA YAŞAR**, tek ekranda değil: kullanıcı kurulumun
+  ortasında herhangi bir ekrana gidebilir ve şerit orada da yolu
+  göstermelidir.
+- **KAPATMA BUTONU YOK.** Saklanan tercih ilerlemenin İKİNCİ gerçek
+  kaynağı olurdu ve türetilmiş durum kararını bozardı. Dört adım
+  bitince şerit kendiliğinden kaybolur; veri giderse geri gelir ve bu
+  **KASITLI** davranıştır.
+- **TEK ÇAĞRI DÜĞMESİ — SIRADAKİ ADIM.** Dört düğme birden göstermek
+  kullanıcıya hangisinden başlayacağını sordurur; onboarding'in işi tam
+  olarak bunu söylemektir.
+
 ## Panel kuralları
 
 - **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
@@ -1143,12 +1188,13 @@ Devir notundaki alt liste (hepsi bitti):
 mutabakat katmanları**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1 testi
 kalmadı.**
 
-**Sıradaki iş FAZ 4'tür** — panel cilası, mutabakat panel ekranı, onay
-durumu ekranı ve abonelik/ödeme (hafta 21–25). Yeni pazaryerleri
-(Hepsiburada → Amazon → Etsy → eBay) Faz 4'ten SONRA. Çalışma sırası
-kararı ("önce çekirdek, panel sona") artık kapsamını doldurdu: çekirdek
-tarafında Faz 3'ten kalan madde yok, o yüzden panel işine geçmek
-kullanıcının kararına bağlıdır.
+**FAZ 4 SÜRÜYOR** (hafta 21–25, 40/90 sa). **Onboarding akışı BİTTİ**
+(`a118b3a`) — dört adım, VERİDEN türetilen ilerleme, her panel
+ekranında şerit. Kalan: panel cilası · abonelik/ödeme (**STRIPE**) ·
+Türkçe yardım dokümantasyonu · güvenlik kontrol listesi + yük testi ·
+onay durumu ekranı (küçük artık madde). Yeni pazaryerleri (Hepsiburada
+→ Amazon → Etsy → eBay) Faz 4'ten SONRA. Çalışma sırası kararı ("önce
+çekirdek, panel sona") kapsamını doldurdu.
 
 **YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
 Kullanıcının kararı: **Hepsiburada → Amazon → Etsy → eBay**. Bu maddeler

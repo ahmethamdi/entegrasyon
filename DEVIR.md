@@ -1,10 +1,9 @@
-# Devir Notu — 20 Ağustos 2026 (FAZ 3 TAMAMEN KAPANDI — beş maddenin beşi de bitti)
+# Devir Notu — 20 Ağustos 2026 (FAZ 4 BAŞLADI — onboarding akışı bitti)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `bbe2852`
-(+ bu devir notu commit'i). **FAZ 3 KAPANDI**: dokümanın §13 · Faz 3 listesindeki BEŞ
-maddenin BEŞİ DE bitti. Son madde uyarı e-postalarıydı (madde 2'nin
-kalan üçte biri) ve bu turda yazıldı. Faz durumu iddiası devir notundan
-değil **dokümanın §13 listesinden** doğrulandı.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `a118b3a`
+(+ bu devir notu commit'i). **FAZ 3 KAPALI** ve **FAZ 4 BAŞLADI**:
+onboarding akışı (20 sa) bu turda yazıldı. Faz durumu iddiası devir
+notundan değil **dokümanın §13 listesinden** doğrulandı.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -12,8 +11,28 @@ Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 759 yeşil olmalı
+docker compose exec app php artisan test      # 772 yeşil olmalı
 ```
+
+### KULLANICI KARARI — ÖDEME STRIPE İLE (20 Ağustos 2026)
+
+**Abonelik ve ödeme STRIPE üzerinden yazılacak, iyzico ile DEĞİL.**
+Doküman §13 · Faz 4 "iyzico" diyor; bu **bilinçli ve kullanıcı onaylı
+bir sapmadır** ("kod ile doküman çeliştiğinde doküman esastır"
+kuralının istisnası — sapmayı kullanıcının kendisi istedi).
+
+Şema kararı DEĞİŞMEZ: `tenants.plan_code` zaten var, §4 · `plans`
+(kiracısız + seed), `subscriptions` `UNIQUE(tenant_id) WHERE
+status='active'`, §3 · `Plan` · `Subscription` · `UsageRecord`.
+Sağlayıcıya özgü kimlikler (`stripe_customer_id`,
+`stripe_subscription_id`) TAHSİLAT katmanında yaşar, çekirdek kota
+mantığında değil. Laravel Cashier (`laravel/cashier`) Stripe'ın resmî
+paketi — değerlendirilebilir.
+
+Webhook alımında projenin **gelen hat kuralları** aynen geçerli:
+HMAC ham gövde üzerinden (`Stripe-Signature`), JSON ayrıştırmadan
+ÖNCE; CSRF muaf ve oturumsuz rota; her durumda 2xx; tekilleştirme
+olay kimliğiyle.
 
 ### Dokümanın gerçek faz tablosu (§13)
 
@@ -49,20 +68,27 @@ kaynak taşıyor (CSV dosyası · kanal bağlantısı). Yeni ekran açılmadı.
 eksik olan bildirimdi: eşik aşımı yalnızca `/metrics` rozetlerinde
 görünüyordu ve **kimse bakmadıkça hiçbir yerde görünmüyordu.**
 
-## SIRADAKİ İŞ — FAZ 4 (90 sa · hafta 21–25)
+## SIRADAKİ İŞ — FAZ 4'ÜN KALANI (50 sa)
 
 Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 
-| Madde | Saat |
-|---|---|
-| Panel cilası (boş durumlar, yükleniyor, mobil — artık ON İKİ ekran) | 20 |
-| Onboarding akışı | 20 |
-| Abonelik/ödeme (planlar, kota, iyzico) | 26 |
-| Türkçe yardım dokümantasyonu | 12 |
-| Güvenlik kontrol listesi + yük testi | 12 |
+| Madde | Saat | Durum |
+|---|---|---|
+| Onboarding akışı | 20 | **BİTTİ** (`a118b3a`) |
+| Panel cilası (boş durumlar, yükleniyor, mobil — ON İKİ ekran) | 20 | kaldı |
+| Abonelik/ödeme (planlar, kota, **STRIPE**) | 26 | kaldı |
+| Türkçe yardım dokümantasyonu | 12 | kaldı |
+| Güvenlik kontrol listesi + yük testi | 12 | kaldı |
 
-Fazın 20 saati zaten bitti (mutabakat panel ekranı `513480d` ve ona
-bağlı işler) → **70 saat kaldı.**
+Fazın 20 saati zaten bitmişti (mutabakat panel ekranı `513480d` ve ona
+bağlı işler); onboarding ile birlikte **40/90 saat bitti → 50 saat
+kaldı.**
+
+**Panel cilası maddesi onboarding'den SONRA gelmeli** — boş durum
+metinleri artık şeridin söylediğiyle çelişmemeli. Ekranların çoğunda
+boş durum metni ZATEN var (gerçek çalıştırmada görüldü: "Henüz bağlı
+kanal yok.", "Başarısız işlem yok — tüm gönderimler kanala ulaştı.");
+madde bunları gözden geçirip yükleniyor ve mobil düzeni eklemek.
 
 **Onay durumu için ayrı ekran** fazın en küçük kalıntısıdır: rozet ve
 red sebebi ürün-kanal ekranında ZATEN var; eksik olan yalnızca toplu
@@ -81,14 +107,79 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 
 ## Tek cümlede durum
 
-**Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı: beş
-maddenin beşi de kapalı); **Faz 4'te 20/90 saat bitti** ve sıradaki iş
-odur. **759 test yeşil** (2509 assertion), Pint temiz (334 dosya), iki
-ardışık rastgele sıralı tur temiz. Panelde ON İKİ ekran.
+**Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı); **Faz
+4'te 40/90 saat bitti** — onboarding akışı bu turda kapandı. **772 test
+yeşil** (2543 assertion), Pint temiz (336 dosya), iki ardışık rastgele
+sıralı tur temiz (seed **1787234985** · **1787235027**). Panelde ON İKİ
+ekran + her ekranda onboarding şeridi.
 
 ## Bu turda ne eklendi
 
-### §11 · §12 · §13 · Faz 3 · madde 2 · UYARI E-POSTALARI (`bbe2852`) — FAZ 3'Ü KAPATIR
+### §13 · Faz 4 · ONBOARDING AKIŞI (`a118b3a`) — FAZ 4'ÜN İLK MADDESİ
+
+| Ne | Nerede |
+|---|---|
+| Türetme | `Domain/Identity/Support/OnboardingProgress` — TEK KAYNAK |
+| Paylaşım | `Http/Middleware/HandleInertiaRequests::share()` |
+| Şerit | `resources/js/Layouts/PanelLayout.vue` |
+| Testler | `OnboardingProgressTest` (13) |
+
+**Doküman tek satır söylüyor** (§13 · Faz 4): "Onboarding: kayıt →
+kanal bağla → ürün aktar → ilk senkron — 20 sa". Başka hiçbir yerde
+onboarding tanımı YOK — adımlar dokümanın, tasarım kararları bu turun.
+
+**İLERLEME SAKLANMAZ, TÜRETİLİR — turun ana kararı.** `tenants`'a
+kolon veya ayrı tablo EKLENMEDİ. Gerekçe projenin iki yerleşik
+kararının aynısı: `is_dirty` generated column'dır (§4) ve
+`DriftHistory` sayacı ayrı kolonda TUTMAZ (§10). Burada tuzak daha da
+keskin: adım "bitti" damgalanıp veri sonradan giderse kayıtlı ilerleme
+**YALAN söyler**. Türetilmiş ilerleme yalan söyleyemez — ve bu
+gerçek tarayıcıda KANITLANDI (aşağıda).
+
+**KANAL ADIMI `active` İSTER, VARLIK YETMEZ.** `pending` bağlantı
+kanalla HİÇ konuşamamıştır; adım kapatılsaydı kullanıcı ürün
+göndermeye başlar ve hepsi `AUTHENTICATION` ile KALICI hataya düşerdi.
+
+**SENKRON ADIMI `completed` İSTER.** `pending` kuyrukta bekliyordur,
+`dead` tam olarak BAŞARISIZ olmuştur, **`superseded` ise terminaldir
+ama HİÇ GÖNDERİLMEMİŞTİR** (§8).
+
+**KİRACI KONTROLÜ KAPANIŞIN İÇİNDE YAPILIR — gerçek çalıştırmada
+bulundu.** `share()` `web` grubunda, `tenant` ise ROTA seviyesinde
+çalışır; yani `share()` bağlam kurulmadan ÖNCE çağrılır ve dışarıda
+okunan `$tenant` HER ZAMAN null olurdu (prop null döndü, 13 test
+kırmızı kaldı). Kapanış yanıt üretilirken çalıştığı için bağlamı
+kurulmuş görür.
+
+**ŞERİT LAYOUT'TA YAŞAR** ve kapatma butonu YOKTUR: saklanan tercih
+ilerlemenin İKİNCİ gerçek kaynağı olurdu. Dört adım bitince kaybolur.
+
+**BEŞ MUTASYON, BEŞİ DE YAKALANDI:** (1) `active` filtresini
+kaldırmak, (2) `completed` filtresini kaldırmak, (3) şeridi her zaman
+göstermek, (4) kiracı scope'unu kaldırmak (çapraz kiracı sızıntısı),
+(5) adım sırasını ters çevirmek.
+
+**GERÇEK TARAYICIDA SÜRÜLDÜ (yeni kiracı kaydedilerek):**
+
+1. Kayıt → `/` → şerit **1/4**, adım 2 "sıradaki" işaretli.
+2. **`pending` bağlantı eklendi → şerit HÂLÂ 1/4.** Bağlantı "Kanallar"
+   listesinde görünüyor ama adım KAPANMADI — saklanan ilerleme burada
+   yanlış cevap verirdi.
+3. Bağlantı `active` → **2/4**, düğme "Ürün aktar →".
+4. Panelden ürün eklendi → **3/4**, düğme "Ürüne git →".
+5. `completed` operasyon → **şerit KAYBOLDU**.
+6. **Bağlantı sağlıksızlığa düşürüldü → şerit GERİ GELDİ (3/4)** ve
+   düğme yeniden "Kanal bağla →" oldu. Türetilmiş durumun asıl kazancı
+   budur.
+
+**DEMO KİRACISINDA ŞERİT 3/4 GÖRÜNÜYOR ve bu DOĞRU** — demo verisinde
+2 aktif kanal ve 6 ürün var ama **HİÇ senkron operasyonu yok** (0
+satır, hiçbir durumda). Şerit tam olarak eksik olanı söylüyor.
+
+**DEV VERİSİ GERİ ALINDI:** tarayıcıda açılan test kiracısı ve
+kullanıcısı silindi; demo kiracısı olduğu gibi duruyor.
+
+### Bir önceki tur — §11 · §12 · §13 · Faz 3 · madde 2 · UYARI E-POSTALARI (`bbe2852`) — FAZ 3'Ü KAPATIR
 
 | Ne | Nerede |
 |---|---|
@@ -725,7 +816,7 @@ silme partilenir; tur başına üst sınır var; transaction YOK.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 759 yeşil olmalı
+docker compose exec app php artisan test      # 772 yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 npm run build                                 # YERELDE (container'da Node yok)
 ```
@@ -764,8 +855,11 @@ içe aktarma (**iki kaynak: CSV + kanal**) · ürün-kanal · siparişler ·
 sipariş ayrıntısı · stok · mutabakat · başarısız işlemler · **sistem
 sağlığı** · kanallar · eşleştirme.
 
-**Testler:** 759 yeşil (2509 assertion).
+**Testler:** 772 yeşil (2543 assertion).
 **P0/P1'in TAMAMI yeşil** — T1…T12. Yazılmamış P0/P1 testi KALMADI.
+
+**Faz 4:** onboarding akışı (`a118b3a`) — dört adım, VERİDEN türetilen
+ilerleme, her panel ekranında şerit.
 
 ### Kaldı — FAZ 4 (panel + abonelik)
 
@@ -785,10 +879,15 @@ teknik bağımlılık yok.
   gerçek posta sürücüsüyle doğrulandı. **FAZ 3'Ü KAPATIR.** SMTP
   sağlayıcısı şimdilik `log`; geçiş TEK bir `.env` satırıdır ve KOD
   DEĞİŞMEZ.
+- ~~**Onboarding akışı**~~ — **BİTTİ** (`a118b3a`), gerçek tarayıcıda
+  uçtan uca sürüldü. İlerleme VERİDEN türetilir; `tenants`'a kolon
+  eklenmedi.
 - **Panel cilası** (§13 · Faz 4, 20 sa): boş durumlar, yükleniyor, mobil.
-  Artık ON İKİ ekrana dokunur.
-- **Onboarding akışı** (§13 · Faz 4, 20 sa).
-- **Abonelik/ödeme** (26 sa · hafta 21–25): planlar, kota, iyzico. Şema
+  Artık ON İKİ ekrana + onboarding şeridine dokunur. **Onboarding'den
+  SONRA gelmeli**: boş durum metinleri şeridin söylediğiyle
+  çelişmemeli.
+- **Abonelik/ödeme** (26 sa · hafta 21–25): planlar, kota, **STRIPE**
+  (kullanıcı kararı — doküman "iyzico" diyor, sapma onaylı). Şema
   kararı alınmış, YAZILMADI. Kota neyi sınırladığını senkron
   davranışından alır ve o davranış artık OTURDU — yani bu madde artık
   teknik olarak da yazılabilir durumda.
@@ -936,6 +1035,16 @@ Mutasyon hayatta kalır ve kalmalı; sahte test YAZILMADI:
 
 ## Tekrar tekrar ısıran tuzaklar
 
+- **`HandleInertiaRequests::share()` KİRACI BAĞLAMI KURULMADAN ÖNCE
+  ÇALIŞIR.** `share()` `web` grubundadır, `EstablishTenantContext` ise
+  ROTA seviyesinde bir alias (`tenant`) — yani `web` önce koşar ve
+  `$request->attributes->get('tenant')` metot gövdesinde HER ZAMAN
+  null'dur. Var olan `tenant` prop'unun çalışıyor olması yanıltır:
+  Inertia prop'ları yanıt üretilirken ÇÖZER, ama senin metot gövdende
+  yazdığın `if` ZATEN çalışmıştır. **Kiracıya bağlı her yeni paylaşılan
+  prop'ta kontrol KAPANIŞIN İÇİNDE yapılmalı** (`fn () => ... `).
+  Onboarding turunda bulundu: 13 test prop null döndüğü için kırmızı
+  kaldı.
 - **ÖLDÜRÜLEN TEST TURU BAYAT BİR POSTGRESQL BACKEND'İ BIRAKIR VE
   SONRAKİ TÜM TURLARI ASAR.** Bu turda sonsuz döngü üreten bir mutasyon
   (sayfa üst sınırının kaldırılması) turu öldürmeyi zorunlu kıldı;
