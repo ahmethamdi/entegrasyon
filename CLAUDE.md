@@ -769,6 +769,15 @@ turunda kazanılan davranışlar KAYBEDİLMEMELİ ve yeniden ÖLÇÜLMELİ:
 mobilde taşma yok · onboarding şeridi layout'ta · kiracı adı başlıkta ·
 aktif öğe işareti · mobil menü gezinmede kapanır.
 
+**ANA RENK TURUNCUDUR** (kullanıcı kararı, 21 Ağustos). Var olan çıpa
+`app.js` içindeki ilerleme çubuğu rengi `#A8532B`. **AMA `amber-*`
+ZATEN UYARI RENGİDİR** (13 dosya, ~90 kullanım: onboarding şeridi,
+eşleşmemiş SKU, `pending` rozetleri). Marka turuncusu amber'a çok
+yakın seçilirse "marka mı uyarı mı" ayrımı kaybolur ve satıcı gerçek
+uyarıyı fark etmez — bu, projenin rozet sırası ve uyarı görünürlüğü
+kurallarını doğrudan ihlal eder. Kırmızı HATA rengidir. Nötr taban
+`stone-*` değişmez.
+
 **BOŞ DURUM ve GEZİNME YÜKLEMESİ MADDELERİ KAPANDI, YENİDEN AÇMA.**
 Boş durum metni on üç ekranın HEPSİNDE var (`Orders/Show` ayrıntı
 ekranı olduğu için istemez); gezinme yüklemesini Inertia'nın ilerleme

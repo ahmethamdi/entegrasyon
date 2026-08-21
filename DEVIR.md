@@ -84,6 +84,26 @@ eklendiğinde yeniden düzen gerektirmez.
 ölçümlerde kullanıldı; sidebar sonrası AYNI dört genişlikte
 tekrarlanmalı.
 
+**ANA RENK TURUNCU (kullanıcı kararı, 21 Ağustos).** Zaten var olan
+çıpa: Inertia ilerleme çubuğu `resources/js/app.js` içinde `#A8532B`
+(yanık turuncu / kiremit). Yani turuncu sıfırdan bir yön değil.
+
+**⚠️ EN ÖNEMLİ KISIT — `amber-*` ZATEN UYARI RENGİ.** Panelde 13
+dosyada ~90 kullanımı var (onboarding şeridi, "eşleşmemiş SKU"
+uyarısı, `pending` rozetleri, mutabakat uyarıları). Marka turuncusu
+amber'a çok yakın seçilirse **"bu turuncu marka mı, uyarı mı" ayrımı
+kaybolur** ve satıcı gerçek uyarıyı fark etmez — projenin rozet sırası
+ve uyarı görünürlüğü kurallarıyla doğrudan çelişir. Kırmızı da HATA
+rengidir, ona da yaklaşılmamalı. Nötr taban `stone-*` (628 kullanım)
+ve değişmesi gerekmiyor.
+
+**FRONTEND AGENT'LARI KULLANILABİLİR (kullanıcı önerdi).** Tasarım
+turunda `ui-ux-pro-max` / `frontend-design` becerileri ve
+`ui-ux-designer` · `frontend-developer` agent'ları devreye alınabilir;
+kullanıcı bunu açıkça önerdi. Sonuçları BENİMSEMEDEN önce yukarıdaki
+kısıtlarla (amber çakışması, taşma ölçümleri, korunacak davranışlar)
+karşılaştır.
+
 ### SONRAKİ İŞ — GÜVENLİK KONTROL LİSTESİ + YÜK TESTİ (12 sa)
 
 **FAZ 4'ÜN SON MADDESİ BU.** Dokümanın §13 · Faz 4 satırı devir
