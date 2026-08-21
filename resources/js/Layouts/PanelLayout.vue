@@ -1,6 +1,6 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const page = usePage();
 
@@ -20,6 +20,25 @@ const nav = [
 ];
 
 const currentPath = computed(() => page.url.split('?')[0]);
+
+/*
+ * Mobil menü (§13 · Faz 4 · panel cilası).
+ *
+ * Dar ekranda ON menü öğesi tek satıra sığmaz: cila öncesi başlık 390px
+ * görünüm alanında 1001px genişliyordu ve "Siparişler"den sonraki YEDİ
+ * ekran ile ÇIKIŞ düğmesi ekranın dışında kalıyordu — telefondan panelde
+ * gezinmek MÜMKÜN DEĞİLDİ (gerçek tarayıcıda ölçüldü). Menü bu yüzden
+ * dar ekranda katlanır; geniş ekranda davranış DEĞİŞMEZ.
+ *
+ * MENÜ GEZİNMEDE KAPANIR. Kapanmasaydı seçilen bağlantı yeni ekranı
+ * açar ama panel açık kalır ve içeriği örterdi; kullanıcı her seferinde
+ * elle kapatmak zorunda kalırdı.
+ */
+const mobileMenuOpen = ref(false);
+
+watch(currentPath, () => {
+    mobileMenuOpen.value = false;
+});
 
 /*
  * Onboarding şeridi (§13 · Faz 4) — dokümanın dört adımı.
@@ -97,15 +116,29 @@ function logout() {
 <template>
     <div class="min-h-screen bg-stone-50">
         <header class="border-b border-stone-200 bg-white">
-            <div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-                <div>
+            <div class="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-4">
+                <div class="min-w-0">
                     <p class="font-mono text-base uppercase tracking-widest text-stone-900">
                         Entegrasyon
                     </p>
-                    <p class="text-sm font-medium text-stone-600">{{ tenantName }}</p>
+                    <p class="truncate text-sm font-medium text-stone-600">{{ tenantName }}</p>
                 </div>
 
-                <div class="flex items-center gap-6">
+                <!--
+                    Dar ekranda menüyü açan düğme. `lg` ve üstünde GİZLİDİR;
+                    o genişlikte menü zaten tek satıra sığıyor.
+                -->
+                <button
+                    type="button"
+                    class="rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 lg:hidden"
+                    :aria-expanded="mobileMenuOpen"
+                    aria-controls="panel-mobile-menu"
+                    @click="mobileMenuOpen = !mobileMenuOpen"
+                >
+                    {{ mobileMenuOpen ? 'Kapat' : 'Menü' }}
+                </button>
+
+                <div class="hidden items-center gap-6 lg:flex">
                     <nav class="flex items-center gap-1">
                         <Link
                             v-for="item in nav"
@@ -128,6 +161,38 @@ function logout() {
                         Çıkış
                     </button>
                 </div>
+            </div>
+
+            <!--
+                Katlanan menü — dar ekranda TÜM ekranları ve çıkışı taşır.
+                Cila öncesi bunların yedisi ekranın dışında kalıyordu.
+            -->
+            <div
+                v-if="mobileMenuOpen"
+                id="panel-mobile-menu"
+                class="border-t border-stone-200 lg:hidden"
+            >
+                <nav class="mx-auto grid max-w-6xl gap-1 px-6 py-3 sm:grid-cols-2">
+                    <Link
+                        v-for="item in nav"
+                        :key="item.href"
+                        :href="item.href"
+                        class="rounded px-3 py-2 text-sm transition"
+                        :class="isActive(item.href)
+                            ? 'bg-stone-900 text-white'
+                            : 'text-stone-700 hover:bg-stone-100'"
+                    >
+                        {{ item.label }}
+                    </Link>
+
+                    <button
+                        type="button"
+                        class="mt-1 rounded border border-stone-300 px-3 py-2 text-left text-sm text-stone-700 transition hover:bg-stone-100 sm:col-span-2"
+                        @click="logout"
+                    >
+                        Çıkış
+                    </button>
+                </nav>
             </div>
         </header>
 

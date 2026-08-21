@@ -145,16 +145,22 @@ function placedAt(row) {
                 </button>
             </div>
 
-            <form class="flex items-center gap-2" @submit.prevent="submitSearch">
+            <!--
+                Arama kutusu dar ekranda ESNER (`w-full` + `min-w-0`), geniş
+                ekranda sabit genişliğe döner. Sabit `w-64` tek başına
+                bırakılsaydı 320px'lik telefonda kutu + düğme satıra sığmaz
+                ve sayfayı yatay kaydırırdı (gerçek tarayıcıda ölçüldü).
+            -->
+            <form class="flex w-full items-center gap-2 sm:w-auto" @submit.prevent="submitSearch">
                 <input
                     v-model="search"
                     type="search"
                     placeholder="Sipariş no veya SKU ara"
-                    class="w-64 rounded border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-500 focus:outline-none"
+                    class="w-full min-w-0 rounded border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-500 focus:outline-none sm:w-64"
                 >
                 <button
                     type="submit"
-                    class="rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                    class="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                 >
                     Ara
                 </button>

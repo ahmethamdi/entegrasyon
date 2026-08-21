@@ -1,6 +1,6 @@
 <script setup>
 import { router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -51,8 +51,25 @@ function formatDate(iso) {
     }).format(new Date(iso));
 }
 
+/*
+ * Ödeme oturumu SUNUCUDA açılır ve ardından Stripe'a YÖNLENDİRİLİR;
+ * arada ağ gecikmesi vardır. Bekleme durumu gösterilmezse düğme
+ * tepkisiz görünür ve kullanıcı tekrar basar — her basış YENİ bir
+ * checkout oturumu yaratır. Yönlendirme başladıktan sonra da düğme
+ * kilitli kalmalıdır; bu yüzden `onFinish` ile SIFIRLANMAZ.
+ */
+const buying = ref(null);
+
 function buy(planCode) {
-    router.post('/billing/checkout', { plan_code: planCode });
+    if (buying.value !== null) return;
+
+    buying.value = planCode;
+
+    router.post('/billing/checkout', { plan_code: planCode }, {
+        onError: () => {
+            buying.value = null;
+        },
+    });
 }
 
 const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) => ({ key, ...row })));
@@ -178,10 +195,10 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                         v-else-if="Number(plan.price) > 0"
                         type="button"
                         class="mt-4 rounded bg-stone-900 py-2 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
-                        :disabled="!paymentsEnabled"
+                        :disabled="!paymentsEnabled || buying !== null"
                         @click="buy(plan.code)"
                     >
-                        Bu plana geç
+                        {{ buying === plan.code ? 'Yönlendiriliyor…' : 'Bu plana geç' }}
                     </button>
                     <p v-else class="mt-4 py-2 text-center text-xs text-stone-500">
                         Ücretsiz

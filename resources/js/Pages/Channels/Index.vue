@@ -1,6 +1,6 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -51,8 +51,25 @@ function activeCapabilities(capabilities) {
         .map(([key]) => capabilityLabels[key] ?? key);
 }
 
+/*
+ * Sağlık kontrolü bir AĞ ÇAĞRISIDIR ve saniyeler sürebilir (kanal
+ * yavaşsa daha da uzun). Bekleme durumu gösterilmezse düğme tıklamaya
+ * tepkisiz görünür ve kullanıcı tekrar tekrar basar; her basış kanala
+ * YENİ bir istek gönderir ve hız sınırı kotasını boşa harcar.
+ */
+const checking = ref(null);
+
 function recheck(id) {
-    router.post(`/channels/${id}/health`, {}, { preserveScroll: true });
+    if (checking.value !== null) return;
+
+    checking.value = id;
+
+    router.post(`/channels/${id}/health`, {}, {
+        preserveScroll: true,
+        onFinish: () => {
+            checking.value = null;
+        },
+    });
 }
 
 function formatDate(iso) {
@@ -131,10 +148,11 @@ function formatDate(iso) {
 
                     <button
                         type="button"
-                        class="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                        class="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="checking !== null"
                         @click="recheck(connection.id)"
                     >
-                        Tekrar dene
+                        {{ checking === connection.id ? 'Kontrol ediliyor…' : 'Tekrar dene' }}
                     </button>
                 </div>
 
