@@ -751,8 +751,13 @@ kota `d02b984`, Stripe tahsilat hattı `6f89fe1`) ve **PANEL CİLASININ
 MOBİL + BEKLEME PARÇALARI BİTTİ** (`aba0a29`).
 **PANEL CİLASI MADDESİ BİTTİ** (`aba0a29` + `26426ff`): mobil düzen,
 bekleme durumları, tablo okunabilirliği ve tutarlılık turu.
-Kalan: Türkçe yardım dokümantasyonu (12 sa) · güvenlik kontrol listesi
-+ yük testi (12 sa) · onay durumu ekranı (küçük artık madde).
+**TÜRKÇE YARDIM + HATA MESAJLARI MADDESİ BİTTİ** (`7208c51` +
+`8642f9f`): `lang/tr/` dil dosyaları ve `/help` ekranı.
+**Faz 4'te kalan TEK madde: güvenlik kontrol listesi + yük testi**
+(12 sa) artı küçük bir artık madde (onay durumu ekranı).
+
+**DİKKAT — dokümanın o satırı devir notundakinden GENİŞ**: "Güvenlik
+kontrol listesi, yük testi, **yedek geri yükleme provası** — 12 sa".
 
 **BOŞ DURUM ve GEZİNME YÜKLEMESİ MADDELERİ KAPANDI, YENİDEN AÇMA.**
 Boş durum metni on üç ekranın HEPSİNDE var (`Orders/Show` ayrıntı
@@ -1253,6 +1258,42 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
   (`/channels`) koşmak ZORUNDADIR. `/` üzerinde yazılan test bozuk
   kodla bile YEŞİL kalır (mutasyonla kanıtlandı).
 
+## Türkçe mesaj ve yardım kuralları (§13 · Faz 4 · `7208c51` · `8642f9f`)
+
+- **VARSAYILAN DİL `config/app.php`'DE TÜRKÇEDİR**, yalnızca `.env`'de
+  değil. `.env`'e yazmak yeterli görünür ama o satırı taşımayan HER
+  kurulum (yeni sunucu, CI, yeni geliştirici) sessizce İngilizce mesaj
+  gösterirdi. `fallback_locale` da Türkçe: çevrilmemiş anahtar
+  İngilizceye DÜŞMEZ.
+- **`.env` İKİNCİ SAVUNMA OLARAK MUTASYONU GİZLER.** `config()` ETKİN
+  değeri döndürür; `.env` `tr` taşıdığı sürece varsayılan `en`'e
+  çevrilse bile test yeşil kalır. Varsayılanı sınayan test dosyanın
+  KENDİSİNİ okur (`file_get_contents(config_path('app.php'))`).
+- **ALAN ADLARI `attributes` İÇİNDE ÇEVRİLİR** ve bu mesaj çevirisi
+  kadar önemlidir: mesaj Türkçe ama alan adı `title` kalsaydı satıcı
+  formda "title" diye bir alan ARAYAMAZDI. Ad, EKRANDAKİ ETİKETLE aynı
+  olmalıdır.
+- **TÜM KURALLAR ÇEVRİLİR**, yalnızca bugün kullanılanlar değil — yarın
+  eklenen kural sessizce İngilizceye düşer ve bunu kimse fark etmez
+  (hata ancak o alan boş bırakıldığında görünür).
+- **ALANA ÖZGÜ MESAJ "NE YAPMALI" DER** (§12'nin ölü mektup ekranı
+  kuralının aynısı): "SKU zorunludur — kanallarla eşleşmenin anahtarı
+  budur."
+- **GİRİŞ HATASI KASITLI OLARAK BELİRSİZDİR** — "hesap bulunamadı" ile
+  "parola yanlış" ayrılsaydı saldırgan kayıtlı adresleri tek tek
+  öğrenebilirdi.
+- **YARDIM İÇERİĞİ KODDA YAŞAR** (`HelpController`), veritabanında
+  değil: metin sürümlenmiş bir ÜRÜN parçasıdır ve kod değiştiğinde
+  birlikte değişmelidir. Veritabanında olsaydı metin ile davranış AYRI
+  zamanlarda değişir ve yeni kurulum boş yardım ekranıyla açılırdı.
+- **YARDIM BÖLÜM KİMLİKLERİ SÖZLEŞMEDİR** (`/help#stok`) ve BEKLENEN
+  METİNLE sınanır; yeniden adlandırma davranış testlerini yeşil bırakır
+  ama dışarıdan verilen bağlantıları SESSİZCE kırar.
+- **YARDIM İÇERİĞİ SİSTEMİN GERÇEK TUZAKLARINI ANLATIR**, genel bir
+  "nasıl kullanılır" değil: fazla satış, eşleşmemiş SKU, kalıcı hata,
+  kanal stoğunun neden yazılmadığı, kota. §17 bu ekranı DESTEK YÜKÜNÜ
+  düşürmek için istiyor.
+
 ## Panel kuralları
 
 - **Kiracı bağlamı ara katmanda kurulur** (`EstablishTenantContext`), `web`
@@ -1322,10 +1363,10 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 
 §6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
 **§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
-maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde ON İKİ
+maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde ON DÖRT
 ekran var: özet · ürünler · toplu içe aktarma · ürün kanalları ·
 siparişler · sipariş ayrıntısı · stok · mutabakat · başarısız işlemler ·
-**sistem sağlığı** · kanallar · eşleştirme.
+**sistem sağlığı** · kanallar · eşleştirme · abonelik · **yardım**.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
@@ -1365,7 +1406,7 @@ ekranında şerit. **ABONELİK/ÖDEME BİTTİ**: şema + kota (`d02b984`) ve
 **Stripe tahsilat hattı** (`6f89fe1` — checkout + webhook, panelde
 `/billing`). Kalan: panel cilası · Türkçe yardım dokümantasyonu ·
 güvenlik kontrol listesi + yük testi · onay durumu ekranı (küçük artık
-madde). Panelde artık ON ÜÇ ekran var. Yeni pazaryerleri (Hepsiburada
+madde). Panelde artık ON DÖRT ekran var (`/help` eklendi). Yeni pazaryerleri (Hepsiburada
 → Amazon → Etsy → eBay) Faz 4'ten SONRA. Çalışma sırası kararı ("önce
 çekirdek, panel sona") kapsamını doldurdu.
 

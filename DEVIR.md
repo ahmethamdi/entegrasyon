@@ -163,7 +163,7 @@ olay kimliğiyle.
 | Faz 1 — Woo dikey dilimi | 140 | 1–8 | BİTTİ |
 | Faz 2 — Trendyol + çift yönlü | 126 | 9–15 | BİTTİ |
 | Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **84/84 · BİTTİ** |
-| Faz 4 — Ticarileşme | 90 | 21–25 | **86/90** |
+| Faz 4 — Ticarileşme | 90 | 21–25 | **~78/90** |
 | Faz 5 — Tampon | 28 | 26 | başlamadı |
 
 **Toplam 468 saat · tahminen ~416 saat bitti → yaklaşık %89.**
@@ -200,13 +200,13 @@ Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 | Abonelik: şema + kota | ~14 | **BİTTİ** (`d02b984`) |
 | Abonelik: Stripe tahsilat (checkout + webhook) | ~12 | **BİTTİ** (`6f89fe1`) |
 | Panel cilası (boş durumlar, yükleniyor, mobil — **ON ÜÇ** ekran) | 20 | **BİTTİ** (`aba0a29` + `26426ff`) |
-| Türkçe yardım dokümantasyonu | 12 | kaldı |
+| Türkçe yardım dokümantasyonu ve hata mesajları | 12 | **BİTTİ** (`7208c51` + `8642f9f`) |
 | Güvenlik kontrol listesi + yük testi | 12 | kaldı |
 | Onay durumu ekranı | küçük | kaldı |
 
-Fazın 20 saati zaten bitmişti (mutabakat panel ekranı `513480d` ve ona
-bağlı işler); onboarding ve abonelik şeması/kotasıyla birlikte
-**~55/90 saat bitti → ~35 saat kaldı.**
+Bitenlerin toplamı: 20 + 14 + 12 + 20 + 12 = **~78/90 saat → ~12 saat
+kaldı** (güvenlik kontrol listesi + yük testi) artı küçük bir artık
+madde (onay durumu ekranı).
 
 **ABONELİK/ÖDEME MADDESİ KAPANDI** (26 sa). Şema, kota, checkout ve
 webhook yazıldı; panelde `/billing` ekranı var.
@@ -282,16 +282,80 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 ## Tek cümlede durum
 
 **Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı); **Faz
-4'te ~86/90 saat bitti** — onboarding, abonelik/ödeme ve **PANEL
-CİLASI MADDESİ** kapandı (`aba0a29` + `26426ff`). **831 test yeşil**
-(2678 assertion), Pint temiz. Panelde **ON ÜÇ** ekran + her ekranda
-onboarding şeridi; **panel artık telefonda kullanılabiliyor**
-(önceden yedi ekran ve çıkış düğmesi erişilemezdi, `/failures`'ın hata
-sütunu okunamıyordu ve kiracı adı on iki ekranda boştu). Sıradaki iş:
-**Türkçe yardım dokümantasyonu** (12 sa) · güvenlik kontrol listesi +
-yük testi (12 sa) · onay durumu ekranı (küçük).
+4'te ~78/90 saat bitti** — onboarding, abonelik/ödeme, **PANEL CİLASI**
+(`aba0a29` + `26426ff`) ve **TÜRKÇE YARDIM + HATA MESAJLARI**
+(`7208c51` + `8642f9f`) kapandı. **842 test yeşil** (2752 assertion),
+Pint temiz. Panelde **ON DÖRT** ekran + her ekranda onboarding şeridi;
+**panel artık telefonda kullanılabiliyor** ve **doğrulama hataları
+Türkçe**. Faz 4'te kalan TEK madde: **güvenlik kontrol listesi + yük
+testi** (12 sa) artı küçük bir artık madde (onay durumu ekranı).
 
 ## Bu turda ne eklendi
+
+### §13 · Faz 4 · TÜRKÇE YARDIM + HATA MESAJLARI (`7208c51` + `8642f9f`) — MADDEYİ KAPATIR
+
+**DOKÜMAN MADDEYİ İKİ YARIM OLARAK TANIMLIYOR** ve devir notu yalnızca
+birini taşıyordu: "Türkçe yardım dokümantasyonu **ve hata mesajları** —
+12 sa". PDF'ten doğrulandı (§13 · Faz 4). İkisi de bu turda yazıldı.
+
+**Not: aynı satırda son madde de devir notundakinden GENİŞ** —
+"Güvenlik kontrol listesi, yük testi, **yedek geri yükleme provası**".
+
+#### Yarım 1 — hata mesajları (`7208c51`)
+
+| Ne | Nerede |
+|---|---|
+| Doğrulama · giriş · parola · sayfalama | `lang/tr/*.php` |
+| Varsayılan dil | `config/app.php` + `.env.example` |
+| Testler | `TurkishMessagesTest` (6) |
+
+**PANELİN TAMAMI TÜRKÇEYDİ AMA DOĞRULAMA HATALARI İNGİLİZCEYDİ.**
+Gerçek tarayıcıda ölçüldü: boş form gönderildiğinde
+**"The title field is required."** dönüyordu. İki ayrı kusur vardı ve
+ikincisi daha sinsi: **alan adı ham veritabanı kolonuydu** (`title`),
+ekranda yazan etiket ("Ürün adı") değil. Mesaj çevrilip alan adı
+bırakılsaydı satıcı formda "title" diye bir alan ARAYAMAZDI.
+
+**VARSAYILAN `config/app.php`'DE DEĞİŞTİ**, yalnızca `.env`'de değil:
+o satırı taşımayan HER kurulum (yeni sunucu, CI, yeni geliştirici)
+sessizce İngilizce mesaj gösterirdi. `fallback_locale` da Türkçe.
+
+**TÜM KURALLAR ÇEVRİLDİ**, yalnızca bugün kullanılan on üç tanesi
+değil — yarın eklenen bir kural sessizce İngilizceye düşerdi ve bunu
+kimse fark etmezdi (hata ancak o alan boş bırakıldığında görünür).
+
+**ÜÇ MUTASYON, BİRİ İLK TESTİ YANLIŞ YEŞİL YAKALADI:** varsayılanı
+`en`'e çevirmek **HAYATTA KALDI**, çünkü `config()` ETKİN değeri
+döndürüyor ve `.env` `tr` taşıdığı için test yeşil kalıyordu —
+**`.env` ikinci savunma olarak mutasyonu gizliyordu.** Ayrı bir test
+eklendi: `config/app.php` dosyasının KENDİSİ okunuyor.
+
+#### Yarım 2 — yardım ekranı (`8642f9f`)
+
+| Ne | Nerede |
+|---|---|
+| İçerik + ekran | `Http/Controllers/HelpController` · `Pages/Help/Index.vue` |
+| Rota + gezinme | `routes/web.php` (`/help`) · `PanelLayout` |
+| Testler | `HelpScreenTest` (5) |
+
+**İÇERİK KODDA YAŞAR, VERİTABANINDA DEĞİL** — yardım metni sürümlenmiş
+bir ÜRÜN parçasıdır ve kod değiştiğinde birlikte değişmelidir.
+Veritabanına konsaydı metin ile davranış AYRI zamanlarda değişir ve
+yeni kurulum boş yardım ekranıyla açılırdı.
+
+**YİRMİ SORU, GENEL "NASIL KULLANILIR" DEĞİL.** İçerik sistemin GERÇEK
+tuzaklarını anlatıyor: stok neden eksiye düşüyor · bakiye −2 iken
+kanala neden 0 gidiyor · "eşleşmemiş" satır ne demek ve fazla satıştan
+farkı ne · kalıcı hata neden kendiliğinden düzelmiyor · kanaldan
+çekilen stok neden yazılmıyor · kota dolunca mevcut ürünlere ne oluyor.
+§17 yardım ekranını tam olarak DESTEK YÜKÜNÜ düşürmek için istiyor.
+
+**BÖLÜM KİMLİKLERİ SÖZLEŞMEDİR** (`/help#stok`) ve BEKLENEN METİNLE
+sınanır — `MetricScope` / `AlertKey` / `plans.limits` tuzağının aynısı,
+bu kez ÖNCEDEN yazıldı. İki mutasyon sürüldü, ikisi de yakalandı.
+
+**ON BİRİNCİ MENÜ ÖĞESİ BAŞLIĞI TAŞIRMADI** (1024–1440px ölçüldü) ve
+yardım ekranı 320/390/768px'te de taşmasız.
 
 ### §13 · Faz 4 · PANEL CİLASI — TABLO OKUNABİLİRLİĞİ + KİRACI ADI (`26426ff`) — MADDEYİ KAPATIR
 
