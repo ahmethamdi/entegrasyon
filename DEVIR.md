@@ -1,19 +1,44 @@
-# Devir Notu — 20 Ağustos 2026 (FAZ 4 SÜRÜYOR — onboarding + ABONELİK/ÖDEME bitti)
+# Devir Notu — 21 Ağustos 2026 (FAZ 4 SÜRÜYOR — panel cilası başladı)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `6f89fe1`
-(+ bu devir notu commit'i). **FAZ 3 KAPALI** ve **FAZ 4 SÜRÜYOR**:
-onboarding akışı (20 sa) ve **abonelik/ödeme maddesinin TAMAMI** (26 sa)
-bu turda yazıldı — şema + kota (`d02b984`) ve **Stripe tahsilat hattı**
-(`6f89fe1`). Faz durumu iddiası devir notundan değil **dokümanın §13
-listesinden** doğrulandı.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `aba0a29`
+(+ bu devir notu commit'i). **FAZ 3 KAPALI** ve **FAZ 4 SÜRÜYOR**.
+Bu turda **panel cilası maddesinin ilk turu** yazıldı (`aba0a29`):
+mobil düzen ve bekleme durumları. Faz durumu iddiası devir notundan
+değil **dokümanın §13 listesinden** doğrulanır.
 
-**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ** — bilinen tek açık uç
-ve **kullanıcı buna SONRA dönmeye karar verdi (21 Ağustos)**.
-`.env`'de `STRIPE_SECRET` yok; ekran bunu AÇIKÇA söylüyor ve düğmeler
-devre dışı. **BLOKAJ DEĞİL** — panel cilası ve diğer Faz 4 maddeleri
-Stripe beklemeden yapılabilir.
+## ⚠️ ÖNCE BUNU OKU — `.env`'DE CANLI STRIPE ANAHTARLARI VAR
+
+**21 Ağustos'ta `.env`'e `pk_live_` / `sk_live_` yazılmış durumda** —
+devir notunun ısrarla uyardığı TEST anahtarları DEĞİL. Kullanıcının
+Stripe hesabı CANLI ve gerçek ciro taşıyor.
+
+**SONUÇLARI:**
+- `/billing` düğmeleri artık ETKİN (`stripeConfigured()` anahtarı
+  görüyor) — yani ekran "ödeme yapılandırılmadı" DEMİYOR.
+- Canlı anahtarla checkout açmak GERÇEK kart / GERÇEK para demektir ve
+  test kartı `4242 4242 4242 4242` **çalışmaz**.
+- `STRIPE_WEBHOOK_SECRET` hâlâ yer tutucu (`whsec_...`), yani webhook
+  imzası doğrulanamaz ve abonelik YAZILAMAZ.
+
+**BU TURDA NE OLDU:** panel cilasını doğrularken çift tıklama korumasını
+sınamak için `/billing/checkout`'a istek gitti ve **canlı hesapta BİR
+checkout oturumu açıldı**. Kart girilmedi, **ücret çekilmedi**;
+`subscriptions` tablosu BOŞ (0 satır) ve kullanılmayan oturumların
+süresi Stripe tarafından kendiliğinden dolar. Yine de bilinerek
+yapılmadı — bu yüzden burada yazılı.
+
+**SIRADAKİ OTURUM İÇİN KURAL: `/billing` üzerinde tarayıcı doğrulaması
+YAPMA** (anahtarlar test moduna çevrilene kadar). Test moduna geçiş:
+`https://dashboard.stripe.com/test/apikeys` — URL'deki `/test/` parçası
+zorunludur.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
+
+## Yerel demo hesabı
+
+`panel@example.com` · parola **`devpassword`** (bu turda tarayıcı
+doğrulaması için atandı, kullanıcı onayıyla böyle bırakıldı). Yalnızca
+yerel geliştirme veritabanında.
 
 ## BURADAN DEVAM ET
 
@@ -201,8 +226,28 @@ gömülmez. Sonra yapılacaklar:
 3. Test kartıyla (`4242 4242 4242 4242`) uçtan uca sür: plan seç →
    ödeme → webhook → abonelik `active` → kota yükseldi mi
 
-**SIRADAKİ İŞ — PANEL CİLASI** (20 sa): boş durumlar, yükleniyor
-göstergeleri, mobil düzen. Artık ON ÜÇ ekrana dokunur.
+**PANEL CİLASI BAŞLADI** (`aba0a29`) — maddenin en ağır iki parçası
+bitti. Bu turda YAPILANLAR ve maddeden ÇIKANLAR:
+
+| Parça | Durum |
+|---|---|
+| Mobil düzen | **BİTTİ** — 12 ekran × 320/390/768/1280px taşmasız |
+| Bekleme durumları | **BİTTİ** — açıkta kalan iki düğme kapatıldı |
+| Boş durumlar | **ZATEN VARDI** — 13 ekranın hepsinde (denetlendi) |
+| Gezinme yüklemesi | **GEREKMİYOR** — Inertia ilerleme çubuğu zaten çalışıyor |
+
+**BOŞ DURUM VE YÜKLEME MADDESİ KAPANDI, YENİDEN AÇMA.** İkisi de
+denetlendi: boş durum metni on üç ekranın HEPSİNDE var (`Inventory`
+dahil — grep'in kaçırdığı satır 177'de), `Orders/Show` ise ayrıntı
+ekranı olduğu için boş duruma İHTİYAÇ DUYMAZ. Gezinme yüklemesi için
+`app.js`'te `progress: { color: '#A8532B' }` tanımlı ve çubuk gerçekten
+çiziliyor — yavaşlatılmış istekte marka rengiyle doğrulandı. Ekran
+başına spinner eklemek GEREKSİZ TEKRAR olur.
+
+**MADDEDEN KALAN** (~10 sa): tablolarda dar ekran okunabilirliği
+(bugün `overflow-x-auto` ile yatay kaydırılıyor — taşma YOK ama
+telefonda kart düzeni daha okunur olabilir), form ekranlarının dar
+ekran gözden geçirmesi ve tutarlılık turu.
 
 **YENİ SOHBET BURADAN BAŞLASIN.** Stripe ertelendi (yukarıda) ve
 teknik bağımlılık yok; panel cilası Faz 4'ün sıradaki maddesidir.
@@ -234,13 +279,88 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 ## Tek cümlede durum
 
 **Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı); **Faz
-4'te ~66/90 saat bitti** — onboarding akışı ve **abonelik/ödeme
-maddesinin tamamı** bu turda kapandı. **829 test yeşil** (2673
-assertion), Pint temiz, iki ardışık rastgele sıralı tur temiz (seed
-**1787255323** · **1787255363**). Panelde **ON ÜÇ** ekran + her ekranda
-onboarding şeridi. Sıradaki iş **panel cilası**.
+4'te ~76/90 saat bitti** — onboarding, abonelik/ödeme ve bu turda
+**panel cilasının mobil + bekleme parçaları** kapandı. **829 test
+yeşil** (2673 assertion), Pint temiz. Panelde **ON ÜÇ** ekran + her
+ekranda onboarding şeridi; **panel artık telefonda kullanılabiliyor**
+(önceden yedi ekran ve çıkış düğmesi erişilemezdi). Sıradaki iş
+**panel cilasının kalanı** (~10 sa) ya da Türkçe yardım dokümantasyonu
+/ güvenlik kontrol listesi.
 
 ## Bu turda ne eklendi
+
+### §13 · Faz 4 · PANEL CİLASI — MOBİL DÜZEN + BEKLEME DURUMLARI (`aba0a29`)
+
+| Ne | Nerede |
+|---|---|
+| Mobil menü | `Layouts/PanelLayout.vue` (katlanan menü, `lg` altında) |
+| Sağlık kontrolü beklemesi | `Pages/Channels/Index.vue` |
+| Checkout beklemesi | `Pages/Billing/Index.vue` |
+| Arama kutusu taşması | `Pages/Orders/Index.vue` |
+
+**BAŞLIK TÜM PANELİ YATAY KAYDIRIYORDU — turun asıl bulgusu.** 390px
+görünüm alanında belge **1001px** genişliyordu. On öğelik menü tek
+satıra sığmadığı için **"Siparişler"den sonraki YEDİ ekran ve ÇIKIŞ
+düğmesi ekranın DIŞINDA** kalıyordu ve hamburger menü olmadığı için
+**telefondan panelde gezinmek MÜMKÜN DEĞİLDİ.**
+
+**TAŞMANIN TEK KAYNAĞI BAŞLIKTI.** Başlık `display:none` yapılıp
+ölçüldüğünde belge tam **390px**'e oturuyordu — yani içerik sütunları
+zaten duyarlıydı (tablolar `overflow-x-auto` taşıyor) ve sorun on üç
+ekranın HEPSİNDE aynı tek kaynaktan geliyordu.
+
+**KIRILMA NOKTASI `lg` (1024px), `sm` DEĞİL.** On menü öğesi ~900px
+istiyor; `sm` seçilseydi **768px'lik tabletler taşımaya devam ederdi**
+(ölçüldü). Bugün 320→1280px arasında taşma YOK.
+
+**MENÜ GEZİNMEDE KAPANIR** (`watch(currentPath)`). Kapanmasaydı
+seçilen bağlantı yeni ekranı açar ama panel açık kalıp içeriği örterdi
+ve kullanıcı her seferinde elle kapatmak zorunda kalırdı.
+
+**MASAÜSTÜ DAVRANIŞI DEĞİŞMEDİ** — on bağlantı satır içi, tek "Çıkış"
+düğmesi, "Menü" düğmesi görünmüyor (ölçüldü + ekran görüntüsü).
+
+**ÇİFT TIKLAMA GERÇEK PARA RİSKİYDİ.** `/billing` "Bu plana geç"
+düğmesi yalnızca ödeme yapılandırılmamışken devre dışıydı; **istek
+uçarken değil.** Ödeme oturumu SUNUCUDA açılıp Stripe'a yönlendirildiği
+için arada gecikme vardır ve her ek basış **YENİ bir checkout oturumu**
+yaratırdı. Artık üç hızlı tıklama **TEK POST** üretiyor (ölçüldü).
+`onFinish` ile SIFIRLANMAZ: yönlendirme başladıktan sonra düğme kilitli
+kalmalı, yoksa çift tıklama penceresi yeniden açılır.
+
+**SAĞLIK KONTROLÜ DE AYNI KALIBI ALDI** — ağ çağrısıdır, saniyeler
+sürer ve tepkisiz görünen düğme tekrar tekrar basılıp kanalın hız
+sınırı kotasını harcardı. Tıklanan düğme "Kontrol ediliyor…" olur,
+**diğer bağlantıların düğmeleri de kilitlenir**.
+
+**KALIP UYDURULMADI:** `Failures`, `Products/Channels` ve `Mappings`
+ekranları bu `busy` + `disabled` + `…` kalıbını ZATEN kullanıyordu;
+açıkta kalan iki düğme aynı kalıba getirildi.
+
+**`/orders` ARAMA KUTUSU 320px'DE TAŞIYORDU** (sabit `w-64` + düğme +
+boşluk > 320px). Kutu artık dar ekranda esner (`w-full min-w-0`),
+`sm` ve üstünde eski `w-64` genişliğine döner.
+
+**GEZİNME YÜKLEMESİ İÇİN HİÇBİR ŞEY EKLENMEDİ ve bu bilinçli.**
+`app.js` zaten `progress: { color: '#A8532B' }` taşıyor ve çubuk
+gerçekten çiziliyor: istek yapay olarak yavaşlatıldığında çubuk marka
+rengiyle (`rgb(168, 83, 43)`) göründü. Yerelde görünmemesinin sebebi
+Inertia'nın 250 ms gecikmesidir — hızlı yanıtta çubuk yanıp sönmesin
+diye. Ekran başına spinner eklemek gereksiz tekrar olurdu.
+
+**BU DEĞİŞİKLİKLER PHP TESTİYLE KORUNMUYOR** — projede JS test
+koşucusu YOK (`package.json`'da script yok) ve hiçbir PHP testi bu Vue
+ayrıntılarına değinmiyor. Vitest eklemek YENİ BİR PARADİGMA olurdu ve
+proje kuralları bunu yasaklıyor. Ekran işi bu projede **tarayıcıda**
+doğrulanır; öyle yapıldı ve ölçümler yukarıda.
+
+**GERÇEK TARAYICIDA DOĞRULANDI** (Playwright CLI, gerçek oturum):
+12 ekran × 4 genişlik (320/390/768/1280) taşma taraması · mobil menü
+açılıp **on bağlantı + Çıkış** göründü · bağlantıya tıklandı,
+**gezindi ve menü kendiliğinden kapandı** · üç hızlı tıklama tek POST
+üretti · masaüstü başlığı değişmedi.
+
+**829 test yeşil, Pint temiz.**
 
 ### §13 · Faz 4 · STRIPE TAHSİLAT HATTI (`6f89fe1`) — ABONELİK MADDESİNİ KAPATIR
 

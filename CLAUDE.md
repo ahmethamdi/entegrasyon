@@ -746,16 +746,30 @@ yeniden deneme (`244a397`, madde 3 ve 4'ü birlikte kapatır) · toplu içe
 aktarma (CSV + **kanaldan ürün çekme**, `f234303` + `99008b8`).
 
 **FAZ 4 SÜRÜYOR** (90 sa · hafta 21–25). **Onboarding akışı BİTTİ**
-(20 sa, `a118b3a`) ve **ABONELİK/ÖDEME MADDESİ BİTTİ** (26 sa):
-şema + kota (`d02b984`) ve Stripe tahsilat hattı (`6f89fe1`).
-Kalan: panel cilası (20 sa) · Türkçe yardım dokümantasyonu (12 sa) ·
-güvenlik kontrol listesi + yük testi (12 sa). Onay durumu için ayrı
-ekran küçük bir artık madde.
+(20 sa, `a118b3a`), **ABONELİK/ÖDEME MADDESİ BİTTİ** (26 sa: şema +
+kota `d02b984`, Stripe tahsilat hattı `6f89fe1`) ve **PANEL CİLASININ
+MOBİL + BEKLEME PARÇALARI BİTTİ** (`aba0a29`).
+Kalan: panel cilasının kalanı (~10 sa — tablolarda dar ekran
+okunabilirliği, form ekranları, tutarlılık turu) · Türkçe yardım
+dokümantasyonu (12 sa) · güvenlik kontrol listesi + yük testi (12 sa).
+Onay durumu için ayrı ekran küçük bir artık madde.
 
-**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ ve KULLANICI BUNA SONRA
-DÖNMEYE KARAR VERDİ (21 Ağustos).** `.env`'de `STRIPE_SECRET` tanımlı
-değil ve ekran bunu açıkça söylüyor. **BLOKAJ DEĞİL** — diğer Faz 4
-maddeleri Stripe beklemeden yapılabilir.
+**BOŞ DURUM ve GEZİNME YÜKLEMESİ MADDELERİ KAPANDI, YENİDEN AÇMA.**
+Boş durum metni on üç ekranın HEPSİNDE var (`Orders/Show` ayrıntı
+ekranı olduğu için istemez); gezinme yüklemesini Inertia'nın ilerleme
+çubuğu zaten karşılıyor.
+
+**⚠️ `.env`'DE CANLI STRIPE ANAHTARLARI VAR (21 Ağustos).**
+`pk_live_` / `sk_live_` yazılmış durumda — TEST anahtarları DEĞİL.
+Kullanıcının hesabı canlı ve gerçek ciro taşıyor; canlı anahtarla
+checkout açmak **gerçek karttan gerçek para** demektir ve test kartı
+`4242...` çalışmaz. `STRIPE_WEBHOOK_SECRET` hâlâ yer tutucu
+(`whsec_...`), yani webhook imzası doğrulanamaz ve abonelik YAZILAMAZ.
+**Düğmeler artık ETKİN** (`stripeConfigured()` anahtarı görüyor).
+**`/billing` üzerinde tarayıcı doğrulaması YAPMA** — anahtarlar test
+moduna çevrilene kadar (`https://dashboard.stripe.com/test/apikeys`,
+URL'deki `/test/` zorunlu). **BLOKAJ DEĞİL** — diğer Faz 4 maddeleri
+Stripe beklemeden yapılabilir.
 **Stripe CLI KURULDU** (brew, 1.50.3) ama `stripe login` YAPILMADI
 (tarayıcı ister, kullanıcı yapar).
 **ÖNCE TEST MODUNA GEÇİLMELİ** — kullanıcının hesabı CANLI ve gerçek
@@ -1180,6 +1194,42 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **TEK ÇAĞRI DÜĞMESİ — SIRADAKİ ADIM.** Dört düğme birden göstermek
   kullanıcıya hangisinden başlayacağını sordurur; onboarding'in işi tam
   olarak bunu söylemektir.
+
+## Panel cilası kuralları (§13 · Faz 4 · `aba0a29`)
+
+- **DAR EKRANDA MENÜ KATLANIR ve kırılma noktası `lg`'dir (1024px).**
+  On menü öğesi ~900px ister; `sm` seçilseydi **768px'lik tabletler
+  taşımaya devam ederdi**. Cila öncesi başlık 390px görünüm alanında
+  1001px genişliyordu ve **"Siparişler"den sonraki YEDİ ekran ile
+  ÇIKIŞ düğmesi erişilemezdi** — telefondan panelde gezinmek mümkün
+  değildi.
+- **TAŞMAYI BAŞLIK YAPAR, İÇERİK DEĞİL.** Teşhis yöntemi: başlığı
+  `display:none` yapıp `documentElement.scrollWidth`'i yeniden ölç.
+  İçerik sütunları zaten duyarlıdır (tablolar `overflow-x-auto`
+  taşır); yeni bir ekranda taşma görülürse önce başlık elenmelidir.
+- **MENÜ GEZİNMEDE KAPANIR** (`watch(currentPath)`). Kapanmasaydı
+  seçilen bağlantı yeni ekranı açar ama panel açık kalıp içeriği
+  örterdi.
+- **İSTEK UÇARKEN DÜĞME KİLİTLENİR — kalıp: `busy` + `:disabled` +
+  `…` etiketi.** `Failures`, `Products/Channels` ve `Mappings` bu
+  kalıbı zaten kullanıyor; YENİ KALIP UYDURULMAZ.
+- **ÖDEME DÜĞMESİ `onFinish` İLE SIFIRLANMAZ.** Checkout oturumu
+  sunucuda açılıp Stripe'a YÖNLENDİRİLİR; düğme yönlendirme sırasında
+  yeniden etkinleşseydi çift tıklama penceresi yeniden açılır ve her
+  basış **YENİ bir checkout oturumu** yaratırdı. Yalnızca `onError`
+  sıfırlar.
+- **GEZİNME YÜKLEMESİ İÇİN EKRAN BAŞINA SPINNER YAZILMAZ.** Inertia'nın
+  ilerleme çubuğu `app.js`'te yapılandırılmıştır
+  (`progress: { color: '#A8532B' }`) ve çalışır. Yerelde görünmemesi
+  hata değildir: Inertia çubuğu **250 ms geciktirir** ki hızlı yanıtta
+  yanıp sönmesin. Doğrulamak için isteği yapay olarak yavaşlat.
+- **TARAYICI DOĞRULAMASI `fetch`'İ DEĞİL `XMLHttpRequest`'İ
+  YAVAŞLATMALI** — Inertia XHR kullanır. `fetch` sarmalanırsa istek
+  hiç yavaşlamaz, bekleme durumu görünmez ve **test kodu suçlu
+  olmadığı hâlde özellik bozuk sanılır** (bu turda yaşandı).
+- **PANEL EKRANLARININ JS TESTİ YOKTUR** ve eklenmez: projede JS test
+  koşucusu yok, Vitest eklemek YENİ PARADİGMA olurdu. Ekran işi
+  **tarayıcıda** doğrulanır ve ölçüm devir notuna yazılır.
 
 ## Panel kuralları
 
