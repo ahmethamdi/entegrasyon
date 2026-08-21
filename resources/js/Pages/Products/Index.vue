@@ -99,8 +99,9 @@ function statusClass(status) {
             </Link>
         </div>
 
+        <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
         <div v-else class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
-            <table class="w-full text-sm">
+            <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
                         <th class="px-4 py-3">Ürün</th>

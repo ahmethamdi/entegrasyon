@@ -368,6 +368,56 @@ final class OnboardingProgressTest extends TestCase
         ]));
     }
 
+    // ------------------------------------------------ paylaşılan kiracı prop'u
+
+    /**
+     * KİRACI ADI ÖZET DIŞINDAKİ EKRANLARDA DA PAYLAŞILIR.
+     *
+     * GERÇEK ÇALIŞTIRMADA BULUNDU: başlıktaki kiracı adı YALNIZCA özet
+     * ekranında görünüyordu, diğer on iki ekranda BOŞTU.
+     *
+     * Sebep `onboarding` prop'unun kapanışla çözdüğü tuzağın AYNISIDIR:
+     * `share()` `web` grubunda çalışır, `tenant` ara katmanı ise ROTA
+     * seviyesinde — yani `share()` bağlam kurulmadan ÖNCE çağrılır ve
+     * kapanış DIŞINDA okunan `$request->attributes->get('tenant')` her
+     * zaman null döner.
+     *
+     * ÖZET EKRANI BU HATAYI MASKELİYORDU: `DashboardController` kendi
+     * `tenant` prop'unu gönderiyor ve paylaşılanı EZİYOR. Bu yüzden test
+     * ÖZET DIŞINDA bir ekranda koşmak ZORUNDADIR — `/` üzerinde yazılsaydı
+     * paylaşılan prop hiç okunmaz ve test hatayı GÖREMEZDİ.
+     */
+    #[Test]
+    public function the_tenant_name_is_shared_on_screens_other_than_the_dashboard(): void
+    {
+        [, $user] = $this->makeTenant();
+
+        $response = $this->actingAs($user)->get('/channels');
+        $response->assertOk();
+
+        $tenant = $response->viewData('page')['props']['tenant'];
+
+        $this->assertNotNull($tenant, 'Kiracı prop\'u özet dışındaki ekranlarda da dolu olmalı.');
+        $this->assertSame(
+            'Test Şirket',
+            $tenant['name'],
+            'Başlıkta gösterilen kiracı adı her panel ekranında paylaşılmalı.',
+        );
+    }
+
+    /** Kiracı bağlamı olmayan ekranda prop null kalır — istisna fırlatmaz. */
+    #[Test]
+    public function the_tenant_prop_is_null_without_tenant_context(): void
+    {
+        $response = $this->get('/login');
+        $response->assertOk();
+
+        $this->assertNull(
+            $response->viewData('page')['props']['tenant'],
+            'Kiracısız ekranda kiracı prop\'u null olmalı.',
+        );
+    }
+
     /** @return array<string, bool> */
     private function steps(TestResponse $response): array
     {

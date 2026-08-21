@@ -188,8 +188,17 @@ function domainFor(domain) {
             yenileyin veya ürün verisini düzeltin, sonra yeniden deneyin.
         </div>
 
+        <!--
+            `min-w-208` TAŞMA ÜRETMEK İÇİN DEĞİL, KIRPMAYI ÖNLEMEK
+            İÇİN. Tek başına `overflow-x-auto` yetmez: tablo `w-full`
+            olduğu için tarayıcı sütunları dar ekrana SIKIŞTIRIR ve en
+            uzun metni taşıyan "Hata" sütunu ~40px'lik bir şeride düşüp
+            kelime ortasından kırpılırdı (390px'te ölçüldü). Asgari
+            genişlik verilince sütunlar doğal boyutlarını korur ve kutu
+            KAYAR — kaydırma zaten tasarlanan davranıştı.
+        -->
         <div class="mt-8 overflow-x-auto rounded border border-stone-200 bg-white">
-            <table class="w-full text-sm">
+            <table class="w-full min-w-208 text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50">
                     <tr class="text-left text-xs uppercase tracking-wide text-stone-500">
                         <th class="px-4 py-3 font-medium">SKU</th>
@@ -205,7 +214,8 @@ function domainFor(domain) {
                 <tbody class="divide-y divide-stone-100">
                     <tr v-for="row in rows" :key="row.id" class="hover:bg-stone-50">
                         <td class="px-4 py-3">
-                            <p class="font-mono text-sm text-stone-900">{{ row.sku ?? '—' }}</p>
+                            <!-- SKU bir KİMLİKTİR; kelime ortasından bölünürse okunmaz. -->
+                            <p class="font-mono text-sm whitespace-nowrap text-stone-900">{{ row.sku ?? '—' }}</p>
                             <p v-if="row.externalId" class="font-mono text-[11px] text-stone-500">
                                 #{{ row.externalId }}
                             </p>

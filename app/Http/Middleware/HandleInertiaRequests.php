@@ -36,18 +36,30 @@ class HandleInertiaRequests extends Middleware
      */
     public function share(Request $request): array
     {
-        $tenant = $request->attributes->get('tenant');
-
         return [
             ...parent::share($request),
 
             // Kiracı ve kullanıcı her sayfada gerekli (başlık, çıkış düğmesi).
             // Yalnızca GÖRÜNEN alanlar paylaşılır: modeli olduğu gibi
             // göndermek parola hash'i ve kimlik bilgisi sızdırabilir.
-            'tenant' => $tenant === null ? null : [
-                'id' => $tenant->id,
-                'name' => $tenant->name,
-            ],
+            //
+            // `Closure` ZORUNLUDUR — `onboarding` ile AYNI gerekçe (aşağıda
+            // uzun uzun yazılı). `share()` `web` grubunda, `tenant` ise ROTA
+            // seviyesinde çalışır; bu metot bağlam kurulmadan ÖNCE çağrılır
+            // ve kapanış dışında okunan `$tenant` HER ZAMAN null olurdu.
+            //
+            // Bu hata GERÇEK ÇALIŞTIRMADA bulundu: kiracı adı YALNIZCA
+            // özet ekranında görünüyordu, diğer on iki ekranda başlık BOŞTU.
+            // Özet ekranı bunu maskeliyordu çünkü `DashboardController`
+            // KENDİ `tenant` prop'unu gönderiyor ve paylaşılanı EZİYOR.
+            'tenant' => function () use ($request): ?array {
+                $tenant = $request->attributes->get('tenant');
+
+                return $tenant === null ? null : [
+                    'id' => $tenant->id,
+                    'name' => $tenant->name,
+                ];
+            },
             'auth' => [
                 'user' => $request->user() === null ? null : [
                     'id' => $request->user()->id,

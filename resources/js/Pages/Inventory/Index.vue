@@ -179,8 +179,9 @@ function money(row) {
         </div>
 
         <!-- liste -->
+        <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
         <div v-else class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
-            <table class="w-full text-sm">
+            <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
                         <th class="px-4 py-3">SKU</th>
@@ -199,7 +200,8 @@ function money(row) {
                             :class="row.isOversold ? 'bg-red-50/60' : ''"
                         >
                             <td class="px-4 py-3">
-                                <p class="font-mono text-xs text-stone-900">{{ row.sku }}</p>
+                                <!-- SKU bir KİMLİKTİR; kelime ortasından bölünürse okunmaz. -->
+                                <p class="font-mono text-xs whitespace-nowrap text-stone-900">{{ row.sku }}</p>
                                 <p class="mt-0.5 text-xs text-stone-500">
                                     {{ money(row) }} · {{ row.warehouse ?? '—' }}
                                 </p>

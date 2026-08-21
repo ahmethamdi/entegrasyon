@@ -163,8 +163,9 @@ function formatTime(iso) {
                 Henüz senkron işlemi yok.
             </p>
 
+            <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
             <div v-else class="mt-3 overflow-x-auto rounded border border-stone-200">
-                <table class="w-full text-sm">
+                <table class="w-full min-w-3xl text-sm">
                     <thead class="bg-stone-50 text-left">
                         <tr>
                             <th class="px-4 py-2 font-medium text-stone-700">Kanal</th>

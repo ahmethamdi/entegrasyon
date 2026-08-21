@@ -209,8 +209,13 @@ function reasonFor(reason) {
             </div>
         </div>
 
+        <!--
+            Asgari genişlik KIRPMAYI önler: `w-full` tablo dar ekranda
+            sütunları sıkıştırır ve "Sebep" gibi metin taşıyan sütun
+            okunamaz hâle gelir. Genişlik verilince kutu KAYAR.
+        -->
         <div class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
-            <table class="w-full text-sm">
+            <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50">
                     <tr class="text-left text-xs uppercase tracking-wide text-stone-500">
                         <th class="px-4 py-3 font-medium">SKU</th>
@@ -226,7 +231,8 @@ function reasonFor(reason) {
                 <tbody class="divide-y divide-stone-100">
                     <tr v-for="row in rows" :key="row.id" class="hover:bg-stone-50">
                         <td class="px-4 py-3">
-                            <p class="font-mono text-sm text-stone-900">{{ row.sku ?? '—' }}</p>
+                            <!-- SKU bir KİMLİKTİR; kelime ortasından bölünürse okunmaz. -->
+                            <p class="font-mono text-sm whitespace-nowrap text-stone-900">{{ row.sku ?? '—' }}</p>
                             <p v-if="row.externalId" class="font-mono text-[11px] text-stone-500">
                                 #{{ row.externalId }}
                             </p>
