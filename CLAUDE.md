@@ -749,10 +749,10 @@ aktarma (CSV + **kanaldan ürün çekme**, `f234303` + `99008b8`).
 (20 sa, `a118b3a`), **ABONELİK/ÖDEME MADDESİ BİTTİ** (26 sa: şema +
 kota `d02b984`, Stripe tahsilat hattı `6f89fe1`) ve **PANEL CİLASININ
 MOBİL + BEKLEME PARÇALARI BİTTİ** (`aba0a29`).
-Kalan: panel cilasının kalanı (~10 sa — tablolarda dar ekran
-okunabilirliği, form ekranları, tutarlılık turu) · Türkçe yardım
-dokümantasyonu (12 sa) · güvenlik kontrol listesi + yük testi (12 sa).
-Onay durumu için ayrı ekran küçük bir artık madde.
+**PANEL CİLASI MADDESİ BİTTİ** (`aba0a29` + `26426ff`): mobil düzen,
+bekleme durumları, tablo okunabilirliği ve tutarlılık turu.
+Kalan: Türkçe yardım dokümantasyonu (12 sa) · güvenlik kontrol listesi
++ yük testi (12 sa) · onay durumu ekranı (küçük artık madde).
 
 **BOŞ DURUM ve GEZİNME YÜKLEMESİ MADDELERİ KAPANDI, YENİDEN AÇMA.**
 Boş durum metni on üç ekranın HEPSİNDE var (`Orders/Show` ayrıntı
@@ -1230,6 +1230,28 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **PANEL EKRANLARININ JS TESTİ YOKTUR** ve eklenmez: projede JS test
   koşucusu yok, Vitest eklemek YENİ PARADİGMA olurdu. Ekran işi
   **tarayıcıda** doğrulanır ve ölçüm devir notuna yazılır.
+- **`overflow-x-auto` TEK BAŞINA YETMEZ — tabloya ASGARİ GENİŞLİK de
+  gerekir.** Tablo `w-full` olduğu için tarayıcı sütunları dar ekrana
+  SIKIŞTIRIR ve kaydırma HİÇ devreye girmez: en uzun metni taşıyan
+  sütun bir şeride düşüp kelime ortasından kırpılır (`/failures`'ta
+  "Hata" sütunu ~40px'e indi, 390px'te ölçüldü). `min-w-*` verilince
+  sütunlar doğal boyutunu korur ve kutu KAYAR. Sayfa taşması ÜRETMEZ —
+  tablo kendi kutusunun içinde kayar.
+- **SKU / kimlik sütunları `whitespace-nowrap` taşır.** Kimlik kelime
+  ortasından bölünürse okunmaz (`TSH−KIRMIZI−M` üç satıra bölünüyordu).
+- **KART DÜZENİNE GEÇİLMEDİ ve bu bilinçli.** Tabloların görünen ilk
+  sütunları zaten ÖNEMLİ olanlar; sağa kayanlar ikincil. Yedi tabloyu
+  kart düzenine çevirmek maddenin istemediği bir yeniden yazım olurdu.
+- **PAYLAŞILAN PROP'LAR KAPANIŞ İÇİNDE OKUNUR — İSTİSNASIZ.**
+  `share()` `web` grubunda, `tenant` ara katmanı ROTA seviyesinde
+  çalışır; kapanış DIŞINDA okunan `$request->attributes->get('tenant')`
+  HER ZAMAN null döner. `onboarding` bunu baştan doğru yapmıştı,
+  `tenant` YAPMAMIŞTI ve kiracı adı on iki ekranda BOŞ görünüyordu.
+- **ÖZET EKRANI PAYLAŞILAN PROP HATALARINI MASKELER.**
+  `DashboardController` kendi `tenant` prop'unu gönderip paylaşılanı
+  EZER; paylaşılan prop'u sınayan test ÖZET DIŞINDA bir ekranda
+  (`/channels`) koşmak ZORUNDADIR. `/` üzerinde yazılan test bozuk
+  kodla bile YEŞİL kalır (mutasyonla kanıtlandı).
 
 ## Panel kuralları
 

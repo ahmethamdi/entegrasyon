@@ -163,10 +163,10 @@ olay kimliğiyle.
 | Faz 1 — Woo dikey dilimi | 140 | 1–8 | BİTTİ |
 | Faz 2 — Trendyol + çift yönlü | 126 | 9–15 | BİTTİ |
 | Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **84/84 · BİTTİ** |
-| Faz 4 — Ticarileşme | 90 | 21–25 | 20/90 |
+| Faz 4 — Ticarileşme | 90 | 21–25 | **86/90** |
 | Faz 5 — Tampon | 28 | 26 | başlamadı |
 
-**Toplam 468 saat · tahminen ~379 saat bitti → yaklaşık %81.**
+**Toplam 468 saat · tahminen ~416 saat bitti → yaklaşık %89.**
 
 ### Faz 3'ün BEŞ maddesi — BEŞİ DE BİTTİ
 
@@ -199,7 +199,7 @@ Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 | Onboarding akışı | 20 | **BİTTİ** (`a118b3a`) |
 | Abonelik: şema + kota | ~14 | **BİTTİ** (`d02b984`) |
 | Abonelik: Stripe tahsilat (checkout + webhook) | ~12 | **BİTTİ** (`6f89fe1`) |
-| Panel cilası (boş durumlar, yükleniyor, mobil — **ON ÜÇ** ekran) | 20 | **SIRADAKİ** |
+| Panel cilası (boş durumlar, yükleniyor, mobil — **ON ÜÇ** ekran) | 20 | **BİTTİ** (`aba0a29` + `26426ff`) |
 | Türkçe yardım dokümantasyonu | 12 | kaldı |
 | Güvenlik kontrol listesi + yük testi | 12 | kaldı |
 | Onay durumu ekranı | küçük | kaldı |
@@ -233,6 +233,9 @@ bitti. Bu turda YAPILANLAR ve maddeden ÇIKANLAR:
 |---|---|
 | Mobil düzen | **BİTTİ** — 12 ekran × 320/390/768/1280px taşmasız |
 | Bekleme durumları | **BİTTİ** — açıkta kalan iki düğme kapatıldı |
+| Tablo okunabilirliği | **BİTTİ** (`26426ff`) — kırpma giderildi, kaydırma devreye girdi |
+| Form ekranları | **BİTTİ** — ölçüldü, düzeltme gerekmedi |
+| Tutarlılık turu | **BİTTİ** — 11 ekranda sıkışmış metin taraması temiz |
 | Boş durumlar | **ZATEN VARDI** — 13 ekranın hepsinde (denetlendi) |
 | Gezinme yüklemesi | **GEREKMİYOR** — Inertia ilerleme çubuğu zaten çalışıyor |
 
@@ -244,10 +247,10 @@ ekranı olduğu için boş duruma İHTİYAÇ DUYMAZ. Gezinme yüklemesi için
 çiziliyor — yavaşlatılmış istekte marka rengiyle doğrulandı. Ekran
 başına spinner eklemek GEREKSİZ TEKRAR olur.
 
-**MADDEDEN KALAN** (~10 sa): tablolarda dar ekran okunabilirliği
-(bugün `overflow-x-auto` ile yatay kaydırılıyor — taşma YOK ama
-telefonda kart düzeni daha okunur olabilir), form ekranlarının dar
-ekran gözden geçirmesi ve tutarlılık turu.
+**MADDE KAPANDI** (`26426ff` ile). Tablo okunabilirliği, form ekranları
+ve tutarlılık turu bitti; ayrıntı aşağıda. **Faz 4'te kalan:** Türkçe
+yardım dokümantasyonu (12 sa) · güvenlik kontrol listesi + yük testi
+(12 sa) · onay durumu ekranı (küçük).
 
 **YENİ SOHBET BURADAN BAŞLASIN.** Stripe ertelendi (yukarıda) ve
 teknik bağımlılık yok; panel cilası Faz 4'ün sıradaki maddesidir.
@@ -279,15 +282,77 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 ## Tek cümlede durum
 
 **Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı); **Faz
-4'te ~76/90 saat bitti** — onboarding, abonelik/ödeme ve bu turda
-**panel cilasının mobil + bekleme parçaları** kapandı. **829 test
-yeşil** (2673 assertion), Pint temiz. Panelde **ON ÜÇ** ekran + her
-ekranda onboarding şeridi; **panel artık telefonda kullanılabiliyor**
-(önceden yedi ekran ve çıkış düğmesi erişilemezdi). Sıradaki iş
-**panel cilasının kalanı** (~10 sa) ya da Türkçe yardım dokümantasyonu
-/ güvenlik kontrol listesi.
+4'te ~86/90 saat bitti** — onboarding, abonelik/ödeme ve **PANEL
+CİLASI MADDESİ** kapandı (`aba0a29` + `26426ff`). **831 test yeşil**
+(2678 assertion), Pint temiz. Panelde **ON ÜÇ** ekran + her ekranda
+onboarding şeridi; **panel artık telefonda kullanılabiliyor**
+(önceden yedi ekran ve çıkış düğmesi erişilemezdi, `/failures`'ın hata
+sütunu okunamıyordu ve kiracı adı on iki ekranda boştu). Sıradaki iş:
+**Türkçe yardım dokümantasyonu** (12 sa) · güvenlik kontrol listesi +
+yük testi (12 sa) · onay durumu ekranı (küçük).
 
 ## Bu turda ne eklendi
+
+### §13 · Faz 4 · PANEL CİLASI — TABLO OKUNABİLİRLİĞİ + KİRACI ADI (`26426ff`) — MADDEYİ KAPATIR
+
+| Ne | Nerede |
+|---|---|
+| Tablo asgari genişliği | 7 ekran (`Failures` · `Reconciliation` · `Inventory` · `Products` · `Orders` · `Orders/Show` · `Products/Import` · `Dashboard`) |
+| SKU bölünmesi | `Failures` · `Reconciliation` · `Inventory` |
+| Paylaşılan kiracı prop'u | `Http/Middleware/HandleInertiaRequests` |
+| Testler | `OnboardingProgressTest`'e 2 test (toplam 831) |
+
+**`overflow-x-auto` TEK BAŞINA YETMİYORDU — turun ilk bulgusu.** Yedi
+tablonun hepsi zaten o sınıfı taşıyordu ama tablo `w-full` olduğu için
+tarayıcı sütunları dar ekrana SIKIŞTIRIYOR ve kaydırma HİÇ devreye
+girmiyordu. En kötü hâli `/failures`: kullanıcıya ne yapacağını
+söyleyen "Hata" sütunu **~40px'lik bir şeride** düşüyor, kelime
+ortasından kırpılıyor ve satır başına tek kelime sarıyordu. Ölçüm
+(390px): tablo 658px, görünen 340px, **gizli 318px**.
+
+`min-w-*` verilince sütunlar doğal boyutunu koruyor ve kutu KAYIYOR.
+**Sayfa taşması ÜRETİLMEDİ** — 320px'te on iki ekranın hepsi hâlâ
+temiz; tablolar KENDİ kutularının içinde kayıyor.
+
+**SKU'LAR ARTIK BÖLÜNMÜYOR** (`whitespace-nowrap`): `TSH−KIRMIZI−M`
+üç satıra bölünüyordu ve SKU bir KİMLİKTİR.
+
+**KART DÜZENİNE GEÇİLMEDİ ve bu BİLİNÇLİ.** `/inventory`'de görünen
+sütunlar (SKU, elde, satılabilir, fazla satış) zaten ÖNEMLİ olanlar;
+sağa kayan "Senkron" rozeti ikincil. Yedi tabloyu kart düzenine
+çevirmek maddenin istemediği bir yeniden yazım olurdu.
+
+**KİRACI ADI ON İKİ EKRANDA BOŞTU — turun ASIL bulgusu ve testlerin
+göremediği gerçek hata.** Başlıktaki kiracı adı YALNIZCA özet
+ekranında görünüyordu.
+
+Sebep `onboarding` prop'unun kapanışla çözdüğü tuzağın BİREBİR
+AYNISIDIR ve CLAUDE.md'de ZATEN YAZILIYDI: `share()` `web` grubunda,
+`tenant` ara katmanı ROTA seviyesinde çalışır — yani `share()` bağlam
+kurulmadan ÖNCE çağrılır ve kapanış DIŞINDA okunan `$tenant` her zaman
+null döner. `onboarding` kapanışla yazılmıştı, **`tenant` yazılmamıştı.**
+
+**ÖZET EKRANI HATAYI MASKELİYORDU:** `DashboardController` KENDİ
+`tenant` prop'unu gönderiyor ve paylaşılanı EZİYOR. Bu yüzden test
+ÖZET DIŞINDA bir ekranda (`/channels`) koşmak ZORUNDA.
+
+**İKİ MUTASYON SÜRÜLDÜ, İKİSİ DE ÖĞRETİCİ:**
+
+1. **Kapanışı hemen çağırmak** (eski davranış) → test KIRMIZI. Koruma
+   gerçek.
+2. **Aynı bozuk kodla testi `/` üzerine almak** → test YEŞİL kalıyor.
+   **"İki savunma mutasyonu gizler"** tuzağının bu projedeki yeni
+   tekrarı: testin rota seçimi tesadüf değil, korumanın KENDİSİ.
+
+**FORM EKRANLARI ÖLÇÜLDÜ, DÜZELTME GEREKMEDİ** — `/products/create`,
+`/channels/create` ve `/products/import`'ta 44px'den dar veya taşan
+kontrol YOK.
+
+**TUTARLILIK TURU TEMİZ** — on bir ekranda "60px'den dar kutuda 25
+karakterden uzun metin" taraması hiçbir şey bulmadı (yani `/failures`'ı
+okunmaz yapan koşul artık hiçbir ekranda yok).
+
+**831 test yeşil** (2 yeni), Pint temiz.
 
 ### §13 · Faz 4 · PANEL CİLASI — MOBİL DÜZEN + BEKLEME DURUMLARI (`aba0a29`)
 
