@@ -1,10 +1,18 @@
-# Devir Notu — 21 Ağustos 2026 (FAZ 4 SÜRÜYOR — panel cilası başladı)
+# Devir Notu — 21 Ağustos 2026 (FAZ 4'te tek madde kaldı · SIRADAKİ: sol sidebar tasarımı)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `aba0a29`
-(+ bu devir notu commit'i). **FAZ 3 KAPALI** ve **FAZ 4 SÜRÜYOR**.
-Bu turda **panel cilası maddesinin ilk turu** yazıldı (`aba0a29`):
-mobil düzen ve bekleme durumları. Faz durumu iddiası devir notundan
-değil **dokümanın §13 listesinden** doğrulanır.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `eea24f6`.
+**FAZ 3 KAPALI** ve **FAZ 4'TE TEK MADDE KALDI**.
+
+Bu oturumda **İKİ madde kapandı**:
+- **Panel cilası** (20 sa) — `aba0a29` (mobil düzen + bekleme
+  durumları) ve `26426ff` (tablo okunabilirliği + kiracı adı).
+- **Türkçe yardım ve hata mesajları** (12 sa) — `7208c51` (`lang/tr/`)
+  ve `8642f9f` (`/help` ekranı).
+
+**842 test yeşil** (2752 assertion), Pint temiz.
+
+Faz durumu iddiası devir notundan değil **dokümanın §13 listesinden**
+doğrulanır — geçmişte "faz kapandı" denip yanlış çıktı.
 
 ## ⚠️ ÖNCE BUNU OKU — `.env`'DE CANLI STRIPE ANAHTARLARI VAR
 
@@ -20,12 +28,12 @@ Stripe hesabı CANLI ve gerçek ciro taşıyor.
 - `STRIPE_WEBHOOK_SECRET` hâlâ yer tutucu (`whsec_...`), yani webhook
   imzası doğrulanamaz ve abonelik YAZILAMAZ.
 
-**BU TURDA NE OLDU:** panel cilasını doğrularken çift tıklama korumasını
-sınamak için `/billing/checkout`'a istek gitti ve **canlı hesapta BİR
-checkout oturumu açıldı**. Kart girilmedi, **ücret çekilmedi**;
-`subscriptions` tablosu BOŞ (0 satır) ve kullanılmayan oturumların
-süresi Stripe tarafından kendiliğinden dolar. Yine de bilinerek
-yapılmadı — bu yüzden burada yazılı.
+**21 AĞUSTOS'TA NE OLDU:** panel cilasını doğrularken çift tıklama
+korumasını sınamak için `/billing/checkout`'a istek gitti ve **canlı
+hesapta BİR checkout oturumu açıldı**. Kart girilmedi, **ücret
+çekilmedi**; `subscriptions` tablosu BOŞ (0 satır) ve kullanılmayan
+oturumların süresi Stripe tarafından kendiliğinden dolar. Yine de
+bilinerek yapılmadı — bu yüzden burada yazılı.
 
 **SIRADAKİ OTURUM İÇİN KURAL: `/billing` üzerinde tarayıcı doğrulaması
 YAPMA** (anahtarlar test moduna çevrilene kadar). Test moduna geçiş:
@@ -44,16 +52,91 @@ yerel geliştirme veritabanında.
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 829 yeşil olmalı
+docker compose exec app php artisan test      # 842 yeşil olmalı
+docker compose exec app vendor/bin/pint       # temiz olmalı
 ```
 
-### ⏭ SIRADAKİ İŞ — STRIPE'I GERÇEK ANAHTARLA SÜRMEK (ERTELENDİ)
+### ⏭ YARIN İLK İŞ — PANELİ SOL SIDEBAR'A ÇEVİRMEK (kullanıcı kararı)
+
+**KULLANICI İSTEDİ (21 Ağustos, oturum sonunda):** panel "modern yapay
+zekâ sistemlerindeki gibi" SOL SIDEBAR'lı bir arayüze çevrilecek ve
+görsel olarak güzelleştirilecek. Bu madde **dokümanın §13 listesinde
+YOKTUR** — kullanıcının açıkça istediği bir ara seanstır ve öyle
+kaydedilmiştir. To-do listesine (güvenlik + yük testi) ondan SONRA
+dönülecek.
+
+**NEDEN MANTIKLI:** menü ON BİR öğeye çıktı (`/help` ile) ve üst
+şeritte yatay yer daralıyor; `lg` kırılma noktası bugün 1024px'te
+zar zor yetiyor. Sidebar dikeyde sınırsızdır ve on ikinci öğe
+eklendiğinde yeniden düzen gerektirmez.
+
+**KORUNMASI GEREKENLER (bu oturumda kazanıldı, kaybedilmemeli):**
+- **Mobilde taşma YOK** — 12 ekran × 320/390/768/1280px ölçüldü.
+  Sidebar'da dar ekran davranışı yeniden çözülmeli (katlanır panel).
+- **Onboarding şeridi LAYOUT'TA yaşar** ve her ekranda görünür.
+- **Kiracı adı** başlıkta görünür (paylaşılan prop, kapanış içinde).
+- **Aktif öğe işareti** (`isActive`) — `/` yalnızca tam eşleşmede
+  aktif, diğerleri `startsWith`.
+- **Menü gezinmede kapanır** (mobil).
+
+**ÖLÇÜM KOMUTU HAZIR:** taşma taraması için
+`scratchpad/overflow.sh` kalıbı devir notunun bu turundaki
+ölçümlerde kullanıldı; sidebar sonrası AYNI dört genişlikte
+tekrarlanmalı.
+
+### SONRAKİ İŞ — GÜVENLİK KONTROL LİSTESİ + YÜK TESTİ (12 sa)
+
+**FAZ 4'ÜN SON MADDESİ BU.** Dokümanın §13 · Faz 4 satırı devir
+notunda yazandan GENİŞ — PDF'ten doğrulandı:
+
+> Güvenlik kontrol listesi, yük testi, **yedek geri yükleme provası**
+> — 12 sa
+
+Yani madde ÜÇ parçalı; "yedek geri yükleme provası" parçası geçmiş
+devir notlarında hiç geçmiyordu.
+
+**BAŞLARKEN İLK İŞ: dokümanın §11 · Güvenlik bölümünü oku**
+(`~/Desktop/Entegrasyon-Mimari-v2.2.pdf`). Kontrol listesi oradan
+türetilmeli, sıfırdan uydurulmamalı. `pdftotext` kurulu ve çalışıyor:
+
+```bash
+pdftotext ~/Desktop/Entegrasyon-Mimari-v2.2.pdf /tmp/mimari.txt
+grep -n -i 'güvenlik\|maskeleme\|sır' /tmp/mimari.txt | head -30
+```
+
+Dokümanın güvenlikle ilgili bilinen iki maddesi (bu turda görüldü):
+- **İki katmanlı maskeleme** — anahtar bazlı maskeleme yalnızca bilinen
+  alan adlarını yakalar; **sır bir hata mesajının içinde düz metin
+  geçebilir** (satır ~5352 ve ~6902).
+
+**Zaten yazılmış ve testle korunan güvenlik davranışları** (kontrol
+listesi bunları TEKRAR YAZMAMALI, DOĞRULAMALI):
+- Kiracı izolasyonu — bağlam yokken istisna, `TenantIsolationTest`
+- Webhook HMAC ham gövde üzerinden (kanal + Stripe)
+- Kimlik bilgisi kasada, `settings` jsonb'sine sır yazılmaz
+- Oturumdaki kiracı kimliğine güvenilmez, üyelik her istekte doğrulanır
+- Giriş hatası hesabın varlığını AÇIK ETMEZ (`TurkishMessagesTest`)
+
+**YÜK TESTİ İÇİN ARAÇ SEÇİLMEDİ** — karar kullanıcınındır. Yeni bir
+paradigma getirmeyen seçenekler: `ab`/`hey` (basit HTTP), `k6`
+(senaryo yazılabilir). Ölçülecek asıl şey HTTP değil **senkron
+hattıdır**: outbox relay + fan-out + kuyruk derinliği.
+
+**ALTERNATİF (küçük artık madde):** onay durumu ekranı. Rozet ve red
+sebebi ürün-kanal ekranında ZATEN var; eksik olan yalnızca toplu
+görünüm. Birkaç saatlik iş.
+
+### STRIPE — ERTELENDİ (kullanıcı kararı, 21 Ağustos)
 
 **DURUM (21 Ağustos 2026): kullanıcı Stripe'a SONRA dönmeye karar
-verdi.** Anahtarlar `.env`'e YAZILMADI ve akış sürülmedi. Kod hazır ve
-28 testle korunuyor; eksik olan yalnızca anahtarlar. Bu madde bir
-BLOKAJ DEĞİLDİR — panel cilası ve diğer Faz 4 maddeleri Stripe
-beklemeden yapılabilir.
+verdi** ve akış hâlâ uçtan uca SÜRÜLMEDİ. Kod hazır ve 28 testle
+korunuyor.
+
+**AMA ANAHTARLAR ARTIK `.env`'DE VAR — ve CANLI olanlar** (yukarıdaki
+uyarıya bak). Yani "eksik olan yalnızca anahtarlar" ifadesi ARTIK
+GEÇERLİ DEĞİL; eksik olan **TEST anahtarları** ve geçerli bir
+`STRIPE_WEBHOOK_SECRET`. Bu madde bir BLOKAJ DEĞİLDİR — kalan Faz 4
+maddesi Stripe beklemeden yapılabilir.
 
 **Stripe CLI KURULDU** (`brew`, sürüm 1.50.3) ama `stripe login`
 YAPILMADI — o adım tarayıcı ister ve kullanıcının yapması gerekir.
@@ -190,7 +273,7 @@ kaynak taşıyor (CSV dosyası · kanal bağlantısı). Yeni ekran açılmadı.
 eksik olan bildirimdi: eşik aşımı yalnızca `/metrics` rozetlerinde
 görünüyordu ve **kimse bakmadıkça hiçbir yerde görünmüyordu.**
 
-## SIRADAKİ İŞ — FAZ 4'ÜN KALANI (50 sa)
+## FAZ 4 DURUMU — TEK MADDE KALDI (12 sa)
 
 Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 
@@ -201,7 +284,7 @@ Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 | Abonelik: Stripe tahsilat (checkout + webhook) | ~12 | **BİTTİ** (`6f89fe1`) |
 | Panel cilası (boş durumlar, yükleniyor, mobil — **ON ÜÇ** ekran) | 20 | **BİTTİ** (`aba0a29` + `26426ff`) |
 | Türkçe yardım dokümantasyonu ve hata mesajları | 12 | **BİTTİ** (`7208c51` + `8642f9f`) |
-| Güvenlik kontrol listesi + yük testi | 12 | kaldı |
+| Güvenlik kontrol listesi + yük testi + **yedek geri yükleme provası** | 12 | **SIRADAKİ** |
 | Onay durumu ekranı | küçük | kaldı |
 
 Bitenlerin toplamı: 20 + 14 + 12 + 20 + 12 = **~78/90 saat → ~12 saat
@@ -253,10 +336,13 @@ yardım dokümantasyonu (12 sa) · güvenlik kontrol listesi + yük testi
 (12 sa) · onay durumu ekranı (küçük).
 
 **YENİ SOHBET BURADAN BAŞLASIN.** Stripe ertelendi (yukarıda) ve
-teknik bağımlılık yok; panel cilası Faz 4'ün sıradaki maddesidir.
-Alternatifler: Türkçe yardım dokümantasyonu (12 sa) · güvenlik
-kontrol listesi + yük testi (12 sa) · onay durumu ekranı (küçük).
-**Hangisiyle başlanacağı kullanıcının kararıdır — sor.**
+teknik bağımlılık yok.
+
+**KULLANICI KARARI (21 Ağustos, oturum sonunda): ARA BİR SEANS —
+PANELİ SOL SIDEBAR'LI MODERN BİR ARAYÜZE ÇEVİRMEK.** Bu, dokümanın
+§13 listesinde OLMAYAN, kullanıcının açıkça istediği bir görsel
+yenileme turudur. Faz 4'ün son maddesi (güvenlik + yük testi) ondan
+SONRA gelecek. Ayrıntı en altta "Sıradaki seans" başlığında.
 
 **Panel cilası maddesi onboarding'den SONRA gelmeli** — boş durum
 metinleri artık şeridin söylediğiyle çelişmemeli. Ekranların çoğunda

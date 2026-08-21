@@ -759,6 +759,16 @@ bekleme durumları, tablo okunabilirliği ve tutarlılık turu.
 **DİKKAT — dokümanın o satırı devir notundakinden GENİŞ**: "Güvenlik
 kontrol listesi, yük testi, **yedek geri yükleme provası** — 12 sa".
 
+**ARA SEANS — SOL SIDEBAR TASARIMI (kullanıcı kararı, 21 Ağustos).**
+Kullanıcı, son maddeye geçmeden önce panelin üst menü yerine **sol
+sidebar'lı** modern bir arayüze çevrilmesini istedi. Bu madde
+**dokümanın §13 listesinde YOKTUR** — bilinçli ve kullanıcı onaylı bir
+sapmadır. Teknik gerekçesi de var: menü `/help` ile ON BİR öğeye çıktı
+ve üst şeritte yatay yer daralıyor. Sidebar'a geçerken panel cilası
+turunda kazanılan davranışlar KAYBEDİLMEMELİ ve yeniden ÖLÇÜLMELİ:
+mobilde taşma yok · onboarding şeridi layout'ta · kiracı adı başlıkta ·
+aktif öğe işareti · mobil menü gezinmede kapanır.
+
 **BOŞ DURUM ve GEZİNME YÜKLEMESİ MADDELERİ KAPANDI, YENİDEN AÇMA.**
 Boş durum metni on üç ekranın HEPSİNDE var (`Orders/Show` ayrıntı
 ekranı olduğu için istemez); gezinme yüklemesini Inertia'nın ilerleme
