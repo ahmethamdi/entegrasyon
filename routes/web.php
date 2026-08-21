@@ -8,6 +8,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\OrderController;
@@ -149,6 +150,10 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
         ->name('failures.index');
     Route::post('/failures/retry', [SyncFailureController::class, 'retry'])
         ->name('failures.retry');
+
+    // Yardım (§13 · Faz 4). Kiracı verisi OKUMAZ ama panelin parçasıdır
+    // ve gezinme şeridiyle birlikte görünmesi için grubun içindedir.
+    Route::get('/help', HelpController::class)->name('help');
 });
 
 Route::post('/logout', [SessionController::class, 'destroy'])
