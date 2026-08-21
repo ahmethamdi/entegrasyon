@@ -752,10 +752,16 @@ Kalan: panel cilası (20 sa) · Türkçe yardım dokümantasyonu (12 sa) ·
 güvenlik kontrol listesi + yük testi (12 sa). Onay durumu için ayrı
 ekran küçük bir artık madde.
 
-**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ** — `.env`'de
-`STRIPE_SECRET` tanımlı değil ve ekran bunu açıkça söylüyor.
+**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ ve KULLANICI BUNA SONRA
+DÖNMEYE KARAR VERDİ (21 Ağustos).** `.env`'de `STRIPE_SECRET` tanımlı
+değil ve ekran bunu açıkça söylüyor. **BLOKAJ DEĞİL** — diğer Faz 4
+maddeleri Stripe beklemeden yapılabilir.
 **Stripe CLI KURULDU** (brew, 1.50.3) ama `stripe login` YAPILMADI
-(tarayıcı ister, kullanıcı yapar). Anahtar tanımlanınca checkout akışı
+(tarayıcı ister, kullanıcı yapar).
+**ÖNCE TEST MODUNA GEÇİLMELİ** — kullanıcının hesabı CANLI ve gerçek
+ciro taşıyor; canlı anahtarla gerçek para çekilir. En garantili yol
+`https://dashboard.stripe.com/test/apikeys` adresidir. `whsec_` o
+sayfada YOKTUR; `stripe listen` verir. Anahtar tanımlanınca checkout akışı
 uçtan uca doğrulanmalı (test modu `sk_test_...`, test kartı
 `4242 4242 4242 4242`). Webhook'u yerelde denemek için `stripe listen
 --forward-to localhost:8080/webhooks/stripe` — komut kendi `whsec_`

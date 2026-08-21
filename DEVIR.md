@@ -7,9 +7,11 @@ bu turda yazıldı — şema + kota (`d02b984`) ve **Stripe tahsilat hattı**
 (`6f89fe1`). Faz durumu iddiası devir notundan değil **dokümanın §13
 listesinden** doğrulandı.
 
-**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ** — bilinen tek açık uç.
+**GERÇEK STRIPE ANAHTARIYLA HENÜZ SÜRÜLMEDİ** — bilinen tek açık uç
+ve **kullanıcı buna SONRA dönmeye karar verdi (21 Ağustos)**.
 `.env`'de `STRIPE_SECRET` yok; ekran bunu AÇIKÇA söylüyor ve düğmeler
-devre dışı. Anahtar tanımlanınca uçtan uca doğrulanmalı.
+devre dışı. **BLOKAJ DEĞİL** — panel cilası ve diğer Faz 4 maddeleri
+Stripe beklemeden yapılabilir.
 
 Yeni sohbete bu dosyayı ve `CLAUDE.md`'yi okutarak başla.
 
@@ -20,12 +22,30 @@ docker compose up -d
 docker compose exec app php artisan test      # 829 yeşil olmalı
 ```
 
-### ⏭ YARIN İLK İŞ — STRIPE'I GERÇEK ANAHTARLA SÜRMEK
+### ⏭ SIRADAKİ İŞ — STRIPE'I GERÇEK ANAHTARLA SÜRMEK (ERTELENDİ)
 
-Kod hazır ve testlerle korunuyor (28 test); eksik olan yalnızca
-anahtarlar. **Stripe CLI KURULDU** (`brew`, sürüm 1.50.3) ama `stripe
-login` YAPILMADI — o adım tarayıcı ister ve kullanıcının yapması
-gerekir.
+**DURUM (21 Ağustos 2026): kullanıcı Stripe'a SONRA dönmeye karar
+verdi.** Anahtarlar `.env`'e YAZILMADI ve akış sürülmedi. Kod hazır ve
+28 testle korunuyor; eksik olan yalnızca anahtarlar. Bu madde bir
+BLOKAJ DEĞİLDİR — panel cilası ve diğer Faz 4 maddeleri Stripe
+beklemeden yapılabilir.
+
+**Stripe CLI KURULDU** (`brew`, sürüm 1.50.3) ama `stripe login`
+YAPILMADI — o adım tarayıcı ister ve kullanıcının yapması gerekir.
+
+**⚠️ EN KRİTİK UYARI — ÖNCE TEST MODUNA GEÇ.** Kullanıcının Stripe
+hesabı CANLI ve gerçek ciro taşıyor (21 Ağustos ekran görüntüsünde
+€713.71 görüldü). Canlı anahtarla (`pk_live_` / `sk_live_`)
+çalışılırsa **gerçek karttan gerçek para çekilir** ve test kartı
+`4242...` da çalışmaz. Test moduna geçmenin en garantili yolu adres
+çubuğudur:
+
+```
+https://dashboard.stripe.com/test/apikeys
+```
+
+URL'deki **`/test/`** parçası zorunludur. Sağ üstteki "Test mode"
+anahtarı da aynı işi görür ama arayüz sürümüne göre yeri değişiyor.
 
 **Kullanıcının yapacakları (sırayla):**
 
@@ -37,10 +57,15 @@ stripe listen --forward-to localhost:8080/webhooks/stripe # AÇIK KALMALI
 İkinci komut ekrana `whsec_...` yazar. Sonra `.env`'e üç satır:
 
 ```
-STRIPE_KEY=pk_test_...          # Stripe paneli → Developers → API keys
-STRIPE_SECRET=sk_test_...       # aynı sayfa, "Reveal" gerekir
+STRIPE_KEY=pk_test_...          # /test/apikeys → Publishable key
+STRIPE_SECRET=sk_test_...       # aynı sayfa → Secret key ("Reveal")
 STRIPE_WEBHOOK_SECRET=whsec_... # `stripe listen` çıktısından
 ```
+
+**`whsec_` API KEYS SAYFASINDA YOKTUR** — kullanıcı 21 Ağustos'ta onu
+orada aradı ve bulamadı. O sır ancak bir webhook uç noktası
+oluşturulunca doğar: yerelde `stripe listen` komutu verir, sunucuda
+Developers → Webhooks → Add endpoint sonrası "Signing secret".
 
 **ANAHTAR SOHBETE YAZILMAZ, KODA GÖMÜLMEZ** — kullanıcı `.env`'e
 yazar, kod `config()` ile okur.
@@ -178,6 +203,12 @@ gömülmez. Sonra yapılacaklar:
 
 **SIRADAKİ İŞ — PANEL CİLASI** (20 sa): boş durumlar, yükleniyor
 göstergeleri, mobil düzen. Artık ON ÜÇ ekrana dokunur.
+
+**YENİ SOHBET BURADAN BAŞLASIN.** Stripe ertelendi (yukarıda) ve
+teknik bağımlılık yok; panel cilası Faz 4'ün sıradaki maddesidir.
+Alternatifler: Türkçe yardım dokümantasyonu (12 sa) · güvenlik
+kontrol listesi + yük testi (12 sa) · onay durumu ekranı (küçük).
+**Hangisiyle başlanacağı kullanıcının kararıdır — sor.**
 
 **Panel cilası maddesi onboarding'den SONRA gelmeli** — boş durum
 metinleri artık şeridin söylediğiyle çelişmemeli. Ekranların çoğunda
