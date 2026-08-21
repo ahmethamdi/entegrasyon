@@ -78,11 +78,24 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    /*
+     * VARSAYILAN TÜRKÇEDİR (§13 · Faz 4 · "Türkçe hata mesajları").
+     *
+     * Varsayılan `en` bırakılıp yalnızca `.env`'e yazılsaydı, o satırı
+     * taşımayan HER kurulum sessizce İngilizce doğrulama mesajı
+     * gösterirdi — ürün TR pazarına satılıyor ve satıcı Türkçe bir
+     * formda "The title field is required." görürdü.
+     *
+     * `fallback_locale` de Türkçedir: çevrilmemiş bir anahtar İngilizce
+     * mesaja düşmek yerine yine Türkçe dosyada aranır. Anahtar hiç
+     * yoksa Laravel anahtarın kendisini basar ve bu, karışık dilli bir
+     * cümleden iyidir.
+     */
+    'locale' => env('APP_LOCALE', 'tr'),
 
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'tr'),
 
-    'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
+    'faker_locale' => env('APP_FAKER_LOCALE', 'tr_TR'),
 
     /*
     |--------------------------------------------------------------------------
