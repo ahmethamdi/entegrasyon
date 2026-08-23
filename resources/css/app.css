@@ -8,4 +8,49 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /*
+     * Marka rengi — YANIK TURUNCU (kullanıcı kararı, 21 Ağustos 2026).
+     *
+     * Çıpa `brand-600` = #a6522a, panelde zaten kullanılan Inertia
+     * ilerleme çubuğu rengidir (`app.js` → #A8532B).
+     *
+     * DEĞİŞMEZ KURAL — MARKA RENGİ UYARI RENGİYLE KARIŞMAMALIDIR.
+     *   `amber-*` bu panelde ZATEN uyarı rengidir (bekleyen rozetler,
+     *   eşleşmemiş SKU satırları, onboarding şeridi — 13 dosya).
+     *   Marka tonu ondan İKİ ölçüde ayrılır:
+     *     marka  H=19  S=59%   (donuk, kiremit)
+     *     amber  H=32–38 S=92–95% (parlak, sarımsı)
+     *   Ayıran asıl şey HUE DEĞİL DOYGUNLUKTUR: 35 puanlık fark marka
+     *   tonunu "arayüz kromu", amber'ı "dikkat çeken uyarı" yapar.
+     *
+     *   Bu yüzden Tailwind'in hazır `orange-*` ölçeği KULLANILMAZ:
+     *   `orange-600` H=21 (marka ile aynı aile) ama S=90% — yani
+     *   amber kadar parlaktır ve rozetlerle karışırdı.
+     *
+     *   `red-*` HATA rengidir; marka ölçeği ona da yaklaşmaz.
+     */
+    --color-brand-50: #fbf5f1;
+    --color-brand-100: #f5e6dc;
+    --color-brand-200: #e9cab5;
+    --color-brand-300: #dba687;
+    --color-brand-400: #c87c56;
+    --color-brand-500: #b56238;
+    --color-brand-600: #a8532b; /* çıpa — app.js ilerleme çubuğuyla AYNI */
+    --color-brand-700: #8a4324; /* metin için: beyaz üzerinde 7.1:1 */
+    --color-brand-800: #6f3720;
+    --color-brand-900: #5b2f1d;
+}
+
+/*
+ * Hareket azaltma tercihi (WCAG 2.3.3 · sidebar çekmecesi kayarak açılır).
+ * Tercihi açık olan kullanıcıda geçişler anında tamamlanır.
+ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+    }
 }
