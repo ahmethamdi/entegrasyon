@@ -1,4 +1,4 @@
-# Devir Notu — 21 Ağustos 2026 (FAZ 4'te tek madde kaldı · SIRADAKİ: sol sidebar tasarımı)
+# Devir Notu — 22 Ağustos 2026 (sol sidebar BİTTİ · Faz 4'te tek madde kaldı)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `eea24f6`.
 **FAZ 3 KAPALI** ve **FAZ 4'TE TEK MADDE KALDI**.
@@ -56,53 +56,38 @@ docker compose exec app php artisan test      # 842 yeşil olmalı
 docker compose exec app vendor/bin/pint       # temiz olmalı
 ```
 
-### ⏭ YARIN İLK İŞ — PANELİ SOL SIDEBAR'A ÇEVİRMEK (kullanıcı kararı)
+### ✅ SOL SIDEBAR TASARIMI — BİTTİ (`62a2209`)
 
-**KULLANICI İSTEDİ (21 Ağustos, oturum sonunda):** panel "modern yapay
-zekâ sistemlerindeki gibi" SOL SIDEBAR'lı bir arayüze çevrilecek ve
-görsel olarak güzelleştirilecek. Bu madde **dokümanın §13 listesinde
-YOKTUR** — kullanıcının açıkça istediği bir ara seanstır ve öyle
-kaydedilmiştir. To-do listesine (güvenlik + yük testi) ondan SONRA
-dönülecek.
+Kullanıcının istediği ara tasarım seansı yapıldı; ayrıntı aşağıda
+"Bu turda ne eklendi" bölümünde. Özet:
 
-**NEDEN MANTIKLI:** menü ON BİR öğeye çıktı (`/help` ile) ve üst
-şeritte yatay yer daralıyor; `lg` kırılma noktası bugün 1024px'te
-zar zor yetiyor. Sidebar dikeyde sınırsızdır ve on ikinci öğe
-eklendiğinde yeniden düzen gerektirmez.
+- Üst şeritten **sol sidebar'a** geçildi; sidebar TEK KEZ render edilir
+  (masaüstünde sabit, dar ekranda çekmece).
+- **Marka rengi turuncu** — `@theme` içinde `brand-50..900`,
+  çıpa `brand-600` = `#a8532b` (`app.js` ilerleme çubuğuyla aynı).
+- **Marka rengi ASLA dolgu olarak kullanılmaz** — aktif öğe 3px'lik
+  sol çubuk taşır. Gerekçe ve ölçüm aşağıda.
+- On bir öğe **üç gruba** ayrıldı, sıra kullanım sıklığına göre.
+- Erişilebilirlik: `focus-visible` halkaları · `aria-current` ·
+  atlama bağlantısı · ESC · kaydırma kilidi · `prefers-reduced-motion`.
+- Cila turunun **beş kazanımı korundu ve yeniden ölçüldü**.
 
-**KORUNMASI GEREKENLER (bu oturumda kazanıldı, kaybedilmemeli):**
-- **Mobilde taşma YOK** — 12 ekran × 320/390/768/1280px ölçüldü.
-  Sidebar'da dar ekran davranışı yeniden çözülmeli (katlanır panel).
-- **Onboarding şeridi LAYOUT'TA yaşar** ve her ekranda görünür.
-- **Kiracı adı** başlıkta görünür (paylaşılan prop, kapanış içinde).
-- **Aktif öğe işareti** (`isActive`) — `/` yalnızca tam eşleşmede
-  aktif, diğerleri `startsWith`.
-- **Menü gezinmede kapanır** (mobil).
+**YAPILMADI (bilinçli):** ikonlar (`Mutabakat`/`Eşleştirme` için
+yerleşik glif yok; uydurma ikon bilgi eklemez) ve **menüde sayaç
+rozetleri** (Hatalar/Mutabakat) — ikincisi gerçekten değerli ama
+controller değişikliği ister, layout turunun kapsamı dışındaydı.
+**Sıradaki tasarım turu için en iyi aday budur.**
 
-**ÖLÇÜM KOMUTU HAZIR:** taşma taraması için
-`scratchpad/overflow.sh` kalıbı devir notunun bu turundaki
-ölçümlerde kullanıldı; sidebar sonrası AYNI dört genişlikte
-tekrarlanmalı.
+### ⏭ SIRADAKİ İŞ — PANEL MODERNİZASYONU (kullanıcı kararı, 22 Ağustos)
 
-**ANA RENK TURUNCU (kullanıcı kararı, 21 Ağustos).** Zaten var olan
-çıpa: Inertia ilerleme çubuğu `resources/js/app.js` içinde `#A8532B`
-(yanık turuncu / kiremit). Yani turuncu sıfırdan bir yön değil.
+**KULLANICI İSTEDİ:** sidebar iskeleti kuruldu ama ekranların İÇİ
+hâlâ sade; "admin panel hissiyatı" verecek şekilde TÜM PROJE
+modernleştirilecek. Bu da dokümanda YOKTUR — sidebar seansının
+devamı ve kullanıcı onaylı bir sapmadır.
 
-**⚠️ EN ÖNEMLİ KISIT — `amber-*` ZATEN UYARI RENGİ.** Panelde 13
-dosyada ~90 kullanımı var (onboarding şeridi, "eşleşmemiş SKU"
-uyarısı, `pending` rozetleri, mutabakat uyarıları). Marka turuncusu
-amber'a çok yakın seçilirse **"bu turuncu marka mı, uyarı mı" ayrımı
-kaybolur** ve satıcı gerçek uyarıyı fark etmez — projenin rozet sırası
-ve uyarı görünürlüğü kurallarıyla doğrudan çelişir. Kırmızı da HATA
-rengidir, ona da yaklaşılmamalı. Nötr taban `stone-*` (628 kullanım)
-ve değişmesi gerekmiyor.
-
-**FRONTEND AGENT'LARI KULLANILABİLİR (kullanıcı önerdi).** Tasarım
-turunda `ui-ux-pro-max` / `frontend-design` becerileri ve
-`ui-ux-designer` · `frontend-developer` agent'ları devreye alınabilir;
-kullanıcı bunu açıkça önerdi. Sonuçları BENİMSEMEDEN önce yukarıdaki
-kısıtlarla (amber çakışması, taşma ölçümleri, korunacak davranışlar)
-karşılaştır.
+Kapsam: sayfa başlıkları · kart/panel yüzeyleri · tablo başlıkları ve
+satır ritmi · rozetler · boş durumlar · form kontrolleri. Marka
+turuncusu kısıtı AYNEN geçerli (dolgu değil, vurgu).
 
 ### SONRAKİ İŞ — GÜVENLİK KONTROL LİSTESİ + YÜK TESTİ (12 sa)
 
