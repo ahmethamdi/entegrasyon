@@ -82,6 +82,7 @@ final class ChannelHttpClient
      * @param  array<string, mixed>|null  $body
      * @param  array<string, mixed>  $query
      * @param  string|null  $attemptId  Hangi denemeye ait — FK yok, indeks var
+     * @param  array<string, string>  $headers  Adapter'a özgü başlıklar
      *
      * @throws ConnectionException Ağ hatası çağırana yükseltilir
      */
@@ -91,6 +92,7 @@ final class ChannelHttpClient
         ?array $body = null,
         array $query = [],
         ?string $attemptId = null,
+        array $headers = [],
     ): Response {
         $method = strtoupper($method);
         $url = $this->urlFor($endpoint);
@@ -98,7 +100,7 @@ final class ChannelHttpClient
         $startedAt = hrtime(true);
 
         try {
-            $response = $this->pendingRequest()->send($method, $url, array_filter([
+            $response = $this->pendingRequest($headers)->send($method, $url, array_filter([
                 'query' => $query,
                 'json' => $body,
             ], static fn (mixed $v): bool => $v !== null && $v !== []));
@@ -131,33 +133,59 @@ final class ChannelHttpClient
         return $response;
     }
 
-    /** @param array<string, mixed> $query */
-    public function get(string $endpoint, array $query = [], ?string $attemptId = null): Response
+    /**
+     * @param  array<string, mixed>  $query
+     * @param  array<string, string>  $headers
+     */
+    public function get(string $endpoint, array $query = [], ?string $attemptId = null, array $headers = []): Response
     {
-        return $this->request('GET', $endpoint, query: $query, attemptId: $attemptId);
+        return $this->request('GET', $endpoint, query: $query, attemptId: $attemptId, headers: $headers);
     }
 
-    /** @param array<string, mixed> $body */
-    public function post(string $endpoint, array $body, ?string $attemptId = null): Response
+    /**
+     * @param  array<string, mixed>  $body
+     * @param  array<string, string>  $headers
+     */
+    public function post(string $endpoint, array $body, ?string $attemptId = null, array $headers = []): Response
     {
-        return $this->request('POST', $endpoint, body: $body, attemptId: $attemptId);
+        return $this->request('POST', $endpoint, body: $body, attemptId: $attemptId, headers: $headers);
     }
 
-    /** @param array<string, mixed> $body */
-    public function put(string $endpoint, array $body, ?string $attemptId = null): Response
+    /**
+     * @param  array<string, mixed>  $body
+     * @param  array<string, string>  $headers
+     */
+    public function put(string $endpoint, array $body, ?string $attemptId = null, array $headers = []): Response
     {
-        return $this->request('PUT', $endpoint, body: $body, attemptId: $attemptId);
+        return $this->request('PUT', $endpoint, body: $body, attemptId: $attemptId, headers: $headers);
     }
 
     // ---------------------------------------------------------------- iç
 
-    private function pendingRequest(): PendingRequest
+    /**
+     * @param  array<string, string>  $headers  Adapter'ın eklediği başlıklar
+     */
+    private function pendingRequest(array $headers = []): PendingRequest
     {
         $secrets = $this->secrets();
 
         $request = Http::timeout(self::DEFAULT_TIMEOUT_SECONDS)
             ->acceptJson()
             ->asJson();
+
+        // ADAPTER BAŞLIKLARI — istemci HANGİ KANAL olduğunu BİLMEZ.
+        //
+        // Bazı kanallar kimlik doğrulamanın PARÇASI olarak özel başlık
+        // ister: Hepsiburada `User-Agent: {merchantId} - {AppName}` bekler
+        // ve eksikse kimlik bilgisi DOĞRU olsa bile 401 döner.
+        //
+        // `if ($channel === '...')` YAZILMAZ: başlığı ADAPTER bilir ve
+        // verir, istemci yalnızca taşır — basic auth çiftlerinin tek yerde
+        // toplanmasıyla aynı gerekçe. Yeni kanal eklendiğinde bu sınıf
+        // DEĞİŞMEZ.
+        if ($headers !== []) {
+            $request = $request->withHeaders($headers);
+        }
 
         // Basic auth: anahtar çifti kasadan gelir ve hiçbir yerde loglanmaz.
         //

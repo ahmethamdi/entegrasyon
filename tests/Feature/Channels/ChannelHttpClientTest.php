@@ -307,6 +307,39 @@ final class ChannelHttpClientTest extends TestCase
         return [$tenant, $connection];
     }
 
+    /**
+     * ADAPTER KENDİ BAŞLIĞINI EKLEYEBİLİR — ama istemci KANAL BİLMEZ.
+     *
+     * Bazı kanallar kimlik doğrulamanın PARÇASI olarak özel başlık ister:
+     * Hepsiburada `User-Agent: {merchantId} - {AppName}` bekler ve eksikse
+     * **401 döner** (kimlik bilgisi doğru olsa bile). Bu, projede daha önce
+     * yaşanmış "sessizce kimliksiz gitti" hatasının bir başka biçimidir —
+     * anahtar doğru, istek reddediliyor ve sebep görünmüyor.
+     *
+     * Başlıklar `if ($channel === '...')` ile DEĞİL, çağıranın verdiği
+     * dizi ile taşınır: istemci hangi kanal olduğunu bilmez ve yeni kanal
+     * eklendiğinde bu sınıf DEĞİŞMEZ (basic auth çiftlerinin tek yerde
+     * toplanmasıyla aynı gerekçe).
+     */
+    #[Test]
+    public function adapter_supplied_headers_are_sent(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->asTenant($tenant, fn () => $this->clientFor($connection)->request(
+            method: 'GET',
+            endpoint: 'listings',
+            headers: ['User-Agent' => '12345 - Entegrasyon'],
+        ));
+
+        Http::assertSent(static fn ($request): bool => $request->hasHeader(
+            'User-Agent',
+            '12345 - Entegrasyon',
+        ));
+    }
+
     private function clientFor(ChannelConnection $connection): ChannelHttpClient
     {
         return new ChannelHttpClient(
