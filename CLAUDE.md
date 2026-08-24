@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 829 test yeşil olmalı
+docker compose exec app php artisan test      # 871 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-38 tablo (çerçeve dışı), 36 model, 829 test. Stok çekirdeği (`ApplyMovement`,
+39 tablo (çerçeve dışı), 37 model, 871 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -737,6 +737,123 @@ testin sonunda çağrılır.
   GERÇEK ÇALIŞTIRMADA bulundu ve o iki metrik tam da uyarı üreten
   metriklerdi. Aynı kırpma `10`'u `1`'e de düşürürdü.
 
+## Güvenlik kuralları (§11 · `1cc6720` · `05b336e` · `fbf1eb7`)
+
+Kontrol listesi `docs/GUVENLIK-KONTROL-LISTESI.md`, yedek prosedürü
+`docs/YEDEK-GERI-YUKLEME.md`. Liste dokümanın §11'inden TÜRETİLDİ.
+
+- **KALICI YAZILAN HER HATA METNİ MASKELENİR** — `ChannelErrorText` TEK
+  kaynaktır ve üç kolonu birden korur (`channel_connections.last_error`,
+  `sync_attempts.error_message`, `listing_sync_states.last_error`).
+  Ham `$e->getMessage()` yazmak SIR SIZDIRIR: Laravel'in
+  `RequestException::prepareMessage()` yanıt GÖVDESİNİN ilk 120
+  karakterini mesaja gömer ve kanal 401 gövdesinde anahtarı yansıtırsa
+  sır `last_error` → Inertia prop → TARAYICI zincirini izler. Kasa
+  şifrelemesinin tüm anlamı kaybolur.
+- **MASKELEME KİMLİK BİLGİSİNİ `runAsSystem()` İLE OKUR.** Bağlam
+  bekleseydi kuyruk işinde katman 2 SESSİZCE devre dışı kalır ve
+  maskeleme yapıldığı sanılırken hiçbir şey maskelenmezdi (`97a7eb7`'de
+  yaşanmış hata biçimi).
+- **`DB::table()` KİRACI FİLTRESİ — BEŞİNCİ KEZ ISIRDI.**
+  `ProcessInboxMessage`'ın koşullu geçişinde filtre yoktu: yanlış
+  eşleşmiş bir çift BAŞKA kiracının inbox satırını `processing` yapıyor,
+  ardından gelen KAPSAMLI `find()` satırı bulamıyor ve iş sessizce
+  çıkıyordu. Satır artık `pending` olmadığı için `inbox:recover` de
+  toplamıyordu — O SİPARİŞ HİÇ İŞLENMİYORDU. Filtre DE testi DE yazılır.
+- **DOĞRULAMA HATASINDA SIR OTURUMA FLASH EDİLMEZ.** Laravel'in
+  varsayılan `dontFlash` listesi yalnızca `password` ailesini kapsar;
+  kanal anahtarları DEĞİL. `SESSION_DRIVER=database` olduğu için anahtar
+  ŞİFRESİZ BİR TABLOYA düşer. Liste `bootstrap/app.php` içinde ve bugün
+  kullanılanlardan GENİŞTİR — yeni kanal eklendiğinde alan adı orada
+  yoksa sızıntı sessizce geri gelir.
+- **WEBHOOK KAPILARI: 415 ve 429, "her durumda 202"NİN BİLİNÇLİ
+  İSTİSNALARIDIR.** O kural TANIDIĞIMIZ bir mesajın işlenmesiyle ilgili
+  ve kanalın gereksiz yeniden göndermesini önler. Yanlış içerik tipi
+  kanalın YAPILANDIRMA hatasıdır; sınır aşımı "yavaşla ve TEKRAR
+  GÖNDER" demektir. İkisinde de 2xx dönmek mesajı SESSİZCE kaybettirir.
+- **HIZ SINIRI BAĞLANTI BAŞINADIR, IP BAŞINA DEĞİL** — kanal
+  webhook'ları kendi altyapısından gelir ve aynı IP yüzlerce satıcıya
+  hizmet eder. Koruma katmanının "kova bağlantı başınadır" kuralıyla
+  aynı gerekçe. Sınır `WebhookController::MAX_REQUESTS_PER_MINUTE`.
+- **HSTS UYGULAMADA DEĞİL NGINX'TE.** Başlığı uygulama katmanından
+  göndermek, uygulamanın HİÇ cevap veremediği durumlarda (500, bakım
+  modu, PHP-FPM ölü) başlığın da gitmemesi demektir; HSTS'in tüm değeri
+  KESİNTİSİZLİĞİNDEDİR. **Yerel vhost'a KONMAZ** — localhost'a HSTS
+  göndermek geliştiricinin DİĞER localhost projelerini de kırar ve geri
+  alması zordur.
+- **`URL::forceScheme` YALNIZCA ÜRETİMDE.** Koşulsuz olsaydı yerel panel
+  kırılırdı; test İKİ YÖNÜ DE sınar (yalnızca "üretimde açık" sınansaydı,
+  koşulun kaldırılması testi kırmazdı).
+- **DENETİM KAYDI DARDIR** (§11: "bu altı olay anlaşmazlık çıktığında
+  sorulan sorular"). Genel bir model-observer YAZILMAZ: tablo stok
+  hareketleriyle dolar, gerçek sinyal gürültüde kaybolur ve maskeleme
+  yüzeyi her modele yayılır. **YAZILMAMIŞ AKIŞ İÇİN ENUM DEĞERİ
+  EKLENMEZ** — hiçbir yerden yazılmayan değer, ekranda var olmayan bir
+  olayı varmış gibi gösterir.
+- **`RecordAuditLog` ASIL İŞİ DÜŞÜRMEZ** (`api_calls` kuralının aynısı)
+  ama **ÇAĞIRANIN TRANSACTION'INA KATILIR**: geri alınan bir stok
+  düzeltmesi denetim izinde olmuş gibi görünmemeli.
+- **`audit_logs.action` ENUM'A CAST EDİLMEZ.** Kolon metindir; enum'dan
+  kaldırılmış bir değeri taşıyan eski kayıt cast sırasında İSTİSNA
+  fırlatır ve denetim ekranı o satır yüzünden tamamen açılmaz.
+- **BAĞIMLILIK TARAMASI AYRI CI JOB'IDIR** — testlerin geçmesinden
+  BAĞIMSIZ bir sinyaldir; `tests` içine gömülseydi kırmızı bir test
+  taramayı hiç çalıştırmazdı. `composer audit` lock dosyasını okur ve
+  paket İNDİRMEZ, yani diğer job'ları düşüren codeload 429 yoluna hiç
+  uğramaz.
+
+## Yük testi kuralları (§11 · `707ad44`)
+
+`loadtest:sync` — araç kullanıcı kararıyla seçildi (k6/ab DEĞİL).
+
+- **ÖLÇÜLEN ŞEY HTTP DEĞİL SENKRON HATTIDIR.** Satıcı panele günde
+  birkaç kez bakar; senkron hattı HER siparişte ve HER stok değişiminde
+  çalışır. "Saniyede kaç istek" bu ürün için yanıltıcı bir sağlık
+  işaretidir: HTTP rahatken outbox kuyruğunun saatlerce geride kalması
+  MÜMKÜNDÜR ve o durumda kanaldaki stok yanlıştır.
+- **BÜTÜNLÜK BOZUKSA KOMUT `FAILURE` DÖNER.** Hız bir günlük satırıdır,
+  `on_hand = Σ on_hand_delta` ürünün temel iddiasıdır.
+- **KANALA GERÇEK İSTEK ATILMAZ** — ölçülen şey kanalın gecikmesi olurdu
+  ve pazaryerinin hız sınırını yakmak üretim bağlantısını devre
+  kesiciye düşürebilirdi.
+- **ÖLÇÜM SORGULARI KAPSAMINI AÇIKÇA YAZAR.** Kapsamsız sorgu demo
+  satırlarını ölçüme katar; gerçek çalıştırmada yayın gecikmesi p95
+  **19566 saniye** çıktı.
+- **ÖLÇÜMDEN ÖNCE SANİYE SINIRI BEKLENİR.** `available_at` saniye
+  hassasiyetlidir ve İLERİYE yuvarlanır; relay'in
+  `available_at <= clock_timestamp()` kapısı taze olayları HAKLI OLARAK
+  eler. Beklemeden ölçmek kuyruk derinliğini yüz kat küçük raporlar.
+- **TEMİZLİK `finally` İÇİNDE** — istisna çıkan tur kiracılarını
+  veritabanında bırakır ve o çöp sonraki turun ölçümüne karışır.
+  `TenantContext`'i `finally` ile bırakma kuralının aynısı.
+- **BÜTÜNLÜK KONTROLÜ `return`'DEN ÖNCE ÇAĞRILIR** — PHP `return`
+  ifadesini `finally`'den ÖNCE değerlendirir; `finally`'ye bırakılırsa
+  rapor BOŞ `integrity` okur ve "BOZUK" der (bozukluk YOKKEN).
+- **ÖLÇÜM ALIRKEN ARTIK `outbox:relay` SÜRECİ OLMAMALI.** Bu turda bir
+  saatten uzun süredir çalışan İKİ artık süreç bulundu; kuyruğu sürekli
+  erittikleri için tüm yayın ölçümleri anlamsız çıkıyordu
+  (`ps aux | grep outbox`).
+
+## Yedek geri yükleme kuralları (§11 · §15 · `fbf1eb7`)
+
+- **YAZILI PROSEDÜR MADDEYİ KARŞILAMAZ.** §11 "geri yükleme EN AZ BİR
+  KEZ TEST EDİLDİ" diyor; kelimeler "test edildi".
+- **KAYNAK VERİTABANINA GERİ YÜKLEME YAPILMAZ** — İKİNCİ, boş bir
+  konteynere yüklenir. Aksi halde "prova" bir veri kaybı olayına dönüşür.
+- **EN ÖNEMLİ KONTROL KİMLİK BİLGİSİNİN ÇÖZÜLMESİDİR.** Yedek tek başına
+  DEĞERSİZDİR: `channel_credentials` `APP_KEY` olmadan çözülemez ve
+  prova, yedek ile anahtarın BİRLİKTE çalıştığını kanıtlayan tek şeydir.
+- **GERİ YÜKLEMEK YETMEZ, DOĞRULANIR**: satır sayıları · kısmi tekil
+  indeksler · generated column'lar (ve gerçekten hesapladıkları) ·
+  kimlik bilgisi çözülüyor mu · ledger bütünlüğü. `pg_restore`'un
+  hatasız bitmesi verinin KULLANILABİLİR olduğu anlamına gelmez.
+- **SÜRE HER PROVADA ÖLÇÜLÜR VE YAZILIR** — §15'in "yedekten dönüş
+  > 1 saat → yönetilen DB değerlendir" sinyali, ölçülmeyen bir süreyle
+  asla tetiklenmez.
+- **PROVANIN SINIRI AÇIKÇA YAZILIR.** Yerel `pg_dump` provası WAL
+  arşivini, PITR'ı ve uzak depodan indirme süresini KANITLAMAZ; üretimde
+  §15 pgBackRest öngörüyor ve prova orada TEKRARLANMALIDIR.
+
 ## Henüz yazılmadı
 
 **FAZ 3 KAPANDI** — dokümanın §13 · Faz 3 listesindeki BEŞ maddenin
@@ -753,11 +870,26 @@ MOBİL + BEKLEME PARÇALARI BİTTİ** (`aba0a29`).
 bekleme durumları, tablo okunabilirliği ve tutarlılık turu.
 **TÜRKÇE YARDIM + HATA MESAJLARI MADDESİ BİTTİ** (`7208c51` +
 `8642f9f`): `lang/tr/` dil dosyaları ve `/help` ekranı.
-**Faz 4'te kalan TEK madde: güvenlik kontrol listesi + yük testi**
-(12 sa) artı küçük bir artık madde (onay durumu ekranı).
+**GÜVENLİK + YÜK TESTİ + YEDEK PROVASI MADDESİ BİTTİ** (12 sa ·
+`1cc6720` + `05b336e` + `707ad44` + `fbf1eb7`). Madde ÜÇ parçalıydı
+(dokümanın satırı devir notundakinden GENİŞ: "Güvenlik kontrol listesi,
+yük testi, **yedek geri yükleme provası**") ve üçü de kapandı.
+Kalıcı kurallar aşağıda "Güvenlik kuralları", "Yük testi kuralları" ve
+"Yedek geri yükleme kuralları" başlıklarında.
 
-**DİKKAT — dokümanın o satırı devir notundakinden GENİŞ**: "Güvenlik
-kontrol listesi, yük testi, **yedek geri yükleme provası** — 12 sa".
+**FAZ 4 KAPANDI (90/90 sa).** Geriye yalnızca küçük bir artık madde
+kaldı: **onay durumu ekranı** (toplu görünüm; rozet ve red sebebi
+ürün-kanal ekranında ZATEN var). O madde dokümanın saat bütçesinde ayrı
+satır taşımıyor.
+
+**GÜVENLİK MADDESİNİ YENİDEN AÇMA.** Kod tarafında kapatılabilecek
+maddeler kapandı; kalan üçü **kod tarafından zorlanamaz** ve sunucu
+kurulmadan kapatılamaz (`docs/GUVENLIK-KONTROL-LISTESI.md` bunları
+"⬜ SUNUCU" olarak işaretliyor): APP_KEY'in iki ayrı yerde yedeklenmesi,
+PostgreSQL/Redis'in dışarıdan erişilemez olması ve yönetici hesaplarında
+2FA. **2FA YAZILMADI ve bu maddenin kapsamında değildir** —
+`users.two_factor_secret` kolonu Laravel iskeletinden geliyor ama akış
+yok; ayrı bir özelliktir ve §13 listesinde kendi satırı YOKTUR.
 
 **TASARIM SEANSI BİTTİ** (`62a2209` + `8f41dc7`, kullanıcı kararı).
 Panel sol sidebar'a çevrildi ve ekranların içi modernleştirildi. Bu
@@ -1464,15 +1596,21 @@ Devir notundaki alt liste (hepsi bitti):
 mutabakat katmanları**. **P0/P1'in tamamı yeşil; yazılmamış P0/P1 testi
 kalmadı.**
 
-**FAZ 4 SÜRÜYOR** (hafta 21–25, ~66/90 sa). **Onboarding akışı BİTTİ**
-(`a118b3a`) — dört adım, VERİDEN türetilen ilerleme, her panel
-ekranında şerit. **ABONELİK/ÖDEME BİTTİ**: şema + kota (`d02b984`) ve
-**Stripe tahsilat hattı** (`6f89fe1` — checkout + webhook, panelde
-`/billing`). Kalan: panel cilası · Türkçe yardım dokümantasyonu ·
-güvenlik kontrol listesi + yük testi · onay durumu ekranı (küçük artık
-madde). Panelde artık ON DÖRT ekran var (`/help` eklendi). Yeni pazaryerleri (Hepsiburada
-→ Amazon → Etsy → eBay) Faz 4'ten SONRA. Çalışma sırası kararı ("önce
-çekirdek, panel sona") kapsamını doldurdu.
+**FAZ 4 KAPANDI** (hafta 21–25, **90/90 sa**). Beş maddenin beşi de
+bitti: onboarding akışı (`a118b3a`) · abonelik/ödeme — şema + kota
+(`d02b984`) ve Stripe tahsilat hattı (`6f89fe1`) · panel cilası
+(`aba0a29` + `26426ff`) · Türkçe yardım ve hata mesajları (`7208c51` +
+`8642f9f`) · **güvenlik kontrol listesi + yük testi + yedek geri yükleme
+provası** (`1cc6720` + `05b336e` + `707ad44` + `fbf1eb7`).
+
+Panelde ON DÖRT ekran var (`/help` dahil). Kalan TEK artık madde:
+**onay durumu ekranı** (toplu görünüm, birkaç saat).
+
+**SIRADAKİ İŞ SEÇİMİ KULLANICININDIR**: onay durumu ekranı · Faz 5
+tampon (28 sa, içeriği belirlenmemiş) · yeni pazaryerleri (Hepsiburada
+→ Amazon → Etsy → eBay) · Stripe'ı uçtan uca sürmek (anahtarlar TEST
+moduna çevrilince) · proje ismi (~yarım saat). Çalışma sırası kararı
+("önce çekirdek, panel sona") kapsamını doldurdu.
 
 **YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
 Kullanıcının kararı: **Hepsiburada → Amazon → Etsy → eBay**. Bu maddeler

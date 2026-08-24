@@ -1,21 +1,106 @@
-# Devir Notu — 24 Ağustos 2026 (tasarım turu BİTTİ · Faz 4'te tek madde kaldı)
+# Devir Notu — 24 Ağustos 2026 (GÜVENLİK + YÜK TESTİ + YEDEK PROVASI BİTTİ)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `8f41dc7`.
-**FAZ 3 KAPALI** ve **FAZ 4'TE TEK MADDE KALDI**.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `fbf1eb7`.
+**FAZ 3 KAPALI** ve **FAZ 4'ÜN SON MADDESİ DE KAPANDI.**
 
-Bu oturumda **DÖRT iş kapandı**:
-- **Panel cilası** (20 sa · §13) — `aba0a29` (mobil düzen + bekleme
-  durumları) ve `26426ff` (tablo okunabilirliği + kiracı adı).
-- **Türkçe yardım ve hata mesajları** (12 sa · §13) — `7208c51`
-  (`lang/tr/`) ve `8642f9f` (`/help` ekranı).
-- **Sol sidebar** (`62a2209`) — dokümanda YOK, kullanıcı isteği.
-- **Panel modernizasyonu** (`8f41dc7`) — dokümanda YOK, kullanıcı
-  isteği; sidebar seansının ikinci turu.
+## 🎯 BU OTURUMDA — FAZ 4'ÜN SON MADDESİ (12 sa) KAPANDI
 
-**842 test yeşil** (2752 assertion), Pint temiz.
+Madde üç parçalıydı ve **üçü de bitti**:
+
+| Parça | Commit | Durum |
+|---|---|---|
+| Güvenlik kontrol listesi | `1cc6720` + `05b336e` | **BİTTİ** |
+| Yük testi | `707ad44` | **BİTTİ** — `loadtest:sync` |
+| Yedek geri yükleme provası | `fbf1eb7` | **BİTTİ** — gerçekten yapıldı |
+
+**871 test yeşil** (3419 assertion · +29), Pint temiz (370 dosya).
+
+### ÜÇ GERÇEK GÜVENLİK AÇIĞI BULUNDU — 871 test yeşilken duruyorlardı
+
+1. **ÇAPRAZ KİRACI UPDATE** (`ProcessInboxMessage`) — koşullu geçişte
+   kiracı filtresi YOKTU. Yanlış eşleşmiş bir çift başka kiracının inbox
+   satırını `processing` yapıyor, ardından gelen KAPSAMLI `find()` satırı
+   bulamıyor ve iş sessizce çıkıyordu. Satır artık `pending` olmadığı için
+   `inbox:recover` de toplamıyordu — **O SİPARİŞ HİÇ İŞLENMİYORDU.**
+   `DB::table()` boşluğu bu projede **BEŞİNCİ kez** çıktı.
+2. **HATA METNİ SIR SIZDIRIYORDU** — iki katmanlı maskeleme YALNIZCA
+   `api_calls` yolunda uygulanmıştı. `RequestException` mesajı yanıt
+   gövdesinin ilk 120 karakterini gömer; kanal 401 gövdesinde anahtarı
+   yansıtırsa sır `last_error` → Inertia prop → **TARAYICI** zincirini
+   izliyordu. Çözüm `ChannelErrorText` (tek kaynak).
+3. **DOĞRULAMA HATASI SIRRI OTURUMA FLASH EDİYORDU** — Laravel'in
+   varsayılan `dontFlash` listesi yalnızca `password` ailesini kapsar.
+   `SESSION_DRIVER=database` olduğu için anahtar **şifresiz bir tabloya**
+   düşüyordu.
+
+Üçü de testle korundu ve **mutasyonla doğrulandı**.
+
+### Ayrıca yazılanlar
+
+- **`audit_logs`** (§4 şeması + §11) — §11'in altı olayından bugün var
+  olan DÖRDÜ bağlandı. Yazılmayan ikisi (fiyat çakışması, rol değişimi)
+  için **uydurma enum değeri EKLENMEDİ**: o akışlar henüz yok.
+- **Webhook kapıları** — içerik tipi → 415, hız sınırı → 429 (bağlantı
+  başına dakikada 600). §11'in webhook tablosu artık **sekiz satırın
+  sekizi de** kapalı.
+- **HTTPS zorunlu** (üretimde `forceScheme`), çerez sertleştirme
+  `.env.example`'da belgeli, güvenlik başlıkları nginx'te.
+- **CI'da bağımlılık taraması** — ayrı `security` job'ı; ikisi de temiz.
+- **`PayloadRedactorTest`** — dokümanın AÇIKÇA istediği beş vaka; sınıfın
+  bağımsız testi YOKTU, yalnızca dolaylı sınanıyordu.
+
+### İki belge
+
+- `docs/GUVENLIK-KONTROL-LISTESI.md` — §11'in 13 maddesi, her biri
+  **TESTLİ / KISMİ / SUNUCU** ayrımıyla.
+- `docs/YEDEK-GERI-YUKLEME.md` — prova prosedürü + **prova kaydı**.
 
 Faz durumu iddiası devir notundan değil **dokümanın §13 listesinden**
 doğrulanır — geçmişte "faz kapandı" denip yanlış çıktı.
+
+## 📊 YÜK TESTİ — `loadtest:sync`
+
+Araç **kullanıcı kararıyla** seçildi: yeni paradigma getirmeyen bir
+artisan komutu (k6/ab DEĞİL). Ölçülen şey HTTP değil **senkron hattı**.
+
+```bash
+docker compose exec app php artisan loadtest:sync \
+    --tenants=5 --variants=40 --movements=1000
+```
+
+**Son ölçüm (yerel Docker):**
+
+| Aşama | Ölçüm |
+|---|---|
+| Ledger | 523.8 hareket/sn · p50 1.65 ms · p95 2.84 ms · p99 4.67 ms |
+| Relay | 339.2 olay/sn · kuyruk tepe 1000 · yayın gecikmesi p95 4 sn |
+| Fan-out | 1000 olay → 1000 operasyon · **oran 1.0** |
+| **Bütünlük** | **`on_hand = Σ on_hand_delta` KORUNDU** |
+
+Bütünlük bozuksa komut **FAILURE döner** — hız bir günlük satırı,
+bütünlük ürünün temel iddiasıdır.
+
+**⚠️ ÖLÇÜM ALIRKEN:** konteynerde artık `outbox:relay` süreci olmadığından
+emin ol (`docker compose exec app sh -c "ps aux | grep outbox"`). Bu turda
+**bir saatten uzun süredir çalışan İKİ artık relay süreci** bulundu;
+kuyruğu sürekli erittikleri için tüm yayın ölçümleri anlamsız çıkıyordu.
+
+**Gerçek çalıştırma DÖRT ölçüm hatası buldu** (kural yine işledi):
+kapsamsız sorgular (p95 = 19566 sn!), listing seed edilmediği için
+ölçülmeyen fan-out, Redis'e atılıp hiç çalıştırılmayan tüketici ve
+`available_at`'in saniye yuvarlaması. Ayrıntı `707ad44` commit mesajında.
+
+## 💾 YEDEK PROVASI — GERÇEKTEN YAPILDI
+
+49 tablo · 177 KB · toplam **~6 sn** (§15 eşiği: 1 saat).
+**7 kontrolün 7'si geçti** — en önemlisi: **13/13 şifreli kimlik bilgisi
+çözüldü**. Yedek tek başına değersizdir; `APP_KEY` olmadan hiçbir kanal
+bağlantısı geri gelmez ve prova ikisinin **birlikte** çalıştığını
+kanıtlayan tek şeydir.
+
+**Sınırı açıkça yazıldı:** yerel Docker + `pg_dump` ile yapıldı; üretimde
+§15 **pgBackRest** öngörüyor. WAL arşivini, PITR'ı ve uzak depodan indirme
+süresini KANITLAMAZ. Sunucu kurulunca **tekrarlanmalı**.
 
 ## ⚠️ ÖNCE BUNU OKU — `.env`'DE CANLI STRIPE ANAHTARLARI VAR
 
@@ -109,47 +194,45 @@ bölümünde; özet:
 - **İkonlar** — `Mutabakat`/`Eşleştirme` için yerleşik glif yok;
   uydurma ikon görsel ağırlık ekler, bilgi eklemez.
 
-### SIRADAKİ İŞ — GÜVENLİK KONTROL LİSTESİ + YÜK TESTİ (12 sa)
+### ✅ GÜVENLİK + YÜK TESTİ + YEDEK PROVASI — BİTTİ (12 sa)
 
-**FAZ 4'ÜN SON MADDESİ BU.** Dokümanın §13 · Faz 4 satırı devir
-notunda yazandan GENİŞ — PDF'ten doğrulandı:
+**FAZ 4'ÜN SON MADDESİYDİ ve KAPANDI.** Üç parçanın üçü de bitti;
+ayrıntı en üstteki bölümde. Kontrol listesi dokümanın §11'inden
+TÜRETİLDİ, uydurulmadı.
 
-> Güvenlik kontrol listesi, yük testi, **yedek geri yükleme provası**
-> — 12 sa
+**BU MADDEYİ YENİDEN AÇMA.** §11'in kod tarafında kapatılabilecek
+maddeleri kapandı. Kalan üç madde **kod tarafından zorlanamaz** ve
+sunucu kurulmadan kapatılamaz — `docs/GUVENLIK-KONTROL-LISTESI.md`
+bunları "⬜ SUNUCU" olarak açıkça işaretliyor:
 
-Yani madde ÜÇ parçalı; "yedek geri yükleme provası" parçası geçmiş
-devir notlarında hiç geçmiyordu.
+- **APP_KEY iki ayrı yerde yedeklendi** (parola yöneticisi + çevrimdışı
+  kopya). §11: "İlk gün yapılacak beş dakikalık iş."
+- **PostgreSQL ve Redis dışarıdan erişilemez** (yerelde portlar host'a
+  açık — geliştirme için gerekli, üretimle karıştırma).
+- **Yönetici hesaplarında 2FA** — YAZILMADI. `users.two_factor_secret`
+  kolonu Laravel iskeletinden geliyor ama akış yok. Bu AYRI bir
+  özelliktir ve dokümanın §13 listesinde kendi satırı YOKTUR.
 
-**BAŞLARKEN İLK İŞ: dokümanın §11 · Güvenlik bölümünü oku**
-(`~/Desktop/Entegrasyon-Mimari-v2.2.pdf`). Kontrol listesi oradan
-türetilmeli, sıfırdan uydurulmamalı. `pdftotext` kurulu ve çalışıyor:
+Ayrıca **HSTS başlığı** bilinçli olarak üretim vhost'una bırakıldı
+(yerel vhost'a KONMAMALI: localhost'a HSTS göndermek geliştiricinin
+diğer localhost projelerini de kırar). Satır
+`docker/nginx/default.conf` içinde yorum olarak hazır duruyor.
 
-```bash
-pdftotext ~/Desktop/Entegrasyon-Mimari-v2.2.pdf /tmp/mimari.txt
-grep -n -i 'güvenlik\|maskeleme\|sır' /tmp/mimari.txt | head -30
-```
+### SIRADAKİ İŞ — SEÇİM KULLANICININ
 
-Dokümanın güvenlikle ilgili bilinen iki maddesi (bu turda görüldü):
-- **İki katmanlı maskeleme** — anahtar bazlı maskeleme yalnızca bilinen
-  alan adlarını yakalar; **sır bir hata mesajının içinde düz metin
-  geçebilir** (satır ~5352 ve ~6902).
+Dokümanın §13 listesinde Faz 4'ten kalan **tek küçük artık madde**:
 
-**Zaten yazılmış ve testle korunan güvenlik davranışları** (kontrol
-listesi bunları TEKRAR YAZMAMALI, DOĞRULAMALI):
-- Kiracı izolasyonu — bağlam yokken istisna, `TenantIsolationTest`
-- Webhook HMAC ham gövde üzerinden (kanal + Stripe)
-- Kimlik bilgisi kasada, `settings` jsonb'sine sır yazılmaz
-- Oturumdaki kiracı kimliğine güvenilmez, üyelik her istekte doğrulanır
-- Giriş hatası hesabın varlığını AÇIK ETMEZ (`TurkishMessagesTest`)
+**Onay durumu ekranı** (birkaç saatlik iş). Rozet ve red sebebi
+ürün-kanal ekranında ZATEN var; eksik olan yalnızca **toplu görünüm**.
 
-**YÜK TESTİ İÇİN ARAÇ SEÇİLMEDİ** — karar kullanıcınındır. Yeni bir
-paradigma getirmeyen seçenekler: `ab`/`hey` (basit HTTP), `k6`
-(senaryo yazılabilir). Ölçülecek asıl şey HTTP değil **senkron
-hattıdır**: outbox relay + fan-out + kuyruk derinliği.
-
-**ALTERNATİF (küçük artık madde):** onay durumu ekranı. Rozet ve red
-sebebi ürün-kanal ekranında ZATEN var; eksik olan yalnızca toplu
-görünüm. Birkaç saatlik iş.
+Ondan sonrası:
+- **Faz 5 — Tampon** (28 sa · hafta 26). Dokümanda tampon olarak
+  ayrılmış; içeriği belirlenmemiş.
+- **Yeni pazaryerleri**: Hepsiburada → Amazon → Etsy → eBay
+  (kullanıcı kararı, sıra ve gerekçeler aşağıda). Shopify KAPSAM DIŞI.
+- **Stripe'ı uçtan uca sürmek** — anahtarlar TEST moduna çevrilince
+  (aşağıdaki bölüm). BLOKAJ DEĞİL.
+- **Proje ismi** — kullanıcı arıyor, bulunca haber verecek (~yarım saat).
 
 ### STRIPE — ERTELENDİ (kullanıcı kararı, 21 Ağustos)
 
@@ -271,7 +354,7 @@ olay kimliğiyle.
 | Faz 1 — Woo dikey dilimi | 140 | 1–8 | BİTTİ |
 | Faz 2 — Trendyol + çift yönlü | 126 | 9–15 | BİTTİ |
 | Faz 3 — Güvenilirlik + görünürlük | 84 | 16–20 | **84/84 · BİTTİ** |
-| Faz 4 — Ticarileşme | 90 | 21–25 | **~78/90** |
+| Faz 4 — Ticarileşme | 90 | 21–25 | **90/90 · BİTTİ** |
 | Faz 5 — Tampon | 28 | 26 | başlamadı |
 
 **Toplam 468 saat · tahminen ~416 saat bitti → yaklaşık %89.**
@@ -309,12 +392,12 @@ Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 | Abonelik: Stripe tahsilat (checkout + webhook) | ~12 | **BİTTİ** (`6f89fe1`) |
 | Panel cilası (boş durumlar, yükleniyor, mobil — **ON ÜÇ** ekran) | 20 | **BİTTİ** (`aba0a29` + `26426ff`) |
 | Türkçe yardım dokümantasyonu ve hata mesajları | 12 | **BİTTİ** (`7208c51` + `8642f9f`) |
-| Güvenlik kontrol listesi + yük testi + **yedek geri yükleme provası** | 12 | **SIRADAKİ** |
+| Güvenlik kontrol listesi + yük testi + **yedek geri yükleme provası** | 12 | **BİTTİ** (`1cc6720`+`05b336e`+`707ad44`+`fbf1eb7`) |
 | Onay durumu ekranı | küçük | kaldı |
 
-Bitenlerin toplamı: 20 + 14 + 12 + 20 + 12 = **~78/90 saat → ~12 saat
-kaldı** (güvenlik kontrol listesi + yük testi) artı küçük bir artık
-madde (onay durumu ekranı).
+Bitenlerin toplamı: 20 + 14 + 12 + 20 + 12 + 12 = **90/90 saat →
+FAZ 4 KAPANDI.** Geriye yalnızca küçük bir artık madde kaldı (onay
+durumu ekranı) ve o dokümanın saat bütçesinde ayrı satır taşımıyor.
 
 **ABONELİK/ÖDEME MADDESİ KAPANDI** (26 sa). Şema, kota, checkout ve
 webhook yazıldı; panelde `/billing` ekranı var.
@@ -399,14 +482,17 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 istediği **TASARIM SEANSI** yapıldı: **sol sidebar** (`62a2209`) ve
 **panel modernizasyonu** (`8f41dc7`).
 
-**842 test yeşil** (2752 assertion), Pint temiz. Panelde **ON DÖRT**
-ekran + her ekranda onboarding şeridi; **panel telefonda
-kullanılabiliyor**, **doğrulama hataları Türkçe** ve arayüz **sol
-sidebar'lı, marka rengi turuncu**.
+*(Bu bölüm ÖNCEKİ turun özetidir — o gün 842 test yeşildi. GÜNCEL sayı
+en üstte: **871 test**.)*
 
-Faz 4'te kalan TEK madde: **güvenlik kontrol listesi + yük testi +
-yedek geri yükleme provası** (12 sa) artı küçük bir artık madde (onay
-durumu ekranı).
+Panelde **ON DÖRT** ekran + her ekranda onboarding şeridi; **panel
+telefonda kullanılabiliyor**, **doğrulama hataları Türkçe** ve arayüz
+**sol sidebar'lı, marka rengi turuncu**.
+
+O turun sonunda Faz 4'te kalan TEK madde **güvenlik kontrol listesi +
+yük testi + yedek geri yükleme provası** idi; **o madde bu turda
+kapandı** (`1cc6720` + `05b336e` + `707ad44` + `fbf1eb7`) ve **FAZ 4
+BİTTİ**.
 
 ## Bu turda ne eklendi
 
@@ -1592,10 +1678,14 @@ teknik bağımlılık yok.
   sürülmedi** — `.env`'e KULLANICI yazar (`STRIPE_KEY`,
   `STRIPE_SECRET`, `STRIPE_WEBHOOK_SECRET`) ve sonra test kartıyla
   uçtan uca doğrulanmalı.
-- **Türkçe yardım dokümantasyonu** (12 sa).
-- **Güvenlik kontrol listesi + yük testi** (12 sa).
+- ~~**Türkçe yardım dokümantasyonu**~~ — **BİTTİ** (`7208c51` +
+  `8642f9f`). `lang/tr/` dil dosyaları ve `/help` ekranı.
+- ~~**Güvenlik kontrol listesi + yük testi + yedek geri yükleme
+  provası**~~ — **BİTTİ** (`1cc6720` + `05b336e` + `707ad44` +
+  `fbf1eb7`). Üç gerçek açık bulundu ve kapatıldı; belgeler
+  `docs/GUVENLIK-KONTROL-LISTESI.md` ve `docs/YEDEK-GERI-YUKLEME.md`.
 - **Onay durumu için ayrı ekran** (rozet + red sebebi ürün-kanal
-  ekranında var). En küçük madde.
+  ekranında var). **FAZ 4'TEN KALAN TEK MADDE** — en küçüğü.
 
 **Trendyol'da kapsam dışı bırakılanlar** (eksik DEĞİL): `delist`,
 `fetchListing`, `acknowledgeOrder` — kargo §14 gereği kapsam dışı.
@@ -1932,3 +2022,30 @@ sonunda raporlanır ve düşüş görülürse KAYDEDİLMELİ.
 **3 · `acknowledgeOrder` yazılmadı ve "yazılmamış yetenek" listesinde de
 YOK.** Sipariş onaylama Trendyol'da kargo akışının parçasıdır ve §14
 kargoyu kapsam dışı bırakır. Bilinçli kapsam sınırı, eksik değil.
+
+**4 · KONTEYNERDE ARTIK `outbox:relay` SÜREÇLERİ BİRİKEBİLİYOR.** Bu
+turda **bir saatten uzun süredir çalışan İKİ artık süreç** bulundu
+(`ps aux | grep outbox` → 1h10 ve 37:54). Elle başlatılan
+`outbox:relay` süreçleri oturum bitince kendiliğinden ölmüyor.
+
+**Zararı:** kuyruğu sürekli erittikleri için `loadtest:sync`'in TÜM
+yayın ölçümleri anlamsız çıkıyordu (kuyruk derinliği 1000 yerine 0–11).
+Ölçüm almadan önce kontrol et:
+
+```bash
+docker compose exec app sh -c "ps aux | grep outbox | grep -v grep"
+```
+
+Üretimde bu sorun YOKTUR — §15 relay'i **Supervisor** altında tek süreç
+olarak çalıştırır (`outbox-relay · 1 süreç · KRİTİK`).
+
+**5 · KİRACI İZOLASYON TESTİ "HER MODEL İÇİN" DEĞİL.** §11 bunu
+istiyor; bugün 30 kiracıya ait modelin 18'inde doğrudan test var,
+5'inde dolaylı, **6'sında yok** (`ProductImage`, `VariantOption`,
+`OrderEvent`, `Fulfillment`, `InboxMessage`, `ReconciliationRun`).
+Bilinçli olarak açık bırakıldı: altısı da panelde doğrudan sorgulanan
+bir yüzey değil. `docs/GUVENLIK-KONTROL-LISTESI.md` bunu "🟡 KISMİ"
+olarak işaretliyor.
+
+**Not:** bu turda o ailedeki EN TEHLİKELİ boşluk kapatıldı —
+`InboxMessage` üzerindeki çapraz kiracı UPDATE'i (`1cc6720`).
