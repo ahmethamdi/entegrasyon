@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Sync;
 
 use App\Domain\Catalog\Actions\UpdateProduct;
+use App\Domain\Catalog\Models\PriceOverride;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -312,6 +313,93 @@ final class PriceSyncTest extends TestCase
             $this->assertSame('149.90', $item['price']);
             $this->assertSame('199.90', $item['compare_at_price']);
             $this->assertSame('11', $item['external_id']);
+        });
+    }
+
+    /**
+     * §9 · KABUL EDİLEN KANAL FİYATI BİR DAHA EZİLMEZ.
+     *
+     * BU TEST OLMADAN TÜM ÖZELLİK ANLAMSIZDIR: satıcı çakışmada
+     * "kanalınki kalsın" der, `price_overrides` satırı yazılır — ve bir
+     * sonraki fiyat turu kanonik fiyatı yine gönderirse kampanya sessizce
+     * silinir. §9 bunu AÇIKÇA "en sık şikayet" diye adlandırıyor.
+     *
+     * Operasyon durumu DEĞİŞMEZ: atlanan operasyon `pending` kalır ve
+     * `SyncResultRecorder` ona dokunmaz ("yükte olmayan operasyona
+     * dokunulmaz"). Kapatılsaydı `PriceBatchBuilder` durum yazan İKİNCİ
+     * yol olurdu.
+     */
+    #[Test]
+    public function a_listing_with_an_accepted_price_override_is_excluded_from_the_payload(): void
+    {
+        [$tenant, $product, $variant] = $this->makeProduct(price: 149.90, withVariant: true);
+
+        $this->asTenant($tenant, function () use ($tenant, $variant): void {
+            $listing = $this->listingFor($variant, externalId: '11');
+
+            PriceOverride::query()->create([
+                'tenant_id' => $tenant->id,
+                'listing_id' => $listing->id,
+                'channel_price' => '119.90',
+                // KARAR ANINDAKİ kanonik fiyat, varyantınkiyle AYNI:
+                // farklı olsaydı override BAYAT sayılır ve eleme
+                // yanlış sebeple çalışmazdı.
+                'our_price' => '149.90',
+                'accepted_at' => now(),
+                'expires_at' => null,
+            ]);
+
+            $operation = $this->openPriceOperation($tenant, $listing);
+
+            $batch = DB::transaction(fn () => app(PriceBatchBuilder::class)->build($operation));
+
+            $this->assertTrue(
+                $batch->isEmpty(),
+                'Override\'lı listing yüke GİRDİ: kabul edilen kanal fiyatı bir '.
+                'sonraki turda ezilirdi ve özellik anlamsızlaşırdı (§9).',
+            );
+
+            $this->assertSame(
+                SyncOperationStatus::PENDING,
+                $operation->fresh()->status,
+                'Atlanan operasyonun DURUMU değişmemelidir — yükte olmayan '.
+                'operasyona dokunulmaz.',
+            );
+        });
+    }
+
+    /**
+     * BAYAT OVERRIDE ELEMEZ — kanonik fiyat değiştiyse gönderim SÜRER.
+     *
+     * Satıcı "119.90 kalsın" dedi (o an bizimki 149.90'dı), sonra panelden
+     * fiyatı 199.90 yaptı. O karar ARTIK BAŞKA BİR SORUYA verilmiştir ve
+     * elemeye devam etseydi panelden yapılan zam o kanala SESSİZCE hiç
+     * gitmezdi — sürekli ve fark edilmesi zor gelir kaybı.
+     */
+    #[Test]
+    public function a_stale_override_does_not_exclude_the_listing(): void
+    {
+        [$tenant, $product, $variant] = $this->makeProduct(price: 199.90, withVariant: true);
+
+        $this->asTenant($tenant, function () use ($tenant, $variant): void {
+            $listing = $this->listingFor($variant, externalId: '11');
+
+            PriceOverride::query()->create([
+                'tenant_id' => $tenant->id,
+                'listing_id' => $listing->id,
+                'channel_price' => '119.90',
+                // Karar 149.90'a verilmişti; kanonik fiyat artık 199.90.
+                'our_price' => '149.90',
+                'accepted_at' => now(),
+                'expires_at' => null,
+            ]);
+
+            $operation = $this->openPriceOperation($tenant, $listing);
+
+            $batch = DB::transaction(fn () => app(PriceBatchBuilder::class)->build($operation));
+
+            $this->assertSame(1, $batch->count(), 'Bayat override gönderimi engelledi.');
+            $this->assertSame('199.90', $batch->items[0]['price']);
         });
     }
 

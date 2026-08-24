@@ -138,6 +138,22 @@ final class HelpController extends Controller
                         'q' => 'Mutabakat ne yapıyor?',
                         'a' => 'Kanaldaki değerle bizdeki değeri karşılaştırır ve fark bulursa düzeltir. Sizin bir şey yapmanız gerekmez. Ama “elle inceleme” işaretli satırlarda otomatik onarım durmuştur: art arda üç turda düzelmediği için sistem denemeyi bırakmıştır ve o satıra bakmanız gerekir.',
                     ],
+                    // §9 · PRICE politikası. Bu üç madde stokla fiyat
+                    // arasındaki OTORİTE farkını anlatır: satıcı bunu
+                    // bilmezse "neden stoğu düzeltti de fiyatı sormadan
+                    // bıraktı" diye sistemi tutarsız sanar.
+                    [
+                        'q' => 'Kanaldaki fiyat benimkinden farklı çıktı, neden düzeltmediniz?',
+                        'a' => 'Bilerek. Kanal panelinden kampanya yapmış olabilirsiniz ve o fiyatı sessizce ezmek yaptığınız indirimi silerdi. Bu yüzden fiyatta karar sizindir: mutabakat ekranında “Kanalınki kalsın” ya da “Bizimki gitsin” diyebilirsiniz. Stokta durum farklıdır — orada tek doğru kaynak biziz ve fark otomatik düzeltilir.',
+                    ],
+                    [
+                        'q' => '“Kanalınki kalsın” dersem ne olur?',
+                        'a' => 'O ürüne artık fiyat göndermeyiz; kanaldaki fiyat olduğu gibi kalır. Kararınız kaydedilir ve kim ne zaman verdi bilgisiyle birlikte saklanır. Panelden o ürünün fiyatını değiştirirseniz kararınız eskimiş sayılır ve yeni fiyat kanala gönderilmeye başlar — yoksa yaptığınız zam o kanala hiç ulaşmazdı.',
+                    ],
+                    [
+                        'q' => '“Bizimki gitsin” dersem hemen gider mi?',
+                        'a' => 'Gönderim sıraya alınır ve normal senkron akışından geçer; birkaç dakika içinde kanala ulaşır. Daha önce “kanalınki kalsın” demişseniz o karar kaldırılır.',
+                    ],
                 ],
             ],
             [

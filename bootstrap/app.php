@@ -10,6 +10,7 @@ use App\Domain\Messaging\Console\RecoverPendingInbox;
 use App\Domain\Orders\Console\PollChannelOrdersCommand;
 use App\Domain\Reconciliation\Console\ReconcileColdCommand;
 use App\Domain\Reconciliation\Console\ReconcileHotCommand;
+use App\Domain\Reconciliation\Console\ReconcilePricesCommand;
 use App\Domain\Reconciliation\Console\ReconcileWarmCommand;
 use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
@@ -51,6 +52,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ReconcileHotCommand::class,
         ReconcileWarmCommand::class,
         ReconcileColdCommand::class,
+        // §9 · fiyat çakışması turu — katman değil DOMAIN ayrımı, gerekçe
+        // komutun sınıf başlığında. Zamanlaması routes/console.php içinde.
+        ReconcilePricesCommand::class,
         // §13 · Faz 2 · taksonomi. Zamanlaması routes/console.php içinde.
         SyncTaxonomyCommand::class,
         // §13 · Faz 2 · onay durumu takibi. Zamanlaması routes/console.php.

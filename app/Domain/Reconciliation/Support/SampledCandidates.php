@@ -65,8 +65,11 @@ final class SampledCandidates
      *
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    public function for(ChannelConnection $connection, int $budget): array
-    {
+    public function for(
+        ChannelConnection $connection,
+        int $budget,
+        SyncDomain $domain = SyncDomain::INVENTORY,
+    ): array {
         if ($budget < 1) {
             return [];
         }
@@ -84,7 +87,7 @@ final class SampledCandidates
                AND coalesce(s.status, 'pending') <> 'error_permanent'
              ORDER BY s.last_observed_at ASC NULLS FIRST, l.id ASC
              LIMIT ?
-        SQL, [SyncDomain::INVENTORY->value, $tenantId, $connection->id, $budget]);
+        SQL, [$domain->value, $tenantId, $connection->id, $budget]);
 
         return array_map(static fn (object $row): array => [
             'listing_id' => $row->listing_id,
@@ -107,12 +110,14 @@ final class SampledCandidates
      * Kiracı filtresi burada da AÇIKÇA yazılır: `DB::table()` global
      * scope'a tabi değildir ve sayım şişerse bütçe de şişer.
      */
-    public function activeListingCount(ChannelConnection $connection): int
-    {
+    public function activeListingCount(
+        ChannelConnection $connection,
+        SyncDomain $domain = SyncDomain::INVENTORY,
+    ): int {
         return DB::table('listings as l')
-            ->leftJoin('listing_sync_states as s', function ($join): void {
+            ->leftJoin('listing_sync_states as s', function ($join) use ($domain): void {
                 $join->on('s.listing_id', '=', 'l.id')
-                    ->where('s.domain', '=', SyncDomain::INVENTORY->value);
+                    ->where('s.domain', '=', $domain->value);
             })
             ->where('l.tenant_id', TenantContext::idOrFail())
             ->where('l.channel_connection_id', $connection->id)

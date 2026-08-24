@@ -118,6 +118,23 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     Route::get('/reconciliation', [ReconciliationController::class, 'index'])
         ->name('reconciliation.index');
 
+    // §9 · FİYAT ÇAKIŞMASI KARARI — ekranın TEK yazma yolu.
+    //
+    // "SALT OKUNUR" KURALININ BİLİNÇLİ İSTİSNASI ve kural aslında
+    // çiğnenmiyor: o kural sürüklenme TESPİTİ ve ONARIMI içindir (ikisi de
+    // zamanlanmış turların işi). Burada tetiklenen şey bir tarama değil,
+    // §9'un AÇIKÇA kullanıcıya bıraktığı karardır — "üzerine yazma,
+    // KULLANICI SEÇER". Panelden gelmeyen bir karar hiçbir yerden gelemez.
+    //
+    // POST'tur: yan etkisi var (`price_overrides` satırı yazar veya outbox
+    // olayı üretir). GET olsaydı tarayıcı ön yüklemesi kullanıcı adına
+    // fiyat kararı verirdi.
+    //
+    // ROTA MODEL BAĞLAMASI KULLANILMAZ — `SubstituteBindings` `tenant` ara
+    // katmanından ÖNCE çalışır ve sorgu bağlamsız atılırdı.
+    Route::post('/reconciliation/price-conflict', [ReconciliationController::class, 'resolvePriceConflict'])
+        ->name('reconciliation.price-conflict');
+
     // Ölü mektup ekranı (§12 · adım 4 ve 5, §13 · Faz 3 · madde 3+4).
     // İlk üç adım (operasyon `dead`, sync state `error_*`, `failed_jobs`)
     // zaten çalışıyordu; eksik olan panel ve butondu. Onlar olmadan ölü

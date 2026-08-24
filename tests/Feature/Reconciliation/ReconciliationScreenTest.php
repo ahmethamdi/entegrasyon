@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Reconciliation;
 
+use App\Domain\Catalog\Models\PriceOverride;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
@@ -14,7 +15,10 @@ use App\Domain\Inventory\Actions\ApplyMovement;
 use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Reconciliation\Actions\ReconcileConnection;
 use App\Domain\Reconciliation\Enums\ReconciliationScope;
+use App\Domain\Reconciliation\Models\ReconciliationItem;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Models\ListingSyncState;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Testing\TestResponse;
@@ -389,6 +393,177 @@ final class ReconciliationScreenTest extends TestCase
         return $this->asTenant($tenant, fn () => ChannelConnection::factory()->create([
             'channel_type_code' => 'woocommerce',
         ]));
+    }
+
+    // ─────────────────────────────────────────────── §9 · fiyat çakışması
+
+    /**
+     * FİYAT ÇAKIŞMASI EKRANDA GÖRÜNÜR ve İKİ FİYATI DA TAŞIR.
+     *
+     * Satıcı kararını ancak "benimki neydi, kanalınki ne" sorusunu görerek
+     * verebilir. Tek fiyat gösterilseydi düğmeler anlamsız olurdu.
+     */
+    #[Test]
+    public function a_price_conflict_row_shows_both_prices(): void
+    {
+        [$tenant, $user, $variant, $connection] = $this->makeContext();
+
+        $this->priceConflictFor($tenant, $variant, $connection, externalId: '10', channelPrice: '79.90');
+
+        $rows = $this->rows($this->actingAs($user)->get('/reconciliation'));
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('PRICE_CONFLICT', $rows[0]['status']);
+        $this->assertSame('PRICE', $rows[0]['domain'], 'Domain YAZILMALI: ekran adet ile parayı ayırt edemezdi.');
+        $this->assertSame('99.90', $rows[0]['our_price']);
+        $this->assertSame('79.90', $rows[0]['channel_price']);
+
+        $summary = $this->summary($this->actingAs($user)->get('/reconciliation'));
+
+        $this->assertSame(1, $summary['price_conflict']);
+        $this->assertSame(
+            0,
+            $summary['drift'],
+            'Çakışma SÜRÜKLENME sayılmamalı: aynı kutuda toplansalardı satıcı '.
+            '"sistem hallediyor" sanır ve kampanyası askıda kalırdı.',
+        );
+    }
+
+    /**
+     * KARAR VERİLEN SATIR AÇIK LİSTEDEN DÜŞER.
+     *
+     * Durum `PRICE_CONFLICT` KALIR (kalem o turda gerçekten çakışma
+     * bulmuştu) ve yalnızca `resolved_at` damgalanır. Filtre yalnızca duruma
+     * baksaydı satıcı kararını verdiği satırı ekranda görmeye devam eder ve
+     * aynı kararı tekrar tekrar verirdi.
+     */
+    #[Test]
+    public function a_resolved_conflict_leaves_the_open_list(): void
+    {
+        [$tenant, $user, $variant, $connection] = $this->makeContext();
+
+        $this->priceConflictFor($tenant, $variant, $connection, externalId: '10', channelPrice: '79.90');
+
+        $item = $this->asTenant($tenant, fn () => ReconciliationItem::query()
+            ->orderByDesc('id')
+            ->firstOrFail());
+
+        $this->actingAs($user)
+            ->post('/reconciliation/price-conflict', [
+                'item' => $item->id,
+                'decision' => 'accept_channel',
+            ])
+            ->assertRedirect('/reconciliation')
+            ->assertSessionHas('success');
+
+        $this->assertCount(
+            0,
+            $this->rows($this->actingAs($user)->get('/reconciliation')),
+            'Karar verilen satır açık listede KALMAMALI.',
+        );
+
+        $this->assertSame(
+            0,
+            $this->summary($this->actingAs($user)->get('/reconciliation'))['price_conflict'],
+            'Özet de çözülmüş çakışmayı saymamalı.',
+        );
+    }
+
+    /**
+     * BAŞKA KİRACININ KALEMİNE KARAR VERİLEMEZ.
+     *
+     * Yetkilendirme kimliğin tahmin edilemezliğine DAYANDIRILMAZ: sorgu
+     * kiracı scope'u altında koşar ve yabancı kalem 404 verir. Açık olsaydı
+     * bir satıcı rakibinin fiyatını kanalda kilitleyebilirdi.
+     */
+    #[Test]
+    public function a_price_conflict_of_another_tenant_cannot_be_resolved(): void
+    {
+        [$tenantA, $userA] = $this->makeContext();
+        [$tenantB, , $variantB, $connectionB] = $this->makeContext();
+
+        $this->priceConflictFor($tenantB, $variantB, $connectionB, externalId: '20', channelPrice: '11.00');
+
+        $foreign = $this->asTenant($tenantB, fn () => ReconciliationItem::query()
+            ->orderByDesc('id')
+            ->firstOrFail());
+
+        $this->actingAs($userA)
+            ->post('/reconciliation/price-conflict', [
+                'item' => $foreign->id,
+                'decision' => 'accept_channel',
+            ])
+            ->assertNotFound();
+
+        $this->assertSame(
+            0,
+            $this->asSystem(fn (): int => PriceOverride::query()->count()),
+            'Yabancı kalem için override YAZILMAMALI.',
+        );
+    }
+
+    /** Uydurma karar reddedilir — doğrulama hatası, 500 değil. */
+    #[Test]
+    public function an_unknown_decision_is_rejected(): void
+    {
+        [$tenant, $user, $variant, $connection] = $this->makeContext();
+
+        $this->priceConflictFor($tenant, $variant, $connection, externalId: '10', channelPrice: '79.90');
+
+        $item = $this->asTenant($tenant, fn () => ReconciliationItem::query()
+            ->orderByDesc('id')
+            ->firstOrFail());
+
+        $this->actingAs($user)
+            ->post('/reconciliation/price-conflict', [
+                'item' => $item->id,
+                'decision' => 'sil_gitsin',
+            ])
+            ->assertSessionHasErrors('decision');
+    }
+
+    /**
+     * GERÇEK FİYAT TURUNDAN bir çakışma üretir.
+     *
+     * Kalemi elle yazmak `status`, `local_value` ve `domain` alanlarını
+     * UYDURMAK olurdu; ekran o zaman gerçek veriyi değil testin varsayımını
+     * doğrulardı — `driftFor` ile aynı gerekçe.
+     */
+    private function priceConflictFor(
+        Tenant $tenant,
+        Variant $variant,
+        ChannelConnection $connection,
+        string $externalId,
+        string $channelPrice,
+        string $ourPrice = '99.90',
+    ): void {
+        $listing = $this->listing($tenant, $variant, $connection, $externalId);
+
+        $this->asTenant($tenant, function () use ($tenant, $variant, $listing, $ourPrice): void {
+            $variant->forceFill(['price' => $ourPrice])->save();
+
+            // FİYAT TURU `recently_sold` KULLANMAZ (satış fiyatı
+            // değiştirmez); aday bekleyen bir fiyat senkronundan gelir.
+            ListingSyncState::query()->updateOrCreate(
+                ['listing_id' => $listing->id, 'domain' => SyncDomain::PRICE->value],
+                [
+                    'tenant_id' => $tenant->id,
+                    'desired_version' => 2,
+                    'synced_version' => 1,
+                    'status' => 'pending',
+                    'error_count' => 0,
+                    'last_requested_at' => now()->subDays(2),
+                ],
+            );
+        });
+
+        ProgrammableInventoryAdapter::remotePrice('woocommerce', $externalId, $channelPrice);
+
+        $this->asTenant($tenant, fn () => app(ReconcileConnection::class)->run(
+            connection: $connection,
+            scope: ReconciliationScope::WARM,
+            domain: SyncDomain::PRICE,
+        ));
     }
 
     /**

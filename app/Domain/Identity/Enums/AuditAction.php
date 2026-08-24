@@ -19,18 +19,19 @@ namespace App\Domain\Identity\Enums;
  * refactor'ıyla ÖLMEZ.
  *
  * ─────────────────────────────────────────────────────────────────────
- * BUGÜN YAZILMAYAN İKİ OLAY — DÜRÜST SINIR
+ * BUGÜN YAZILMAYAN TEK OLAY — DÜRÜST SINIR
  * ─────────────────────────────────────────────────────────────────────
- * §11'in listesinde altı olay var; bu enum dördünü tanımlar. Eksik ikisi:
+ * §11'in listesinde altı olay var; bu enum beşini tanımlar. Eksik olan:
  *
- *   - "fiyat çakışması kararı" — çakışma çözümü akışı henüz YAZILMADI
- *     (§9'un üçüncü durumu; fiyat senkronu tek yönlü çalışıyor).
  *   - "kullanıcı davet ve rol değişimi" — davet akışı YAZILMADI;
  *     `tenant_users.role` yalnızca `CreateTenant` tarafından yazılıyor.
  *
- * O yollar açıldığında buraya birer değer eklenir. Şimdi tanımlamak,
- * hiçbir yerden yazılmayan ölü bir enum değeri bırakırdı ve denetim
- * ekranı olmayan bir olayı varmış gibi gösterirdi.
+ * O yol açıldığında buraya bir değer eklenir. Şimdi tanımlamak, hiçbir
+ * yerden yazılmayan ölü bir enum değeri bırakırdı ve denetim ekranı
+ * olmayan bir olayı varmış gibi gösterirdi.
+ *
+ * "Fiyat çakışması kararı" ARTIK YAZILIYOR (§9 · PRICE politikası) ve
+ * aşağıda kendi değerini taşıyor.
  *
  * "Kanal bağlantısı SİLME" de aynı sebeple yok: silme yolu yazılmadı —
  * bağlantı silinmez, işaretlenir (§13 · faz 1.4).
@@ -57,6 +58,20 @@ enum AuditAction: string
     /** Kiracı yaratıldı — ilk sahip ve varsayılan depo ile birlikte. */
     case TENANT_CREATED = 'tenant.created';
 
+    /**
+     * Fiyat çakışmasında satıcı karar verdi (§9 · PRICE, §11).
+     *
+     * İKİ YÖNÜ DE AYNI OLAY TAŞIR ve fark YÜKTE yaşar (`decision`):
+     * "kanalınkini kabul et" ve "bizimkini gönder". Ayrı olaylar
+     * yazılsaydı "bu listing'de kim ne zaman ne karar verdi" sorusu iki
+     * ayrı taksonomiden okunurdu; oysa sorulan tek soru vardır ve
+     * anlaşmazlıkta o sorulur.
+     *
+     * Yükte İKİ FİYAT DA taşınır: karar bağlamı olmadan denetim izi
+     * "satıcı bir şey seçti" demekten öteye geçmez.
+     */
+    case PRICE_CONFLICT_RESOLVED = 'price.conflict_resolved';
+
     /** Panelde gösterilecek Türkçe ad. */
     public function label(): string
     {
@@ -65,6 +80,7 @@ enum AuditAction: string
             self::CHANNEL_CREDENTIAL_UPDATED => 'Kanal anahtarı yenilendi',
             self::STOCK_ADJUSTED => 'Stok elle düzeltildi',
             self::TENANT_CREATED => 'Hesap oluşturuldu',
+            self::PRICE_CONFLICT_RESOLVED => 'Fiyat çakışması çözüldü',
         };
     }
 }

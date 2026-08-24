@@ -54,6 +54,11 @@ final class ScheduledScansTest extends TestCase
             // ikisi de kod incelemesinde kusursuz görünür.
             'reconcile:warm',
             'reconcile:cold',
+            // §9 · fiyat çakışması turu. Zamanlanmazsa satıcının kanal
+            // panelinden yaptığı fiyat değişikliği HİÇ görülmez ve §9'un
+            // PRICE politikası ("kullanıcı seçer") sorulacak bir soru
+            // üretmeden kâğıt üzerinde kalır — stok turları fiyata BAKMAZ.
+            'reconcile:prices',
             // §13 · Faz 2 — Trendyol webhook GÖNDERMEZ; sipariş yalnızca
             // bu turla gelir. Zamanlanmazsa hiçbir Trendyol siparişi
             // alınmaz ve eksiklik panelde "sipariş yok" gibi görünür.
@@ -109,6 +114,17 @@ final class ScheduledScansTest extends TestCase
         // gereksizce yeniden okurdu. 03:00 taksonomi, 04:00 api_calls —
         // üçü aynı bakım penceresinde üst üste binmiyor.
         $this->assertSame('0 5 * * *', $commands['reconcile:cold']);
+
+        // §9 · fiyat turu SAATLİK ve DAKİKA 30'DA. Beş dakikalık olsaydı
+        // kanal kotasını on iki katına çıkarır ve o kota stok turlarından
+        // çalınırdı; fiyat çakışmasının bedeli stoğunki gibi ANLIK değildir
+        // (satıcının kampanyası zaten yürüyor, tespit onu durdurmaz).
+        //
+        // DAKİKA 30 BİLİNÇLİDİR: `reconcile:warm` de saatliktir ve ikisi
+        // aynı dakikada koşsaydı aynı bağlantıya iki tur birden istek atar,
+        // hız sınırı kovasını gereksizce boşaltırdı. `withoutOverlapping`
+        // yalnızca AYNI komutu korur, farklı komutları değil.
+        $this->assertSame('30 * * * *', $commands['reconcile:prices']);
 
         // Gelen hat kurtarması: dakikalık. Kaybedilen şey SİPARİŞTİR.
         $this->assertSame('* * * * *', $commands['inbox:recover']);
@@ -193,6 +209,7 @@ final class ScheduledScansTest extends TestCase
             'reconcile:hot',
             'reconcile:warm',
             'reconcile:cold',
+            'reconcile:prices',
             'orders:poll',
             'api-calls:prune',
             'metrics:capture',
@@ -219,6 +236,9 @@ final class ScheduledScansTest extends TestCase
         $this->artisan('reconcile:hot')->assertSuccessful();
         $this->artisan('reconcile:warm')->assertSuccessful();
         $this->artisan('reconcile:cold')->assertSuccessful();
+
+        // §9 · fiyat turu da gerçekten koşabilmeli.
+        $this->artisan('reconcile:prices')->assertSuccessful();
     }
 
     /**

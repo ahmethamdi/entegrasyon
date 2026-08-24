@@ -100,6 +100,29 @@ Schedule::command('reconcile:cold')
     ->onOneServer()
     ->withoutOverlapping();
 
+// §9 · FİYAT ÇAKIŞMASI TURU — satıcının kanal panelinden yaptığı fiyat
+// değişikliğini bulan TEK mekanizma.
+//
+// STOK TURLARINDAN AYRIDIR ÇÜNKÜ POLİTİKASI TERSTİR: stokta fark bulununca
+// sessizce üzerine yazılır (tek otorite biziz), fiyatta YAZILMAZ — kalem
+// `PRICE_CONFLICT` işaretlenir ve satıcı seçer. §9'un gerekçesi: satıcılar
+// kanal panelinden kampanya yapıyor ve sessizce ezmek EN SIK ŞİKAYET.
+//
+// SAATLİK, BEŞ DAKİKADA BİR DEĞİL: yanlış stokun bedeli fazla satıştır ve
+// dakikalar içinde müşteriye yansır; fiyat çakışmasında satıcının kampanyası
+// zaten yürüyor ve tespit onu durdurmaz, yalnızca sorar. Bir saat gecikmenin
+// maliyeti rozeti bir saat geç görmektir; beş dakikada bir okumanın maliyeti
+// kanal kotasının on iki katı ve o kota stok turlarından çalınırdı.
+//
+// 30 DAKİKA KAYDIRILDI: `reconcile:warm` de saatliktir ve ikisi aynı dakikada
+// koşsaydı aynı bağlantıya iki tur birden istek atar, hız sınırı kovasını
+// gereksizce boşaltır ve ikisi de yavaşlardı. `withoutOverlapping` yalnızca
+// AYNI komutun üst üste binmesini engeller, farklı komutları değil.
+Schedule::command('reconcile:prices')
+    ->hourlyAt(30)
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // §13 · Faz 2 · TAKSONOMİ — kanal kategori ağacı.
 //
 // GÜNLÜK, SAATLİK DEĞİL: kategori ağacı sık değişmez ve 30 bin satırlık bir

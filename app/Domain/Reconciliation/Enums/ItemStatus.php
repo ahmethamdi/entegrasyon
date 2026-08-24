@@ -43,7 +43,33 @@ enum ItemStatus: string
     /** API hatası — sürüklenme DEĞİL, altyapı sorunu. */
     case REMOTE_UNREACHABLE = 'REMOTE_UNREACHABLE';
 
-    /** Bu sınıflandırma sürüklenme sayılır mı — tur sayacını besler. */
+    /**
+     * Fiyat kanalda değişmiş — KULLANICI KARARI BEKLENİYOR (§9 · PRICE).
+     *
+     * SÜRÜKLENME DEĞİLDİR ve `isDrift()` bunun için `false` DÖNER.
+     * `REMOTE_UNREACHABLE` kuralının kardeşidir ama gerekçesi TERSTİR:
+     * orada fark KANITLANMAMIŞTIR, burada fark KANITLIDIR — yalnızca
+     * onarım MEŞRU DEĞİLDİR.
+     *
+     * §9 domain başına politika tanımlar ve PRICE'ı ayırır: "ÜZERİNE
+     * YAZMA. Çakışma rozeti. Kullanıcı seçer." Gerekçesi de yazılı:
+     * satıcılar kanal panelinden kampanya yapıyor ve sessizce ezmek EN SIK
+     * ŞİKAYET. `isDrift()` true dönseydi `ReconcileConnection` bu kalem için
+     * `QueueRepair` çağırır, kanonik fiyat kanala gider ve satıcının
+     * kampanyası beş dakika içinde SESSİZCE silinirdi — özelliğin
+     * engellemek için var olduğu şeyin ta kendisi.
+     *
+     * Stokta bu durum YOKTUR: orada tek otorite biziz (§9 · INVENTORY).
+     */
+    case PRICE_CONFLICT = 'PRICE_CONFLICT';
+
+    /**
+     * Bu sınıflandırma sürüklenme sayılır mı — tur sayacını besler.
+     *
+     * Sayaç aynı zamanda ONARIM KAPISIDIR (`ReconcileConnection::run()`):
+     * `false` dönen her durum onarımdan da muaftır. `PRICE_CONFLICT` ve
+     * `REMOTE_UNREACHABLE` bu yüzden burada YOKTUR.
+     */
     public function isDrift(): bool
     {
         return $this === self::DRIFT_DETECTED

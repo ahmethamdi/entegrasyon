@@ -49,6 +49,22 @@ use Illuminate\Support\Facades\DB;
  * KAYNAK KANAL DAHİLDİR: fan-out'ta kaynak kanal anlık yankıdan muaf tutulur
  * ama bu bir ENİYİLEMEDİR, otorite devri değil. Kaynak kanal kendi
  * güncellemesini uygulamamış olabilir; mutabakat onu da okur (§10).
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * DOMAIN PARAMETREDİR — FİYAT TURU `recently_sold` KULLANMAZ
+ * ─────────────────────────────────────────────────────────────────────
+ * Dört sorgunun üçü domain-nötrdür ve yalnızca `listing_sync_states.domain`
+ * değerini değiştirir. `recently_sold` ise DEĞİLDİR: `inventory_movements`
+ * üzerinden çalışır ve sorduğu şey "bu varyantta satış oldu mu"dur.
+ *
+ * SATIŞ FİYATI DEĞİŞTİRMEZ. O sorgu fiyat turunda da koşsaydı her satan
+ * ürün fiyat adayı olur, bütçe fiyatı hiç değişmemiş satırlarla dolar ve
+ * gerçek çakışmalar (satıcının kanal panelinden yaptığı kampanya) bütçe
+ * dışında kalırdı — üstelik çakışma tam da SATMAYAN üründe uzun süre
+ * fark edilmeden durabilir.
+ *
+ * Bu, soğuk katmanın dört sorguyu çalıştırmama kararının kardeşidir:
+ * sorgu kümesi kapsamdan türer, kapsam da sorulan sorudan.
  */
 final class CandidateSelector
 {
@@ -67,14 +83,18 @@ final class CandidateSelector
         ChannelConnection $connection,
         int $budget,
         ReconciliationScope $scope = ReconciliationScope::HOT,
+        SyncDomain $domain = SyncDomain::INVENTORY,
     ): array {
         $tenantId = TenantContext::idOrFail();
 
         $found = [
-            ...$this->recentlySold($tenantId, $connection->id, $scope),
-            ...$this->previousError($tenantId, $connection->id),
-            ...$this->staleSync($tenantId, $connection->id, $scope),
-            ...$this->driftDetected($tenantId, $connection->id, $scope),
+            // Gerekçe sınıf başlığında: satış fiyatı değiştirmez.
+            ...($domain === SyncDomain::INVENTORY
+                ? $this->recentlySold($tenantId, $connection->id, $scope)
+                : []),
+            ...$this->previousError($tenantId, $connection->id, $domain),
+            ...$this->staleSync($tenantId, $connection->id, $scope, $domain),
+            ...$this->driftDetected($tenantId, $connection->id, $scope, $domain),
         ];
 
         return $this->mergeByHighestPriority($found, $budget);
@@ -127,7 +147,7 @@ final class CandidateSelector
      *
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    private function previousError(string $tenantId, string $connectionId): array
+    private function previousError(string $tenantId, string $connectionId, SyncDomain $domain): array
     {
         $rows = DB::select(<<<'SQL'
             SELECT l.id AS listing_id
@@ -140,7 +160,7 @@ final class CandidateSelector
                AND l.tenant_id = ?
                AND l.channel_connection_id = ?
                AND l.lifecycle_status = 'live'
-        SQL, [$tenantId, SyncDomain::INVENTORY->value, $tenantId, $connectionId]);
+        SQL, [$tenantId, $domain->value, $tenantId, $connectionId]);
 
         return $this->label($rows, 'previous_error');
     }
@@ -158,8 +178,12 @@ final class CandidateSelector
      *
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    private function staleSync(string $tenantId, string $connectionId, ReconciliationScope $scope): array
-    {
+    private function staleSync(
+        string $tenantId,
+        string $connectionId,
+        ReconciliationScope $scope,
+        SyncDomain $domain,
+    ): array {
         $rows = DB::select(<<<'SQL'
             SELECT l.id AS listing_id
               FROM listing_sync_states s
@@ -174,7 +198,7 @@ final class CandidateSelector
                AND l.lifecycle_status = 'live'
         SQL, [
             $tenantId,
-            SyncDomain::INVENTORY->value,
+            $domain->value,
             $scope->pendingFor(),
             $tenantId,
             $connectionId,
@@ -190,10 +214,27 @@ final class CandidateSelector
      * gecikmesi yüzünden yanlış sonuç verir; bir sonraki tura bırakmak hem
      * bedava hem doğrudur (§10).
      *
+     * KALEM DE DOMAİNE GÖRE FİLTRELENİR (`ri.domain`). Filtrelenmeseydi bir
+     * stok sürüklenmesi fiyat turunu tetikler ve tersi olurdu: iki tur
+     * birbirinin bütçesini yer ve "hangi domainde sorun var" sorusu
+     * cevapsız kalırdı.
+     *
+     * `PRICE_CONFLICT` BURADA YOKTUR ve olmamalıdır. Çakışma KULLANICI
+     * KARARI bekler (§9 · PRICE: "kullanıcı seçer"); her turda yeniden
+     * okumak bütçeyi, satıcı karar verene kadar — belki günlerce — aynı
+     * satıra harcar. Rozet zaten ekranda duruyor ve kanaldaki fiyat
+     * değişmediği sürece yeni bir bilgi de doğmaz. `error_permanent`ın
+     * aday olmama gerekçesinin aynısı: satır ancak kullanıcı müdahalesiyle
+     * akışa döner.
+     *
      * @return list<array{listing_id: string, reason: string, priority: int}>
      */
-    private function driftDetected(string $tenantId, string $connectionId, ReconciliationScope $scope): array
-    {
+    private function driftDetected(
+        string $tenantId,
+        string $connectionId,
+        ReconciliationScope $scope,
+        SyncDomain $domain,
+    ): array {
         $rows = DB::select(<<<'SQL'
             SELECT DISTINCT l.id AS listing_id
               FROM reconciliation_items ri
@@ -201,6 +242,7 @@ final class CandidateSelector
               LEFT JOIN listing_sync_states s
                      ON s.listing_id = l.id AND s.domain = ?
              WHERE ri.tenant_id = ?
+               AND ri.domain = ?
                AND ri.status IN ('REPAIR_QUEUED', 'DRIFT_DETECTED')
                AND ri.checked_at > clock_timestamp() - ?::interval
                AND l.tenant_id = ?
@@ -208,8 +250,9 @@ final class CandidateSelector
                AND l.lifecycle_status = 'live'
                AND coalesce(s.status, 'pending') <> 'error_permanent'
         SQL, [
-            SyncDomain::INVENTORY->value,
+            $domain->value,
             $tenantId,
+            $domain->value,
             $scope->driftWithin(),
             $tenantId,
             $connectionId,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Support;
 
+use App\Domain\Catalog\Actions\ResolveChannelPrice;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Sync\Enums\SyncOperationStatus;
@@ -29,11 +30,32 @@ use RuntimeException;
  * KIRPMA YOK — stoktan farklı. Stokta kanonik bakiye fazla satış nedeniyle
  * negatif olabilir ve `OutboundQuantity` onu sıfıra çeker; fiyatın negatif
  * olma hâli yoktur ve kolonun kendisi zaten pozitif tutulur.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * OVERRIDE'LI LISTING YÜKE ALINMAZ — §9 · PRICE POLİTİKASI
+ * ─────────────────────────────────────────────────────────────────────
+ * Satıcı "kanalınki kalsın" dediyse (`price_overrides` satırı) o listing'e
+ * kanonik fiyat GÖNDERİLMEZ. Elenmeseydi kabul edilen kanal fiyatı bir
+ * sonraki fiyat turunda ezilir ve TÜM ÖZELLİK ANLAMSIZLAŞIRDI: satıcı
+ * "kabul ettim" der, sistem beş dakika sonra üzerine yazardı — §9'un
+ * "sessizce ezmek EN SIK ŞİKAYET" cümlesinin tarif ettiği hatanın ta
+ * kendisi.
+ *
+ * KARAR BU SINIFTA VERİLMEZ, `ResolveChannelPrice`'A SORULUR. O sınıf
+ * bayat override'ı (kanonik fiyat karar anından beri değişmişse) da
+ * ayıklar ve aynı cevabı mutabakat turu da kullanır; iki yerde
+ * hesaplansaydı gönderim override'ı atlar, mutabakat kanonik fiyatı
+ * beklerdi ve her tur SAHTE çakışma raporlanırdı.
+ *
+ * OPERASYON DURUMU BURADA DEĞİŞMEZ — atlanan operasyon `pending` kalır ve
+ * `SyncResultRecorder` ona dokunmaz ("yükte olmayan operasyona
+ * dokunulmaz"). Kapatılsaydı burası durum yazan İKİNCİ yol olurdu.
  */
 final class PriceBatchBuilder
 {
     public function __construct(
         private readonly AdapterRegistry $registry,
+        private readonly ResolveChannelPrice $resolvePrice,
     ) {}
 
     /**
@@ -91,6 +113,12 @@ final class PriceBatchBuilder
             $variant = $listing->variant;
 
             if ($variant === null) {
+                continue;
+            }
+
+            // §9 · PRICE: satıcı kanalınkini kabul ettiyse gönderim YAPILMAZ.
+            // Gerekçe ve "neden burada karar verilmiyor" sınıf başlığında.
+            if ($this->resolvePrice->run($listing)['override'] !== null) {
                 continue;
             }
 

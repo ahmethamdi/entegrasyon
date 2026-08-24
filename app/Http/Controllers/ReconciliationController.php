@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Catalog\Actions\ResolvePriceConflict;
 use App\Domain\Reconciliation\Enums\ItemStatus;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
 use App\Domain\Reconciliation\Models\ReconciliationRun;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -45,6 +48,19 @@ use Inertia\Response as InertiaResponse;
  *   Altyapı sorunudur ve fark KANITLANMAMIŞTIR. Ama AYRI gösterilir —
  *   sessizce yutulsaydı satıcı kanalının okunamadığını hiç bilmezdi.
  *
+ * DEĞİŞMEZ KURAL — `PRICE_CONFLICT` EN ÜSTTE VE KARAR BEKLER (§9 · PRICE):
+ *   Fiyat çakışması SÜRÜKLENME DEĞİLDİR ve onarımı AÇILMAZ; kanaldaki fiyat
+ *   satıcının kendi kampanyası olabilir ve §9 onu sessizce ezmeyi açıkça
+ *   yasaklar ("EN SIK ŞİKAYET"). O yüzden bu satırlar `MANUAL_REVIEW` ile
+ *   AYNI ağırlıkta değil, ONDAN DA ÖNCE gösterilir: `MANUAL_REVIEW`'da
+ *   sistem denemiş ve başaramamıştır, burada sistem BİLEREK BEKLİYOR ve
+ *   satıcı karar verene kadar HİÇBİR ŞEY olmaz.
+ *
+ * DEĞİŞMEZ KURAL — EKRAN SALT OKUNURDUR, TEK İSTİSNASI FİYAT KARARIDIR:
+ *   Sürüklenme tespiti ve onarımı zamanlanmış turların işidir. Fiyat kararı
+ *   ise §9'un AÇIKÇA kullanıcıya bıraktığı adımdır ve panelden gelmezse
+ *   hiçbir yerden gelemez.
+ *
  * DEĞİŞMEZ KURAL — INERTIA'YA MODEL GÖNDERİLMEZ: yalnızca görünen alanlar.
  */
 final class ReconciliationController extends Controller
@@ -60,6 +76,7 @@ final class ReconciliationController extends Controller
      * Geçmiş `?filter=all` ile açılır.
      */
     private const ACTIONABLE = [
+        ItemStatus::PRICE_CONFLICT->value,
         ItemStatus::MANUAL_REVIEW->value,
         ItemStatus::DRIFT_DETECTED->value,
         ItemStatus::REPAIR_QUEUED->value,
@@ -75,11 +92,15 @@ final class ReconciliationController extends Controller
      * sorunudur ve genellikle kendiliğinden düzelir.
      */
     private const STATUS_WEIGHT = [
-        ItemStatus::MANUAL_REVIEW->value => 0,
-        ItemStatus::DRIFT_DETECTED->value => 1,
-        ItemStatus::REPAIR_QUEUED->value => 2,
-        ItemStatus::REMOTE_MISSING->value => 3,
-        ItemStatus::REMOTE_UNREACHABLE->value => 4,
+        // `MANUAL_REVIEW`'DAN DA ÖNCE: orada sistem denedi ve başaramadı,
+        // burada sistem BİLEREK BEKLİYOR ve satıcı karar verene kadar
+        // hiçbir şey olmaz (§9 · PRICE).
+        ItemStatus::PRICE_CONFLICT->value => 0,
+        ItemStatus::MANUAL_REVIEW->value => 1,
+        ItemStatus::DRIFT_DETECTED->value => 2,
+        ItemStatus::REPAIR_QUEUED->value => 3,
+        ItemStatus::REMOTE_MISSING->value => 4,
+        ItemStatus::REMOTE_UNREACHABLE->value => 5,
     ];
 
     public function index(Request $request): InertiaResponse
@@ -106,6 +127,46 @@ final class ReconciliationController extends Controller
         ]);
     }
 
+    /**
+     * §9 · fiyat çakışması kararı — ekranın TEK yazma yolu.
+     *
+     * KALEM KİRACI SCOPE'U ALTINDA ARANIR ve rota model bağlaması
+     * KULLANILMAZ: `SubstituteBindings` `web` grubundadır ve rota
+     * seviyesindeki `tenant` ara katmanından ÖNCE çalışır; bağlama
+     * kullanılsaydı sorgu bağlam kurulmadan atılır ve izolasyon istisnası
+     * fırlatırdı. Yetkilendirme kimliğin tahmin edilemezliğine
+     * DAYANDIRILMAZ — `findOrFail` global scope altında koşar ve başka
+     * kiracının kalemi 404 verir.
+     */
+    public function resolvePriceConflict(Request $request, ResolvePriceConflict $resolve): RedirectResponse
+    {
+        $validated = $request->validate([
+            'item' => ['required', 'string'],
+            'decision' => [
+                'required',
+                'string',
+                Rule::in([ResolvePriceConflict::ACCEPT_CHANNEL, ResolvePriceConflict::PUSH_OURS]),
+            ],
+        ]);
+
+        $item = ReconciliationItem::query()
+            ->with('listing')
+            ->findOrFail($validated['item']);
+
+        $resolve->run($item, $validated['decision'], $request->user()?->id);
+
+        // FLASH ANAHTARI `success` — panelin PAYLAŞTIĞI ad budur
+        // (`HandleInertiaRequests::share()`). Uydurma bir anahtar Inertia'ya
+        // HİÇ ULAŞMAZ: karar yazılır ama kullanıcı hiçbir geri bildirim
+        // görmez ve düğmenin çalışıp çalışmadığını bilemez.
+        return redirect('/reconciliation')->with(
+            'success',
+            $validated['decision'] === ResolvePriceConflict::ACCEPT_CHANNEL
+                ? 'Kanaldaki fiyat kabul edildi — bu ürüne fiyat gönderilmeyecek.'
+                : 'Sizin fiyatınız kanala gönderilmek üzere sıraya alındı.',
+        );
+    }
+
     // ─────────────────────────────────────────────────── sorgular
 
     /**
@@ -127,7 +188,17 @@ final class ReconciliationController extends Controller
             ->whereIn('id', $this->latestItemIds());
 
         if ($filter === 'open') {
-            $query->whereIn('status', self::ACTIONABLE);
+            $query->whereIn('status', self::ACTIONABLE)
+                // ÇÖZÜLMÜŞ KALEM AÇIK LİSTEDE DURMAZ.
+                //
+                // Fiyat çakışmasında durum `PRICE_CONFLICT` KALIR ve yalnızca
+                // `resolved_at` damgalanır (§9 kararı `ResolvePriceConflict`
+                // içinde gerekçelendirildi: kalem o turda gerçekten çakışma
+                // BULMUŞTU ve `MATCHED` yazmak "zaten doğruydu" demek olurdu).
+                // Bedeli burada ödenir: yalnızca duruma bakan bir filtre,
+                // satıcının kararını verdiği satırı EKRANDA BIRAKIRDI ve
+                // satıcı aynı kararı tekrar tekrar verirdi.
+                ->whereNull('resolved_at');
         }
 
         return $query->limit(self::PER_PAGE);
@@ -182,6 +253,13 @@ final class ReconciliationController extends Controller
             ->selectRaw('count(*) FILTER (WHERE status = ?) AS unreachable', [ItemStatus::REMOTE_UNREACHABLE->value])
             ->selectRaw('count(*) FILTER (WHERE status = ?) AS missing', [ItemStatus::REMOTE_MISSING->value])
             ->selectRaw('count(*) FILTER (WHERE status = ?) AS repaired', [ItemStatus::REPAIRED->value])
+            // ÇÖZÜLMÜŞ ÇAKIŞMA SAYILMAZ — durum `PRICE_CONFLICT` KALDIĞI için
+            // `resolved_at` kapısı burada da ZORUNLUDUR. Yazılmasaydı özet,
+            // satıcının çoktan karar verdiği satırları saymaya devam eder ve
+            // "kaç karar bekliyor" sorusuna sürekli yanlış cevap verirdi.
+            ->selectRaw('count(*) FILTER (WHERE status = ? AND resolved_at IS NULL) AS price_conflict', [
+                ItemStatus::PRICE_CONFLICT->value,
+            ])
             ->first();
 
         return [
@@ -190,6 +268,10 @@ final class ReconciliationController extends Controller
             'unreachable' => (int) ($row?->unreachable ?? 0),
             'missing' => (int) ($row?->missing ?? 0),
             'repaired' => (int) ($row?->repaired ?? 0),
+            // AYRI SAYI, AYRI EYLEM: sürüklenme kendiliğinden onarılır,
+            // çakışma KARAR bekler. Aynı kutuda toplansalardı satıcı
+            // "sistem hallediyor" sanır ve kampanyası askıda kalırdı.
+            'price_conflict' => (int) ($row?->price_conflict ?? 0),
         ];
     }
 
@@ -267,6 +349,17 @@ final class ReconciliationController extends Controller
             'listingId' => $item->listing_id,
             'sku' => $item->listing?->variant?->sku,
             'externalId' => $item->listing?->external_id,
+
+            // DOMAIN GÖRÜNÜR OLMALI: stok kalemi ADET, fiyat kalemi PARA
+            // taşır ve ekran ikisini aynı sütunda gösteremez. Alan
+            // yazılmasaydı satıcı "17 → 99" satırının stok mu fiyat mı
+            // olduğunu ayırt edemezdi.
+            'domain' => $item->domain,
+
+            // Fiyat alanları YALNIZCA fiyat kaleminde dolar; stok
+            // kaleminde `local_value` bir `price` anahtarı taşımaz.
+            'our_price' => $local['price'] ?? null,
+            'channel_price' => $remote['price'] ?? null,
 
             'status' => $item->status,
             'reason' => $item->priority_reason,

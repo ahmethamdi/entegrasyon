@@ -9,10 +9,13 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Support\InventoryPushBatch;
+use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
+use App\Domain\Sync\Support\RemotePriceSnapshot;
 use DateTimeImmutable;
 use RuntimeException;
 use Throwable;
@@ -28,7 +31,7 @@ use Throwable;
  *
  * Gerçek adapter'larla imza aynıdır: (connection, client).
  */
-final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInventory
+final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInventory, SupportsPricing
 {
     /**
      * Kanal tipi kodu → yanıt planı.
@@ -58,6 +61,20 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
 
     /** @var array<string, bool> */
     private static array $fetchFails = [];
+
+    /**
+     * Kanal kodu → external_id → kanalda GÖZLENEN fiyat (metin).
+     *
+     * Fiyat STRING tutulur, float değil: kanonik kolon `decimal(12,2)` ve
+     * PHP'ye string döner; testin float taşıması, üretimde olmayan bir
+     * ölçeği sınamak olurdu (§7 · para float taşınmaz).
+     *
+     * @var array<string, array<string, string>>
+     */
+    private static array $remotePrices = [];
+
+    /** @var array<string, list<list<array<string, mixed>>>> */
+    private static array $pricePushes = [];
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -98,10 +115,30 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
         self::$remote[$channelTypeCode][$externalId] = $quantity;
     }
 
+    /** Kanalda gözlenen FİYATI programlar — §9 çakışma testleri. */
+    public static function remotePrice(string $channelTypeCode, string $externalId, string $price): void
+    {
+        self::$remotePrices[$channelTypeCode][$externalId] = $price;
+    }
+
     /** Uzak okuma patlasın — REMOTE_UNREACHABLE yolu. */
     public static function failFetchOn(string $channelTypeCode): void
     {
         self::$fetchFails[$channelTypeCode] = true;
+    }
+
+    /**
+     * Kanala giden FİYAT çağrıları.
+     *
+     * `PriceBatchBuilder`'ın override'lı listing'i elemesi ancak buraya
+     * bakarak sınanabilir: "gönderilmedi" iddiası, çağrının hiç yapılmamış
+     * olmasıyla kanıtlanır.
+     *
+     * @return list<list<array<string, mixed>>>
+     */
+    public static function pricePushesFor(string $channelTypeCode): array
+    {
+        return self::$pricePushes[$channelTypeCode] ?? [];
     }
 
     public static function reset(): void
@@ -111,6 +148,8 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
         self::$batchSize = [];
         self::$remote = [];
         self::$fetchFails = [];
+        self::$remotePrices = [];
+        self::$pricePushes = [];
     }
 
     /**
@@ -205,6 +244,56 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
     }
 
     public function maxInventoryBatchSize(): int
+    {
+        return self::$batchSize[$this->code()] ?? 50;
+    }
+
+    // ------------------------------------------------------------- fiyat
+
+    public function pushPrices(PricePushBatch $batch): AdapterResult
+    {
+        $code = $this->code();
+
+        self::$pricePushes[$code][] = $batch->toArray();
+
+        $throw = self::$plan[$code]['throw'] ?? null;
+
+        if ($throw !== null) {
+            throw $throw;
+        }
+
+        return AdapterResult::success(['pushed' => $batch->count()]);
+    }
+
+    public function fetchPrices(array $listings): RemotePriceSnapshot
+    {
+        $code = $this->code();
+
+        // Aynı bayrak stok okumasıyla PAYLAŞILIR: "kanal okunamıyor" bir
+        // BAĞLANTI durumudur, domaine göre değişmez.
+        if (self::$fetchFails[$code] ?? false) {
+            throw new RuntimeException('kanal okunamadı');
+        }
+
+        $programmed = self::$remotePrices[$code] ?? [];
+
+        // YALNIZCA istenen kimlikler döner — stok okumasıyla aynı kural:
+        // kanalda olmayan kimlik yanıtta hiç görünmez ve mutabakat onu
+        // REMOTE_MISSING sayar.
+        $prices = [];
+
+        foreach ($listings as $listing) {
+            $externalId = $listing->external_id;
+
+            if ($externalId !== null && array_key_exists($externalId, $programmed)) {
+                $prices[$externalId] = $programmed[$externalId];
+            }
+        }
+
+        return new RemotePriceSnapshot($prices, new DateTimeImmutable);
+    }
+
+    public function maxPriceBatchSize(): int
     {
         return self::$batchSize[$this->code()] ?? 50;
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Reconciliation\Support;
 
 use App\Domain\Reconciliation\Enums\ItemStatus;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -42,6 +43,23 @@ use Illuminate\Support\Facades\DB;
  * davranışla sınanamaz (mutasyon hayatta kalır ve KALMALI) — sahte test
  * YAZILMADI. Filtre, ileride sayacın listing yerine varyant veya bağlantı
  * üzerinden sorulması hâlinde tek gerçek savunma olacağı için duruyor.
+ *
+ * ─────────────────────────────────────────────────────────────────────
+ * ZİNCİR DOMAIN BAŞINADIR — `tenant_id` FİLTRESİNİN AKSİNE GERÇEK KORUMA
+ * ─────────────────────────────────────────────────────────────────────
+ * Aynı listing HEM stok HEM fiyat kalemi taşır (§9 · fiyat çakışması turu).
+ * Domain filtresi olmasaydı iki zincir TEK zincir gibi okunurdu ve sonuç
+ * iki yönde de yanlış olurdu:
+ *
+ *   · Bir stok `MATCHED`'ı, araya girdiği için fiyat sürüklenme zincirini
+ *     KIRARDI — sonsuz onarım döngüsüne karşı emniyet sessizce devre dışı
+ *     kalırdı.
+ *   · İki fiyat çakışması, hiç sürüklenmemiş bir stok satırını üçüncü turda
+ *     `MANUAL_REVIEW`'a düşürebilirdi — ve o satırın onarımı, hiçbir
+ *     gerekçe olmadan DURURDU.
+ *
+ * `tenant_id` filtresinin aksine bu filtre BUGÜN GERÇEK BİR SAVUNMADIR ve
+ * kaldırılması davranışla SINANIR.
  */
 final class DriftHistory
 {
@@ -80,11 +98,14 @@ final class DriftHistory
      * durumda yanlış okur. `id` UUIDv7'dir, zaman sıralı ve saniye içinde
      * de ayırt edicidir.
      */
-    public function consecutiveDriftCount(string $listingId): int
-    {
+    public function consecutiveDriftCount(
+        string $listingId,
+        SyncDomain $domain = SyncDomain::INVENTORY,
+    ): int {
         $statuses = DB::table('reconciliation_items')
             ->where('tenant_id', TenantContext::idOrFail())
             ->where('listing_id', $listingId)
+            ->where('domain', $domain->value)
             ->orderByDesc('id')
             // Sınır emniyet eşiğinin birkaç katı: daha eskisini okumak
             // sonucu DEĞİŞTİREMEZ (zincir çoktan kırılmıştır) ve uzun
@@ -119,9 +140,11 @@ final class DriftHistory
      * yeniden başlasaydı döngü yalnızca yavaşlar, KIRILMAZDI — her üç
      * turda bir onarım açan sonsuz bir döngü hâlâ sonsuz bir döngüdür.
      */
-    public function autoRepairAllowed(string $listingId): bool
-    {
-        return $this->consecutiveDriftCount($listingId) < self::STOP_AFTER;
+    public function autoRepairAllowed(
+        string $listingId,
+        SyncDomain $domain = SyncDomain::INVENTORY,
+    ): bool {
+        return $this->consecutiveDriftCount($listingId, $domain) < self::STOP_AFTER;
     }
 
     /**
@@ -132,11 +155,14 @@ final class DriftHistory
      * içindir — ikisi tek duruma sıkıştırılsaydı onarımın işe yarayıp
      * yaramadığı hiçbir yerde kayıtlı olmazdı.
      */
-    public function awaitingRepairVerification(string $listingId): bool
-    {
+    public function awaitingRepairVerification(
+        string $listingId,
+        SyncDomain $domain = SyncDomain::INVENTORY,
+    ): bool {
         $previous = DB::table('reconciliation_items')
             ->where('tenant_id', TenantContext::idOrFail())
             ->where('listing_id', $listingId)
+            ->where('domain', $domain->value)
             ->orderByDesc('id')
             ->value('status');
 
