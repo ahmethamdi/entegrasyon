@@ -35,15 +35,21 @@ Bu belge tek bir soruya cevap verir:
 
 ### v2.2 dokümanından bilinçli sapmalar
 
-Üçü de **kullanıcı kararıdır** ve bu belgede gerekçesiyle taşınır.
+Üçü de **V3.0 kapsamında onaylanmış proje kararlarıdır** ve bu belgede
+gerekçesiyle taşınır.
 Dokümanın kendisi "kod ile doküman çeliştiğinde doküman esastır" der;
 bu istisnalar kullanıcının açık talebidir.
 
 | # | v2.2 ne diyor | V3.0 ne yapıyor | Gerekçe |
 |---|---|---|---|
 | 1 | Shopify = ayrı **Remix/Node servisi**, App Store için (§2, §11 · Ay 8+) | Shopify = **Laravel adapter**, Woo/Trendyol ile aynı kalıp | Satıcı kendi **custom app** anahtarıyla bağlanır. Projeye ikinci teknoloji yığını (Node) SOKULMAZ. App Store kararı verilirse §11'in servis token'ı değişmezi O ZAMAN uygulanır — şema zaten hazır (`UNIQUE(channel_type_code, external_account_id)`). |
-| 2 | Hepsiburada, Etsy, eBay = **kapsam dışı** (Ay 7–9) | V3.0 kapsamı | 468 saatlik plan Faz 5'te bitiyor; bunlar ONDAN SONRASIDIR. Zaman çizelgesinin dışına çıkış, doküman ihlali değil. |
-| 3 | §7 · **yedi** yetenek arayüzü | **sekiz** — `SupportsCatalogImport` eklendi (`99008b8`) | `SupportsCatalog`'un iki okuma metodu da YEREL kayıttan başlar; içe aktarma TERSİNİ sorar ("kanalda ne var ki bende yok"). Kullanıcı onaylı. |
+| 2 | Hepsiburada, Etsy, eBay = **kapsam dışı** (Ay 7–9) | V3.0 kapsamı | v2.2'nin **468 saatlik genel roadmap'i** Faz 5'te bitiyor ve bu kanalları ileri fazlara bırakıyordu; V3.0 onları **ayrı bir 240 saatlik implementation kapsamına** alır (§27). Zaman çizelgesinin dışına çıkış, doküman ihlali değil. |
+| 3 | §7 · **yedi** yetenek arayüzü | **sekiz** — `SupportsCatalogImport` eklendi (`99008b8`) | `SupportsCatalog`'un iki okuma metodu da YEREL kayıttan başlar; içe aktarma TERSİNİ sorar ("kanalda ne var ki bende yok"). V3.0 kapsamında onaylanmış proje kararı. |
+
+> **468 SAAT V3.0'IN TOPLAMI DEĞİLDİR.** O rakam v2.2'nin genel
+> roadmap'ine aittir ve v2.2 Faz 1–5'i kapsar. **V3.0'ın kanal
+> genişletme implementation tahmini 240 saattir** (§27) ve bu belgede
+> geçen tek V3.0 toplamı odur.
 
 ### V3.0'ın değişmez sınırı
 
@@ -53,7 +59,8 @@ bu istisnalar kullanıcının açık talebidir.
 > YAZILMAZ — yetenek `instanceof` ile okunur.
 
 Bu belgede **Core Domain'e dokunan her madde ayrıca gerekçelendirilir** ve
-toplamda yalnızca **üç tane** vardır (§03).
+toplamda yalnızca **üç Core Architecture Delta** vardır (§03). §16'daki
+DB/seeder maddeleri bu sayıya **dahil değildir**.
 
 ---
 
@@ -75,7 +82,7 @@ ve testle korunuyor.
 | Adapter | **Yan etkisiz** — DB'ye yazmaz, kuyruğa iş atmaz | Sonucu `SyncResultRecorder` yazar |
 | Fan-out | Outbox tüketicisinde: 1 olay → N operasyon | 6 kanalda 6 operasyon — kod değişmez |
 | Gelen hat | **Tek** inbox (`IngestInboxMessage`), webhook + polling aynı yol | Yeni kanal ikinci hat AÇMAZ |
-| HMAC | **Ham gövde üzerinden**, ayrıştırmadan ÖNCE | Shopify/Etsy/eBay webhook'ları aynı kural |
+| HMAC | **Ham gövde üzerinden**, ayrıştırmadan ÖNCE | Webhook veya imzalı event callback kullanan **her** kanalda, o kanalın kendi doğrulama spesifikasyonuna göre (§19) |
 | Webhook | **Her durumda 202** (istisna: 415, 429) | Yeni kanal da aynı |
 | Sipariş | **Asla reddedilmez**; stok yetmezse negatife düşer | Etsy/eBay siparişi de |
 | Hata | Sınıflandırma **adapter**'da, karar **çekirdek**te | `classifyError()` kanala özgü |
@@ -125,7 +132,14 @@ listelenmemişse o değişiklik yapılmadan önce yeniden düşünülmelidir.
 Dört kanal eklerken çekirdekte **üç** değişiklik gerekiyor. Hepsi
 **genişletmedir**, davranış değiştirmez ve mevcut kanalları etkilemez.
 
-### Delta 1 — `SupportsOfferLifecycle` (yeni, dokuzuncu arayüz)
+### Delta 1 — `SupportsOfferLifecycle` (yeni · **9.** capability arayüzü)
+
+> **NUMARALANDIRMA.** v2.2 sonunda **sekiz** capability arayüzü vardı
+> (§02'deki `Contracts/` listesi). `SupportsOfferLifecycle`, bunlara
+> eklenen **9.** capability arayüzüdür; `SupportsTokenRefresh` (Delta 3)
+> ise V3.0 kapsamında eklenen **10.** support/capability arayüzüdür.
+> **V3.0 sonunda toplam on arayüz olur** ve ikisi de mevcutların
+> davranışını DEĞİŞTİRMEZ — yalnızca genişletir.
 
 **Yalnızca eBay için.** eBay'de bir ürünün yayına girmesi **üç adımdır**:
 
@@ -163,7 +177,7 @@ interface SupportsOfferLifecycle
 ```
 
 **Registry anahtarı:** `offer_lifecycle`. Panel bu yeteneği görünce
-`PushListing` yerine `PushOfferListing` işini kullanır (§14).
+`PushListing` yerine `PushOfferListing` işini kullanır (§13).
 
 > **Bu arayüz eBay'e ÖZGÜ DEĞİLDİR.** Amazon SP-API'nin feed tabanlı akışı
 > (`submitFeed` → `getFeedResult`) de aynı "çok adımlı, ara kimlikli"
@@ -204,7 +218,9 @@ dolumu bilmiyor.
 Shopify (offline token — süresiz ama iptal edilebilir), Etsy (**1 saat**) ve
 eBay (**2 saat** access + 18 ay refresh) için token yenileme **zorunludur**.
 
-Yeni bileşen — çekirdekte, kanala özgü DEĞİL:
+Yeni bileşen — çekirdekte, kanala özgü DEĞİL. `SupportsTokenRefresh`,
+V3.0 kapsamında eklenen **10.** support/capability arayüzüdür
+(9.'su Delta 1'in `SupportsOfferLifecycle`'ı):
 
 ```
 app/Domain/Channels/Support/TokenRefresher.php     ← ne zaman yenilenmeli
@@ -274,7 +290,7 @@ doğrulandı, diğer üçü V3 hedefidir.
 
 **Dipnotlar — dürüst sınırlar:**
 
-- **Shopify · Token Refresh ⚠️** — offline access token **süresiz**ama
+- **Shopify · Token Refresh ⚠️** — offline access token **süresiz** ama
   uygulama kaldırılınca (`app/uninstalled`) geçersizleşir.
   `SupportsTokenRefresh` UYGULANMAZ; bunun yerine webhook `revoked_at`
   yazar (§07, §20).
@@ -285,7 +301,7 @@ doğrulandı, diğer üçü V3 hedefidir.
   `updated` olarak görür → **stok hareketi ÜRETMEZ** (v2.2 kuralı). Gerçek
   iade elle girilir. **Bu bir eksiklik değil, kanalın sınırıdır.**
 - **eBay · Listing Creation ✅\*** — `SupportsCatalog` uygulanır ama gövdesi
-  `SupportsOfferLifecycle` zincirini çağırır (§14).
+  `SupportsOfferLifecycle` zincirini çağırır (§13).
 - **Taxonomy · Shopify ❌** — Shopify'da kategori zorunlu değil;
   `product_type` serbest metin. Taksonomi arayüzü uygulanmaz —
   **uygulanırsa panelde çalışmayan bir sekme açılır.**
@@ -340,15 +356,20 @@ app/Domain/Channels/Adapters/{Channel}/
 >
 > **SEEDER TUZAĞI:** `db:seed --class=ChannelTypeSeeder` çalıştırıldığında
 > elle açılmış kanallar `false`'a döner (Trendyol'da yaşandı, `356a662`).
-> V3'te seeder **var olan `is_active` değerini KORUR** (§16 · Delta 4).
+> V3'te seeder **var olan `is_active` değerini KORUR** (§16 · DB Delta 4).
 
-### Yazılmamış yetenek — dürüst sınır
+### Henüz implement edilmemiş capability için örnek davranış
+
+Aşağıdaki örnek **kanaldan bağımsızdır** ve herhangi bir kanalın henüz
+yazılmamış yetenek gövdesi için geçerlidir. Bir kanalın §04 capability
+matrisindeki **hedef** durumu ✅ olsa bile, o gövde yazılana kadar
+davranış budur.
 
 ```php
-public function pushFulfillment(Fulfillment $f): AdapterResult
+public function pushSomeCapability(...): AdapterResult
 {
     throw new RuntimeException(
-        'Etsy kargo bildirimi YAZILMADI (V3 · Faz 3.7). '.
+        'Bu kanal için ilgili capability henüz uygulanmadı. '.
         'AdapterResult::success() dönmek operasyonu tamamlandı gösterir, '.
         '`synced_version` ilerler ve kanalda hiçbir şey değişmemişken satır '.
         '"senkron" görünür.'
@@ -1090,8 +1111,16 @@ V3.0'da **kapsam içi** — Etsy'nin aksine burada gerçek bir uç nokta var.
 > gerektirdiği değişiklikler listelenir. v2.2 şeması ihtiyacı karşılıyorsa
 > **NO SCHEMA CHANGE REQUIRED** yazılır ve mevcut yapının nasıl kullanılacağı
 > anlatılır.
+>
+> **BU BÖLÜMDEKİ MADDELER CORE ARCHITECTURE DELTA DEĞİLDİR.** Core
+> Architecture Delta sayısı **üçtür** ve üçü de §03'te tanımlıdır
+> (`SupportsOfferLifecycle` · `listings.channel_metadata` ·
+> `channel_credentials.expires_at`'in kullanılması). Aşağıdaki maddeler
+> **veritabanı / seeder kapsamındadır** ve numaralandırmaları §03'ün
+> Delta numaralarıyla **ilgisizdir**; karışmasın diye "DB Delta" olarak
+> adlandırılırlar.
 
-### Delta 1 — `listings.channel_metadata`
+### DB Delta 1 — `listings.channel_metadata`
 
 | | |
 |---|---|
@@ -1117,7 +1146,7 @@ V3.0'da **kapsam içi** — Etsy'nin aksine burada gerçek bir uç nokta var.
 > **SIR TAŞIMAZ** — kolon şifresiz ve panele gidebilir. Token ve secret
 > `channel_credentials`'ta yaşar.
 
-### Delta 2 — `channel_credentials` yenileme alanları
+### DB Delta 2 — `channel_credentials` yenileme alanları
 
 | | |
 |---|---|
@@ -1134,7 +1163,7 @@ v2.2 §4 zaten tanımlıyor: `expires_at`, `refreshed_at`, `revoked_at`,
 > **İNDEKS TAM BU SORGU İÇİN ZATEN VAR** ve bugüne kadar hiç kullanılmadı —
 > v2.2 onu ileri görüşle tanımlamış. V3 onu kullanan ilk fazdır.
 
-### Delta 3 — `channel_types` yeni satırlar
+### DB Delta 3 — `channel_types` yeni satırlar
 
 | | |
 |---|---|
@@ -1151,7 +1180,11 @@ ebay         · kind=marketplace  · supports_webhooks=false · is_active=FALSE
 > **HEPSİ `is_active = false` DOĞAR** — §05'in 12 adımlı listesindeki 1. ve
 > 12. adım ayrımı.
 
-### Delta 4 — Seeder `is_active`'i EZMEZ *(hata düzeltmesi)*
+### DB Delta 4 — Seeder `is_active`'i EZMEZ *(DB/Seeder değişikliği · hata düzeltmesi)*
+
+> **BU DEĞİŞİKLİK CORE ARCHITECTURE DELTA DEĞİLDİR.** `ChannelTypeSeeder`
+> içindeki bir hata düzeltmesidir; çekirdek mimariye dokunmaz ve §03'ün
+> üç Core Delta'sının sayısını **değiştirmez**.
 
 | | |
 |---|---|
@@ -1161,7 +1194,7 @@ ebay         · kind=marketplace  · supports_webhooks=false · is_active=FALSE
 | **Çözüm** | `updateOrCreate`'in güncelleme kümesinden `is_active` **çıkarılır**; yalnızca yaratılışta kullanılır |
 | **Aciliyet** | V3'te **kritik** — altı kanalda bu tuzak altı kez ısırır |
 
-### Delta 5 — `channel_connections.settings` yeni anahtarlar
+### DB Delta 5 — `channel_connections.settings` yeni anahtarlar
 
 | | |
 |---|---|
@@ -1184,7 +1217,7 @@ ebay         · kind=marketplace  · supports_webhooks=false · is_active=FALSE
 > ölür. Bu yüzden sağlık kontrolü üçünün varlığını **şart koşar**;
 > yoksa bağlantı `active` OLMAZ.
 
-### Delta 6 — `orders` / `order_lines`
+### DB Delta 6 — `orders` / `order_lines`
 
 | | |
 |---|---|
@@ -1203,7 +1236,7 @@ Dört kanalın dördü de mevcut alanlara sığıyor:
 > yaşanan tuzağın aynısı: `(int)` dönüşümü harf içeren her kimliği `0`'a
 > düşürür ve **kanal 200 döndüğü için senkron BAŞARILI görünür**.
 
-### Delta 7 — `listing_sync_states.domain`
+### DB Delta 7 — `listing_sync_states.domain`
 
 | | |
 |---|---|
@@ -1217,17 +1250,22 @@ yeterli. eBay'in üç adımlı yayını **ayrı domain açmaz** — o bir
 
 | # | Değişiklik | Tip |
 |---|---|---|
-| 1 | `listings.channel_metadata` | **ALTER TABLE** |
-| 2 | `channel_credentials` | değişiklik YOK |
-| 3 | `channel_types` 3 satır | seeder |
-| 4 | Seeder `is_active` düzeltmesi | kod |
-| 5 | `settings` anahtarları | değişiklik YOK |
-| 6 | `orders` / `order_lines` | değişiklik YOK |
-| 7 | `listing_sync_states` | değişiklik YOK |
+| DB Delta 1 | `listings.channel_metadata` | **ALTER TABLE** |
+| DB Delta 2 | `channel_credentials` | değişiklik YOK |
+| DB Delta 3 | `channel_types` 3 satır | seeder (veri) |
+| DB Delta 4 | Seeder `is_active` düzeltmesi | kod |
+| DB Delta 5 | `settings` anahtarları | değişiklik YOK |
+| DB Delta 6 | `orders` / `order_lines` | değişiklik YOK |
+| DB Delta 7 | `listing_sync_states` | değişiklik YOK |
 
-**Toplam: bir kolon.** v2.2'nin şeması dört yeni kanalı neredeyse
-değişmeden karşılıyor — bu, §4'ün kanal-agnostik tasarlanmış olmasının
-doğrudan sonucudur.
+**Toplam: bir fiziksel DB şema değişikliği** — tek bir kolon
+(`listings.channel_metadata`). Yedi maddenin kalan altısı ya veri/kod
+kapsamındadır ya da hiçbir değişiklik gerektirmez. v2.2'nin şeması dört
+yeni kanalı neredeyse değişmeden karşılıyor — bu, §4'ün kanal-agnostik
+tasarlanmış olmasının doğrudan sonucudur.
+
+> **Bu yedi madde DB/seeder kapsamındadır ve Core Architecture Delta
+> DEĞİLDİR** — Core Delta sayısı §03'teki **üçtür**.
 
 ---
 
@@ -2118,9 +2156,10 @@ başarı doğru operasyona yazılır · `offer_id` kalıcı
 |---|---|
 | Mimari | v2.2 modüler monolit **değişmez** |
 | Yeni teknoloji | **YOK** — Node/Remix sokulmaz |
-| Yeni çekirdek arayüz | **1** — `SupportsOfferLifecycle` (eBay) |
-| Yeni çekirdek bileşen | **1** — `TokenRefresher` (Etsy, eBay) |
-| Şema değişikliği | **1 kolon** — `listings.channel_metadata` |
+| Core Architecture Delta | **3** — §03 (`SupportsOfferLifecycle` · `listings.channel_metadata` · `expires_at`'in kullanılması) |
+| Yeni çekirdek arayüz | **1** — `SupportsOfferLifecycle` (eBay) · **9.** capability arayüzü |
+| Yeni çekirdek bileşen | **1** — `TokenRefresher` (Etsy, eBay); `SupportsTokenRefresh` **10.** arayüz |
+| **Fiziksel DB şema değişikliği** | **1 kolon** — `listings.channel_metadata` (§16 · DB Delta 1) |
 | Yeni kuyruk | **YOK** |
 | Yeni event sistemi | **YOK** — tek inbox |
 | Tahmini süre | **240 saat** |
@@ -2161,9 +2200,10 @@ if ($channel === '...') YAZILMAZ
 | Çekirdek değişikliği gerekiyor | **Önce buraya yazılır**, sonra kodlanır |
 
 > **KOD İLE DOKÜMAN ÇELİŞTİĞİNDE DOKÜMAN ESASTIR** — v2.2'den devralınan
-> kural. İstisna: kullanıcının açıkça onayladığı sapmalar (§01).
+> kural. İstisna: V3.0 kapsamında açıkça onaylanmış proje kararları (§01).
 
 ---
 
 *ENTEGRASYON V3.0 · Multi-Channel Expansion Implementation Reference*
 *Baseline: v2.2 (DONDURULMUŞ) · commit `72b7416` · 923 test yeşil*
+*Final documentation consistency revision*
