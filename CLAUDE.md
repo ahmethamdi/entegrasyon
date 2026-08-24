@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 909 test yeşil olmalı
+docker compose exec app php artisan test      # 923 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-40 tablo (çerçeve dışı), 38 model, 909 test. Stok çekirdeği (`ApplyMovement`,
+40 tablo (çerçeve dışı), 38 model, 923 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -1012,10 +1012,11 @@ yük testi, **yedek geri yükleme provası**") ve üçü de kapandı.
 Kalıcı kurallar aşağıda "Güvenlik kuralları", "Yük testi kuralları" ve
 "Yedek geri yükleme kuralları" başlıklarında.
 
-**FAZ 4 KAPANDI (90/90 sa).** Geriye yalnızca küçük bir artık madde
-kaldı: **onay durumu ekranı** (toplu görünüm; rozet ve red sebebi
-ürün-kanal ekranında ZATEN var). O madde dokümanın saat bütçesinde ayrı
-satır taşımıyor.
+**FAZ 4 KAPANDI (90/90 sa)** ve **artık madde de kalmadı**: onay
+durumu ekranı `8ba3c08` ile yazıldı (toplu görünüm; rozet ve red sebebi
+ürün-kanal ekranında zaten vardı). O madde dokümanın saat bütçesinde
+ayrı satır taşımıyordu. Kalıcı kurallar aşağıda "Onay durumu ekranı
+kuralları" başlığında. **YENİDEN AÇMA.**
 
 **GÜVENLİK MADDESİNİ YENİDEN AÇMA.** Kod tarafında kapatılabilecek
 maddeler kapandı; kalan üçü **kod tarafından zorlanamaz** ve sunucu
@@ -1292,6 +1293,56 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **Filtreler `whereHas` ile kurulur, `join` ile değil** — sipariş başına
   birden çok satır vardır ve `join` çok kalemli siparişi listede tekrar
   ederdi.
+
+## Onay durumu ekranı kuralları (§13 · Faz 4 · `8ba3c08`)
+
+Faz 4'ün son artık maddesiydi ve kapandı. **YENİDEN AÇMA.**
+
+- **ÜRÜN-KANAL EKRANININ KOPYASI DEĞİLDİR.** Rozet ve red sebebi orada
+  ZATEN vardı; eksik olan TOPLU GÖRÜNÜMDÜ. O ekran TEK ÜRÜN için
+  "hangi kanallarda ne durumda" der; bu ekran TERSİNİ sorar: "kaç
+  ürünüm onay bekliyor, hangileri reddedildi". Yüz ürün gönderen satıcı
+  reddedilen üçünü bulmak için yüz kanal sekmesi açamaz — red sebebi
+  KAYITLIYDI ve pratikte GÖRÜNMEZDİ.
+- **REDDEDİLEN EN ÜSTTE VE AYRI SAYILIR.** `rejected` kullanıcı
+  müdahalesi bekler ve kendiliğinden DÜZELMEZ; `pending_approval` bir
+  bekleme durumudur. Aynı kefeye konsalardı satıcı "sistem hallediyor"
+  sanır ve tam olarak kendisini bekleyen satırı hiç görmezdi
+  (mutabakat ekranındaki `MANUAL_REVIEW` kuralının aynısı).
+- **ONAY SÜRECİ OLMAYAN KANAL BU EKRANDA HİÇ GÖRÜNMEZ** (§7). Woo
+  `SupportsApprovalWorkflow` uygulamaz; yetenek `instanceof` ile
+  okunur. Bir Woo listing'i `pending_approval`'a elle sokulsa bile
+  listelenmez: o kanalda öyle bir hâl yoktur ve satıcı hiç gelmeyecek
+  bir onayı beklerdi.
+- **KANAL LİSTESİ BOŞSA EKRAN BUNU AÇIKÇA SÖYLER.** Boş tablo
+  göstermek satıcıya "onay bekleyen ürünüm yok" dedirtirdi; doğru cevap
+  "bu kanalda onay süreci yok"tur ve ikisi TAMAMEN FARKLI şeylerdir.
+- **`adapter_class` EAGER-LOAD'DA AÇIKÇA SEÇİLİR** — seçilmezse
+  registry sınıfı bulamaz, yetenek sessizce boşalır ve ekran "onay
+  süreci olan kanalın yok" der (`supports_webhooks` tuzağının aynısı).
+- **EKRAN SALT OKUNURDUR.** Onay kararını KANAL verir, biz yalnızca
+  okuruz (`approval:track`, saatlik). Panelden "onayla" düğmesi
+  koymak, kanalın kararını bizim verebileceğimiz izlenimi yaratırdı.
+  Reddedilen satırın düzeltme yolu ÜRÜN ekranıdır.
+- **ÖZET FİLTREDEN BAĞIMSIZDIR.** "Yalnızca reddedilenler" filtresi
+  açıldığında bekleyen sayısının sıfıra düşmesi, o ürünlerin
+  kaybolduğu izlenimini verirdi.
+- **TANINMAYAN BAĞLANTI FİLTRESİ YOK SAYILIR, LİSTEYİ BOŞALTMAZ** —
+  doğrulanmasaydı adres çubuğuna yazılan rastgele kimlik sorguyu hiç
+  eşleşmeyen bir bağlantıya çevirir ve ekran sebebini söyleyemeden boş
+  kalırdı.
+- **MENÜDE KATALOG ALTINDA, İZLEME ALTINDA DEĞİL.** İzleme grubu
+  SİSTEMİN sağlığını gösterir ve oradaki satırlar bizim bir şeyi
+  beceremediğimizi söyler; onay ise ürünün kanaldaki NORMAL yaşam
+  döngüsüdür. Hataların yanına konsaydı satıcı bekleyen her ürünü bir
+  arıza sanardı.
+- **ZAMAN DAMGALARI TEK BİÇİMDE GÖNDERİLİR.** `DB::max()` ham kolon
+  metni döndürür (`"2026-08-24 14:31:09"`) ve tarayıcı onu YEREL saat
+  sanar; satırlar `toIso8601String()` kullanır. Karışınca AYNI AN iki
+  farklı saat görünür — gerçek tarayıcı çalıştırmasında iki saatlik
+  fark ölçüldü.
+- **HİÇ SORULMAMIŞ SATIR "—" DEĞİL "Henüz sorulmadı" DER.** Tire,
+  satıcıya "kontrol edildi ama tarih yok" gibi okunurdu.
 
 ## Mutabakat ekranı kuralları (§13 · Faz 4)
 
@@ -1694,10 +1745,11 @@ Dokümanda YOK — kullanıcı onaylı tasarım seansının kalıcı çıktısı
 
 §6 taramaları, §13 · faz 1.4 kanal bağlama, ürün yönetimi, ürün/stok listesi,
 **§13 · faz 1.5 (`PushListing` + panelden gönderme)** ve **faz 1.6 panel
-maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde ON DÖRT
+maddesi (sipariş listesi + fazla satış uyarısı)** kapandı. Panelde ON BEŞ
 ekran var: özet · ürünler · toplu içe aktarma · ürün kanalları ·
 siparişler · sipariş ayrıntısı · stok · mutabakat · başarısız işlemler ·
-**sistem sağlığı** · kanallar · eşleştirme · abonelik · **yardım**.
+**sistem sağlığı** · kanallar · eşleştirme · **onaylar** · abonelik ·
+**yardım**.
 
 **Dikey dilim artık PANELDEN uçtan uca sürülebilir** — `PanelToChannelSliceTest`
 zinciri ürün yaratmadan kanala girmesine kadar yürütüyor ve gerçek worker'da
@@ -1738,8 +1790,8 @@ bitti: onboarding akışı (`a118b3a`) · abonelik/ödeme — şema + kota
 `8642f9f`) · **güvenlik kontrol listesi + yük testi + yedek geri yükleme
 provası** (`1cc6720` + `05b336e` + `707ad44` + `fbf1eb7`).
 
-Panelde ON DÖRT ekran var (`/help` dahil). Kalan TEK artık madde:
-**onay durumu ekranı** (toplu görünüm, birkaç saat).
+Panelde **ON BEŞ** ekran var (`/help` ve `/approvals` dahil).
+**Faz 4'ün artık maddesi de kapandı** — onay durumu ekranı `8ba3c08`.
 
 **FİYAT ÇAKIŞMASI TESPİTİ BİTTİ** (`fd8cbe1`) — v2.2'nin kod
 tarafındaki SON açık maddesiydi. Dokümanın "468 saat sonunda
@@ -1752,9 +1804,8 @@ Kullanıcı kararı (24 Ağustos): "dökümantasyonu beraber yazalım". Uç
 noktalar doğrulanmadan sonraki madde YAZILMAZ; ayrıntı DEVIR.md'nin en
 üstünde.
 
-Bekleyen diğer maddeler: onay durumu ekranı · Faz 5 tampon (28 sa) ·
-Stripe'ı uçtan uca sürmek (anahtarlar TEST moduna çevrilince) · proje
-ismi (~yarım saat).
+Bekleyen diğer maddeler: Faz 5 tampon (28 sa) · Stripe'ı uçtan uca
+sürmek (anahtarlar TEST moduna çevrilince) · proje ismi (~yarım saat).
 
 **YENİ PAZARYERLERİ — BAŞLANDI (24 Ağustos 2026).**
 Sıra: **Hepsiburada → Shopify → Amazon → Etsy → eBay.**

@@ -1,10 +1,38 @@
 # Devir Notu — 24 Ağustos 2026 (v2.2'NİN KOD TARAFI KAPANDI)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `fd8cbe1`.
-**FAZ 1–4 KAPALI** ve **v2.2'nin "production'a hazır" tablosundaki tüm
-"TAM" satırları gerçekten TAM.**
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `8ba3c08`.
+**FAZ 1–4 KAPALI**, **artık madde de kalmadı** ve **v2.2'nin
+"production'a hazır" tablosundaki tüm "TAM" satırları gerçekten TAM.**
 
-**909 test yeşil** (3534 assertion), Pint temiz (379 dosya).
+**923 test yeşil** (3580 assertion), Pint temiz (381 dosya).
+Panelde **ON BEŞ** ekran (`/approvals` eklendi).
+
+## ✅ ONAY DURUMU EKRANI — BİTTİ (`8ba3c08`)
+
+Faz 4'ün SON artık maddesiydi. `/approvals` — "kaç ürünüm onay
+bekliyor, hangileri reddedildi".
+
+**ÜRÜN-KANAL EKRANININ KOPYASI DEĞİL.** Rozet ve red sebebi orada zaten
+vardı; eksik olan TOPLU GÖRÜNÜMDÜ. Yüz ürün gönderen satıcı,
+reddedilen üçünü bulmak için yüz ürünün kanal sekmesini TEK TEK açmak
+zorundaydı — red sebebi KAYITLIYDI ve pratikte GÖRÜNMEZDİ.
+
+Kalıcı kurallar CLAUDE.md → "Onay durumu ekranı kuralları". En
+önemlileri: reddedilen en üstte ve ayrı sayılır · onay süreci olmayan
+kanal (Woo) bu ekranda HİÇ görünmez · kanal listesi boşsa ekran bunu
+AÇIKÇA söyler (boş tablo göstermek "onay bekleyen ürünüm yok"
+dedirtirdi) · ekran SALT OKUNUR · menüde KATALOG altında (izleme
+grubu sistemin ARIZALARINI gösterir, onay ise normal yaşam döngüsü).
+
+**GERÇEK ÇALIŞTIRMA YİNE HATA BULDU:** üst "Son kontrol" damgası ile
+satır damgası AYNI ANI iki farklı saat gösteriyordu (14:31 / 16:31).
+`DB::max()` ham kolon metni döndürüyor, tarayıcı onu yerel saat sanıyor;
+satırlar `toIso8601String()` kullanıyor. Test mutasyonla doğrulandı.
+
+**TARAYICIDA SÜRÜLDÜ:** gerçek `TrackApprovalStatus` akışından geçen üç
+listing — biri onaylandı (listede yok), biri reddedildi (sebebiyle en
+üstte), biri kanalın yanıtında YOKTU (dokunulmadı, "Henüz sorulmadı").
+390px'de taşma yok.
 
 ## ✅ v2.2 TAMAMLANMA DENETİMİ — SON DURUM
 
@@ -417,10 +445,8 @@ diğer localhost projelerini de kırar). Satır
 
 ### SIRADAKİ İŞ — SEÇİM KULLANICININ
 
-Dokümanın §13 listesinde Faz 4'ten kalan **tek küçük artık madde**:
-
-**Onay durumu ekranı** (birkaç saatlik iş). Rozet ve red sebebi
-ürün-kanal ekranında ZATEN var; eksik olan yalnızca **toplu görünüm**.
+*(Bu bölüm ÖNCEKİ turun listesidir. Burada "kaldı" denen **onay durumu
+ekranı `8ba3c08` ile YAZILDI** — ayrıntı en üstte.)*
 
 Ondan sonrası:
 - **Faz 5 — Tampon** (28 sa · hafta 26). Dokümanda tampon olarak
@@ -590,11 +616,11 @@ Faz 3'te kalan madde YOK. Dokümanın §13 · Faz 4 listesi:
 | Panel cilası (boş durumlar, yükleniyor, mobil — **ON ÜÇ** ekran) | 20 | **BİTTİ** (`aba0a29` + `26426ff`) |
 | Türkçe yardım dokümantasyonu ve hata mesajları | 12 | **BİTTİ** (`7208c51` + `8642f9f`) |
 | Güvenlik kontrol listesi + yük testi + **yedek geri yükleme provası** | 12 | **BİTTİ** (`1cc6720`+`05b336e`+`707ad44`+`fbf1eb7`) |
-| Onay durumu ekranı | küçük | kaldı |
+| Onay durumu ekranı | küçük | **BİTTİ** (`8ba3c08`) |
 
 Bitenlerin toplamı: 20 + 14 + 12 + 20 + 12 + 12 = **90/90 saat →
-FAZ 4 KAPANDI.** Geriye yalnızca küçük bir artık madde kaldı (onay
-durumu ekranı) ve o dokümanın saat bütçesinde ayrı satır taşımıyor.
+FAZ 4 KAPANDI.** Artık madde de (onay durumu ekranı) kapandı; o
+dokümanın saat bütçesinde ayrı satır taşımıyordu.
 
 **ABONELİK/ÖDEME MADDESİ KAPANDI** (26 sa). Şema, kota, checkout ve
 webhook yazıldı; panelde `/billing` ekranı var.
