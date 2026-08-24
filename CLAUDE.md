@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 892 test yeşil olmalı
+docker compose exec app php artisan test      # 909 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-39 tablo (çerçeve dışı), 37 model, 892 test. Stok çekirdeği (`ApplyMovement`,
+40 tablo (çerçeve dışı), 38 model, 909 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -474,6 +474,85 @@ dışına çıkış.
 - **`PricePushBatch` OPERASYON LİSTESİ TAŞIR.** Taşımazsa
   `SyncResultRecorder` hiçbir şey yazamaz: çağrı başarılı olur,
   `synced_version` yerinde kalır ve satır her turda yeniden gönderilir.
+
+## Fiyat çakışması kuralları (§9 · `fd8cbe1`)
+
+v2.2'nin kod tarafındaki SON açık maddesiydi ve kapandı.
+
+- **STOKTA ÜZERİNE YAZILIR, FİYATTA YAZILMAZ** (§9 · domain başına
+  politika). Gerekçe dokümanda yazılı: satıcılar kanal panelinden
+  kampanya yapıyor ve **sessizce ezmek EN SIK ŞİKAYET**. Stokta tek
+  otorite biziz; fiyatta DEĞİLİZ.
+- **REPAIR ADIMI FİYATTA ATLANIR ve AYRI BİR DOMAIN KOŞULU YAZILMAZ.**
+  Kapı `ItemStatus::isDrift()`'tir ve `PRICE_CONFLICT` orada `false`
+  döner; `ReconcileConnection` onarımı zaten açmaz.
+  `if ($domain === PRICE)` yazılsaydı kural İKİ yerde yaşar ve biri
+  değiştiğinde ötekinin sessizce eski kalması an meselesi olurdu.
+- **`PRICE_CONFLICT`, `REMOTE_UNREACHABLE`'IN KARDEŞİ AMA GEREKÇESİ
+  TERSTİR**: orada fark KANITLANMAMIŞTIR (altyapı sorunu), burada
+  KANITLIDIR ve yalnızca onarım MEŞRU DEĞİLDİR.
+- **İKİ DOMAIN, TEK AKIŞ** — §10'un "üç katman tek akış" kuralının
+  kardeşi. Fiyat turu `ReconcileConnection`'ın KOPYASI DEĞİLDİR; aynı
+  beş adımı yürütür ve yalnızca ÜÇ noktada ayrışır: hangi yetenek
+  okunur (`SupportsInventory`/`SupportsPricing`), beklenen değer nereden
+  gelir (kırpılmış bakiye / kanonik fiyat), fark bulununca ne yazılır.
+- **KABUL EDİLEN FİYAT BİR DAHA EZİLMEZ** — `PriceBatchBuilder`
+  override'lı listing'i yüke ALMAZ. Bu olmadan özellik ANLAMSIZDIR:
+  satıcı "kabul ettim" der, sistem bir sonraki turda üzerine yazardı.
+  Atlanan operasyonun DURUMU değişmez (`pending` kalır) — "yükte
+  olmayan operasyona dokunulmaz" kuralı.
+- **BAYAT OVERRIDE ELEMEZ.** Karar "89.90 mı 99.90 mı" sorusuna
+  verilmişti; satıcı panelden 149.90 yaparsa o karar BAŞKA bir soruya
+  verilmiştir. Yok sayılmasaydı panelden yapılan zam o kanala SESSİZCE
+  hiç gitmez ve satıcı eski fiyattan satmaya devam ederdi.
+- **"HANGİ FİYAT GİDER" TEK KAYNAKTIR** (`ResolveChannelPrice`):
+  gönderim ve mutabakat AYNI cevabı okur. İki yerde hesaplansaydı biri
+  override yollar öteki kanonik bekler ve her tur SAHTE çakışma
+  raporlanırdı — satıcı kabul ettiği kampanyayı sonsuza kadar yeniden
+  kabul ederdi.
+- **PARA KARŞILAŞTIRMASI KURUŞ ÖLÇEĞİNDE TAM SAYIDIR** ve `round()`
+  ZORUNLUDUR: `19.90 * 100` IEEE-754'te `1989.99...` olabilir, `(int)`
+  cast'i onu aşağı keser. `"79.90"` ile `"79.9"` AYNI fiyattır; metin
+  karşılaştırılsaydı her tur sahte çakışma üretirdi.
+- **`DriftHistory` DOMAIN FİLTRELİDİR** ve bu `tenant_id` filtresinin
+  aksine BUGÜN GERÇEK BİR SAVUNMADIR: aynı listing hem stok hem fiyat
+  kalemi taşır. Karışsalardı bir stok `MATCHED`'ı fiyat sürüklenme
+  zincirini KIRAR (sonsuz döngü emniyeti devre dışı kalır) ya da iki
+  fiyat çakışması hiç sürüklenmemiş bir stok satırını üçüncü turda
+  `MANUAL_REVIEW`'a düşürürdü.
+- **FİYAT TURU `recently_sold` KULLANMAZ** — satış fiyatı DEĞİŞTİRMEZ
+  ve o sorgu `inventory_movements` üzerinden çalışır. Koşsaydı bütçe
+  fiyatı hiç değişmemiş satırlarla dolar ve gerçek çakışmalar dışarıda
+  kalırdı; üstelik çakışma tam da SATMAYAN üründe uzun süre fark
+  edilmeden durabilir. Soğuk katmanın dört sorguyu çalıştırmama
+  kararının kardeşi: sorgu kümesi KAPSAMDAN türer.
+- **`PRICE_CONFLICT` ADAY DEĞİLDİR** (`drift_detected` sorgusu onu
+  içermez). Karar bekleyen satırı her turda yeniden okumak bütçeyi —
+  satıcı karar verene kadar, belki günlerce — aynı satıra harcardı.
+  `error_permanent` kuralının aynısı: satır ancak kullanıcı
+  müdahalesiyle akışa döner.
+- **ÇÖZÜLÜNCE DURUM `PRICE_CONFLICT` KALIR**, yalnızca `resolved_at`
+  damgalanır: kalem o turda GERÇEKTEN çakışma bulmuştu ve `MATCHED`
+  yazmak "zaten doğruydu" demek olurdu. **BEDELİ:** ekran filtresi ve
+  özet sayımı `resolved_at IS NULL` kapısını AÇIKÇA taşımak zorundadır;
+  yalnızca duruma bakan bir filtre satıcının kararını verdiği satırı
+  ekranda bırakır ve aynı karar tekrar tekrar verilirdi.
+- **`reconcile:prices` SAATLİK ve DAKİKA 30'DA.** Yanlış stokun bedeli
+  fazla satıştır ve dakikalar içinde müşteriye yansır (sıcak katman beş
+  dakikada); fiyat çakışmasında satıcının kampanyası ZATEN YÜRÜYOR ve
+  tespit onu durdurmaz. Dakika 30 bilinçlidir: `reconcile:warm` de
+  saatliktir ve `withoutOverlapping` yalnızca AYNI komutu korur.
+- **YETENEĞİ OLMAYAN KANAL SESSİZCE ATLANIR** (`ReconcileActiveConnections`).
+  İstisnaya bırakılsaydı her tur, `SupportsPricing` uygulamayan her
+  bağlantı için bir uyarı satırı yazar ve gerçek arızalar gürültüde
+  kaybolurdu.
+- **KANAL FİYATI KALEMDEN OKUNUR, KANALDAN YENİDEN OKUNMAZ.** Satıcı
+  ekranda gördüğü değere karar verdi; yeniden okunsaydı arada değişmiş
+  bir fiyatı görmeden kabul etmiş olurdu.
+- **FLASH EKRAN BAŞINA ÇİZİLİR — layout GÖSTERMEZ.** `share()` mesajı
+  props'a koyar ama çizen ortak bir yer yoktur. Gerçek çalıştırmada
+  bulundu: `assertSessionHas('success')` YEŞİLKEN ekranda hiçbir şey
+  görünmüyordu.
 
 ## Resync kuralları (§9 · Karar 18 · T10)
 
@@ -1661,6 +1740,12 @@ provası** (`1cc6720` + `05b336e` + `707ad44` + `fbf1eb7`).
 
 Panelde ON DÖRT ekran var (`/help` dahil). Kalan TEK artık madde:
 **onay durumu ekranı** (toplu görünüm, birkaç saat).
+
+**FİYAT ÇAKIŞMASI TESPİTİ BİTTİ** (`fd8cbe1`) — v2.2'nin kod
+tarafındaki SON açık maddesiydi. Dokümanın "468 saat sonunda
+production'a hazır olan" tablosundaki **tüm "TAM" satırları artık
+gerçekten TAM.** Kalıcı kurallar yukarıda "Fiyat çakışması kuralları"
+başlığında. **BU MADDEYİ YENİDEN AÇMA.**
 
 **SIRADAKİ İŞ — HEPSİBURADA DOKÜMANTASYONU (kullanıcı ile BİRLİKTE).**
 Kullanıcı kararı (24 Ağustos): "dökümantasyonu beraber yazalım". Uç
