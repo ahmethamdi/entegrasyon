@@ -15,6 +15,7 @@ use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Support\LoadTest\SyncLoadTestCommand;
 use App\Support\Observability\CaptureMetricsCommand;
 use App\Support\Observability\DispatchAlertsCommand;
 use Illuminate\Foundation\Application;
@@ -62,6 +63,10 @@ return Application::configure(basePath: dirname(__DIR__))
         CaptureMetricsCommand::class,
         // §11 · §12 · eşik aşımı uyarıları. Zamanlaması routes/console.php.
         DispatchAlertsCommand::class,
+        // §11 · yük testi. ZAMANLANMAZ ve bu bilinçlidir: ölçüm aracıdır,
+        // bakım turu değil — zamanlansaydı her gece kendiliğinden veri
+        // üretir ve kuyruğu meşgul ederdi. Elle çalıştırılır.
+        SyncLoadTestCommand::class,
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
