@@ -1,0 +1,217 @@
+@page {
+    size: A4;
+    margin: 18mm 16mm 20mm 16mm;
+}
+
+:root {
+    --ink: #1c1917;
+    --muted: #57534e;
+    --faint: #78716c;
+    --rule: #e7e5e4;
+    --rule-strong: #d6d3d1;
+    --surface: #fafaf9;
+    --brand: #a8532b;
+    --brand-dark: #8a4324;
+    --brand-tint: #fbf5f1;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 9.2pt;
+    line-height: 1.5;
+    color: var(--ink);
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- başlıklar ---------- */
+
+h1 {
+    font-size: 21pt;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+    margin: 0 0 2mm;
+    color: var(--ink);
+}
+
+h2 {
+    font-size: 13.5pt;
+    letter-spacing: -0.01em;
+    margin: 9mm 0 3mm;
+    padding: 0 0 1.6mm;
+    border-bottom: 2px solid var(--brand);
+    page-break-after: avoid;
+    break-after: avoid;
+}
+
+h2:first-of-type { margin-top: 4mm; }
+
+h3 {
+    font-size: 10.6pt;
+    margin: 6mm 0 2mm;
+    color: var(--brand-dark);
+    page-break-after: avoid;
+    break-after: avoid;
+}
+
+h4 {
+    font-size: 9.6pt;
+    margin: 4mm 0 1.5mm;
+    color: var(--muted);
+    page-break-after: avoid;
+    break-after: avoid;
+}
+
+p { margin: 0 0 2.6mm; }
+
+strong { color: var(--ink); }
+
+/* ---------- kapak ---------- */
+
+.cover {
+    text-align: left;
+    padding: 34mm 0 0;
+    page-break-after: always;
+    break-after: page;
+    border-top: 4px solid var(--brand);
+}
+
+.cover .eyebrow {
+    font-size: 8pt;
+    letter-spacing: 0.22em;
+    color: var(--brand);
+    margin: 0 0 6mm;
+    font-weight: 600;
+}
+
+.cover h1 {
+    font-size: 34pt;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin: 0 0 3mm;
+}
+
+.cover .sub {
+    font-size: 13pt;
+    color: var(--muted);
+    margin: 0 0 14mm;
+    font-weight: 400;
+}
+
+.cover .meta {
+    border-top: 1px solid var(--rule);
+    padding-top: 5mm;
+    font-size: 9pt;
+    color: var(--muted);
+}
+
+.cover .meta div { margin-bottom: 1.6mm; }
+.cover .meta b { color: var(--ink); font-weight: 600; }
+
+/* ---------- tablolar ---------- */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 3mm 0 4mm;
+    font-size: 8.2pt;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+thead { display: table-header-group; }
+
+th {
+    text-align: left;
+    background: var(--surface);
+    border-bottom: 1.5px solid var(--rule-strong);
+    padding: 1.7mm 2mm;
+    font-size: 7.6pt;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+td {
+    border-bottom: 1px solid var(--rule);
+    padding: 1.7mm 2mm;
+    vertical-align: top;
+}
+
+tbody tr:nth-child(even) { background: #fcfcfb; }
+
+/* ---------- kod ---------- */
+
+code {
+    font-family: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 8pt;
+    background: var(--surface);
+    padding: 0.3mm 1mm;
+    border-radius: 2px;
+    color: var(--brand-dark);
+}
+
+pre {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--brand);
+    border-radius: 3px;
+    padding: 2.5mm 3mm;
+    margin: 3mm 0;
+    overflow: visible;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+pre code {
+    background: none;
+    padding: 0;
+    color: var(--ink);
+    font-size: 7.6pt;
+    line-height: 1.42;
+}
+
+/* ---------- alıntı = değişmez kural ---------- */
+
+blockquote {
+    margin: 3mm 0;
+    padding: 2.5mm 3mm;
+    background: var(--brand-tint);
+    border-left: 3px solid var(--brand);
+    border-radius: 0 3px 3px 0;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    color: #4a2a18;
+}
+
+blockquote p { margin: 0 0 1.8mm; }
+blockquote p:last-child { margin-bottom: 0; }
+blockquote strong { color: #3a1f10; }
+
+/* ---------- listeler ---------- */
+
+ul, ol { margin: 0 0 2.6mm; padding-left: 5mm; }
+li { margin-bottom: 1mm; }
+
+/* ---------- yatay çizgi = bölüm ayracı ---------- */
+
+hr {
+    border: none;
+    border-top: 1px solid var(--rule);
+    margin: 7mm 0 0;
+    page-break-after: avoid;
+}
+
+/* ---------- son satır ---------- */
+
+body > p:last-child em {
+    display: block;
+    font-size: 7.6pt;
+    color: var(--faint);
+    text-align: center;
+    font-style: normal;
+}

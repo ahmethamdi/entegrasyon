@@ -1,11 +1,148 @@
-# Devir Notu — 24 Ağustos 2026 (v2.2'NİN KOD TARAFI KAPANDI)
+# Devir Notu — 24 Ağustos 2026 (v2.2 KAPANDI · V3.0 DOKÜMANI ONAY BEKLİYOR)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `8ba3c08`.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `cc44dac`.
 **FAZ 1–4 KAPALI**, **artık madde de kalmadı** ve **v2.2'nin
 "production'a hazır" tablosundaki tüm "TAM" satırları gerçekten TAM.**
 
 **923 test yeşil** (3580 assertion), Pint temiz (381 dosya).
 Panelde **ON BEŞ** ekran (`/approvals` eklendi).
+
+---
+
+# 🔴🔴 ÖNCE BUNU OKU — V3.0 DOKÜMANI ONAY BEKLİYOR
+
+**Kullanıcı V3.0 mimari dokümanını PDF olarak kontrol ediyor**
+(24 Ağustos, oturum sonu). Yeni sohbet buradan devam edecek.
+
+## KURAL — ONAY GELMEDEN KOD YAZILMAZ
+
+> **V3.0'IN HİÇBİR MADDESİ UYGULANMAZ** — ne migration, ne adapter, ne
+> arayüz. Kullanıcı "onayladım, başlayalım" demeden `app/` altında V3
+> için tek satır yazılmaz.
+>
+> Bu, v2.2'nin "doküman önce, kod sonra" kuralının aynısıdır ve
+> dokümanın kendisi de §18'de testlerin ÖNCE yazılmasını şart koşuyor.
+
+## Dosyalar
+
+| Ne | Nerede |
+|---|---|
+| **PDF** (kullanıcı bunu inceliyor) | `~/Desktop/Entegrasyon-Mimari-v3.0.pdf` · 46 sayfa · 1.76 MB |
+| **Markdown kaynağı** (tek gerçek kaynak) | `docs/ENTEGRASYON-V3.0.md` · commit `cc44dac` |
+| v2.2 PDF (baseline, DONDURULMUŞ) | `~/Desktop/Entegrasyon-Mimari-v2.2.pdf` |
+
+## ⚠️ DOKÜMAN DEĞİŞİRSE — İKİ DOSYA BİRDEN
+
+**Kullanıcı düzeltme isterse SIRA ŞUDUR:**
+
+1. `docs/ENTEGRASYON-V3.0.md` düzenlenir — **tek gerçek kaynak budur**
+2. PDF **yeniden üretilir** (aşağıdaki komut)
+3. İkisi birlikte commit edilir
+
+> **YALNIZCA PDF'İ DÜZELTMEK YASAKTIR.** PDF bir ÇIKTIDIR; kaynak
+> Markdown'dır. PDF elle düzeltilirse bir sonraki üretim düzeltmeyi
+> SESSİZCE geri alır ve kimse fark etmez.
+
+### PDF yeniden üretme — TEK KOMUT
+
+```bash
+docs/pdf/build-v3.sh          # → ~/Desktop/Entegrasyon-Mimari-v3.0.pdf
+```
+
+Betik ve stil dosyaları **repo'da** (`docs/pdf/`) — scratchpad'de
+DEĞİL, çünkü scratchpad oturuma özeldir ve yeni sohbette kaybolur.
+Araç zinciri `pandoc` + **Chrome headless** (weasyprint/wkhtmltopdf YOK,
+LaTeX YOK). Çalıştığı doğrulandı: 46 sayfa.
+
+| Dosya | Ne |
+|---|---|
+| `docs/pdf/build-v3.sh` | Üretim betiği |
+| `docs/pdf/v3.css` | Stil — A4, 9.2pt, marka rengi `#a8532b` (panelle AYNI) |
+| `docs/pdf/cover.html` | Kapak sayfası |
+
+> **`text-transform: uppercase` KULLANILMAZ.** Chrome Türkçe locale'de
+> `i` harfini `İ`ye çeviriyor: "IMPLEMENTATION" → "IMPLEMENTATİON"
+> oluyordu. Metin doğrudan BÜYÜK yazılır (kapak) veya küçük bırakılır
+> (tablo başlıkları). Bu turda bulundu ve düzeltildi.
+>
+> **BETİK MARKDOWN'IN İLK 7 SATIRINI ATLAR** (`tail -n +8`) — o blok
+> kapağa taşındı. Dokümanın BAŞI değişirse bu sayı da güncellenmelidir;
+> güncellenmezse başlık gövdede İKİ KEZ görünür.
+
+## V3.0 dokümanının özeti — kullanıcı sorarsa
+
+**Kapsam:** Shopify · Hepsiburada · Etsy · eBay → altı kanal.
+**Tahmin:** 240 saat · 5 faz. **Sıra:** Shopify önce (Hepsiburada'nın uç
+noktaları kullanıcı doğrulamasına bağlı ve BLOKE).
+
+**Çekirdeğe ÜÇ dokunuş** (hepsi genişletme, davranış değişmiyor):
+
+1. **`SupportsOfferLifecycle`** — eBay'in `inventory item → offer →
+   publish` zinciri. Mevcut `createListing()` tek çağrı varsayıyor;
+   ara başarısızlıkta (publish 429) `external_id` yazılmıyor → sonraki
+   tur ikinci offer yaratıyor → `25002` duplicate → KALICI hata.
+2. **`listings.channel_metadata`** (JSONB) — **TEK şema değişikliği.**
+   Shopify `inventory_item_gid`, Etsy `offering_id`, eBay `offer_id`.
+3. **`TokenRefresher`** — Etsy 1 sa, eBay 2 sa token. Yenileme İSTEK
+   ANINDA DEĞİL TARAMAYLA (`FOR UPDATE SKIP LOCKED`): paralel yenileme
+   kanalın ilk token'ı iptal etmesine yol açar.
+
+**Şema deltası: yedi maddenin ALTISI "NO SCHEMA CHANGE REQUIRED".**
+`external_parent_id` v2.2'de yazılmış ve hiç kullanılmamıştı; üç yeni
+kanal onu kullanıyor.
+
+**Kanal başına en tehlikeli madde (dördü de P0 testli):**
+
+| Kanal | Tuzak |
+|---|---|
+| Shopify | GraphQL **200 döner ama başarısız olabilir** (`userErrors`) |
+| Etsy | Envanter PUT'u **TÜM envanteri ezer** → oku-birleştir-yaz zorunlu |
+| eBay | Ara başarısızlık kaldığı yerden devam etmeli |
+| Hepsiburada | Stok+fiyat aynı yükte, **eksik alan SIFIR sayılıyor** |
+
+**YENİ KUYRUK YOK · YENİ EVENT SİSTEMİ YOK · YENİ TEKNOLOJİ YOK.**
+
+**v2.2'den bilinçli sapma — Shopify:** doküman ayrı Remix/Node servisi
+öngörüyor (§2, §11 · Ay 8+); V3 **Laravel adapter** yazıyor (kullanıcı
+kararı). §11'in servis token'ı değişmezi **İPTAL EDİLMEDİ, ERTELENDİ** —
+App Store kararı verilirse olduğu gibi uygulanır ve şema hazır.
+
+## Onay gelirse — ilk iş
+
+**Faz 0 · Ortak altyapı (12 sa)**, dokümanın §27'sinde ayrıntılı:
+
+| Slice | İş | Saat |
+|---|---|---|
+| 0.1 | `listings.channel_metadata` migration + model cast | 2 |
+| 0.2 | `SupportsTokenRefresh` + `TokenRefresher` | 5 |
+| 0.3 | `credentials:refresh` komutu + zamanlama | 3 |
+| 0.4 | **Seeder `is_active` düzeltmesi** + testi | 2 |
+
+> **0.4 KÜÇÜK AMA KRİTİK:** `db:seed --class=ChannelTypeSeeder`
+> çalıştırıldığında elle açılmış kanallar `false`'a dönüyor —
+> `356a662`'de **Trendyol kapandı** ve elle SQL ile geri açıldı. Altı
+> kanalda bu tuzak altı kez ısırır.
+
+## Kullanıcı "değişiklik istiyorum" derse
+
+Dokümanın **hangi bölümü** olduğunu sor. Yapı:
+
+```
+01 Scope · 02 Baseline · 03 Architecture Delta · 04 Capability Matrix
+05 Extension Pattern · 06 Shopify · 09 Hepsiburada · 11 Etsy
+13 eBay · 16 Database Delta · 07 Identifier Strategy
+17 Cross-Channel Fan-out · 19 Webhook/Polling · 20 Auth
+21 Rate Limits · 22 Reconciliation · 23 Queue & Capacity
+24 Security · 25 Observability · 26 Rollout · 27 Roadmap
+28 P0/P1/P2 · 29 Test Criteria · 30 Final Decision
+```
+
+> **BÖLÜM NUMARALARI KULLANICININ İSTEDİĞİ İÇİNDEKİLER SIRASINI TAŞIR**
+> (08, 10, 12, 14, 15, 18 numaraları bilinçli olarak birleştirildi —
+> örneğin Shopify'ın auth/catalog/inventory/orders bölümleri §06 altında
+> tek başlıkta toplandı). Yeniden numaralandırma İSTENMEDİKÇE YAPILMAZ.
+
+---
 
 ## ✅ ONAY DURUMU EKRANI — BİTTİ (`8ba3c08`)
 
@@ -153,7 +290,11 @@ geçti):
 
 ---
 
-## 🔴 SONRAKİ İŞ — HEPSİBURADA DOKÜMANTASYONU (KULLANICI İLE BİRLİKTE)
+## 🔶 V3 · FAZ 2'NİN ÖN KOŞULU — HEPSİBURADA DOKÜMANTASYONU
+
+*(Bu iş V3.0'da **Faz 2 · slice 2.0** olarak yer alıyor. Onay gelene
+kadar bekler; kullanıcı isterse V3 onayından BAĞIMSIZ olarak da
+yapılabilir çünkü kod değil dokümantasyon işidir.)*
 
 **Kullanıcı kararı (24 Ağustos): "dökümantasyonu beraber yazalım".**
 

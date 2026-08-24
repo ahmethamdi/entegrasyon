@@ -13,6 +13,22 @@ Kod ile doküman çeliştiğinde **doküman esastır**. Yeni mimari turu yapılm
 yalnızca kod incelemesinde çıkan somut bulgular patchlenebilir. Yeni teknoloji
 veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez.
 
+### ⏳ V3.0 — YAZILDI, ONAY BEKLİYOR (24 Ağustos 2026)
+
+**Kaynak:** `docs/ENTEGRASYON-V3.0.md` · **PDF:**
+`~/Desktop/Entegrasyon-Mimari-v3.0.pdf` (46 sayfa) · commit `cc44dac`
+
+Kapsam: **Shopify · Hepsiburada · Etsy · eBay** → altı kanal. 240 saat.
+
+> **ONAY GELMEDEN V3'ÜN HİÇBİR MADDESİ UYGULANMAZ** — ne migration, ne
+> adapter, ne arayüz. Kullanıcı PDF'i inceliyor. Ayrıntı ve "değişiklik
+> isterse ne yapılacak" DEVIR.md'nin EN ÜSTÜNDE.
+
+**Doküman değişirse İKİ DOSYA BİRDEN:** önce `docs/ENTEGRASYON-V3.0.md`
+(tek gerçek kaynak), sonra `docs/pdf/build-v3.sh` ile PDF yeniden
+üretilir. **Yalnızca PDF'i düzeltmek YASAKTIR** — PDF bir çıktıdır ve
+sonraki üretim düzeltmeyi sessizce geri alır.
+
 ## Ortam — komutlar container içinde çalışır
 
 ```bash
