@@ -47,7 +47,7 @@ function formatTime(iso) {
         </h1>
 
         <!-- Sağlık özeti -->
-        <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded border border-stone-200 bg-stone-200 sm:grid-cols-4">
+        <dl class="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-4">
             <div class="bg-white p-4">
                 <dt class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
                     Senkron
@@ -101,13 +101,13 @@ function formatTime(iso) {
                 ama gerçek açık aşağıda.
             </p>
 
-            <div class="mt-3 overflow-x-auto rounded border border-red-200">
+            <div class="mt-3 overflow-x-auto rounded-lg border border-red-200">
                 <table class="w-full text-sm">
-                    <thead class="bg-red-50 text-left">
+                    <thead class="border-b border-red-200 bg-red-50 text-left">
                         <tr>
-                            <th class="px-4 py-2 font-medium text-red-900">SKU</th>
-                            <th class="px-4 py-2 text-right font-medium text-red-900">Bakiye</th>
-                            <th class="px-4 py-2 text-right font-medium text-red-900">Eksik</th>
+                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-red-900">SKU</th>
+                            <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-red-900">Bakiye</th>
+                            <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-red-900">Eksik</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-red-100 bg-white">
@@ -133,7 +133,7 @@ function formatTime(iso) {
                 Henüz bağlı kanal yok.
             </p>
 
-            <ul v-else class="mt-3 divide-y divide-stone-200 rounded border border-stone-200 bg-white">
+            <ul v-else class="mt-3 divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">
                 <li
                     v-for="connection in connections"
                     :key="connection.id"
@@ -164,16 +164,16 @@ function formatTime(iso) {
             </p>
 
             <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-            <div v-else class="mt-3 overflow-x-auto rounded border border-stone-200">
+            <div v-else class="mt-3 overflow-x-auto rounded-lg border border-stone-200">
                 <table class="w-full min-w-3xl text-sm">
-                    <thead class="bg-stone-50 text-left">
+                    <thead class="border-b border-stone-200 bg-stone-50 text-left">
                         <tr>
-                            <th class="px-4 py-2 font-medium text-stone-700">Kanal</th>
-                            <th class="px-4 py-2 font-medium text-stone-700">İşlem</th>
-                            <th class="px-4 py-2 text-right font-medium text-stone-700">Sürüm</th>
-                            <th class="px-4 py-2 text-right font-medium text-stone-700">Deneme</th>
-                            <th class="px-4 py-2 font-medium text-stone-700">Durum</th>
-                            <th class="px-4 py-2 font-medium text-stone-700">Zaman</th>
+                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kanal</th>
+                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">İşlem</th>
+                            <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Sürüm</th>
+                            <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Deneme</th>
+                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
+                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Zaman</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-stone-100 bg-white">

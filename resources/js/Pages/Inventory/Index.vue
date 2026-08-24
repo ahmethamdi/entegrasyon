@@ -1,6 +1,8 @@
 <script setup>
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
+import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -70,20 +72,11 @@ function money(row) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Stok
-                </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    Ürün ve stok
-                </h1>
-            </div>
-        </div>
+        <PageHeader section="Stok" title="Ürün ve stok" />
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flashSuccess }}
         </div>
@@ -93,49 +86,25 @@ function money(row) {
             Eksik miktar gizlenmez; kırpma yalnızca kanala giden yükte meşru.
         -->
         <div class="mt-6 grid gap-4 sm:grid-cols-3">
-            <div class="rounded border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Varyant</p>
-                <p class="mt-1 text-2xl font-semibold text-stone-900">{{ summary.variantCount }}</p>
-            </div>
+            <StatCard label="Varyant" :value="summary.variantCount" />
 
-            <div
-                class="rounded border p-4"
-                :class="summary.oversoldCount > 0
-                    ? 'border-red-200 bg-red-50'
-                    : 'border-stone-200 bg-white'"
-            >
-                <p class="text-xs" :class="summary.oversoldCount > 0 ? 'text-red-800' : 'text-stone-500'">
-                    Fazla satılan
-                </p>
-                <p
-                    class="mt-1 text-2xl font-semibold"
-                    :class="summary.oversoldCount > 0 ? 'text-red-900' : 'text-stone-900'"
-                >
-                    {{ summary.oversoldCount }}
-                </p>
-            </div>
+            <StatCard
+                label="Fazla satılan"
+                :value="summary.oversoldCount"
+                :tone="summary.oversoldCount > 0 ? 'error' : 'neutral'"
+            />
 
-            <div
-                class="rounded border p-4"
-                :class="summary.totalShortfall > 0
-                    ? 'border-red-200 bg-red-50'
-                    : 'border-stone-200 bg-white'"
-            >
-                <p class="text-xs" :class="summary.totalShortfall > 0 ? 'text-red-800' : 'text-stone-500'">
-                    Toplam eksik adet
-                </p>
-                <p
-                    class="mt-1 text-2xl font-semibold"
-                    :class="summary.totalShortfall > 0 ? 'text-red-900' : 'text-stone-900'"
-                >
-                    {{ summary.totalShortfall }}
-                </p>
-            </div>
+            <StatCard
+                label="Toplam eksik adet"
+                :value="summary.totalShortfall"
+                :tone="summary.totalShortfall > 0 ? 'error' : 'neutral'"
+                :hint="summary.totalShortfall > 0 ? 'Kanala sıfır gönderiliyor' : null"
+            />
         </div>
 
         <!-- filtreler -->
         <div class="mt-8 flex flex-wrap items-center gap-3">
-            <div class="flex rounded border border-stone-300 bg-white p-0.5">
+            <div class="flex rounded-md border border-stone-300 bg-white p-0.5">
                 <button
                     type="button"
                     class="rounded px-3 py-1.5 text-sm transition"
@@ -163,33 +132,33 @@ function money(row) {
                     v-model="search"
                     type="search"
                     placeholder="SKU ara"
-                    class="w-56 rounded border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-500 focus:outline-none"
+                    class="w-56 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <button
                     type="submit"
-                    class="rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                 >
                     Ara
                 </button>
             </form>
         </div>
 
-        <div v-if="!rows.length" class="mt-8 rounded border border-dashed border-stone-300 p-10 text-center">
+        <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
             <p class="text-sm text-stone-600">Bu ölçütlerle varyant bulunamadı.</p>
         </div>
 
         <!-- liste -->
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div v-else class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div v-else class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
-                    <tr class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                        <th class="px-4 py-3">SKU</th>
-                        <th class="px-4 py-3 text-right">Elde</th>
-                        <th class="px-4 py-3 text-right">Rezerve</th>
-                        <th class="px-4 py-3 text-right">Satılabilir</th>
-                        <th class="px-4 py-3">Senkron</th>
-                        <th class="px-4 py-3"></th>
+                    <tr>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">SKU</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Elde</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Rezerve</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Satılabilir</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Senkron</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600"></th>
                     </tr>
                 </thead>
 
@@ -197,7 +166,7 @@ function money(row) {
                     <template v-for="row in rows" :key="row.levelId">
                         <tr
                             class="border-b border-stone-100"
-                            :class="row.isOversold ? 'bg-red-50/60' : ''"
+                            :class="row.isOversold ? 'bg-red-50/60 hover:bg-red-100/60' : 'hover:bg-stone-50'"
                         >
                             <td class="px-4 py-3">
                                 <!-- SKU bir KİMLİKTİR; kelime ortasından bölünürse okunmaz. -->
@@ -246,7 +215,7 @@ function money(row) {
                             <td class="px-4 py-3 text-right">
                                 <button
                                     type="button"
-                                    class="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                    class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                     @click="openAdjust(row)"
                                 >
                                     Düzelt
@@ -275,7 +244,7 @@ function money(row) {
                                             type="number"
                                             min="1"
                                             required
-                                            class="mt-1 w-28 rounded border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-500 focus:outline-none"
+                                            class="mt-1 w-28 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                                         >
                                     </div>
 
@@ -291,14 +260,14 @@ function money(row) {
                                             v-model="adjustForm.note"
                                             type="text"
                                             placeholder="Sayım farkı"
-                                            class="mt-1 w-full rounded border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-500 focus:outline-none"
+                                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                                         >
                                     </div>
 
                                     <button
                                         type="submit"
                                         :disabled="adjustForm.processing"
-                                        class="rounded bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+                                        class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                                     >
                                         Kaydet
                                     </button>

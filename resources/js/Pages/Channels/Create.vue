@@ -1,5 +1,6 @@
 <script setup>
 import { Link, useForm } from '@inertiajs/vue3';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -24,19 +25,11 @@ function submit() {
 
 <template>
     <PanelLayout>
-        <div>
-            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                Kanallar
-            </p>
-            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                Mağaza bağla
-            </h1>
-            <p class="mt-2 max-w-xl text-sm text-stone-600">
-                Anahtarlar şifrelenerek saklanır ve panele bir daha
-                gönderilmez. Kaydettikten sonra kanala bir sağlık isteği
-                gönderilir; cevap gelmezse bağlantı beklemede kalır.
-            </p>
-        </div>
+        <PageHeader
+            section="Kanallar"
+            title="Mağaza bağla"
+            description="Anahtarlar şifrelenerek saklanır ve panele bir daha gönderilmez. Kaydettikten sonra kanala bir sağlık isteği gönderilir; cevap gelmezse bağlantı beklemede kalır."
+        />
 
         <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">
             <div>
@@ -47,7 +40,7 @@ function submit() {
                     id="channel_type_code"
                     v-model="form.channel_type_code"
                     required
-                    class="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                     <option v-for="type in channelTypes" :key="type.code" :value="type.code">
                         {{ type.name }}
@@ -68,7 +61,7 @@ function submit() {
                     type="text"
                     required
                     placeholder="Ana Mağaza"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Yalnızca senin göreceğin isim; birden fazla mağazayı ayırt etmek için.
@@ -88,7 +81,7 @@ function submit() {
                     type="text"
                     required
                     placeholder="magaza.example.com"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Bir mağaza yalnızca tek bir hesaba bağlanabilir. Bağlantı HTTPS üzerinden kurulur.
@@ -98,7 +91,7 @@ function submit() {
                 </p>
             </div>
 
-            <div class="rounded border border-stone-200 bg-stone-50 p-4">
+            <div class="rounded-lg border border-stone-200 bg-stone-50 p-4">
                 <p class="text-sm font-medium text-stone-900">WooCommerce API anahtarı</p>
                 <p class="mt-1 text-xs text-stone-600">
                     WooCommerce yönetiminde <span class="font-mono">Ayarlar → Gelişmiş → REST API</span>
@@ -118,7 +111,7 @@ function submit() {
                             autocomplete="off"
                             spellcheck="false"
                             placeholder="ck_..."
-                            class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-mono text-sm focus:border-stone-500 focus:outline-none"
+                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                         >
                         <p v-if="form.errors.consumer_key" class="mt-1 text-sm text-red-700">
                             {{ form.errors.consumer_key }}
@@ -137,7 +130,7 @@ function submit() {
                             autocomplete="off"
                             spellcheck="false"
                             placeholder="cs_..."
-                            class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-mono text-sm focus:border-stone-500 focus:outline-none"
+                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                         >
                         <p v-if="form.errors.consumer_secret" class="mt-1 text-sm text-red-700">
                             {{ form.errors.consumer_secret }}
@@ -150,7 +143,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ form.processing ? 'Bağlanıyor…' : 'Bağla ve doğrula' }}
                 </button>

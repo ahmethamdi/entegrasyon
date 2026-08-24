@@ -1,6 +1,7 @@
 <script setup>
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -77,18 +78,13 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
 
 <template>
     <PanelLayout>
-        <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-            Abonelik
-        </p>
-        <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-            Plan ve kullanım
-        </h1>
+        <PageHeader section="Abonelik" title="Plan ve kullanım" />
 
         <!-- Ödeme altyapısı yoksa SÖYLENİR: sessizce başarısız olan bir
              düğme, sebebi hiç anlaşılmayan bir hatadır. -->
         <div
             v-if="!paymentsEnabled"
-            class="mt-6 rounded border border-amber-200 bg-amber-50 p-4"
+            class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4"
         >
             <p class="text-sm font-medium text-amber-900">
                 Ödeme altyapısı henüz yapılandırılmadı.
@@ -100,7 +96,7 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
             </p>
         </div>
 
-        <p v-if="errors.plan_code" class="mt-6 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <p v-if="errors.plan_code" class="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             {{ errors.plan_code }}
         </p>
 
@@ -108,7 +104,7 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
         <section class="mt-8">
             <h2 class="text-sm font-semibold text-stone-900">Mevcut planın</h2>
 
-            <div class="mt-3 rounded border border-stone-200 bg-white p-4">
+            <div class="mt-3 rounded-lg border border-stone-200 bg-white p-4">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <p class="text-lg font-medium text-stone-900">
                         {{ current.planName ?? '—' }}
@@ -137,7 +133,7 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
         <section class="mt-8">
             <h2 class="text-sm font-semibold text-stone-900">Kullanımın</h2>
 
-            <dl class="mt-3 grid gap-px overflow-hidden rounded border border-stone-200 bg-stone-200 sm:grid-cols-2">
+            <dl class="mt-3 grid gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-2">
                 <div v-for="row in usageRows" :key="row.key" class="bg-white p-4">
                     <dt class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
                         {{ row.label }}
@@ -194,7 +190,7 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                     <button
                         v-else-if="Number(plan.price) > 0"
                         type="button"
-                        class="mt-4 rounded bg-stone-900 py-2 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                        class="mt-4 rounded-md bg-stone-900 py-2 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
                         :disabled="!paymentsEnabled || buying !== null"
                         @click="buy(plan.code)"
                     >

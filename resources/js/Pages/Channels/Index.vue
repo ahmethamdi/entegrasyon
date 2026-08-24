@@ -1,6 +1,7 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -80,27 +81,20 @@ function formatDate(iso) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Kanallar
-                </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    Bağlı mağazalar
-                </h1>
-            </div>
-
-            <Link
-                href="/channels/create"
-                class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
-            >
-                Mağaza bağla
-            </Link>
-        </div>
+        <PageHeader section="Kanallar" title="Bağlı mağazalar">
+            <template #actions>
+                <Link
+                    href="/channels/create"
+                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                >
+                    Mağaza bağla
+                </Link>
+            </template>
+        </PageHeader>
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flashSuccess }}
         </div>
@@ -112,7 +106,7 @@ function formatDate(iso) {
             {{ flashWarning }}
         </div>
 
-        <div v-if="!sorted.length" class="mt-10 rounded border border-dashed border-stone-300 p-10 text-center">
+        <div v-if="!sorted.length" class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center">
             <p class="text-sm text-stone-600">
                 Henüz bağlı mağaza yok. Senkron için en az bir kanal gerekiyor.
             </p>
@@ -125,7 +119,7 @@ function formatDate(iso) {
             <article
                 v-for="connection in sorted"
                 :key="connection.id"
-                class="rounded border border-stone-200 bg-white p-5"
+                class="rounded-lg border border-stone-200 bg-white p-5"
             >
                 <div class="flex items-start justify-between gap-4">
                     <div class="min-w-0">
@@ -148,7 +142,7 @@ function formatDate(iso) {
 
                     <button
                         type="button"
-                        class="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="checking !== null"
                         @click="recheck(connection.id)"
                     >

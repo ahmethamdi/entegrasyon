@@ -1,6 +1,7 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -115,30 +116,26 @@ function send(connectionId) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div class="min-w-0">
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Ürün · kanallar
-                </p>
-                <h1 class="mt-1 truncate text-2xl font-semibold tracking-tight text-stone-900">
-                    {{ product.title }}
-                </h1>
-                <p class="mt-1 font-mono text-xs text-stone-500">
+        <PageHeader section="Ürün · kanallar" :title="product.title">
+            <template #actions>
+                <Link
+                    :href="`/products/${product.id}/edit`"
+                    class="shrink-0 rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                >
+                    Ürünü düzenle
+                </Link>
+            </template>
+
+            <template #toolbar>
+                <p class="font-mono text-xs text-stone-500">
                     {{ product.sku }} · içerik sürümü v{{ product.contentVersion }}
                 </p>
-            </div>
-
-            <Link
-                :href="`/products/${product.id}/edit`"
-                class="shrink-0 rounded border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100"
-            >
-                Ürünü düzenle
-            </Link>
-        </div>
+            </template>
+        </PageHeader>
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flashSuccess }}
         </div>
@@ -152,7 +149,7 @@ function send(connectionId) {
 
         <div
             v-if="connectionError"
-            class="mt-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+            class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
             {{ connectionError }}
         </div>
@@ -163,7 +160,7 @@ function send(connectionId) {
         -->
         <div
             v-if="!sorted.length"
-            class="mt-10 rounded border border-dashed border-stone-300 p-10 text-center"
+            class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center"
         >
             <p class="text-sm text-stone-600">
                 Ürün gönderilebilecek aktif kanal yok. Kanalın sağlık kontrolünü
@@ -178,7 +175,7 @@ function send(connectionId) {
             <article
                 v-for="channel in sorted"
                 :key="channel.connectionId"
-                class="rounded border border-stone-200 bg-white p-5"
+                class="rounded-lg border border-stone-200 bg-white p-5"
             >
                 <div class="flex items-start justify-between gap-4">
                     <div class="min-w-0">
@@ -194,7 +191,7 @@ function send(connectionId) {
                             </span>
                             <span
                                 v-if="channel.published && channel.pendingWork"
-                                class="rounded border border-stone-300 bg-white px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-stone-600"
+                                class="rounded-md border border-stone-300 bg-white px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-stone-600"
                             >
                                 Bekleyen iş
                             </span>
@@ -208,7 +205,7 @@ function send(connectionId) {
                     <button
                         type="button"
                         :disabled="sending === channel.connectionId"
-                        class="shrink-0 rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+                        class="shrink-0 rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         @click="send(channel.connectionId)"
                     >
                         {{ channel.published ? 'Yeniden gönder' : 'Kanala gönder' }}

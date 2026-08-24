@@ -1,5 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 defineProps({
@@ -8,7 +9,7 @@ defineProps({
 
 const lineBadges = {
     OVERSOLD: { text: 'FAZLA SATIŞ', class: 'bg-red-50 text-red-800 border-red-200' },
-    PENDING: { text: 'BEKLİYOR', class: 'bg-amber-50 text-amber-900 border-amber-300' },
+    PENDING: { text: 'BEKLİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
     APPLIED: { text: 'STOK DÜŞÜLDÜ', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
 };
 
@@ -36,50 +37,46 @@ function stamp(value) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Sipariş
-                </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    {{ order.externalNumber ?? order.externalId }}
-                </h1>
-                <p class="mt-1 text-sm text-stone-600">
+        <PageHeader section="Sipariş" :title="order.externalNumber ?? order.externalId">
+            <template #actions>
+                <Link
+                    href="/orders"
+                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                >
+                    Listeye dön
+                </Link>
+            </template>
+
+            <template #toolbar>
+                <p class="text-sm text-stone-600">
                     {{ order.channel.label ?? '—' }}
                     <span class="font-mono text-xs text-stone-500">({{ order.channel.type }})</span>
                     · {{ stamp(order.placedAt) }}
                 </p>
-            </div>
-
-            <Link
-                href="/orders"
-                class="rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
-            >
-                Listeye dön
-            </Link>
-        </div>
+            </template>
+        </PageHeader>
 
         <!-- tutarlar -->
         <div class="mt-6 grid gap-4 sm:grid-cols-4">
-            <div class="rounded border border-stone-200 bg-white p-4">
+            <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Ara toplam</p>
                 <p class="mt-1 font-mono text-sm tabular-nums text-stone-900">
                     {{ order.subtotal }} {{ order.currency }}
                 </p>
             </div>
-            <div class="rounded border border-stone-200 bg-white p-4">
+            <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Kargo</p>
                 <p class="mt-1 font-mono text-sm tabular-nums text-stone-900">
                     {{ order.shippingTotal }} {{ order.currency }}
                 </p>
             </div>
-            <div class="rounded border border-stone-200 bg-white p-4">
+            <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Vergi</p>
                 <p class="mt-1 font-mono text-sm tabular-nums text-stone-900">
                     {{ order.taxTotal }} {{ order.currency }}
                 </p>
             </div>
-            <div class="rounded border border-stone-200 bg-white p-4">
+            <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Genel toplam</p>
                 <p class="mt-1 font-mono text-sm font-semibold tabular-nums text-stone-900">
                     {{ order.grandTotal }} {{ order.currency }}
@@ -91,15 +88,15 @@ function stamp(value) {
         <h2 class="mt-10 text-sm font-semibold text-stone-900">Kalemler</h2>
 
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div class="mt-3 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div class="mt-3 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
-                    <tr class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                        <th class="px-4 py-3">Ürün</th>
-                        <th class="px-4 py-3 text-right">Adet</th>
-                        <th class="px-4 py-3 text-right">İptal / İade</th>
-                        <th class="px-4 py-3 text-right">Tutar</th>
-                        <th class="px-4 py-3">Stok</th>
+                    <tr>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Ürün</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Adet</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">İptal / İade</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Tutar</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Stok</th>
                     </tr>
                 </thead>
 
@@ -108,7 +105,7 @@ function stamp(value) {
                         v-for="line in order.lines"
                         :key="line.id"
                         class="border-b border-stone-100"
-                        :class="line.isOversold ? 'bg-red-50/60' : (!line.isMatched ? 'bg-amber-50/50' : '')"
+                        :class="line.isOversold ? 'bg-red-50/60 hover:bg-red-100/60' : (!line.isMatched ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-stone-50')"
                     >
                         <td class="px-4 py-3">
                             <p class="text-xs text-stone-900">{{ line.title }}</p>
@@ -152,7 +149,7 @@ function stamp(value) {
         <!-- olay geçmişi -->
         <h2 class="mt-10 text-sm font-semibold text-stone-900">Geçmiş</h2>
 
-        <div class="mt-3 rounded border border-stone-200 bg-white">
+        <div class="mt-3 rounded-lg border border-stone-200 bg-white">
             <ul>
                 <li
                     v-for="event in order.events"

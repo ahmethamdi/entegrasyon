@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -117,20 +118,13 @@ const lastCapture = computed(() => {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Gözlemlenebilirlik
+        <PageHeader section="Gözlemlenebilirlik" title="Sistem sağlığı">
+            <template #actions>
+                <p v-if="lastCapture" class="text-xs text-stone-500">
+                    Son ölçüm: {{ lastCapture }}
                 </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    Sistem sağlığı
-                </h1>
-            </div>
-
-            <p v-if="lastCapture" class="text-xs text-stone-500">
-                Son ölçüm: {{ lastCapture }}
-            </p>
-        </div>
+            </template>
+        </PageHeader>
 
         <!--
             AŞAN METRİK SAYISI ÜSTTE: on üç kart arasında tek bir kırmızı
@@ -247,7 +241,7 @@ const lastCapture = computed(() => {
 
         <div
             v-if="cards.length === 0"
-            class="mt-8 rounded border border-stone-200 bg-white px-4 py-12 text-center"
+            class="mt-8 rounded-lg border border-stone-200 bg-white px-4 py-12 text-center"
         >
             <p class="text-sm text-stone-600">Henüz ölçüm yok.</p>
             <p class="mt-1 text-xs text-stone-500">

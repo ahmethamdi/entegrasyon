@@ -1,6 +1,8 @@
 <script setup>
 import { router } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
+import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -43,7 +45,7 @@ const badges = {
     },
     REMOTE_MISSING: {
         text: 'KANALDA YOK',
-        class: 'bg-purple-50 text-purple-900 border-purple-200',
+        class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     REMOTE_UNREACHABLE: {
         text: 'KANAL OKUNAMADI',
@@ -100,20 +102,13 @@ function reasonFor(reason) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Mutabakat
+        <PageHeader section="Mutabakat" title="Kanal sürüklenmesi">
+            <template #actions>
+                <p v-if="lastRunText" class="text-xs text-stone-500">
+                    Son tur: {{ lastRunText }}
                 </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    Kanal sürüklenmesi
-                </h1>
-            </div>
-
-            <p v-if="lastRunText" class="text-xs text-stone-500">
-                Son tur: {{ lastRunText }}
-            </p>
-        </div>
+            </template>
+        </PageHeader>
 
         <!--
             ÜÇ SAYI, ÜÇ FARKLI EYLEM. Tek sayıda birleştirilselerdi satıcı
@@ -121,52 +116,29 @@ function reasonFor(reason) {
             ister, sürüklenme kendiliğinden onarılır, okunamayan kanal
             bağlantı sağlığına bakmayı gerektirir.
         -->
-        <div class="mt-6 grid gap-4 sm:grid-cols-4">
-            <div
-                class="rounded border p-4"
-                :class="summary.manual_review > 0
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-stone-200 bg-white'"
-            >
-                <p class="text-xs" :class="summary.manual_review > 0 ? 'text-red-800' : 'text-stone-500'">
-                    Elle inceleme
-                </p>
-                <p
-                    class="mt-1 text-2xl font-semibold"
-                    :class="summary.manual_review > 0 ? 'text-red-900' : 'text-stone-900'"
-                >
-                    {{ summary.manual_review ?? 0 }}
-                </p>
-            </div>
+        <div class="mt-6 grid gap-3 sm:grid-cols-4">
+            <StatCard
+                label="Elle inceleme"
+                :value="summary.manual_review ?? 0"
+                :tone="summary.manual_review > 0 ? 'error' : 'neutral'"
+                :hint="summary.manual_review > 0 ? 'Otomatik onarım durdu' : null"
+            />
 
-            <div
-                class="rounded border p-4"
-                :class="summary.drift > 0 ? 'border-amber-300 bg-amber-50' : 'border-stone-200 bg-white'"
-            >
-                <p class="text-xs" :class="summary.drift > 0 ? 'text-amber-900' : 'text-stone-500'">
-                    Sürüklenme
-                </p>
-                <p
-                    class="mt-1 text-2xl font-semibold"
-                    :class="summary.drift > 0 ? 'text-amber-900' : 'text-stone-900'"
-                >
-                    {{ summary.drift ?? 0 }}
-                </p>
-            </div>
+            <!-- Sürüklenme kendiliğinden onarılır: UYARI, hata değil. -->
+            <StatCard
+                label="Sürüklenme"
+                :value="summary.drift ?? 0"
+                :tone="summary.drift > 0 ? 'warning' : 'neutral'"
+            />
 
-            <div class="rounded border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Kanal okunamadı</p>
-                <p class="mt-1 text-2xl font-semibold text-stone-900">
-                    {{ summary.unreachable ?? 0 }}
-                </p>
-            </div>
+            <!--
+                `REMOTE_UNREACHABLE` sürüklenme SAYILMAZ (§10) ama ayrı
+                gösterilir: sessizce yutulsaydı satıcı kanalının
+                okunamadığını hiç bilmezdi.
+            -->
+            <StatCard label="Kanal okunamadı" :value="summary.unreachable ?? 0" />
 
-            <div class="rounded border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Onarıldı</p>
-                <p class="mt-1 text-2xl font-semibold text-stone-900">
-                    {{ summary.repaired ?? 0 }}
-                </p>
-            </div>
+            <StatCard label="Onarıldı" :value="summary.repaired ?? 0" tone="good" />
         </div>
 
         <!--
@@ -185,7 +157,7 @@ function reasonFor(reason) {
 
         <!-- filtreler -->
         <div class="mt-8 flex flex-wrap items-center gap-3">
-            <div class="flex rounded border border-stone-300 bg-white p-0.5">
+            <div class="flex rounded-md border border-stone-300 bg-white p-0.5">
                 <button
                     type="button"
                     class="rounded px-3 py-1.5 text-sm transition"
@@ -214,17 +186,17 @@ function reasonFor(reason) {
             sütunları sıkıştırır ve "Sebep" gibi metin taşıyan sütun
             okunamaz hâle gelir. Genişlik verilince kutu KAYAR.
         -->
-        <div class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50">
-                    <tr class="text-left text-xs uppercase tracking-wide text-stone-500">
-                        <th class="px-4 py-3 font-medium">SKU</th>
-                        <th class="px-4 py-3 font-medium">Durum</th>
-                        <th class="px-4 py-3 font-medium">Sebep</th>
-                        <th class="px-4 py-3 text-right font-medium">Bizde</th>
-                        <th class="px-4 py-3 text-right font-medium">Kanalda</th>
-                        <th class="px-4 py-3 text-right font-medium">Fark</th>
-                        <th class="px-4 py-3 font-medium">Kontrol</th>
+                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">SKU</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Sebep</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Bizde</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kanalda</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Fark</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kontrol</th>
                     </tr>
                 </thead>
 

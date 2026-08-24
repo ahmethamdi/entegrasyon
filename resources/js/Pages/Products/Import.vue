@@ -1,6 +1,7 @@
 <script setup>
 import { useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 defineProps({
@@ -84,18 +85,11 @@ function toggleErrors(id) {
 
 <template>
     <PanelLayout>
-        <div>
-            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                Ürünler
-            </p>
-            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                Toplu içe aktarma
-            </h1>
-        </div>
+        <PageHeader section="Ürünler" title="Toplu içe aktarma" />
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flashSuccess }}
         </div>
@@ -108,7 +102,7 @@ function toggleErrors(id) {
         <div class="mt-6 grid gap-6 lg:grid-cols-3">
             <div class="lg:col-span-2">
                 <form
-                    class="rounded border border-stone-200 bg-white p-6"
+                    class="rounded-lg border border-stone-200 bg-white p-6"
                     @submit.prevent="submit"
                 >
                     <label class="block text-sm font-medium text-stone-700">
@@ -119,7 +113,7 @@ function toggleErrors(id) {
                         ref="fileInput"
                         type="file"
                         accept=".csv,text/csv"
-                        class="mt-2 block w-full rounded border border-stone-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
+                        class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
                         @change="onFileChange"
                     >
 
@@ -134,7 +128,7 @@ function toggleErrors(id) {
 
                     <button
                         type="submit"
-                        class="mt-4 rounded bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:opacity-50"
+                        class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         :disabled="form.processing || !form.file"
                     >
                         {{ form.processing ? 'Yükleniyor…' : 'Yükle' }}
@@ -148,7 +142,7 @@ function toggleErrors(id) {
                     kanaldan okuyabildiği veriyi elle taşıtmak demektir.
                 -->
                 <form
-                    class="mt-6 rounded border border-stone-200 bg-white p-6"
+                    class="mt-6 rounded-lg border border-stone-200 bg-white p-6"
                     @submit.prevent="submitChannel"
                 >
                     <label class="block text-sm font-medium text-stone-700">
@@ -163,7 +157,7 @@ function toggleErrors(id) {
                     <template v-else>
                         <select
                             v-model="channelForm.connection_id"
-                            class="mt-2 block w-full rounded border border-stone-300 px-3 py-2 text-sm"
+                            class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
                         >
                             <option value="">Kanal seç…</option>
                             <option
@@ -193,7 +187,7 @@ function toggleErrors(id) {
 
                         <button
                             type="submit"
-                            class="mt-4 rounded bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:opacity-50"
+                            class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="channelForm.processing || !channelForm.connection_id"
                         >
                             {{ channelForm.processing ? 'Başlatılıyor…' : 'Ürünleri çek' }}
@@ -202,7 +196,7 @@ function toggleErrors(id) {
                 </form>
             </div>
 
-            <div class="rounded border border-stone-200 bg-white p-6">
+            <div class="rounded-lg border border-stone-200 bg-white p-6">
                 <p class="text-sm font-medium text-stone-900">Kolonlar</p>
 
                 <p class="mt-3 text-xs uppercase tracking-wide text-stone-500">Zorunlu</p>
@@ -245,17 +239,17 @@ function toggleErrors(id) {
         <h2 class="mt-10 text-sm font-medium text-stone-900">Geçmiş içe aktarmalar</h2>
 
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div class="mt-3 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div class="mt-3 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50">
-                    <tr class="text-left text-xs uppercase tracking-wide text-stone-500">
-                        <th class="px-4 py-3 font-medium">Kaynak</th>
-                        <th class="px-4 py-3 font-medium">Durum</th>
-                        <th class="px-4 py-3 text-right font-medium">Yeni</th>
-                        <th class="px-4 py-3 text-right font-medium">Güncellenen</th>
-                        <th class="px-4 py-3 text-right font-medium">Atlanan</th>
-                        <th class="px-4 py-3 text-right font-medium">Hata</th>
-                        <th class="px-4 py-3 font-medium">Başladı</th>
+                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kaynak</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Yeni</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Güncellenen</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Atlanan</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Hata</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Başladı</th>
                     </tr>
                 </thead>
 

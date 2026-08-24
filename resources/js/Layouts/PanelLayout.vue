@@ -318,7 +318,7 @@ function logout() {
             >
                 <button
                     type="button"
-                    class="rounded border border-stone-300 p-2 text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                    class="rounded-md border border-stone-300 p-2 text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
                     aria-controls="panel-sidebar"
                     :aria-expanded="mobileMenuOpen"
                     aria-label="Menüyü aç"
@@ -362,7 +362,7 @@ function logout() {
                         </p>
                     </div>
 
-                    <ol class="mt-4 grid gap-px overflow-hidden rounded border border-amber-200 bg-amber-200 sm:grid-cols-4">
+                    <ol class="mt-4 grid gap-px overflow-hidden rounded-lg border border-amber-200 bg-amber-200 sm:grid-cols-4">
                         <li
                             v-for="(step, index) in steps"
                             :key="step.key"
@@ -404,7 +404,7 @@ function logout() {
                     <div v-if="nextStep?.href" class="mt-4">
                         <Link
                             :href="nextStep.href"
-                            class="inline-block rounded bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+                            class="inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
                         >
                             {{ nextStep.action }} →
                         </Link>

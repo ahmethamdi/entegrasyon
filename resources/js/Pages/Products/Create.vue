@@ -1,5 +1,6 @@
 <script setup>
 import { Link, useForm } from '@inertiajs/vue3';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const form = useForm({
@@ -20,19 +21,11 @@ function submit() {
 
 <template>
     <PanelLayout>
-        <div>
-            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                Katalog
-            </p>
-            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                Ürün ekle
-            </h1>
-            <p class="mt-2 max-w-xl text-sm text-stone-600">
-                Açılış stoğu stok defterine bir giriş hareketi olarak işlenir;
-                bakiye o hareketten türer. Ürün eklendikten sonra kanallara
-                gönderilebilir.
-            </p>
-        </div>
+        <PageHeader
+            section="Katalog"
+            title="Ürün ekle"
+            description="Açılış stoğu stok defterine bir giriş hareketi olarak işlenir; bakiye o hareketten türer. Ürün eklendikten sonra kanallara gönderilebilir."
+        />
 
         <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">
             <div>
@@ -45,7 +38,7 @@ function submit() {
                     type="text"
                     required
                     placeholder="Yün Kazak"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <p v-if="form.errors.title" class="mt-1 text-sm text-red-700">
                     {{ form.errors.title }}
@@ -62,7 +55,7 @@ function submit() {
                     type="text"
                     required
                     placeholder="KAZAK-001"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-mono text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Kanallarla eşleşmenin anahtarı. Hesabınız içinde tekil olmalı.
@@ -85,7 +78,7 @@ function submit() {
                         min="0"
                         required
                         placeholder="249.90"
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                     <p v-if="form.errors.price" class="mt-1 text-sm text-red-700">
                         {{ form.errors.price }}
@@ -101,7 +94,7 @@ function submit() {
                         v-model.number="form.opening_stock"
                         type="number"
                         min="0"
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                     <p class="mt-1 text-xs text-stone-500">
                         Giriş hareketi olarak işlenir. Negatif olamaz.
@@ -120,7 +113,7 @@ function submit() {
                     id="description"
                     v-model="form.description"
                     rows="4"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 />
                 <p v-if="form.errors.description" class="mt-1 text-sm text-red-700">
                     {{ form.errors.description }}
@@ -136,7 +129,7 @@ function submit() {
                         id="brand"
                         v-model="form.brand"
                         type="text"
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                 </div>
 
@@ -148,7 +141,7 @@ function submit() {
                         id="barcode"
                         v-model="form.barcode"
                         type="text"
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 font-mono text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                 </div>
             </div>
@@ -167,7 +160,7 @@ function submit() {
                     v-model="form.internal_category_id"
                     type="text"
                     placeholder="Örn. kadin-elbise"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Kendi kategori adınız. Kanalın kategorisine bu ad üzerinden
@@ -182,7 +175,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ form.processing ? 'Ekleniyor…' : 'Ürünü ekle' }}
                 </button>

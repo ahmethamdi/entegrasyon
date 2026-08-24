@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 defineProps({
@@ -26,19 +27,11 @@ function toggle(key) {
 
 <template>
     <PanelLayout>
-        <div>
-            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                Destek
-            </p>
-            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                Yardım
-            </h1>
-            <p class="mt-2 max-w-2xl text-sm leading-relaxed text-stone-600">
-                Panelde sık karşılaşılan durumlar ve sistemin neden öyle davrandığı.
-                Aradığınızı bulamazsanız ilgili ekrandaki uyarı metinleri de aynı
-                gerekçeleri anlatır.
-            </p>
-        </div>
+        <PageHeader
+            section="Destek"
+            title="Yardım"
+            description="Panelde sık karşılaşılan durumlar ve sistemin neden öyle davrandığı. Aradığınızı bulamazsanız ilgili ekrandaki uyarı metinleri de aynı gerekçeleri anlatır."
+        />
 
         <!--
             Bölüm kimlikleri (`id`) SÖZLEŞMEDİR: başka ekranlardan
@@ -58,7 +51,7 @@ function toggle(key) {
                 {{ section.intro }}
             </p>
 
-            <div class="mt-4 divide-y divide-stone-100 overflow-hidden rounded border border-stone-200 bg-white">
+            <div class="mt-4 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200 bg-white">
                 <div v-for="(item, index) in section.items" :key="index">
                     <button
                         type="button"

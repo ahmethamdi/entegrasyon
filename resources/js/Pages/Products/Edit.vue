@@ -1,5 +1,6 @@
 <script setup>
 import { Link, useForm } from '@inertiajs/vue3';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -22,43 +23,39 @@ function submit() {
 
 <template>
     <PanelLayout>
-        <div class="flex items-start justify-between gap-4">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Katalog
-                </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    {{ product.title }}
-                </h1>
-                <p class="mt-1 font-mono text-xs text-stone-500">
+        <PageHeader section="Katalog" :title="product.title">
+            <template #actions>
+                <div class="text-right">
+                    <p class="text-xs text-stone-500">Toplam stok</p>
+                    <p
+                        class="font-mono text-xl font-semibold tabular-nums"
+                        :class="product.hasOversold ? 'text-red-800' : 'text-stone-900'"
+                    >
+                        {{ product.totalOnHand }}
+                    </p>
+                    <Link
+                        v-if="product.hasOversold"
+                        href="/inventory?filter=oversold"
+                        class="text-[11px] text-red-700 underline"
+                    >
+                        fazla satış var
+                    </Link>
+                </div>
+            </template>
+
+            <template #toolbar>
+                <p class="font-mono text-xs text-stone-500">
                     {{ product.sku }} · içerik sürümü {{ product.contentVersion }}
                 </p>
-            </div>
-
-            <div class="text-right">
-                <p class="text-xs text-stone-500">Toplam stok</p>
-                <p
-                    class="font-mono text-xl font-semibold tabular-nums"
-                    :class="product.hasOversold ? 'text-red-800' : 'text-stone-900'"
-                >
-                    {{ product.totalOnHand }}
-                </p>
-                <Link
-                    v-if="product.hasOversold"
-                    href="/inventory?filter=oversold"
-                    class="text-[11px] text-red-700 underline"
-                >
-                    fazla satış var
-                </Link>
-            </div>
-        </div>
+            </template>
+        </PageHeader>
 
         <!--
             STOK BU EKRANDA DEĞİŞTİRİLMEZ. İçerik ve stok ayrı senkron
             alanlarıdır; başlık düzeltmesinin stok hareketi yaratması
             ledger'ı kirletirdi. Stok düzeltmesi stok ekranındadır.
         -->
-        <p class="mt-6 rounded border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
+        <p class="mt-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
             Bu ekran yalnızca içeriği düzenler; stok değişmez.
             Stok düzeltmesi için
             <Link href="/inventory" class="font-medium text-stone-900 underline">stok ekranını</Link>
@@ -75,7 +72,7 @@ function submit() {
                     v-model="form.title"
                     type="text"
                     required
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <p v-if="form.errors.title" class="mt-1 text-sm text-red-700">
                     {{ form.errors.title }}
@@ -93,7 +90,7 @@ function submit() {
                         type="number"
                         step="0.01"
                         min="0"
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                     <p v-if="form.errors.price" class="mt-1 text-sm text-red-700">
                         {{ form.errors.price }}
@@ -107,7 +104,7 @@ function submit() {
                     <select
                         id="status"
                         v-model="form.status"
-                        class="mt-1 w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                         <option value="active">Yayında</option>
                         <option value="draft">Taslak</option>
@@ -124,7 +121,7 @@ function submit() {
                     id="description"
                     v-model="form.description"
                     rows="4"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 />
             </div>
 
@@ -136,7 +133,7 @@ function submit() {
                     id="brand"
                     v-model="form.brand"
                     type="text"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
             </div>
 
@@ -153,7 +150,7 @@ function submit() {
                     v-model="form.internal_category_id"
                     type="text"
                     placeholder="Örn. kadin-elbise"
-                    class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Kendi kategori adınız. Ürünün kanalda hangi kategoriye açılacağı
@@ -169,7 +166,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ form.processing ? 'Kaydediliyor…' : 'Kaydet' }}
                 </button>

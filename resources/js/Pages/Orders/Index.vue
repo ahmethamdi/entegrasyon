@@ -1,6 +1,8 @@
 <script setup>
 import { Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
+import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -29,7 +31,7 @@ function submitSearch() {
  */
 const badges = {
     OVERSOLD: { text: 'FAZLA SATIŞ', class: 'bg-red-50 text-red-800 border-red-200' },
-    PENDING: { text: 'BEKLİYOR', class: 'bg-amber-50 text-amber-900 border-amber-300' },
+    PENDING: { text: 'BEKLİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
     APPLIED: { text: 'STOK DÜŞÜLDÜ', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
 };
 
@@ -44,75 +46,37 @@ function placedAt(row) {
 
 <template>
     <PanelLayout>
-        <div>
-            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                Siparişler
-            </p>
-            <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                Kanal siparişleri
-            </h1>
-        </div>
+        <PageHeader section="Siparişler" title="Kanal siparişleri" />
 
         <!--
             EYLEM GEREKTİREN ÖZET ÜSTTE. Fazla satış gizlenmez (§17 · P0):
             satıcı gönderemeyeceği bir siparişi kabul ettiğini burada görür.
         -->
-        <div class="mt-6 grid gap-4 sm:grid-cols-3">
-            <div class="rounded border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Sipariş</p>
-                <p class="mt-1 text-2xl font-semibold text-stone-900">{{ summary.orderCount }}</p>
-            </div>
+        <div class="mt-6 grid gap-3 sm:grid-cols-3">
+            <StatCard label="Sipariş" :value="summary.orderCount" />
 
-            <div
-                class="rounded border p-4"
-                :class="summary.oversoldOrderCount > 0
-                    ? 'border-red-200 bg-red-50'
-                    : 'border-stone-200 bg-white'"
-            >
-                <p
-                    class="text-xs"
-                    :class="summary.oversoldOrderCount > 0 ? 'text-red-800' : 'text-stone-500'"
-                >
-                    Fazla satış içeren
-                </p>
-                <p
-                    class="mt-1 text-2xl font-semibold"
-                    :class="summary.oversoldOrderCount > 0 ? 'text-red-900' : 'text-stone-900'"
-                >
-                    {{ summary.oversoldOrderCount }}
-                </p>
-            </div>
+            <StatCard
+                label="Fazla satış içeren"
+                :value="summary.oversoldOrderCount"
+                :tone="summary.oversoldOrderCount > 0 ? 'error' : 'neutral'"
+            />
 
             <!--
                 EŞLEŞMEMİŞ SKU AYRI UYARIDIR: o satırın stoğu HİÇ düşülmedi.
                 Fazla satışta stok eksi görünür ve fark edilir; burada tablo
                 "her şey yolunda" der ve sessiz kalırsa stok kalıcı olarak
-                fazla gösterilir.
+                fazla gösterilir. Bu yüzden tonu UYARI (amber), hata değil.
             -->
-            <div
-                class="rounded border p-4"
-                :class="summary.unmatchedOrderCount > 0
-                    ? 'border-amber-300 bg-amber-50'
-                    : 'border-stone-200 bg-white'"
-            >
-                <p
-                    class="text-xs"
-                    :class="summary.unmatchedOrderCount > 0 ? 'text-amber-900' : 'text-stone-500'"
-                >
-                    Eşleşmemiş SKU içeren
-                </p>
-                <p
-                    class="mt-1 text-2xl font-semibold"
-                    :class="summary.unmatchedOrderCount > 0 ? 'text-amber-900' : 'text-stone-900'"
-                >
-                    {{ summary.unmatchedOrderCount }}
-                </p>
-            </div>
+            <StatCard
+                label="Eşleşmemiş SKU içeren"
+                :value="summary.unmatchedOrderCount"
+                :tone="summary.unmatchedOrderCount > 0 ? 'warning' : 'neutral'"
+            />
         </div>
 
         <!-- filtreler -->
         <div class="mt-8 flex flex-wrap items-center gap-3">
-            <div class="flex rounded border border-stone-300 bg-white p-0.5">
+            <div class="flex rounded-md border border-stone-300 bg-white p-0.5">
                 <button
                     type="button"
                     class="rounded px-3 py-1.5 text-sm transition"
@@ -156,33 +120,33 @@ function placedAt(row) {
                     v-model="search"
                     type="search"
                     placeholder="Sipariş no veya SKU ara"
-                    class="w-full min-w-0 rounded border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-500 focus:outline-none sm:w-64"
+                    class="w-full min-w-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600 sm:w-64"
                 >
                 <button
                     type="submit"
-                    class="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                    class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                 >
                     Ara
                 </button>
             </form>
         </div>
 
-        <div v-if="!rows.length" class="mt-8 rounded border border-dashed border-stone-300 p-10 text-center">
+        <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
             <p class="text-sm text-stone-600">Bu ölçütlerle sipariş bulunamadı.</p>
         </div>
 
         <!-- liste -->
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div v-else class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div v-else class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
-                    <tr class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                        <th class="px-4 py-3">Sipariş</th>
-                        <th class="px-4 py-3">Kanal</th>
-                        <th class="px-4 py-3 text-right">Kalem</th>
-                        <th class="px-4 py-3 text-right">Tutar</th>
-                        <th class="px-4 py-3">Stok</th>
-                        <th class="px-4 py-3"></th>
+                    <tr>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Sipariş</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kanal</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kalem</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Tutar</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Stok</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600"></th>
                     </tr>
                 </thead>
 
@@ -191,7 +155,7 @@ function placedAt(row) {
                         v-for="row in rows"
                         :key="row.id"
                         class="border-b border-stone-100"
-                        :class="row.hasOversold ? 'bg-red-50/60' : (row.hasUnmatched ? 'bg-amber-50/50' : '')"
+                        :class="row.hasOversold ? 'bg-red-50/60 hover:bg-red-100/60' : (row.hasUnmatched ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-stone-50')"
                     >
                         <td class="px-4 py-3">
                             <p class="font-mono text-xs text-stone-900">
@@ -240,7 +204,7 @@ function placedAt(row) {
                         <td class="px-4 py-3 text-right">
                             <Link
                                 :href="`/orders/${row.id}`"
-                                class="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                             >
                                 Ayrıntı
                             </Link>

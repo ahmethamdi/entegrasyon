@@ -1,6 +1,8 @@
 <script setup>
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
+import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -95,7 +97,7 @@ const errors = {
     NOT_FOUND: {
         text: 'KANALDA YOK',
         advice: 'Ürün kanalda bulunamadı; kanal panelinden kontrol edin.',
-        class: 'bg-purple-50 text-purple-900 border-purple-200',
+        class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
 };
 
@@ -114,30 +116,27 @@ function domainFor(domain) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Senkron
-                </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    Başarısız işlemler
-                </h1>
-            </div>
-
-            <button
-                v-if="rows.length > 0"
-                type="button"
-                class="rounded bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-800 disabled:opacity-50"
-                :disabled="busy !== null"
-                @click="retryAll"
-            >
-                {{ busy === 'all' ? 'Kuyruğa alınıyor…' : `Hepsini yeniden dene (${rows.length})` }}
-            </button>
-        </div>
+        <PageHeader
+            section="Senkron"
+            title="Başarısız işlemler"
+            description="Tüm denemelerini tüketen gönderimler burada listelenir. Yetki ve doğrulama hataları yeniden denemeyle çözülmez."
+        >
+            <template #actions>
+                <button
+                    v-if="rows.length > 0"
+                    type="button"
+                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="busy !== null"
+                    @click="retryAll"
+                >
+                    {{ busy === 'all' ? 'Kuyruğa alınıyor…' : `Hepsini yeniden dene (${rows.length})` }}
+                </button>
+            </template>
+        </PageHeader>
 
         <p
             v-if="flash"
-            class="mt-6 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flash }}
         </p>
@@ -148,29 +147,15 @@ function domainFor(domain) {
             yeniden denemeyle geçer. Tek sayıda birleştirilselerdi satıcı
             hangi satırların kendisini beklediğini bilemezdi.
         -->
-        <div class="mt-6 grid gap-4 sm:grid-cols-2">
-            <div
-                class="rounded border p-4"
-                :class="summary.total > 0 ? 'border-stone-300 bg-white' : 'border-stone-200 bg-white'"
-            >
-                <p class="text-xs text-stone-500">Başarısız işlem</p>
-                <p class="mt-1 text-2xl font-semibold text-stone-900">{{ summary.total ?? 0 }}</p>
-            </div>
+        <div class="mt-6 grid gap-3 sm:grid-cols-2">
+            <StatCard label="Başarısız işlem" :value="summary.total ?? 0" />
 
-            <div
-                class="rounded border p-4"
-                :class="summary.needs_user > 0 ? 'border-red-300 bg-red-50' : 'border-stone-200 bg-white'"
-            >
-                <p class="text-xs" :class="summary.needs_user > 0 ? 'text-red-800' : 'text-stone-500'">
-                    Müdahale bekliyor
-                </p>
-                <p
-                    class="mt-1 text-2xl font-semibold"
-                    :class="summary.needs_user > 0 ? 'text-red-900' : 'text-stone-900'"
-                >
-                    {{ summary.needs_user ?? 0 }}
-                </p>
-            </div>
+            <StatCard
+                label="Müdahale bekliyor"
+                :value="summary.needs_user ?? 0"
+                :tone="summary.needs_user > 0 ? 'error' : 'neutral'"
+                :hint="summary.needs_user > 0 ? 'Yeniden denemeyle çözülmez' : null"
+            />
         </div>
 
         <!--
@@ -197,17 +182,17 @@ function domainFor(domain) {
             genişlik verilince sütunlar doğal boyutlarını korur ve kutu
             KAYAR — kaydırma zaten tasarlanan davranıştı.
         -->
-        <div class="mt-8 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div class="mt-8 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-208 text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50">
-                    <tr class="text-left text-xs uppercase tracking-wide text-stone-500">
-                        <th class="px-4 py-3 font-medium">SKU</th>
-                        <th class="px-4 py-3 font-medium">Kanal</th>
-                        <th class="px-4 py-3 font-medium">Alan</th>
-                        <th class="px-4 py-3 font-medium">Hata</th>
-                        <th class="px-4 py-3 text-right font-medium">Deneme</th>
-                        <th class="px-4 py-3 font-medium">Zaman</th>
-                        <th class="px-4 py-3"></th>
+                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                    <tr>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">SKU</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kanal</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Alan</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Hata</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Deneme</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Zaman</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600"></th>
                     </tr>
                 </thead>
 
@@ -267,7 +252,7 @@ function domainFor(domain) {
                         <td class="px-4 py-3 text-right">
                             <button
                                 type="button"
-                                class="rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:opacity-50"
+                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="busy !== null"
                                 @click="retry(row.id)"
                             >

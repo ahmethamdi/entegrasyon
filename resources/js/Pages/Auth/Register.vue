@@ -40,7 +40,7 @@ function submit() {
                         type="text"
                         required
                         autofocus
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                     <p v-if="form.errors.name" class="mt-1 text-sm text-red-700">
                         {{ form.errors.name }}
@@ -56,7 +56,7 @@ function submit() {
                         v-model="form.company"
                         type="text"
                         required
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                     <p v-if="form.errors.company" class="mt-1 text-sm text-red-700">
                         {{ form.errors.company }}
@@ -73,7 +73,7 @@ function submit() {
                         type="email"
                         autocomplete="email"
                         required
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                     <p v-if="form.errors.email" class="mt-1 text-sm text-red-700">
                         {{ form.errors.email }}
@@ -90,7 +90,7 @@ function submit() {
                         type="password"
                         autocomplete="new-password"
                         required
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                     <p v-if="form.errors.password" class="mt-1 text-sm text-red-700">
                         {{ form.errors.password }}
@@ -107,14 +107,14 @@ function submit() {
                         type="password"
                         autocomplete="new-password"
                         required
-                        class="mt-1 w-full rounded border border-stone-300 px-3 py-2 text-sm focus:border-stone-500 focus:outline-none"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                     >
                 </div>
 
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800 disabled:opacity-50"
+                    class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     Hesap oluştur
                 </button>

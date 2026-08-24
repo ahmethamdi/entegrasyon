@@ -1,6 +1,7 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -92,39 +93,32 @@ function toggle(id) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between gap-4">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Kanal · eşleştirme
-                </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    Kategori ve öznitelik eşleştirme
-                </h1>
-                <p class="mt-1 text-sm text-stone-600">
-                    Ürünlerin kanalda hangi kategoriye açılacağı burada belirlenir.
-                    Eksik eşleştirmede ürün kanala gönderilemez; stok akışı etkilenmez.
-                </p>
-            </div>
-
-            <div v-if="channelTypes.length > 1" class="shrink-0">
-                <label class="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Kanal
-                </label>
-                <select
-                    class="mt-1 rounded border border-stone-300 px-3 py-2 text-sm"
-                    :value="selectedChannelType"
-                    @change="switchChannel"
-                >
-                    <option v-for="type in channelTypes" :key="type.code" :value="type.code">
-                        {{ type.name }}
-                    </option>
-                </select>
-            </div>
-        </div>
+        <PageHeader
+            section="Kanal · eşleştirme"
+            title="Kategori ve öznitelik eşleştirme"
+            description="Ürünlerin kanalda hangi kategoriye açılacağı burada belirlenir. Eksik eşleştirmede ürün kanala gönderilemez; stok akışı etkilenmez."
+        >
+            <template #actions>
+                <div v-if="channelTypes.length > 1" class="shrink-0">
+                    <label class="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
+                        Kanal
+                    </label>
+                    <select
+                        class="mt-1 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                        :value="selectedChannelType"
+                        @change="switchChannel"
+                    >
+                        <option v-for="type in channelTypes" :key="type.code" :value="type.code">
+                            {{ type.name }}
+                        </option>
+                    </select>
+                </div>
+            </template>
+        </PageHeader>
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flashSuccess }}
         </div>
@@ -132,7 +126,7 @@ function toggle(id) {
         <div
             v-for="(message, field) in errors"
             :key="field"
-            class="mt-6 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+            class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
             {{ message }}
         </div>
@@ -143,7 +137,7 @@ function toggle(id) {
         -->
         <div
             v-if="!channelCategories.length"
-            class="mt-10 rounded border border-dashed border-stone-300 p-10 text-center"
+            class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center"
         >
             <p class="text-sm text-stone-600">
                 Bu kanalın kategori ağacı henüz çekilmedi. Taksonomi günlük olarak
@@ -165,7 +159,7 @@ function toggle(id) {
             -->
             <div
                 v-if="!sortedInternal.length"
-                class="mt-4 rounded border border-dashed border-stone-300 p-10 text-center"
+                class="mt-4 rounded-lg border border-dashed border-stone-300 p-10 text-center"
             >
                 <p class="text-sm text-stone-600">
                     Hiçbir ürününüzde iç kategori tanımlı değil. Ürünü düzenleyip
@@ -180,7 +174,7 @@ function toggle(id) {
                 <article
                     v-for="row in sortedInternal"
                     :key="row.id"
-                    class="rounded border border-stone-200 bg-white"
+                    class="rounded-lg border border-stone-200 bg-white"
                 >
                     <div class="flex items-start justify-between gap-4 p-5">
                         <div class="min-w-0">
@@ -231,7 +225,7 @@ function toggle(id) {
 
                         <button
                             type="button"
-                            class="shrink-0 rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                            class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                             @click="toggle(row.id)"
                         >
                             {{ expanded === row.id ? 'Kapat' : 'Eşleştir' }}
@@ -245,7 +239,7 @@ function toggle(id) {
                         <div class="mt-1 flex gap-2">
                             <select
                                 :id="`cat-${row.id}`"
-                                class="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm"
+                                class="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm"
                                 :value="row.mapping?.channelCategoryId ?? ''"
                                 @change="saveCategory(row.id, $event.target.value)"
                             >
@@ -272,14 +266,14 @@ function toggle(id) {
                                 <div
                                     v-for="attribute in row.mapping.requiredAttributes"
                                     :key="attribute.externalId"
-                                    class="flex items-center gap-3 rounded border border-stone-200 bg-white px-3 py-2"
+                                    class="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2"
                                 >
                                     <span class="w-40 shrink-0 truncate text-sm text-stone-900">
                                         {{ attribute.name }}
                                     </span>
 
                                     <select
-                                        class="w-full rounded border border-stone-300 px-3 py-1.5 text-sm"
+                                        class="w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm"
                                         :value="row.mapping.mappedAttributes[attribute.externalId] ?? ''"
                                         :disabled="saving === attribute.externalId"
                                         @change="saveAttribute(

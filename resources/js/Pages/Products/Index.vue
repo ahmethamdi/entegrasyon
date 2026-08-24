@@ -1,6 +1,7 @@
 <script setup>
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
 const props = defineProps({
@@ -35,42 +36,35 @@ function statusClass(status) {
 
 <template>
     <PanelLayout>
-        <div class="flex items-end justify-between">
-            <div>
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                    Katalog
-                </p>
-                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-                    Ürünler
-                </h1>
-            </div>
+        <PageHeader section="Katalog" title="Ürünler">
+            <template #actions>
+                <div class="flex items-center gap-2">
+                    <!--
+                        Toplu içe aktarma ürün ekleme AKIŞININ YANINDA durur:
+                        satıcı "ürün ekle"ye bakarken 500 ürünü tek tek
+                        giremeyeceğini fark eder ve alternatifi tam orada
+                        görmeli.
+                    -->
+                    <Link
+                        href="/products/import"
+                        class="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                    >
+                        Toplu içe aktar
+                    </Link>
 
-            <div class="flex items-center gap-2">
-                <!--
-                    Toplu içe aktarma ürün ekleme AKIŞININ YANINDA durur:
-                    satıcı "ürün ekle"ye bakarken 500 ürünü tek tek
-                    giremeyeceğini fark eder ve alternatifi tam orada
-                    görmeli.
-                -->
-                <Link
-                    href="/products/import"
-                    class="rounded border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
-                >
-                    Toplu içe aktar
-                </Link>
-
-                <Link
-                    href="/products/create"
-                    class="rounded bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-800"
-                >
-                    Ürün ekle
-                </Link>
-            </div>
-        </div>
+                    <Link
+                        href="/products/create"
+                        class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                    >
+                        Ürün ekle
+                    </Link>
+                </div>
+            </template>
+        </PageHeader>
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flashSuccess }}
         </div>
@@ -80,17 +74,17 @@ function statusClass(status) {
                 v-model="search"
                 type="search"
                 placeholder="SKU veya başlık ara"
-                class="w-72 rounded border border-stone-300 px-3 py-1.5 text-sm focus:border-stone-500 focus:outline-none"
+                class="w-72 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
             >
             <button
                 type="submit"
-                class="rounded border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
             >
                 Ara
             </button>
         </form>
 
-        <div v-if="!rows.length" class="mt-8 rounded border border-dashed border-stone-300 p-10 text-center">
+        <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
             <p class="text-sm text-stone-600">
                 Henüz ürün yok. Senkron için önce katalog gerekiyor.
             </p>
@@ -100,15 +94,15 @@ function statusClass(status) {
         </div>
 
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div v-else class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div v-else class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
-                    <tr class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                        <th class="px-4 py-3">Ürün</th>
-                        <th class="px-4 py-3">Durum</th>
-                        <th class="px-4 py-3 text-right">Varyant</th>
-                        <th class="px-4 py-3 text-right">Toplam stok</th>
-                        <th class="px-4 py-3"></th>
+                    <tr>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Ürün</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Varyant</th>
+                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Toplam stok</th>
+                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600"></th>
                     </tr>
                 </thead>
 
@@ -117,7 +111,7 @@ function statusClass(status) {
                         v-for="row in rows"
                         :key="row.id"
                         class="border-b border-stone-100"
-                        :class="row.hasOversold ? 'bg-red-50/60' : ''"
+                        :class="row.hasOversold ? 'bg-red-50/60 hover:bg-red-100/60' : 'hover:bg-stone-50'"
                     >
                         <td class="px-4 py-3">
                             <p class="text-sm text-stone-900">{{ row.title }}</p>
@@ -159,13 +153,13 @@ function statusClass(status) {
                             <div class="flex justify-end gap-2">
                                 <Link
                                     :href="`/products/${row.id}/channels`"
-                                    class="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                    class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                 >
                                     Kanallar
                                 </Link>
                                 <Link
                                     :href="`/products/${row.id}/edit`"
-                                    class="rounded border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                    class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                 >
                                     Düzenle
                                 </Link>
