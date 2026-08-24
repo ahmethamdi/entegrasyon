@@ -8,6 +8,7 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Support\Logging\PayloadRedactor;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -47,5 +48,25 @@ class AppServiceProvider extends ServiceProvider
         // Üretimde beklenmeyen lazy loading sessiz N+1 üretir; geliştirmede
         // erken yakalanır.
         Model::preventLazyLoading(! $this->app->isProduction());
+
+        // HTTPS ZORUNLU — §11 · "Minimum production kontrol listesi".
+        //
+        // Düz HTTP'de iki şey birden açığa çıkar: satıcının OTURUM ÇEREZİ
+        // (yani hesabın tamamı) ve kanal bağlama formuna yazılan API
+        // ANAHTARI. `StoreUrl` zaten `https` dayatıyor ama o kural KANALA
+        // GİDEN yönü korur; bu satır satıcının TARAYICISINDAN gelen yönü
+        // korur.
+        //
+        // ÜRETİMLE SINIRLIDIR: yerel geliştirme `http://localhost:8080`
+        // üzerinden çalışır ve koşulsuz zorlama tüm paneli yerelde kırardı.
+        //
+        // HSTS BAŞLIĞI BURADA DEĞİL NGINX'TE: başlığı uygulama katmanından
+        // göndermek, uygulamanın HİÇ cevap veremediği durumlarda (500,
+        // bakım modu, PHP-FPM ölü) başlığın da gitmemesi demektir. HSTS'in
+        // tüm değeri KESİNTİSİZLİĞİNDEDİR — bir kez eksik gönderilen
+        // başlık tarayıcının kaydını süresinden önce eskitir.
+        if ($this->app->isProduction()) {
+            URL::forceScheme('https');
+        }
     }
 }

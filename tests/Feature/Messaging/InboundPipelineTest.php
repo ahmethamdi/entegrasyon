@@ -20,6 +20,7 @@ use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Enums\StockStatus;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Models\OrderLine;
+use App\Http\Controllers\WebhookController;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -97,6 +98,87 @@ final class InboundPipelineTest extends TestCase
         $response = $this->postJson('/webhooks/'.(string) new UuidV7, ['type' => 'created']);
 
         $response->assertStatus(404);
+    }
+
+    /**
+     * BEKLENMEYEN İÇERİK TİPİ 415 ALIR VE AYRIŞTIRILMAZ.
+     *
+     * Mimari Karar Dokümanı v2.2 · §11 · Webhook güvenliği tablosu:
+     * "İçerik tipi — beklenmeyen tip → 415, ayrıştırma yapılmaz".
+     *
+     * Kapı İMZADAN ÖNCE gelir ve bu bilinçlidir: imza doğrulaması gövdeyi
+     * okur ve adapter'a verir; JSON beklerken `multipart/form-data` veya
+     * `application/xml` almak, ayrıştırıcıyı hiç tasarlanmadığı bir girdiyle
+     * karşılaştırmaktır. Ucuz kapı önce çalışır.
+     *
+     * 415 DÖNMEK 202 KURALINI İHLAL ETMEZ: "her durumda 202" kuralı
+     * TANIDIĞIMIZ bir mesajın işlenmesiyle ilgilidir ve kanalın gereksiz
+     * yeniden göndermesini önler. Yanlış içerik tipi kanalın YAPILANDIRMA
+     * hatasıdır; 2xx dönmek onu sessizce gizler ve mesaj sonsuza kadar
+     * kaybolur.
+     */
+    #[Test]
+    public function unexpected_content_type_is_rejected_with_415(): void
+    {
+        [, $connection] = $this->makeContext();
+
+        $response = $this->call(
+            method: 'POST',
+            uri: "/webhooks/{$connection->id}",
+            server: ['CONTENT_TYPE' => 'application/xml'],
+            content: '<order><id>1</id></order>',
+        );
+
+        $response->assertStatus(415);
+
+        // Ayrıştırma YAPILMADI: hiçbir kayıt yazılmamalı.
+        $this->assertSame(0, $this->asSystem(fn () => InboxMessage::query()->count()));
+    }
+
+    /**
+     * HIZ SINIRI BAĞLANTI BAŞINADIR — §11: "dakikada 600 istek".
+     *
+     * SINIR BAĞLANTI BAŞINA, IP BAŞINA DEĞİL: kanal webhook'ları kendi
+     * altyapısından gelir ve aynı IP yüzlerce satıcıya hizmet eder. IP
+     * başına sınır konsaydı yoğun bir satıcı, aynı kanaldaki DİĞER
+     * satıcıların siparişlerini düşürürdü.
+     *
+     * SINIRA TAKILAN İSTEK 429 ALIR ve bu, "her durumda 202" kuralının
+     * bilinçli istisnasıdır: 429 kanala "yavaşla ve TEKRAR GÖNDER" der ve
+     * her ciddi kanal onu böyle yorumlar. 202 dönseydi mesaj kabul edilmiş
+     * sayılır ama işlenmezdi — sipariş sessizce kaybolurdu.
+     */
+    #[Test]
+    public function the_webhook_endpoint_is_rate_limited_per_connection(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+        [, $other] = $this->makeContext();
+
+        $limit = WebhookController::MAX_REQUESTS_PER_MINUTE;
+
+        for ($i = 0; $i < $limit; $i++) {
+            $this->postJson(
+                "/webhooks/{$connection->id}",
+                ['type' => 'created', 'external_order_id' => "ORD-{$i}"],
+                ['X-Fake-Delivery-Id' => "DLV-{$i}"],
+            )->assertStatus(202);
+        }
+
+        // Bütçe doldu.
+        $this->postJson(
+            "/webhooks/{$connection->id}",
+            ['type' => 'created', 'external_order_id' => 'ORD-TASMA'],
+            ['X-Fake-Delivery-Id' => 'DLV-TASMA'],
+        )->assertStatus(429);
+
+        // BAŞKA BAĞLANTI ETKİLENMEZ — kova bağlantı başınadır.
+        $this->postJson(
+            "/webhooks/{$other->id}",
+            ['type' => 'created', 'external_order_id' => 'ORD-DIGER'],
+            ['X-Fake-Delivery-Id' => 'DLV-DIGER'],
+        )->assertStatus(202);
     }
 
     /**

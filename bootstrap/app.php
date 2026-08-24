@@ -80,5 +80,26 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(fn () => route('login'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // DOĞRULAMA HATASINDA SIR OTURUMA FLASH EDİLMEZ — §11.
         //
+        // Laravel doğrulama hatasında TÜM istek girdisini oturuma flash
+        // eder ki form yeniden doldurulabilsin. Varsayılan `dontFlash`
+        // listesi yalnızca `password` ailesini kapsar — kanal anahtarları
+        // DEĞİL.
+        //
+        // Bedeli: kullanıcı kanal formunu eksik doldurup gönderdiğinde
+        // anahtar oturum deposuna DÜZ METİN yazılır ve bu projede oturum
+        // deposu VERİTABANIDIR (`SESSION_DRIVER=database`). Kasada
+        // şifrelenen değer, kasaya hiç ulaşmadan şifresiz bir tabloya
+        // düşer ve oturum süresi boyunca orada durur.
+        //
+        // LİSTE BUGÜN KULLANILANLARDAN GENİŞTİR ve bu bilinçlidir: yeni
+        // bir kanal eklendiğinde alan adı burada YOKSA sızıntı sessizce
+        // geri gelir ve hiçbir test onu göstermez. `PayloadRedactor`'ün
+        // anahtar listesiyle aynı gerekçe.
+        $exceptions->dontFlash([
+            'consumer_key', 'consumer_secret',
+            'api_key', 'api_secret',
+            'access_token', 'refresh_token', 'token', 'secret',
+        ]);
     })->create();

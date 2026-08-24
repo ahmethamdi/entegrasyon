@@ -231,6 +231,61 @@ jobs:
       - name: Laravel Pint
         run: $(composer global config bin-dir --absolute --quiet)/pint --test
 
+  # BAĞIMLILIK GÜVENLİK TARAMASI — Mimari Karar Dokümanı v2.2 · §11 ·
+  # "Minimum production kontrol listesi" → "Bağımlılık güvenlik taraması
+  # CI'da".
+  #
+  # NEDEN AYRI JOB: tarama, testlerin geçip geçmemesinden BAĞIMSIZ bir
+  # sinyaldir. `tests` içine gömülseydi kırmızı bir test taramayı hiç
+  # çalıştırmazdı — oysa güvenlik açığı tam da acele düzeltme yapılan
+  # günlerde önemlidir.
+  #
+  # NEDEN 429 SORUNU YOK: `composer audit` yalnızca `composer.lock`'ı
+  # okur ve Packagist'in advisory API'sine TEK istek atar; paket İNDİRMEZ.
+  # Diğer job'ları düşüren codeload yolu buraya hiç uğramaz ve bu yüzden
+  # `--prefer-source` gibi bir kaçış yoluna da ihtiyaç yoktur.
+  security:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        id: php
+        continue-on-error: true
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Setup PHP (retry)
+        if: steps.php.outcome == 'failure'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      # Kilitli PHP sürümü (`config.platform`) yüzünden `--no-scripts`:
+      # audit hiçbir paketi kurmaz, yalnızca lock dosyasını okur.
+      - name: Composer audit
+        run: composer audit --locked --no-scripts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # `--omit=dev` ÜRETİME GİDENİ sınar. Geliştirme bağımlılıklarındaki
+      # bir açık (Vite eklentisi, test aracı) sunucuda hiç çalışmaz ve
+      # CI'ı kırmışsa yalnızca gerçek sinyali gürültüye boğar.
+      #
+      # `--audit-level=high` bilinçlidir: `low`/`moderate` seviyesindeki
+      # geçişli uyarılar npm ekosisteminde sürekli akar ve her biri CI'ı
+      # kırsaydı ekip taramayı KAPATIRDI — uyarı yorgunluğunun kodda
+      # karşılığı (`alert_deliveries`'in var olma sebebiyle aynı mantık).
+      - name: NPM audit
+        run: npm audit --omit=dev --audit-level=high
+
   frontend:
     name: Frontend build
     runs-on: ubuntu-latest
