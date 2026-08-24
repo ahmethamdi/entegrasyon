@@ -177,6 +177,17 @@ final class HelpController extends Controller
                         'q' => 'Ürünüm “gönderilecek bir şey yok” diyor.',
                         'a' => 'İki farklı sebep olabilir: içerik zaten güncel olduğu için gönderim atlanmıştır ya da eşleştirme eksik olduğu için engellenmiştir. Ekran hangisi olduğunu söyler; engelse eşleştirme ekranından eksikleri tamamlayın.',
                     ],
+                    // §14 · onay süreci. Satıcı bu farkı bilmezse
+                    // Trendyol'a gönderdiği ürünün neden satmadığını
+                    // anlamaz ve sorunu bizde arar.
+                    [
+                        'q' => 'Ürünü gönderdim ama kanalda görünmüyor.',
+                        'a' => 'Pazaryerlerinde ürün gönderilir gönderilmez yayına girmez: kanal önce inceler. O sırada ürün “onay bekliyor” durumundadır ve yapmanız gereken bir şey yoktur. Kanal reddederse sebebini “Onaylar” ekranında görürsünüz. WooCommerce gibi kendi mağazanızda onay süreci yoktur, ürün anında yayına girer.',
+                    ],
+                    [
+                        'q' => 'Ürünüm reddedildi, ne yapmalıyım?',
+                        'a' => '“Onaylar” ekranında red sebebi yazılıdır — genellikle eksik bir bilgi ya da kanal kurallarına uymayan bir görseldir. Ürünü düzeltip kanala yeniden gönderin; sonraki kontrol turunda durum güncellenir. Reddedilen satır kendiliğinden düzelmez.',
+                    ],
                 ],
             ],
             [

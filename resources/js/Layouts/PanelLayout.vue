@@ -39,6 +39,16 @@ const navGroups = [
             { href: '/products', label: 'Ürünler' },
             { href: '/channels', label: 'Kanallar' },
             { href: '/mappings', label: 'Eşleştirme' },
+            /*
+             * "Onaylar" KATALOG altındadır, İZLEME altında DEĞİL.
+             *
+             * İzleme grubu SİSTEMİN sağlığını gösterir (sürüklenme, hata,
+             * metrik) ve oradaki satırlar bizim bir şeyi beceremediğimizi
+             * söyler. Onay ise ürünün kanaldaki NORMAL yaşam döngüsüdür:
+             * gönderdik, kanal bakıyor. Hataların yanına konsaydı satıcı
+             * bekleyen her ürünü bir arıza sanardı.
+             */
+            { href: '/approvals', label: 'Onaylar' },
         ],
     },
     {

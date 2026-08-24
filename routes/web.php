@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BillingController;
@@ -110,6 +111,18 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     // çözer; başka kiracının siparişi 404 verir.
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+
+    // Onay durumu ekranı (§13 · Faz 4, §14 · onay süreci). SALT OKUNUR:
+    // onay kararını KANAL verir ve biz yalnızca okuruz (`approval:track`,
+    // saatlik). Panelden "onayla" düğmesi koymak, kanalın kararını bizim
+    // verebileceğimiz izlenimi yaratırdı.
+    //
+    // Ürün-kanal ekranının KOPYASI DEĞİLDİR: orası TEK ÜRÜN için "hangi
+    // kanallarda ne durumda" der, burası TERSİNİ sorar — "kaç ürünüm onay
+    // bekliyor, hangileri reddedildi". Yüz ürün gönderen satıcı reddedilen
+    // üçünü bulmak için yüz kanal sekmesi açamaz.
+    Route::get('/approvals', [ApprovalController::class, 'index'])
+        ->name('approvals.index');
 
     // Mutabakat ekranı (§13 · Faz 4 · panel, §10). SALT OKUNUR: sürüklenme
     // tespiti ve onarımı zamanlanmış turların işidir ve panelden
