@@ -5,7 +5,170 @@ Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `356a662`,
 
 **892 test yeşil** (3462 assertion), Pint temiz (373 dosya).
 
-## 🔴 SIRADAKİ İŞ — HEPSİBURADA DOKÜMANTASYONU (KULLANICI İLE BİRLİKTE)
+## 📋 v2.2 TAMAMLANMA DENETİMİ (24 Ağustos — kullanıcı sordu)
+
+Kullanıcı "v2.2 bitti mi, yeni PDF yazdıracağım" diye sordu. Dokümanın
+kendi **"468 saat sonunda production'a hazır olan"** tablosuyla
+karşılaştırıldı (PDF satır ~7930–7990):
+
+| Alan | Doküman | Gerçek |
+|---|---|---|
+| WooCommerce | TAM | ✅ |
+| Trendyol | TAM | ✅ |
+| Stok senkronu | TAM | ✅ |
+| Fazla satış görünürlüğü | TAM | ✅ |
+| Sipariş alımı | TAM | ✅ |
+| **Fiyat senkronu** | **TAM** ("kanal override, **çakışma tespiti ve rozeti**") | ⚠️ **EKSİK** |
+| Mutabakat | TAM | ✅ |
+| Gözlemlenebilirlik | TAM (11 metrik) | ✅ (13 metrik) |
+| Faturalama | TEMEL | ✅ |
+| Toplu içe aktarma | TEMEL | ✅ |
+| Hepsiburada | HAYIR (Ay 7) | 🔵 istemci katmanı yazıldı (kapsam dışı) |
+| Shopify | HAYIR (Ay 7–8) | 🔵 sıraya kondu (kapsam dışı) |
+
+**SONUÇ: v2.2'nin kod tarafında TEK açık madde fiyat çakışması tespiti.**
+
+Ayrıca kodla kapanmayan iki şey:
+
+- **Faz 5 (28 sa)** — doküman: *"İlk üç beş müşterinin gerçek verisiyle
+  çıkan sorunlar · Çıktı: ÖDEYEN MÜŞTERİ"*. Müşteri gerektiriyor.
+- **Faz 4'ün demo ölçütü** — *"yeni kullanıcı kaydolup ÖDEME YAPIP
+  senkronlayabiliyor"*. `subscriptions` tablosu **0 satır**,
+  `STRIPE_WEBHOOK_SECRET` yer tutucu. Kod hazır, test anahtarı lazım.
+
+**Hepsiburada ve Shopify dokümanda "HAYIR — Ay 7" yazıyor.** Yeni PDF'e
+yazdırırken bunlar v2.2'nin KAPSAMI değil, SONRASI olarak durmalı —
+aksi halde belge kendi zaman çizelgesiyle çelişir.
+
+---
+
+## 🔴🔴 YARIM İŞ VAR — FİYAT ÇAKIŞMASI TESPİTİ (ÖNCE BUNU OKU)
+
+**24 Ağustos, oturum sonunda başlandı ve YARIDA KESİLDİ** (kullanıcı yeni
+sohbetten devam etmek istedi). Çalışma ağacında **commit edilmemiş bir
+migration** var:
+
+```
+database/migrations/2026_08_24_000200_create_price_overrides_table.php
+```
+
+**MIGRATION HENÜZ ÇALIŞTIRILMADI** — `price_overrides` tablosu
+veritabanında YOK (doğrulandı). Yani temiz bir devir noktası: dosyayı
+okuyup devam et ya da silip baştan tasarla.
+
+### Neden bu iş açıldı
+
+Kullanıcı "v2.2 bitti mi, yeni PDF yazdıracağım" diye sordu. Dokümanın
+**"468 saat sonunda production'a hazır olan"** tablosu kontrol edildi ve
+**tek bir alan "TAM" dediği hâlde eksik çıktı**:
+
+> **Fiyat senkronu · TAM · "Kanal override, çakışma tespiti ve rozeti"**
+
+Fiyat senkronu tek yönlü çalışıyor (panel → kanal). Ama §9'un istediği
+**çakışma tespiti YOK**: satıcı Trendyol panelinden fiyatı elle
+değiştirirse sistem bunu görmüyor.
+
+**Kanıt:** `RequestResync.php:50`'de `REASON_PRICE_CONFLICT_RESOLVED`
+sabiti VAR ama onu yazan hiçbir kod yok — yol açık bırakılmış, hiç
+bağlanmamış.
+
+### §9'un tam tarifi (PDF satır 4749–4791)
+
+**Karar tablosu:**
+
+| desired vs synced | synced vs remote | Durum | Davranış |
+|---|---|---|---|
+| Eşit | Eşit | `MATCHED` | Hiçbir şey yapma |
+| Farklı (`is_dirty`) | Eşit | `LOCAL_AHEAD` | Normal senkron — gönder |
+| **Eşit** | **Farklı** | **`REMOTE_AHEAD`** | **Domaine göre → aşağıda** |
+| Farklı | Farklı | `DIVERGED` | Bizimki gider + çakışma rozeti |
+| — | Uzak yok | `REMOTE_MISSING` | Yeniden listele veya sor |
+
+**Kritik ayrım (dokümanın kendi cümlesi):** *"desired != synced ise sorun
+BİZDE — henüz göndermemişiz. Bu çakışma DEĞİL, bekleyen iş. Çakışma
+yalnızca `synced != remote` olduğunda vardır."*
+
+**Domain başına politika:**
+
+| Domain | Uzak değişiklik bulununca | Gerekçe (dokümandan) |
+|---|---|---|
+| `INVENTORY` | **Sessizce üzerine yaz. Rozet YOK.** | "Stokta tek otorite biziz" |
+| **`PRICE`** | **ÜZERİNE YAZMA. Çakışma rozeti. Kullanıcı seçer.** | **"Satıcılar kanal panelinden kampanya yapıyor. Sessizce ezmek EN SIK ŞİKAYET."** Kabul edilirse `price_override` kaydedilir |
+| `CONTENT` | Üzerine yaz, panelde bilgi notu | "İçerikte kanonik model otorite" |
+
+### KULLANICI KARARLARI (bu oturumda alındı)
+
+1. **Kapsam: TAM §9** — tespit + rozet + kullanıcı kararı. (Alternatifler
+   "sadece tespit" ve "hiç yapma" idi; kullanıcı tamamını seçti.)
+2. **Şema: YENİ TABLO `price_overrides`** — `listings`'e kolon eklemek
+   DEĞİL. Gerekçe: tarihçe ve "kim kabul etti" kaydı gerekli (§11'in
+   denetim maddesi "fiyat çakışması kararı" diyor).
+
+**ŞEMA §4'TE TANIMLI DEĞİL** — doküman yalnızca §3'te
+`Pricing/Models/PriceOverride` diye model ADINI veriyor, tablo tanımını
+vermiyor. Migration §9'un davranış tarifinden türetildi; bu bilinçli bir
+tamamlamadır ve migration başlığında yazılı.
+
+### YAPILACAKLAR (sırayla)
+
+**1 · Migration'ı çalıştır** (dosya hazır, gözden geçir):
+```bash
+docker compose exec app php artisan migrate
+```
+
+**2 · `PriceOverride` modeli** — `app/Domain/Catalog/Models/` altına
+(projede `Pricing/` klasörü YOK; §3'ün ağacından sapma, `PrerequisiteGate`
+kararının aynısı — gerekçe koda yazılmalı). `BelongsToTenant` + `HasUuidV7`.
+
+**3 · `ItemStatus`'a `PRICE_CONFLICT` ekle** —
+`app/Domain/Reconciliation/Enums/ItemStatus.php`. **DİKKAT:**
+`isDrift()` metodu `true` DÖNMEMELİ — çakışma sürüklenme DEĞİLDİR ve
+onarım AÇILMAMALIDIR (§9: "üzerine yazma"). Bu, `REMOTE_UNREACHABLE`
+kuralının kardeşi.
+
+**4 · `ReconcileConnection`'a PRICE turu** —
+`app/Domain/Reconciliation/Actions/ReconcileConnection.php:77` `run()`
+metodu şu an SADECE `SupportsInventory` okuyor (satır ~107). Fiyat için
+`SupportsPricing::fetchPrices()` **sözleşmede ZATEN VAR**.
+
+⚠️ **EN ÖNEMLİ KURAL:** stok turu ile fiyat turu **AYNI beş adımı
+paylaşmalı** ama **REPAIR adımı fiyatta ATLANMALI**. Kod kopyalanırsa
+§10'un "üç katman tek akış" kuralı çiğnenir — akış kopyalandığında
+zamanla ayrışır.
+
+**5 · `CandidateSelector`** — şu an dört sorgunun HEPSİ
+`SyncDomain::INVENTORY` sabitini gömüyor (satır 112, 143, 177, 211).
+Fiyat adayları için domain parametreleşmeli.
+
+**6 · Panel: `/reconciliation` ekranına rozet + iki düğme**
+- "Kanalınkini kabul et" → `price_overrides` satırı + `audit_logs`
+- "Bizimkini gönder" → `RequestResync` (`reason: price_conflict_resolved`
+  — **sabit ZATEN VAR**, `RequestResync.php:50`)
+
+**7 · `audit_logs`'a `PRICE_CONFLICT_RESOLVED`** — §11'in altı olayından
+biri ve şu an YAZILMAMIŞ olarak işaretli (`AuditAction` enum'unda gerekçesi
+yazılı: "o akış YAZILMADI"). Bu iş bitince o not GÜNCELLENMELİ.
+
+**8 · Fiyat fan-out'u override'ı ELEMELİ** — `PriceBatchBuilder`
+(`app/Domain/Sync/Support/`) override'lı listing'i yüke ALMAMALI. Yoksa
+kabul edilen kanal fiyatı bir sonraki turda ezilir ve tüm özellik
+anlamsızlaşır.
+
+**9 · `ResolveChannelPrice` action'ı** (§3'te adı geçiyor) — "bu listing'e
+hangi fiyat gider" sorusunun TEK kaynağı. Override varsa kanalınki,
+yoksa kanonik.
+
+### Tahmin ve sınır
+
+**~10-14 saat.** Bittiğinde dokümanın "468 saat sonunda production'a hazır
+olan" tablosundaki **tüm "TAM" satırları gerçekten TAM** olur.
+
+**Bu iş bitmeden yeni PDF yazdırılırsa** fiyat senkronu "TAM" değil
+"TEMEL" olarak işaretlenmeli.
+
+---
+
+## 🔴 SONRAKİ İŞ — HEPSİBURADA DOKÜMANTASYONU (KULLANICI İLE BİRLİKTE)
 
 **Kullanıcı kararı (24 Ağustos): "dökümantasyonu beraber yazalım".**
 
