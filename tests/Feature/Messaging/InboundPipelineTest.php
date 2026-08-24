@@ -211,6 +211,57 @@ final class InboundPipelineTest extends TestCase
         $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
     }
 
+    /**
+     * KOŞULLU GEÇİŞ BAŞKA KİRACININ SATIRINA DOKUNAMAZ.
+     *
+     * Mimari Karar Dokümanı v2.2 · §11 · kiracı izolasyonu.
+     *
+     * `DB::table()` Eloquent global scope'una TABİ DEĞİLDİR: kiracı filtresi
+     * AÇIKÇA yazılmazsa UPDATE tüm kiracıları görür. Bu boşluk projede beş
+     * ayrı turda çıktı ve kuralı şudur — `DB::table()` her kullanıldığında
+     * filtre DE testi DE yazılır.
+     *
+     * BURADAKİ ZARAR SESSİZ VE KALICIDIR: yanlış eşleşmiş bir çift
+     * (A kiracısının işi, B kiracısının mesaj kimliği) B'nin satırını
+     * `processing` yapar, ardından gelen `find()` KAPSAMLI olduğu için satırı
+     * bulamaz ve iş sessizce çıkar. B'nin mesajı artık `pending` DEĞİLDİR —
+     * `inbox:recover` taraması yalnızca `pending` satırları toplar, yani o
+     * sipariş bir daha HİÇ işlenmez. Sipariş kaybetmek bu projede en pahalı
+     * hata biçimidir.
+     */
+    #[Test]
+    public function conditional_transition_never_claims_another_tenants_message(): void
+    {
+        [$tenantA] = $this->makeContext();
+        [, $connectionB] = $this->makeContext();
+
+        // Mesaj B kiracısına ait.
+        $messageB = $this->recordMessage($connectionB, [
+            'type' => 'created',
+            'external_order_id' => 'ORD-B',
+            'lines' => [['external_line_id' => 'l1', 'sku' => 'SKU-B', 'quantity' => 1]],
+        ]);
+
+        // İş A kiracısı bağlamında koşar ama B'nin mesaj kimliğini taşır.
+        (new ProcessInboxMessage($tenantA->id, $messageB->id))->handle();
+
+        // B'nin satırı DOKUNULMAMIŞ olmalı: hâlâ pending ve deneme sayacı 0.
+        $raw = $this->asSystem(fn () => DB::table('inbox_messages')
+            ->where('id', $messageB->id)
+            ->first());
+
+        $this->assertNotNull($raw);
+
+        $this->assertSame(
+            'pending',
+            $raw->status,
+            'Başka kiracının inbox satırı processing yapıldı — o sipariş '.
+            'bir daha hiç işlenmez (inbox:recover yalnızca pending toplar).',
+        );
+
+        $this->assertSame(0, (int) $raw->attempt_count);
+    }
+
     /** İşlenmiş mesaj yeniden çalıştırılırsa erken çıkar. */
     #[Test]
     public function processed_message_is_not_reprocessed(): void

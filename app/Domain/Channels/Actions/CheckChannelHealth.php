@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Actions;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Sync\Support\ChannelErrorText;
 use Throwable;
 
 /**
@@ -35,6 +36,7 @@ final class CheckChannelHealth
 {
     public function __construct(
         private readonly AdapterRegistry $registry,
+        private readonly ChannelErrorText $errorText,
     ) {}
 
     public function run(ChannelConnection $connection): ChannelConnection
@@ -68,7 +70,10 @@ final class CheckChannelHealth
             'health_status' => 'unhealthy',
             // Aktifse geri çekilir: sağlıksız kanala iş atılmaz.
             'status' => 'pending',
-            'last_error' => $message,
+            // MASKELENİR (§11): hata metni kanalın yanıt gövdesini taşır ve
+            // o gövde kimlik bilgisini yansıtabilir. Bu kolon panele
+            // olduğu gibi gider — maskelenmezse sır tarayıcıda görünür.
+            'last_error' => $this->errorText->redact($connection, $message),
         ])->save();
 
         return $connection;

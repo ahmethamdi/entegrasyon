@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Inventory\Actions;
 
+use App\Domain\Identity\Actions\RecordAuditLog;
+use App\Domain\Identity\Enums\AuditAction;
 use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Inventory\Models\InventoryMovement;
 use App\Domain\Inventory\Support\MovementKey;
@@ -41,6 +43,7 @@ final class AdjustStock
     public function __construct(
         private readonly LockInventoryRows $lockRows,
         private readonly ApplyMovement $applyMovement,
+        private readonly RecordAuditLog $audit,
     ) {}
 
     public function run(
@@ -65,7 +68,7 @@ final class AdjustStock
             // Kilit ÖNCE: ApplyMovement kilitli satır bekler.
             $this->lockRows->run($warehouseId, [$variantId]);
 
-            return $this->applyMovement->run(
+            $movement = $this->applyMovement->run(
                 warehouseId: $warehouseId,
                 variantId: $variantId,
                 type: MovementType::MANUAL_ADJUSTMENT,
@@ -75,6 +78,29 @@ final class AdjustStock
                 sourceId: $actorId,
                 note: $note,
             );
+
+            // DENETİM KAYDI (§11): "elle stok düzeltme" §11'in altı
+            // olayından biridir ve anlaşmazlıkta ilk sorulan sorudur —
+            // bakiye neden değişti, kim değiştirdi.
+            //
+            // Ledger hareketi tek başına yetmez: `inventory_movements`
+            // NİCELİĞİ taşır, denetim kaydı AKTÖRÜ ve bağlamı taşır
+            // (kullanıcı, IP, not). Aynı transaction içindedir — düzeltme
+            // geri alınırsa kaydı da geri alınmalıdır.
+            $this->audit->run(
+                action: AuditAction::STOCK_ADJUSTED,
+                subjectType: 'variants',
+                subjectId: $variantId,
+                changes: [
+                    'warehouse_id' => $warehouseId,
+                    'quantity' => $quantity,
+                    'movement_id' => $movement->id,
+                    'note' => $note,
+                ],
+                userId: $actorId,
+            );
+
+            return $movement;
         });
     }
 }

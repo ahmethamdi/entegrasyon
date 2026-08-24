@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Identity\Actions;
 
+use App\Domain\Identity\Enums\AuditAction;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\TenantUser;
 use App\Domain\Identity\Models\User;
@@ -72,6 +73,30 @@ final class CreateTenant
                     ],
                 );
             });
+
+            // DENETİM KAYDI (§11) — hesabın doğum kaydı.
+            //
+            // Kiracı YENİ yaratıldı ve `TenantContext` henüz onu göstermiyor
+            // olabilir (kayıt akışı bağlam kurmadan önce çalışır); kiracı
+            // kimliği bu yüzden AÇIKÇA verilir. Verilmeseydi
+            // `TenantContext::idOrFail()` istisna fırlatır, `RecordAuditLog`
+            // onu yutar ve hesabın ilk kaydı SESSİZCE hiç yazılmazdı.
+            //
+            // Aktör de açıkça verilir: kayıt akışında kullanıcı henüz
+            // oturum açmamıştır ve `auth()->id()` NULL döner — oysa hesabı
+            // kimin açtığı denetimin ilk sorusudur.
+            //
+            // `new` ile değil KAPSAYICIDAN çözülür: `CreateTenant` pek çok
+            // yerde `new CreateTenant` ile kuruluyor ve kurucuya bağımlılık
+            // eklemek o çağrıların hepsini kırardı.
+            app(RecordAuditLog::class)->run(
+                action: AuditAction::TENANT_CREATED,
+                subjectType: 'tenants',
+                subjectId: $tenant->id,
+                changes: ['name' => $name, 'slug' => $tenant->slug],
+                userId: $owner->id,
+                tenantId: $tenant->id,
+            );
 
             return $tenant;
         });

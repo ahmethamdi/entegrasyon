@@ -41,6 +41,15 @@ final class ProcessInboxMessage extends TenantAwareJob
         // affected = 0 → başka bir işleyici almış veya zaten işlenmiş.
         $claimed = DB::table('inbox_messages')
             ->where('id', $this->inboxMessageId)
+            // KİRACI FİLTRESİ AÇIKÇA YAZILIR (§11).
+            //
+            // `DB::table()` Eloquent global scope'una TABİ DEĞİLDİR. Filtre
+            // olmasaydı yanlış eşleşmiş bir çift (bu kiracının işi, başka
+            // kiracının mesaj kimliği) o satırı `processing` yapardı;
+            // ardından gelen `find()` KAPSAMLI olduğu için satırı bulamaz ve
+            // iş sessizce çıkardı. Satır artık `pending` olmadığı için
+            // `inbox:recover` de onu toplamaz — o sipariş HİÇ işlenmez.
+            ->where('tenant_id', $this->tenantId)
             ->where('status', 'pending')
             ->update([
                 'status' => 'processing',

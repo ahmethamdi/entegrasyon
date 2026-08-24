@@ -119,6 +119,11 @@ final class UpdateOrderSnapshot
         // damgalar saniye hassasiyetlidir. Kendi ürettiğimiz uuid geri
         // geldiyse INSERT gerçekten bu çağrıda oldu demektir.
         $written = DB::table('order_events')
+            // Kiracı filtresi AÇIKÇA yazılır (§11): `DB::table()` global
+            // scope'a tabi değildir. `$order` zaten kapsamlı okunduğu için
+            // `order_id` kümeyi tek kiracıya daraltıyor — bu satır ikinci
+            // savunmadır ve okuyana kuralı hatırlatır.
+            ->where('tenant_id', $tenantId)
             ->where('order_id', $order->id)
             ->where('type', OrderEventType::UPDATED->value)
             ->where('external_ref', $event->externalRef)

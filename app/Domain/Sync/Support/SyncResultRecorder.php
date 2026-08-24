@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Support;
 
 use App\Domain\Channels\Contracts\AdapterResult;
+use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
@@ -37,6 +38,10 @@ use Throwable;
  */
 final class SyncResultRecorder
 {
+    public function __construct(
+        private readonly ChannelErrorText $errorText,
+    ) {}
+
     /**
      * Denemeyi açar — attempt_count BURADA artar.
      *
@@ -108,14 +113,30 @@ final class SyncResultRecorder
         ErrorClass $class,
         Throwable $error,
     ): void {
-        DB::transaction(function () use ($operations, $attempt, $class, $error): void {
+        // MASKELEME BİR KEZ, TRANSACTION'DAN ÖNCE (§11).
+        //
+        // Hata metni kanalın yanıt gövdesini taşır (Laravel'in
+        // `RequestException` mesajı gövde özetini gömer) ve o gövde kimlik
+        // bilgisini yansıtabilir. Bu metin İKİ kalıcı kolona ve oradan
+        // panele gider; ham yazılırsa sır veritabanı yedeğinde ve
+        // tarayıcıda düz metin durur.
+        //
+        // Kasa okuması bir HTTP/DB işidir; transaction dışında yapılır ve
+        // sonucu döngüde yeniden hesaplanmaz — aynı bağlantının sırrı her
+        // operasyon için tekrar okunurdu.
+        $message = $this->errorText->redact(
+            $this->connectionFor($operations, $attempt),
+            $error->getMessage(),
+        );
+
+        DB::transaction(function () use ($operations, $attempt, $class, $message): void {
             $this->closeAttempt($attempt, outcome: $class->isPermanent() ? 'permanent' : 'transient',
-                class: $class, message: $error->getMessage());
+                class: $class, message: $message);
 
             foreach ($operations as $operation) {
                 if ($operation->id !== $attempt->sync_operation_id) {
                     $this->recordPiggybackAttempt($operation, outcome: $class->isPermanent() ? 'permanent' : 'transient',
-                        class: $class, message: $error->getMessage());
+                        class: $class, message: $message);
                 }
 
                 $operation->forceFill([
@@ -123,7 +144,7 @@ final class SyncResultRecorder
                     'last_error_class' => $class->value,
                 ])->save();
 
-                $this->markSyncStateFailed($operation, $class, $error->getMessage());
+                $this->markSyncStateFailed($operation, $class, $message);
             }
         });
     }
@@ -264,7 +285,7 @@ final class SyncResultRecorder
         return $state->desired_version > $operation->entity_version ? 'pending' : 'synced';
     }
 
-    private function markSyncStateFailed(SyncOperation $operation, ErrorClass $class, string $message): void
+    private function markSyncStateFailed(SyncOperation $operation, ErrorClass $class, ?string $message): void
     {
         $state = $this->lockState($operation);
 
@@ -311,5 +332,30 @@ final class SyncResultRecorder
         throw new \RuntimeException(
             "Bilinmeyen operasyon türü: {$operation->operation_type}."
         );
+    }
+
+    /**
+     * Hata metnindeki sırrı maskelemek için okunacak bağlantı.
+     *
+     * Gruplama BAĞLANTI BAŞINADIR (`InventoryBatchBuilder`): yükteki tüm
+     * operasyonlar aynı bağlantıya aittir ve tek bağlantı okumak yeterlidir.
+     * Yine de TETİKLEYİCİ operasyon önce aranır — hata onun çağrısından
+     * doğdu ve maskelenecek sır onunkidir.
+     *
+     * Bağlantı bulunamazsa `null` döner ve katman 1 yine çalışır; yazma
+     * yolunu maskeleme uğruna DÜŞÜRMEK, korumayı korunan şeyden büyük bir
+     * zarara çevirirdi (`api_calls` günlükleme kuralının aynısı).
+     *
+     * @param  list<SyncOperation>  $operations
+     */
+    private function connectionFor(array $operations, SyncAttempt $attempt): ?ChannelConnection
+    {
+        foreach ($operations as $operation) {
+            if ($operation->id === $attempt->sync_operation_id) {
+                return $operation->connection;
+            }
+        }
+
+        return $operations[0]->connection ?? null;
     }
 }

@@ -8,6 +8,8 @@ use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\StoreUrl;
+use App\Domain\Identity\Actions\RecordAuditLog;
+use App\Domain\Identity\Enums\AuditAction;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -43,6 +45,7 @@ final class ConnectChannel
     public function __construct(
         private readonly CredentialVault $vault,
         private readonly CheckChannelHealth $checkHealth,
+        private readonly RecordAuditLog $audit,
     ) {}
 
     /**
@@ -75,6 +78,10 @@ final class ConnectChannel
                 'external_account_id' => $url->host,
             ]);
 
+            // Denetim olayı YAZMADAN ÖNCE belirlenir: `save()` sonrası
+            // `exists` her koşulda true olur ve iki olay ayırt edilemezdi.
+            $isNew = ! $connection->exists;
+
             $connection->fill([
                 'tenant_id' => TenantContext::idOrFail(),
                 'label' => $label,
@@ -92,6 +99,33 @@ final class ConnectChannel
 
             // Kimlik bilgisi kasaya yazılır — çağrıyı yapabilmek için zorunlu.
             $this->vault->store($connection, $secrets);
+
+            // DENETİM KAYDI (§11) — İKİ AYRI OLAY.
+            //
+            // "Kanal bağlantısı ekleme" ve "kimlik bilgisi güncelleme"
+            // §11'in listesinde AYRI maddelerdir ve ayrı olmaları
+            // gerekir: anahtar yenileme bir güven olayıdır ve "bu
+            // mağazaya kim, ne zaman yeni anahtar verdi" sorusu
+            // bağlantının ne zaman kurulduğundan bağımsız sorulur. Tek
+            // olayda birleştirilselerdi ikinci soru cevapsız kalırdı.
+            //
+            // YÜKE SIR KONMAZ — yalnızca hangi anahtarların verildiği
+            // (ADLARI) yazılır. Değerleri yazmak kasanın tüm anlamını
+            // yok ederdi; `RecordAuditLog` maskelemesi ikinci savunmadır,
+            // birincisi burada sırrı hiç göndermemektir.
+            $this->audit->run(
+                action: $isNew
+                    ? AuditAction::CHANNEL_CONNECTED
+                    : AuditAction::CHANNEL_CREDENTIAL_UPDATED,
+                subjectType: 'channel_connections',
+                subjectId: $connection->id,
+                changes: [
+                    'channel_type_code' => $channelTypeCode,
+                    'external_account_id' => $url->host,
+                    'label' => $label,
+                    'secret_keys' => array_keys($secrets),
+                ],
+            );
 
             return $connection;
         });
