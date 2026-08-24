@@ -1,13 +1,16 @@
-# Devir Notu — 22 Ağustos 2026 (sol sidebar BİTTİ · Faz 4'te tek madde kaldı)
+# Devir Notu — 24 Ağustos 2026 (tasarım turu BİTTİ · Faz 4'te tek madde kaldı)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `eea24f6`.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `8f41dc7`.
 **FAZ 3 KAPALI** ve **FAZ 4'TE TEK MADDE KALDI**.
 
-Bu oturumda **İKİ madde kapandı**:
-- **Panel cilası** (20 sa) — `aba0a29` (mobil düzen + bekleme
+Bu oturumda **DÖRT iş kapandı**:
+- **Panel cilası** (20 sa · §13) — `aba0a29` (mobil düzen + bekleme
   durumları) ve `26426ff` (tablo okunabilirliği + kiracı adı).
-- **Türkçe yardım ve hata mesajları** (12 sa) — `7208c51` (`lang/tr/`)
-  ve `8642f9f` (`/help` ekranı).
+- **Türkçe yardım ve hata mesajları** (12 sa · §13) — `7208c51`
+  (`lang/tr/`) ve `8642f9f` (`/help` ekranı).
+- **Sol sidebar** (`62a2209`) — dokümanda YOK, kullanıcı isteği.
+- **Panel modernizasyonu** (`8f41dc7`) — dokümanda YOK, kullanıcı
+  isteği; sidebar seansının ikinci turu.
 
 **842 test yeşil** (2752 assertion), Pint temiz.
 
@@ -78,18 +81,35 @@ rozetleri** (Hatalar/Mutabakat) — ikincisi gerçekten değerli ama
 controller değişikliği ister, layout turunun kapsamı dışındaydı.
 **Sıradaki tasarım turu için en iyi aday budur.**
 
-### ⏭ SIRADAKİ İŞ — PANEL MODERNİZASYONU (kullanıcı kararı, 22 Ağustos)
+### ✅ PANEL MODERNİZASYONU — BİTTİ (`8f41dc7`)
 
-**KULLANICI İSTEDİ:** sidebar iskeleti kuruldu ama ekranların İÇİ
-hâlâ sade; "admin panel hissiyatı" verecek şekilde TÜM PROJE
-modernleştirilecek. Bu da dokümanda YOKTUR — sidebar seansının
-devamı ve kullanıcı onaylı bir sapmadır.
+Sidebar seansının ikinci turu. Ayrıntı aşağıda "Bu turda ne eklendi"
+bölümünde; özet:
 
-Kapsam: sayfa başlıkları · kart/panel yüzeyleri · tablo başlıkları ve
-satır ritmi · rozetler · boş durumlar · form kontrolleri. Marka
-turuncusu kısıtı AYNEN geçerli (dolgu değil, vurgu).
+- **Asıl sorun düzlük DEĞİL TUTARSIZLIKMIŞ** — beş tablo başlığı
+  biçimi, iki satır yüksekliği, üç rozet biçimi, üç farklı `pending`
+  rengi ölçüldü.
+- **Gölge EKLENMEDİ** (bilinçli): dense araçta durum tonlarıyla
+  yarışırdı. Hiyerarşi kenarlık + zemin farkıyla kuruldu.
+- `PageHeader.vue` (16 ekran) · `StatCard.vue` (durum = 3px üst çubuk,
+  dolgu değil) · köşe ölçeği (8/6/4px) · tek tip tablo başlığı ·
+  `pending` → sky · mor kaldırıldı · 31 odak halkası açığı kapandı.
 
-### SONRAKİ İŞ — GÜVENLİK KONTROL LİSTESİ + YÜK TESTİ (12 sa)
+**YAPILMADI (bilinçli, gerekçesiyle):**
+- **Sticky tablo başlığı** — denendi, tarayıcıda ÇALIŞMADIĞI ölçüldü
+  (`overflow-x-auto` sticky'yi kendi kutusuna hapsediyor; 600px
+  kaydırmada thead −304px). Kullanıcı kararıyla kaldırıldı.
+- **`Badge.vue`** — yazıldı ama SİLİNDİ: rozetler ekran başına
+  `badges = {...}` haritalarında yaşıyor, mekanik dönüşüm riskliydi.
+  Rozet RENKLERİ zaten tutarlı hale geldi.
+- **Menüde sayaç rozetleri** (Hatalar/Mutabakat) — controller
+  değişikliği ister. **Tasarım tarafında en değerli sıradaki aday
+  budur**: ürünün temel iddiası senkron güvenilirliği ve satıcı şu an
+  bir sorunu öğrenmek için ekrana GİTMEK zorunda.
+- **İkonlar** — `Mutabakat`/`Eşleştirme` için yerleşik glif yok;
+  uydurma ikon görsel ağırlık ekler, bilgi eklemez.
+
+### SIRADAKİ İŞ — GÜVENLİK KONTROL LİSTESİ + YÜK TESTİ (12 sa)
 
 **FAZ 4'ÜN SON MADDESİ BU.** Dokümanın §13 · Faz 4 satırı devir
 notunda yazandan GENİŞ — PDF'ten doğrulandı:
@@ -375,13 +395,104 @@ bittikten SONRA** — sıra ve gerekçeler aşağıda.
 **Faz 1, Faz 2 ve FAZ 3 BİTTİ** (§13 listesinden doğrulandı); **Faz
 4'te ~78/90 saat bitti** — onboarding, abonelik/ödeme, **PANEL CİLASI**
 (`aba0a29` + `26426ff`) ve **TÜRKÇE YARDIM + HATA MESAJLARI**
-(`7208c51` + `8642f9f`) kapandı. **842 test yeşil** (2752 assertion),
-Pint temiz. Panelde **ON DÖRT** ekran + her ekranda onboarding şeridi;
-**panel artık telefonda kullanılabiliyor** ve **doğrulama hataları
-Türkçe**. Faz 4'te kalan TEK madde: **güvenlik kontrol listesi + yük
-testi** (12 sa) artı küçük bir artık madde (onay durumu ekranı).
+(`7208c51` + `8642f9f`) kapandı. Ayrıca dokümanda olmayan, kullanıcının
+istediği **TASARIM SEANSI** yapıldı: **sol sidebar** (`62a2209`) ve
+**panel modernizasyonu** (`8f41dc7`).
+
+**842 test yeşil** (2752 assertion), Pint temiz. Panelde **ON DÖRT**
+ekran + her ekranda onboarding şeridi; **panel telefonda
+kullanılabiliyor**, **doğrulama hataları Türkçe** ve arayüz **sol
+sidebar'lı, marka rengi turuncu**.
+
+Faz 4'te kalan TEK madde: **güvenlik kontrol listesi + yük testi +
+yedek geri yükleme provası** (12 sa) artı küçük bir artık madde (onay
+durumu ekranı).
 
 ## Bu turda ne eklendi
+
+### TASARIM SEANSI — SOL SIDEBAR + MODERNİZASYON (`62a2209` + `8f41dc7`)
+
+**DOKÜMANDA YOKTUR** — kullanıcının açıkça istediği iki turluk bir ara
+seans ve onaylı bir sapmadır. Faz 4'ün son maddesi bundan SONRA gelir.
+
+#### Tur 1 — sol sidebar (`62a2209`)
+
+| Ne | Nerede |
+|---|---|
+| Sidebar + mobil çekmece | `Layouts/PanelLayout.vue` |
+| Marka ölçeği `brand-50..900` | `resources/css/app.css` (`@theme`) |
+
+**ÜST ŞERİT ON BİR ÖĞEDE TIKANMIŞTI** (`/help` eklendikten sonra) ve
+`lg` kırılma noktası 1024px'te zar zor yetiyordu. Sidebar dikeyde
+sınırsızdır.
+
+**MARKA RENGİ ASLA DOLGU DEĞİL — turun ana tasarım kararı.** `amber-*`
+bu panelde ZATEN uyarı rengidir (13 dosya, ~90 kullanım). Aktif menü
+öğesi turuncu DOLGU olsaydı ~200×36px'lik bir yüzey olur ve uyarı
+yüzeyleriyle karışırdı; bu panelde renkli YÜZEY her zaman "durum"
+demektir. Onun yerine **3px'lik sol çubuk**: ölçüldü, çubuk 108px²,
+onboarding'in amber CTA'sı 4492px² — **42 kat fark**, yani renkli alan
+ekseninde hiç yarışmıyor.
+
+**ÜÇ SİNYAL, YALNIZCA BİRİ RENKLİ:** çubuk (konum) · `font-medium`
+(ağırlık) · `bg-stone-100` (zemin). Renk körlüğünde turuncu sarımsıya
+kayıp amber'a yaklaşır; diğer ikisi renksiz de okunur.
+
+**DOYGUNLUK AYIRIR, HUE DEĞİL:** marka ölçeğinin hiçbir adımı %59'u
+aşmaz, amber %92–95'tir. Bu yüzden Tailwind'in hazır `orange-*` ölçeği
+KULLANILMADI — `orange-600` aynı hue ailesinde (H=21) ama S=90%.
+
+On bir öğe **üç gruba** ayrıldı (İşleyiş · Katalog · İzleme), sıra
+KULLANIM SIKLIĞINA göre: Siparişler ve Stok, Ürünler'in ÜSTÜNDE.
+Erişilebilirlik eklendi: `focus-visible` · `aria-current` (3px çubuk
+`::before` olduğu için ekran okuyucuya GÖRÜNMEZ) · atlama bağlantısı ·
+ESC · kaydırma kilidi · `prefers-reduced-motion`.
+
+#### Tur 2 — modernizasyon (`8f41dc7`)
+
+**ASIL SORUN DÜZLÜK DEĞİL TUTARSIZLIKMIŞ** — turun teşhisi ve
+başlangıçtaki varsayımın düzeltilmesi. Ölçüldü: BEŞ tablo başlığı
+biçimi, İKİ satır yüksekliği, ÜÇ rozet biçimi, `pending` için ÜÇ ayrı
+renk. Tutarsızlık "bitmemiş" okunur; düzlük "eski" okunmaz.
+
+**GÖLGE EKLENMEDİ ve bu bilinçli.** Dense bir operasyon aracında kart
+gölgeleri, durum tonlarıyla (kırmızı satır, amber şerit) AYNI görsel
+frekansta yarışır — o tonlar burada yük taşıyan sinyaller.
+
+| Ne | Nerede |
+|---|---|
+| Sayfa başlığı (16 ekran) | `Components/PageHeader.vue` |
+| Durum kartı | `Components/StatCard.vue` |
+
+**STAT KARTINDA DURUM DOLGU DEĞİL 3px ÜST ÇUBUK** — sidebar'ın aktif
+öğesiyle AYNI ilke. Eskiden kötü durumda kartın TAMAMI kırmızıya
+boyanıyor ve altındaki tablonun satır tonlarıyla yarışıyordu. Sayının
+rengi çubuğu TEKRARLAR (renk körlüğü).
+
+Ayrıca: köşe ölçeği 8/6/4px · tablo başlıkları tek biçime
+(`text-stone-600` — 10px'te `stone-500` kontrastı 4.6:1 ile sınırdı) ·
+tonlu satırlarda hover KENDİ ailesinde kalır (`hover:bg-stone-50`
+kırmızı satırı griye yıkardı) · `pending` üç ekranda da sky (bekliyor
+UYARI değil, normal kuyruk durumu) · sistem dışı MOR kaldırıldı ·
+**31 yerde `focus:outline-none`** → marka renkli odak halkası
+(WCAG 2.4.7 açığıydı) · birincil buton hover `stone-800` →
+`stone-700` (öncekinin luminans farkı ~%2.4, görünmüyordu).
+
+**OTOMATİK DÖNÜŞÜMÜN ÜRETTİĞİ GERÇEK HATA TARAYICIDA YAKALANDI:**
+`Products/Edit` ve `Orders/Show`'da başlık `title="{{ product.title }}"`
+olmuştu — Vue bunu **LİTERAL metin** basar. `:title` bağlamasına
+çevrildi ve gerçek ürün adının bastığı doğrulandı. **Testler bunu
+GÖRMEZDİ.**
+
+**DOĞRULAMA:** 12 ekran × 320/390/768/1440px taşma YOK · beş ekranın
+başlığı ve iki dinamik başlık tarayıcıda okundu · ham `{{` hiçbir
+ekranda yok · mobil çekmece açılıp on bir bağlantı + çıkış göründü ·
+gezinmede kendiliğinden kapandı.
+
+Tasarım yönü için `ui-ux-designer` agent'ından danışmanlık alındı
+(kullanıcı önerisi). "Dolgu değil çubuk" ve "gölge ekleme,
+tutarsızlığı düzelt" kararları oradan geldi; hepsi amber çakışması
+kısıtıyla karşılaştırılarak benimsendi.
 
 ### §13 · Faz 4 · TÜRKÇE YARDIM + HATA MESAJLARI (`7208c51` + `8642f9f`) — MADDEYİ KAPATIR
 

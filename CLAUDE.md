@@ -759,24 +759,11 @@ bekleme durumları, tablo okunabilirliği ve tutarlılık turu.
 **DİKKAT — dokümanın o satırı devir notundakinden GENİŞ**: "Güvenlik
 kontrol listesi, yük testi, **yedek geri yükleme provası** — 12 sa".
 
-**ARA SEANS — SOL SIDEBAR TASARIMI (kullanıcı kararı, 21 Ağustos).**
-Kullanıcı, son maddeye geçmeden önce panelin üst menü yerine **sol
-sidebar'lı** modern bir arayüze çevrilmesini istedi. Bu madde
-**dokümanın §13 listesinde YOKTUR** — bilinçli ve kullanıcı onaylı bir
-sapmadır. Teknik gerekçesi de var: menü `/help` ile ON BİR öğeye çıktı
-ve üst şeritte yatay yer daralıyor. Sidebar'a geçerken panel cilası
-turunda kazanılan davranışlar KAYBEDİLMEMELİ ve yeniden ÖLÇÜLMELİ:
-mobilde taşma yok · onboarding şeridi layout'ta · kiracı adı başlıkta ·
-aktif öğe işareti · mobil menü gezinmede kapanır.
-
-**ANA RENK TURUNCUDUR** (kullanıcı kararı, 21 Ağustos). Var olan çıpa
-`app.js` içindeki ilerleme çubuğu rengi `#A8532B`. **AMA `amber-*`
-ZATEN UYARI RENGİDİR** (13 dosya, ~90 kullanım: onboarding şeridi,
-eşleşmemiş SKU, `pending` rozetleri). Marka turuncusu amber'a çok
-yakın seçilirse "marka mı uyarı mı" ayrımı kaybolur ve satıcı gerçek
-uyarıyı fark etmez — bu, projenin rozet sırası ve uyarı görünürlüğü
-kurallarını doğrudan ihlal eder. Kırmızı HATA rengidir. Nötr taban
-`stone-*` değişmez.
+**TASARIM SEANSI BİTTİ** (`62a2209` + `8f41dc7`, kullanıcı kararı).
+Panel sol sidebar'a çevrildi ve ekranların içi modernleştirildi. Bu
+madde **dokümanın §13 listesinde YOKTUR** — bilinçli ve kullanıcı
+onaylı bir sapmadır. Kalıcı kurallar aşağıda "Tasarım sistemi
+kuralları" başlığında.
 
 **BOŞ DURUM ve GEZİNME YÜKLEMESİ MADDELERİ KAPANDI, YENİDEN AÇMA.**
 Boş durum metni on üç ekranın HEPSİNDE var (`Orders/Show` ayrıntı
@@ -1218,6 +1205,64 @@ kanal başına yanıt programlanır — T4 bunu kullanır).
 - **TEK ÇAĞRI DÜĞMESİ — SIRADAKİ ADIM.** Dört düğme birden göstermek
   kullanıcıya hangisinden başlayacağını sordurur; onboarding'in işi tam
   olarak bunu söylemektir.
+
+## Tasarım sistemi kuralları (`62a2209` · `8f41dc7`)
+
+Dokümanda YOK — kullanıcı onaylı tasarım seansının kalıcı çıktısı.
+
+- **MARKA RENGİ TURUNCU, AMA ASLA DOLGU DEĞİL.** Ölçek
+  `resources/css/app.css` → `@theme` içinde `brand-50..900`; çıpa
+  `brand-600` = `#a8532b` (`app.js` ilerleme çubuğuyla AYNI).
+  **Bu panelde renkli YÜZEY her zaman "durum" demektir** ve `amber-*`
+  uyarı, `red-*` hata rengidir. Marka tonu dolgu olarak kullanılırsa
+  satıcı onu durum sanar. Yeri: **odak halkaları, 3px'lik çubuklar,
+  küçük vurgular**. Birincil buton `bg-stone-900` kalır.
+- **AYIRAN ŞEY DOYGUNLUK, HUE DEĞİL.** Marka ölçeğinin hiçbir adımı
+  **%59 doygunluğu aşmaz**; amber %92–95'tir. Yeni bir ton eklerken bu
+  tavan korunur. Tailwind'in hazır `orange-*` ölçeği KULLANILMAZ —
+  `orange-600` aynı hue ailesinde (H=21) ama S=90%, yani amber kadar
+  parlaktır.
+- **DURUM İŞARETİ ÇUBUKTUR, DOLGU DEĞİL** — sidebar aktif öğesi ve
+  `StatCard` aynı ilkeyi paylaşır. Ölçüldü: sidebar çubuğu 108px²,
+  onboarding'in amber CTA'sı 4492px² (42 kat). Renkli alan ekseninde
+  yarışmaz.
+- **RENK TEK SİNYAL OLAMAZ.** Aktif öğe: çubuk + `font-medium` +
+  `bg-stone-100`. Stat kartı: çubuk + sayının rengi. Renk körlüğünde
+  turuncu sarımsıya kayıp amber'a yaklaşır; diğer sinyaller renksiz de
+  okunur.
+- **GÖLGE EKLENMEZ.** Dense bir operasyon aracında kart gölgeleri,
+  durum tonlarıyla (kırmızı satır, amber şerit) AYNI görsel frekansta
+  yarışır. Hiyerarşi kenarlık + zemin farkıyla kurulur. İSTİSNA: Z
+  ekseninde gerçekten üstte duran örtüler (mobil çekmece).
+- **KÖŞE ÖLÇEĞİ**: kart/tablo `rounded-lg` (8px) · buton/input
+  `rounded-md` (6px) · rozet `rounded` (4px) · yalnızca gerçekten
+  dairesel olanlar `rounded-full`. Tek yarıçap her yerde jenerik
+  görünür.
+- **SAYFA BAŞLIĞI `Components/PageHeader.vue`'DUR** — on altı ekranın
+  ortak deseni. Yeni ekranda desen KOPYALANMAZ, bileşen kullanılır;
+  kopyalandığı için zaten bir kez ayrışmıştı.
+- **DURUM KARTI `Components/StatCard.vue`'DUR** (`tone`: neutral ·
+  good · warning · error). Nötr çubuk şeffaf DEĞİL `stone-200`:
+  yalnızca kötü durumda beliren çubuk kartın okunuşunu 3px kaydırırdı.
+- **`pending` ROZETİ SKY'DIR, AMBER DEĞİL.** "Bekliyor" bir uyarı
+  değil normal kuyruk durumudur ve "yeniden deneniyor" ile aynı rengi
+  paylaşamaz. Rozet sırası kuralı da bunu söyler: bekleyen, başarı
+  dışındaki EN SAKİN durumdur.
+- **SİSTEM DIŞI RENK KULLANILMAZ.** Palet: stone (nötr) · emerald
+  (başarı) · sky (bilgi) · amber (uyarı) · red (hata) · brand (marka
+  vurgusu). Mor bir kez sızdı ve kaldırıldı.
+- **TONLU SATIRDA HOVER KENDİ AİLESİNDE KALIR** — `hover:bg-stone-50`
+  kırmızı satırı griye yıkar ve satıcı sinyalden şüphe eder.
+- **`focus:outline-none` YAZILMAZ.** Her etkileşimli öğe görünür odak
+  halkası taşır (WCAG 2.4.7). Bir turda 31 yerde bulunup düzeltildi.
+- **STICKY TABLO BAŞLIĞI ÇALIŞMAZ, DENEME.** `overflow-x-auto`
+  kapsayıcısı sticky'yi kendi kutusuna hapseder: tarayıcıda ölçüldü,
+  600px kaydırmada thead −304px'e gidiyor. Yalnızca kapsayıcıya sabit
+  yükseklik verilirse çalışır ve o da sayfa içinde ikinci bir kaydırma
+  alanı demektir (kullanıcı istemedi).
+- **OTOMATİK TOPLU DÖNÜŞÜM TARAYICIDA DOĞRULANIR.** Bir dönüşüm turu
+  `title="{{ product.title }}"` üretti — Vue bunu LİTERAL metin basar,
+  `:title` olmalıydı. **Testler bunu görmedi**, tarayıcı gördü.
 
 ## Panel cilası kuralları (§13 · Faz 4 · `aba0a29`)
 
