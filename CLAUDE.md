@@ -17,7 +17,7 @@ veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez
 
 ```bash
 docker compose up -d
-docker compose exec app php artisan test      # 871 test yeşil olmalı
+docker compose exec app php artisan test      # 892 test yeşil olmalı
 docker compose exec app vendor/bin/pint       # kod stili
 ```
 
@@ -106,7 +106,7 @@ sınıfını çağırır. Orders, `InventoryLevel` satırını güncellemez; kil
 Reconciliation
 `app/Support/`: Tenancy · Uuid · Logging
 
-39 tablo (çerçeve dışı), 37 model, 871 test. Stok çekirdeği (`ApplyMovement`,
+39 tablo (çerçeve dışı), 37 model, 892 test. Stok çekirdeği (`ApplyMovement`,
 `LockInventoryRows`), outbox relay, fan-out tüketicisi, adapter mimarisi
 (`AdapterRegistry` + 7 yetenek arayüzü), sipariş alımı (`IngestChannelOrder`,
 `ApplyOrderReturn`, `ApplyOrderCancellation`), gelen hat (webhook → inbox →
@@ -189,6 +189,62 @@ memory'deki "Repo Durumu" dosyasına bak.
 - **Yazılmamış yetenek SESSİZCE BAŞARILI DÖNMEZ.** `AdapterResult::success()`
   dönseydi operasyon tamamlandı sanılır, `synced_version` ilerler ve kanalda
   hiçbir şey değişmemişken satır "senkron" görünürdü.
+
+## Hepsiburada kuralları (üçüncü kanal · `356a662`)
+
+**DOKÜMAN BU KANALI KAPSAM DIŞI BIRAKIYOR** (§16: "iki kanal kusursuz
+çalışır"; kapsam dışı tablosu "Ay 7"). Faz 4 bittiği için kullanıcının
+açık kararıyla açıldı — doküman ihlali değil, zaman çizelgesinin
+dışına çıkış.
+
+- **UÇ NOKTALAR DOĞRULANMADI ve TEK YERDE TOPLANDI**
+  (`HepsiburadaEndpoints`). `developers.hepsiburada.com` bot isteklerini
+  403 ile reddediyor. Adapter'a serpiştirilselerdi düzeltme on yere
+  dokunmak olurdu ve biri unutulunca o çağrı SESSİZCE yanlış adrese
+  giderdi. **Kanal `is_active = false`** ve panelde GÖRÜNMEZ;
+  aktifleştirme sırası o sınıfın başlığında.
+- **`User-Agent` KİMLİK DOĞRULAMANIN PARÇASIDIR** —
+  `{merchantId} - {AppName}` eksikse kanal kimlik bilgisi DOĞRU olsa
+  bile 401 döner. Bu, `97a7eb7`'de yaşanan "istek sessizce kimliksiz
+  gitti" hatasının başka bir biçimidir: anahtar doğru, listing
+  "anahtarın yanlış" diyerek ölür. Başlık desteği `ChannelHttpClient`'a
+  **GENEL** olarak eklendi — başlığı ADAPTER verir, istemci taşır ve
+  `if ($channel === '...')` YAZILMAZ (basic auth çiftlerinin tek yerde
+  toplanmasıyla aynı gerekçe).
+- **SATICI KİMLİĞİ YOKSA İSTEK HİÇ ATILMAZ.** Boş kimlikle
+  `User-Agent: " - Entegrasyon"` giderdi; kanal 401 döner,
+  `AUTHENTICATION` KALICI sayılır ve sebep hiçbir yerde görünmez.
+- **STOK VE FİYAT AYNI YÜKTE GİDER — TRENDYOL'UN TERSİ.** Trendyol'da
+  "stok yükü fiyat alanı TAŞIMAZ" katı kuraldı çünkü biri diğerini
+  sessizce ezerdi. Hepsiburada'nın uç noktası ikisini birlikte bekliyor
+  ve **eksik alanı SIFIR sayabiliyor**; kanal "stok 0 veya fiyat 0 =
+  satışa kapat" diye yorumluyor. Yani orada birleştirmek neyse burada
+  AYIRMAK odur. `pushInventory`/`pushPrices` yazılırken mevcut değer
+  okunup yük TAMAMLANMALIDIR.
+- **WEBHOOK VAR** (`X-HB-Signature` HMAC) — Trendyol'un aksine. Gelen
+  hat kuralları aynen geçerli: ham gövde üzerinden, ayrıştırmadan önce,
+  `hash_equals` ile. **Başlık adı BÜYÜK/KÜÇÜK HARF DUYARSIZ okunur** —
+  vekil sunucular başlıkları yeniden yazar ve tam eşleşme aransaydı
+  MEŞRU webhook reddedilir, kanal sonsuza kadar yeniden gönderirdi.
+- **WEBHOOK SIRRI YOKSA DOĞRULAMA "GEÇTİ" DEMEZ** — güvenli taraf
+  REDDETMEKTİR; kabul etmek imzasız sipariş enjeksiyonuna kapı açardı.
+- **EN DÜŞÜK HIZ SINIRI SEÇİLİR** (10/sn). Kova BAĞLANTI başınadır ve
+  tek kova iki farklı uç nokta sınırını (listing ~30/sn, sipariş
+  ~10/sn) ayrı ayrı temsil edemez. Yüksek sınır sipariş çağrılarını
+  sürekli 429'a sokardı; düşük sınırın bedeli yalnızca yavaşlıktır.
+  **Dinamik öğrenme YOK** (Trendyol'un aksine): kanal sınırı yanıt
+  başlığında bildirmiyor ve öğrenilecek başlık yokken "öğrenme" kodu
+  yazmak, hiç çalışmayan ve hiç sınanamayan bir yol bırakırdı.
+- **YER TUTUCU ADIYLA DOLDURULUR, KONUMLA DEĞİL** — konumla eşleştirme
+  `{merchantId}` ve `{merchantSku}` sırası değişince sessizce yanlış
+  değeri yazar ve istek BAŞKA satıcının SKU'suna giderdi (toplu içe
+  aktarmadaki "kolonlar ADIYLA eşlenir" kuralının aynısı).
+  **Doldurulmamış yer tutucu İSTİSNA fırlatır**: geçseydi istek literal
+  `{merchantSku}` içeren adrese gider ve 404'ün sebebi görünmezdi.
+- **PARTİ BOYUTU 1000'DE TUTULUYOR** (ikincil kaynak 4000 diyor).
+  Sınır doğrulanmadı ve aşımın bedeli ağır: kanal isteği kısmen
+  işlerse hangi satırın gittiği bilinmez. Küçük parti yalnızca daha çok
+  istek demektir, yanlış sonuç değil.
 
 ## Trendyol kuralları (§14 · Faz 2)
 
@@ -1606,17 +1662,36 @@ provası** (`1cc6720` + `05b336e` + `707ad44` + `fbf1eb7`).
 Panelde ON DÖRT ekran var (`/help` dahil). Kalan TEK artık madde:
 **onay durumu ekranı** (toplu görünüm, birkaç saat).
 
-**SIRADAKİ İŞ SEÇİMİ KULLANICININDIR**: onay durumu ekranı · Faz 5
-tampon (28 sa, içeriği belirlenmemiş) · yeni pazaryerleri (Hepsiburada
-→ Amazon → Etsy → eBay) · Stripe'ı uçtan uca sürmek (anahtarlar TEST
-moduna çevrilince) · proje ismi (~yarım saat). Çalışma sırası kararı
-("önce çekirdek, panel sona") kapsamını doldurdu.
+**SIRADAKİ İŞ — HEPSİBURADA DOKÜMANTASYONU (kullanıcı ile BİRLİKTE).**
+Kullanıcı kararı (24 Ağustos): "dökümantasyonu beraber yazalım". Uç
+noktalar doğrulanmadan sonraki madde YAZILMAZ; ayrıntı DEVIR.md'nin en
+üstünde.
 
-**YENİ PAZARYERLERİ — SIRAYA KONDU, ŞİMDİ YAZILMIYOR (19 Ağustos 2026).**
-Kullanıcının kararı: **Hepsiburada → Amazon → Etsy → eBay**. Bu maddeler
-**Faz 3 ve Faz 4 bittikten sonra** ele alınır. **Shopify KAPSAM DIŞI** —
-kullanıcı açıkça istemedi; memory'deki eski "Node Shopify app" kararı
-artık geçerli değil.
+Bekleyen diğer maddeler: onay durumu ekranı · Faz 5 tampon (28 sa) ·
+Stripe'ı uçtan uca sürmek (anahtarlar TEST moduna çevrilince) · proje
+ismi (~yarım saat).
+
+**YENİ PAZARYERLERİ — BAŞLANDI (24 Ağustos 2026).**
+Sıra: **Hepsiburada → Shopify → Amazon → Etsy → eBay.**
+
+**⚠️ SHOPIFY KARARI DEĞİŞTİ.** 19 Ağustos'ta "kapsam dışı"ydı; kullanıcı
+24 Ağustos'ta "shopify da bizim için çok önemli" dedi. **LARAVEL ADAPTER
+olarak yazılacak, Remix uygulaması DEĞİL** (kullanıcı kararı). Bu
+dokümandan BİLİNÇLİ bir sapmadır: §2 diyagramı ve §11 servis token'ı
+değişmezi Shopify'ı ayrı bir Node/Remix servisi olarak öngörüyor ve o
+mimari **App Store'a çıkmak için** gerekli (doküman Ay 8+ diyor).
+Şimdi yazılacak olan: satıcının kendi **custom app** Admin API
+anahtarıyla bağlandığı, Woo/Trendyol ile AYNI kalıpta bir adapter.
+OAuth YOK, Remix YOK, **projeye ikinci teknoloji yığını (Node)
+SOKULMAZ**. App Store kararı verilirse §11'in servis token'ı değişmezi
+O ZAMAN uygulanır; şema hazır (`UNIQUE(channel_type_code,
+external_account_id)`).
+
+**DOKÜMAN İKİSİNİ DE KAPSAM DIŞI BIRAKIYOR** (§16: "468 saatte dört
+kanal yüzeysel çalışır; iki kanal kusursuz çalışır"; kapsam dışı
+tablosu "Ay 7"). 468 saatlik plan Faz 5 ile bitiyor ve bu maddeler
+ONDAN SONRASIDIR — doküman ihlali değil, zaman çizelgesinin dışına
+çıkış.
 
 Sıranın gerekçesi: Hepsiburada Trendyol'un modeline en yakın (taksonomi +
 zorunlu öznitelik + onay), o yüzden en düşük riskli ikinci pazaryeri.

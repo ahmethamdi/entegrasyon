@@ -1,9 +1,86 @@
-# Devir Notu — 24 Ağustos 2026 (GÜVENLİK + YÜK TESTİ + YEDEK PROVASI BİTTİ)
+# Devir Notu — 24 Ağustos 2026 (FAZ 4 BİTTİ · HEPSİBURADA BAŞLADI)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `fbf1eb7`.
-**FAZ 3 KAPALI** ve **FAZ 4'ÜN SON MADDESİ DE KAPANDI.**
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `356a662`,
+`origin/main`'e push edildi. **FAZ 1–4 KAPALI (440/468 sa).**
 
-## 🎯 BU OTURUMDA — FAZ 4'ÜN SON MADDESİ (12 sa) KAPANDI
+**892 test yeşil** (3462 assertion), Pint temiz (373 dosya).
+
+## 🔴 SIRADAKİ İŞ — HEPSİBURADA DOKÜMANTASYONU (KULLANICI İLE BİRLİKTE)
+
+**Kullanıcı kararı (24 Ağustos): "dökümantasyonu beraber yazalım".**
+
+Hepsiburada adapter'ının **istemci katmanı yazıldı** (`356a662`) ama
+**uç noktalar DOĞRULANMADI** — `developers.hepsiburada.com` bot
+isteklerini **403**, `listing-external.hepsiburada.com/docs` **401** ile
+reddediyor. Yollar ikincil kaynaklardan derlendi.
+
+**KULLANICIDAN ALINACAKLAR** (tarayıcıdan kopyalayacak):
+
+| # | Ne | Nerede kullanılacak |
+|---|---|---|
+| 1 | Listing **tekil** fiyat/stok güncelleme — uç nokta + payload | `LISTING_UPDATE` |
+| 2 | Listing **toplu** güncelleme + `trackingId` yoklaması | `LISTING_BULK_UPDATE`, `LISTING_BULK_STATUS` |
+| 3 | Kategori ağacı + kategori bazlı **zorunlu öznitelikler** | `CATEGORIES`, `CATEGORY_ATTRIBUTES` |
+| 4 | Sipariş/paket listeleme + **webhook imza doğrulama biçimi** | `ORDER_PACKAGES`, `verifyWebhookSignature` |
+| 5 | Ürün açma (`PRODUCT_IMPORT`) + `trackingId` akışı | `PRODUCT_IMPORT*` |
+| 6 | Gerçek **hız sınırı** başlıkları (varsa) | `rateLimitProfile()` |
+
+**Satıcı hesabı varsa test anahtarı da işe yarar** — bu projede gerçek
+çalıştırma HER TURDA gerçek bir hata buldu.
+
+**DOĞRULAMA SIRASI** (`HepsiburadaEndpoints` sınıf başlığında da yazılı):
+
+1. Her sabiti resmî dokümanla karşılaştır.
+2. `HepsiburadaAdapterTest`'teki beklenen metinleri güncelle.
+3. Gerçek satıcı hesabıyla sağlık kontrolü çalıştır.
+4. `ChannelTypeSeeder` → `is_active = true` yap.
+
+**ŞU AN `is_active = false`** ve panelde açılır listede GÖRÜNMÜYOR.
+Bu bilinçli: doğrulanmamış adrese istek atan bağlantı, kanal 200
+dönerse "senkron BAŞARILI" gösterir ve hiçbir şey gitmemiş olur.
+
+### ✅ HEPSİBURADA — BİRİNCİ MADDE BİTTİ (`356a662`)
+
+Trendyol'un Faz 2'deki ilk maddesiyle aynı kapsam: istemci, kimlik
+doğrulama, sağlık kontrolü, hata sınıflandırma, hız sınırı, webhook
+imzası. **20 test.**
+
+**ÜÇ KRİTİK FARK — TRENDYOL'A BENZİYOR AMA AYNI DEĞİL:**
+
+1. **`User-Agent` KİMLİK DOĞRULAMANIN PARÇASI** —
+   `{merchantId} - Entegrasyon` eksikse kimlik bilgisi DOĞRU olsa bile
+   kanal **401** döner. `97a7eb7`'de yaşanan "sessizce kimliksiz gitti"
+   hatasının başka bir biçimi. `ChannelHttpClient`'a **GENEL** başlık
+   desteği eklendi — `if ($channel === '...')` YAZILMADI.
+2. **STOK VE FİYAT AYNI YÜKTE — TRENDYOL'UN TERSİ.** Orada ayırmak
+   zorunluydu (biri diğerini ezerdi); burada kanal eksik alanı **SIFIR**
+   sayıyor ve "stok 0 = satışa kapat" diye yorumluyor. Yazılmamış
+   gövdeler bunu açıkça söylüyor ve **test o metni sınıyor**.
+3. **WEBHOOK VAR** (`X-HB-Signature` HMAC) — Trendyol'un aksine.
+
+**YAZILMADI ve AÇIKÇA İSTİSNA FIRLATIYOR:** stok/fiyat itme, sipariş
+yoklama, katalog, taksonomi. `SupportsCatalog`/`SupportsTaxonomy` İLAN
+DA EDİLMEDİ — çalışmayan yetenek panelde çalışmayan sekme demektir.
+
+**ÜÇ MUTASYONUN İKİSİ YAKALANDI.** `hash_equals` → `===` mutasyonu
+HAYATTA KALDI ve bu **BEKLENEN dürüst sınırdır** (zamanlama saldırısı
+işlevsel testte görünmez); Woo'da da aynı durum kayıtlı, sahte test
+YAZILMADI.
+
+### ⚠️ SEEDER TUZAĞI — TRENDYOL'U KAPATTI
+
+`db:seed --class=ChannelTypeSeeder` çalıştırıldığında **Trendyol
+`is_active = false`'a döndü** (seeder'daki değer eskiden beri `false`,
+veritabanında elle açılmış). Elle geri açıldı:
+
+```sql
+UPDATE channel_types SET is_active = true WHERE code = 'trendyol';
+```
+
+Seeder'ı çalıştıran her tur bunu tekrar yapmalı ya da seeder
+düzeltilmeli — **karar verilmedi, açık uç.**
+
+## 🎯 ÖNCEKİ OTURUM — FAZ 4'ÜN SON MADDESİ (12 sa) KAPANDI
 
 Madde üç parçalıydı ve **üçü de bitti**:
 
