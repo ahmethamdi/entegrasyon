@@ -476,6 +476,142 @@ final class EtsyOrdersTest extends TestCase
         $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
     }
 
+    // ══════════════════════════════════ SLICE 3.8 · iptal stok GERİ EKLER
+
+    /**
+     * ⚠️ İPTAL SATILMIŞ STOĞU GERİ EKLER — uçtan uca (§11.4 · slice 3.8).
+     *
+     * `canceled` durumu `cancelled` tipine eşlenir ve `ApplyOrderCancellation`
+     * yolundan geçer. Tip yanlış eşlenseydi (`updated` sayılsaydı) stok
+     * hareketi HİÇ üretilmez ve satılmış mal sonsuza kadar düşük
+     * görünürdü — satıcı stoğu olmayan üründen satış yapmayı bırakır.
+     *
+     * ⚠️ İDDİA "ikinci inbox satırı yazıldı" DEĞİL, **BAKİYE 8 → 10**.
+     * Satır iddiası, iptal hiç işlenmese bile yeşil kalırdı (mesaj
+     * yazılır ama router dalı çalışmaz).
+     */
+    #[Test]
+    public function a_cancelled_receipt_restores_the_stock(): void
+    {
+        [$tenant, $connection] = $this->connected();
+
+        $variant = $this->asTenant(
+            $tenant,
+            fn (): Variant => Variant::factory()->create(['sku' => 'TSH-M'])
+        );
+
+        $warehouseId = (string) $this->asTenant(
+            $tenant,
+            fn () => Warehouse::query()->where('is_default', true)->value('id')
+        );
+
+        $this->asTenant($tenant, fn () => app(ApplyMovement::class)->run(
+            warehouseId: $warehouseId,
+            variantId: $variant->id,
+            type: MovementType::IMPORT,
+            quantity: 10,
+            idempotencyKey: 'import:'.$variant->id,
+            sourceType: 'test',
+        ));
+
+        // ① Sipariş gelir: 2 adet satıldı → 8.
+        Http::fake(['*' => Http::sequence()
+            ->push(['results' => [$this->receipt('9001', 'paid')], 'count' => 1], 200)
+            ->push(['results' => [$this->receipt('9001', 'canceled')], 'count' => 1], 200)]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(8, $this->onHand($tenant, $variant), 'Satış stoğu düşürmedi.');
+
+        // ② Satıcı Etsy panelinden iptal etti → yoklama `canceled` görür.
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        // ⚠️ ASIL KANIT: bakiye geri döndü.
+        $this->assertSame(
+            10,
+            $this->onHand($tenant, $variant),
+            'İptal stoğu GERİ EKLEMEDİ — satılmış mal sonsuza kadar düşük '
+            .'görünür ve satıcı olmayan stoktan satış yapmayı bırakır.',
+        );
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /**
+     * ⚠️ AYNI İPTAL İKİNCİ KEZ GELİRSE STOK İKİ KEZ EKLENMEZ.
+     *
+     * Yoklama penceresi GERİYE bakar (5 dk örtüşme), yani aynı iptal
+     * tur tur yeniden görülür. Çıpa `order_events (order_id, type,
+     * external_ref)` kısmi tekilliğidir; olmasaydı bakiye her turda
+     * ikişer artar ve stok GERÇEKTE olmayan mala şişerdi.
+     */
+    #[Test]
+    public function a_repeated_cancellation_does_not_restore_stock_twice(): void
+    {
+        [$tenant, $connection] = $this->connected();
+
+        $variant = $this->asTenant(
+            $tenant,
+            fn (): Variant => Variant::factory()->create(['sku' => 'TSH-M'])
+        );
+
+        $warehouseId = (string) $this->asTenant(
+            $tenant,
+            fn () => Warehouse::query()->where('is_default', true)->value('id')
+        );
+
+        $this->asTenant($tenant, fn () => app(ApplyMovement::class)->run(
+            warehouseId: $warehouseId,
+            variantId: $variant->id,
+            type: MovementType::IMPORT,
+            quantity: 10,
+            idempotencyKey: 'import:'.$variant->id,
+            sourceType: 'test',
+        ));
+
+        Http::fake(['*' => Http::sequence()
+            ->push(['results' => [$this->receipt('9001', 'paid')], 'count' => 1], 200)
+            ->push(['results' => [$this->receipt('9001', 'canceled')], 'count' => 1], 200)
+            ->push(['results' => [$this->receipt('9001', 'canceled')], 'count' => 1], 200)]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        // ÜÇÜNCÜ tur: aynı iptal yeniden görülür.
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(
+            10,
+            $this->onHand($tenant, $variant),
+            'İptal İKİ KEZ uygulandı — bakiye gerçekte olmayan mala şişti.',
+        );
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /** Bekleyen tüm inbox satırlarını işler. */
+    private function processInbox(Tenant $tenant): void
+    {
+        $this->asTenant($tenant, function () use ($tenant): void {
+            foreach (InboxMessage::query()->where('status', 'pending')->get() as $message) {
+                (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+            }
+        });
+    }
+
+    private function onHand(Tenant $tenant, Variant $variant): int
+    {
+        return (int) $this->asTenant($tenant, fn () => InventoryLevel::query()
+            ->where('variant_id', $variant->id)
+            ->value('on_hand'));
+    }
+
     // ═══════════════════════════════════════════════════ yetenek
 
     /** Yetenek `instanceof` ile okunur. */

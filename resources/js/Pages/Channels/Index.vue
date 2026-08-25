@@ -38,6 +38,11 @@ function healthClass(health) {
 /** Yetenekler tip sisteminden gelir; kanal adı kontrol edilmez. */
 const capabilityLabels = {
     catalog: 'Ürün',
+    // ⚠️ BU SATIR EKSİKTİ ve `?? key` yedeği yüzünden HATA VERMEDİ:
+    // rozet ham anahtarı (`catalog_import`) İngilizce ve alt çizgili
+    // olarak bastı. Yedek olmasaydı boş görünürdü — ikisi de sessiz.
+    // Gerçek tarayıcı çalıştırmasında bulundu.
+    catalog_import: 'İçe aktarma',
     inventory: 'Stok',
     pricing: 'Fiyat',
     orders: 'Sipariş',

@@ -35,6 +35,14 @@ class ChannelTypeSeeder extends Seeder
                 'adapter_class' => 'App\\Domain\\Channels\\Adapters\\WooCommerce\\WooCommerceAdapter',
                 'capabilities' => [
                     'catalog' => true,
+                    // ⚠️ ANAHTAR HİÇ YOKTU ve `?? false` ile SESSİZCE
+                    // kapalı sayılıyordu — oysa `WooCommerceAdapter`
+                    // `SupportsCatalogImport`'u `99008b8`'den beri
+                    // UYGULUYOR. Yani "kanaldan ürün çekme" çalışıyordu
+                    // ama satıcı onu panelde HİÇ GÖREMİYORDU.
+                    // `ChannelTypeSeederTest` artık bunu `instanceof`
+                    // ile karşılaştırarak koruyor.
+                    'catalog_import' => true,
                     'inventory' => true,
                     'pricing' => true,
                     'orders' => true,
@@ -269,19 +277,26 @@ class ChannelTypeSeeder extends Seeder
                     // panel çalışmayan bir sekme gösterirdi.
                     'catalog_import' => false,
                     'inventory' => true,        // slice 3.5 ✓
-                    'pricing' => false,         // slice 3.6
-                    'orders' => false,          // slice 3.7
+                    'pricing' => true,          // slice 3.6 ✓
+                    'orders' => true,           // slice 3.7 ✓
                     'taxonomy' => true,         // slice 3.3 ✓
                     // ⚠️ ONAY SÜRECİ YOKTUR (§11.5) — Etsy'de ilan
                     // yayınlanır yayınlanmaz canlıdır. Açılsaydı panelde
                     // HİÇ DOLMAYACAK bir sekme belirirdi.
                     'approval' => false,
-                    // ⚠️ İADE İÇİN AYRI UÇ NOKTA YOK (§11.4 · dürüst
-                    // sınır): satıcı iadeyi Etsy panelinden işler,
-                    // yoklama bunu `updated` görür ve stok hareketi
-                    // ÜRETMEZ. `returned` sayılsaydı satılmış stok geri
-                    // eklenir ve bakiye bozulurdu.
-                    'fulfillment' => false,     // slice 3.7
+                    // ⚠️ `SupportsFulfillment` UYGULANMADI. §11.4 ondan
+                    // söz ediyor ama §27'nin slice tablosunda kendi
+                    // satırı YOK; ilan edilip yazılmasaydı panelde
+                    // ÇALIŞMAYAN bir sekme açardı (§05). Bilinçli bir
+                    // açık madde ve `EtsyAdapterTest` bunu
+                    // `assertNotInstanceOf` ile korur.
+                    //
+                    // AYRI KONU — İADE: Etsy iade için uç nokta VERMİYOR
+                    // (§11.4 · dürüst sınır). Satıcı iadeyi panelden
+                    // işler, yoklama bunu `updated` görür ve stok
+                    // hareketi ÜRETMEZ; `returned` sayılsaydı satılmış
+                    // stok geri eklenir ve bakiye bozulurdu.
+                    'fulfillment' => false,
                 ],
                 'rate_limit_profile' => [
                     // 10 istek/sn (§21). ASIL SINIR GÜNLÜK KOTADIR:

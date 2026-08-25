@@ -2,10 +2,83 @@
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1228 test yeşil** (4198 assertion), Pint temiz (425 dosya).
+**1234 test yeşil** (4259 assertion), Pint temiz (426 dosya).
 
-**Faz 3 · Etsy: 52/56 saat.** Slice 3.1–3.7 KAPALI, sıradaki
-**3.8 iptal + mutabakat + production** (4 sa).
+## 🟢 FAZ 3 KAPANDI — ETSY 56/56 SAAT
+
+Slice 3.1–3.8'in sekizi de bitti. Sıradaki **Faz 4 · eBay (64 sa)**.
+
+### ⚠️ SLICE 3.8'DE BULUNAN GERÇEK HATA — üç kanalda yetenek sürüklenmesi
+
+Tohumlanan `capabilities` kolonu GERÇEK uygulamayla ayrışmıştı ve
+**hiçbir test bunu okumuyordu**:
+
+| Kanal | Bayrak | Arayüz | Sonuç |
+|---|---|---|---|
+| etsy | `pricing = false` | UYGULANMIŞ (3.6) | Satıcı fiyat senkronunu göremezdi |
+| etsy | `orders = false` | UYGULANMIŞ (3.7) | Satıcı sipariş yoklamasını göremezdi |
+| **woocommerce** | `catalog_import` **anahtarı YOK** | UYGULANMIŞ (`99008b8`) | **Aylardır** çalışan içe aktarma panelde GÖRÜNMÜYORDU |
+
+Sonuncusu bu turla ilgisiz, **çok daha eski** bir hata. Davranış
+testleri yeşildi çünkü hepsi yeteneği `instanceof` ile okuyor — o
+kolonu OKUYAN kimse yoktu. `ChannelTypeSeederTest` artık ikisini
+karşılaştırıyor ve iki yönü de koruyor (bayrak true+arayüz yok =
+çalışmayan sekme; bayrak false+arayüz var = görünmeyen özellik).
+
+**Tarayıcıda ikinci bir hata daha çıktı:** rozet etiket haritasında
+`catalog_import` yoktu ve `?? key` yedeği ham anahtarı bastı
+(`Ürün · catalog_import · Stok...`). Yedek olmasaydı boş görünürdü —
+ikisi de sessiz. Artık "İçe aktarma" yazıyor.
+
+### Slice 3.8 · ne yapıldı
+
+**1 · İptal — dikey dilimle KANITLANDI.** Router dalı zaten vardı ama
+Etsy yolundan hiç sürülmemişti. `canceled` → `cancelled` → stok GERİ
+EKLENİR: bakiye **10 → 8 → 10**. İddia "ikinci inbox satırı yazıldı"
+DEĞİL, bakiyenin kendisi — satır iddiası iptal hiç işlenmese bile
+yeşil kalırdı. Tekrarlanan iptal stoğu İKİ KEZ eklemiyor
+(`order_events` kısmi tekilliği).
+
+**2 · Mutabakat — STOK sweep'i de sürüldü.** Slice 3.6 fiyat turunu
+kanıtlamıştı; stok turu AYRI yeteneği (`SupportsInventory`) ve AYRI
+aday sorgusunu (`recently_sold`) kullanır, yani biri çalışırken öteki
+kopuk olabilirdi. Kanalda 99, bizde 17 → `REPAIR_QUEUED`.
+
+**3 · Production (§26).** Kanal açma listesinin 1–2. adımları TAMAM
+(adapter yazıldı, uç noktalar resmî dokümandan doğrulandı). **3–5.
+adımlar KULLANICIDA**: gerçek Etsy hesabıyla sağlık kontrolü, tek
+kiracıda uçtan uca sürüm, sonra kademeli açılış.
+
+⚠️ **ETSY `is_active = true` AMA GERÇEK MAĞAZADA HİÇ SÜRÜLMEDİ** —
+Shopify'la aynı durum. Kullanıcının açık kararıyla açıldı (25 Ağustos:
+"kanallardan bağlansın bütün platformlar"). Geri alma: `UPDATE
+channel_types SET is_active = false WHERE code = 'etsy';`
+
+⚠️ **PANELDEN BAĞLANAMAZ** — bağlama formu OAuth akışını bilmiyor ve
+bunu AÇIKÇA söylüyor (`PanelConnectSupport`, commit `f0fb07a`).
+Bağlanma formunun kanal başına dallandırılması AYRI bir madde
+(aşağıda).
+
+## 📌 AÇIK MADDELER — Faz 3 dışı, kullanıcı onaylı
+
+**1 · §25'İN ÜÇ METRİĞİ HİÇ YAZILMADI** (~6 sa). Doküman
+`token_expiring_soon` · `token_refresh_failures` ·
+`channel_daily_quota_used` metriklerini, `/channels`'a token durumu
+rozetini ve `Metric::alertAudience()`'ı istiyor. **Faz 1'de de
+atlanmış** — yani Shopify'ı da ilgilendiriyor, Etsy'ye özgü değil.
+Şema HAZIR: `channel_credentials.expires_at` ve
+`channel_credentials_expiring_idx` kısmi indeksi zaten var.
+Kullanıcı kararıyla Faz 3'ten AYRILDI (slice 3.8 dokümanda 4 saat).
+
+**2 · BAĞLANMA FORMU KANAL BAŞINA DALLANDIRILMALI** (~4 sa).
+A1: Shopify (tek Admin API token'ı, ~1.5 sa) · A2: Etsy (OAuth
+yönlendirmesi; rotalar `EtsyOAuthController`'da ZATEN yazılı, ~2.5 sa).
+Bitince `PanelConnectSupport` satırları teker teker silinir; liste
+boşalınca sınıf da kaldırılır.
+
+**3 · `SupportsFulfillment` ETSY'DE UYGULANMADI.** §11.4 ondan söz
+ediyor ama §27'nin slice tablosunda satırı YOK. `EtsyAdapterTest`
+`assertNotInstanceOf` ile kilitliyor.
 
 ## ⚠️ SLICE 3.7'DE BULUNAN GERÇEK HATA — olay kimliği Etsy'de ÜRETİLMİYORDU
 
@@ -204,8 +277,8 @@ kullanıcı kararı: "dökümantasyonu beraber yazalım" (24 Ağustos).
 | 3.4 | Katalog — listing/product/offering (10 sa) | ✅ KAPALI | `606d999` |
 | 3.5 | **Stok — oku-birleştir-yaz (8 sa)** | ✅ KAPALI | `2c522ed` |
 | 3.6 | **Fiyat (4 sa)** | ✅ KAPALI | `8869464` |
-| 3.7 | **Sipariş yoklama (8 sa)** | ✅ KAPALI | bu tur |
-| **3.8** | **İptal + mutabakat + production (4 sa)** | ⏭️ **SIRADAKİ** | — |
+| 3.7 | **Sipariş yoklama (8 sa)** | ✅ KAPALI | `bccf77d` |
+| 3.8 | **İptal + mutabakat + production (4 sa)** | ✅ KAPALI | bu tur |
 
 **Yazılan dosyalar:** `EtsyEndpoints` · `EtsyAuth` (saf PKCE) ·
 `EtsyAdapter` · `EtsyProductMapper` · `EtsyInventoryMerger` ·

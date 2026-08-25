@@ -375,8 +375,26 @@ memory'deki "Repo Durumu" dosyasına bak.
 ## Etsy kuralları (beşinci kanal · Faz 3 · `6dcaf52`)
 
 Faz 2 (Hepsiburada) uç nokta doğrulaması BLOKE olduğu için atlandı;
-kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1–3.7 KAPALI**, 3.8
-(iptal + mutabakat + production) sırada.
+kullanıcı kararıyla Etsy'ye geçildi. **FAZ 3 KAPANDI — slice 3.1–3.8
+BİTTİ (56/56 sa).**
+
+- **TOHUMLANAN `capabilities` GERÇEK UYGULAMAYI İZLER** (slice 3.8'de
+  bulundu). O kolon PANELE gider ve `instanceof` ile karşılaştırılır.
+  İki yönü de tehlikelidir: bayrak `true` + arayüz YOK = panelde
+  ÇALIŞMAYAN sekme (§05); bayrak `false` + arayüz VAR = satıcı çalışan
+  özelliği **HİÇ GÖREMEZ**. İkincisi daha sinsi ve **üç kez yaşandı**:
+  Etsy `pricing`/`orders` (slice 3.6/3.7) ve **WooCommerce
+  `catalog_import`** — sonuncusu `99008b8`'den beri uygulanıyordu ama
+  anahtar seeder'da HİÇ YOKTU, `?? false` ile sessizce kapalıydı.
+  Davranış testleri yeşildi çünkü hepsi yeteneği `instanceof` ile
+  okuyor; **kolonu OKUYAN kimse yoktu.** `ChannelTypeSeederTest` artık
+  ikisini karşılaştırıyor.
+- **YENİ SLICE YETENEK AÇTIĞINDA SEEDER'I DA GÜNCELLE** — arayüzü
+  uygulamak yetmez. Kural artık testle korunuyor.
+- **PANELDEKİ ETİKET HARİTASINDA `?? key` YEDEĞİ HATAYI GİZLER.**
+  `catalog_import` etiketi eksikti ve rozet ham anahtarı İngilizce+alt
+  çizgili bastı; yedek olmasaydı boş görünürdü — ikisi de sessiz.
+  Gerçek tarayıcı çalıştırmasında bulundu.
 
 - **HIZ SINIRI PROFİLİNİN ANAHTAR ADI SÖZLEŞMEDİR** (`35b0209`).
   `RateLimitProfile::fromArray()` TAM OLARAK `requests_per_second`

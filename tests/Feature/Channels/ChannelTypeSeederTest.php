@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Channels;
 
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
+use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
+use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOrders;
+use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Models\ChannelType;
 use Database\Seeders\ChannelTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -39,6 +47,67 @@ use Tests\TestCase;
 final class ChannelTypeSeederTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * ⚠️ TOHUMLANAN `capabilities` GERÇEK UYGULAMAYI İZLEMEK ZORUNDADIR.
+     *
+     * O kolon PANELE gider; yetenek bayrağı `true` ama arayüz
+     * UYGULANMAMIŞSA panel çalışmayan bir sekme gösterir (§05). Tersi
+     * daha sinsidir: arayüz YAZILMIŞ ama bayrak `false` kalmışsa satıcı
+     * çalışan bir özelliği HİÇ GÖREMEZ ve kimse fark etmez.
+     *
+     * BU GERÇEKTEN YAŞANDI: slice 3.6 `SupportsPricing`'i, 3.7
+     * `SupportsOrders`'ı yazdı ama tohumda `pricing`/`orders` `false`
+     * kaldı. Davranış testleri yeşildi çünkü hepsi yeteneği
+     * `instanceof` ile okuyor — kolonu OKUYAN kimse yoktu.
+     *
+     * Karşılaştırma `instanceof` yansımasıyla yapılır: iki taraf da aynı
+     * enum'dan okusaydı mutasyon ikisini BİRLİKTE kaydırır ve test
+     * sahte yeşil kalırdı (`SeededRateLimitContractTest`'in kuralı).
+     */
+    #[Test]
+    public function seeded_capabilities_match_the_actual_adapter_interfaces(): void
+    {
+        (new ChannelTypeSeeder)->run();
+
+        $interfaces = [
+            'catalog' => SupportsCatalog::class,
+            'catalog_import' => SupportsCatalogImport::class,
+            'inventory' => SupportsInventory::class,
+            'pricing' => SupportsPricing::class,
+            'orders' => SupportsOrders::class,
+            'taxonomy' => SupportsTaxonomy::class,
+            'approval' => SupportsApprovalWorkflow::class,
+            'fulfillment' => SupportsFulfillment::class,
+        ];
+
+        foreach (ChannelType::query()->get() as $type) {
+            $adapter = (string) $type->adapter_class;
+
+            if ($adapter === '' || ! class_exists($adapter)) {
+                continue;
+            }
+
+            foreach ($interfaces as $flag => $interface) {
+                $implemented = is_subclass_of($adapter, $interface);
+                $seeded = (bool) ($type->capabilities[$flag] ?? false);
+
+                $this->assertSame(
+                    $implemented,
+                    $seeded,
+                    sprintf(
+                        '%s kanalında `%s` bayrağı %s ama arayüz %s. '.
+                        'Bayrak true+arayüz yok = panelde ÇALIŞMAYAN sekme; '.
+                        'bayrak false+arayüz var = satıcı çalışan özelliği HİÇ GÖREMEZ.',
+                        $type->code,
+                        $flag,
+                        $seeded ? 'true' : 'false',
+                        $implemented ? 'UYGULANMIŞ' : 'uygulanmamış',
+                    ),
+                );
+            }
+        }
+    }
 
     /**
      * Elle açılan kanal, seeder yeniden koşunca AÇIK KALIR.

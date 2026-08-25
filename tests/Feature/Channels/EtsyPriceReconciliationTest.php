@@ -12,6 +12,9 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
+use App\Domain\Inventory\Actions\ApplyMovement;
+use App\Domain\Inventory\Enums\MovementType;
+use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Reconciliation\Enums\ReconciliationScope;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
 use App\Domain\Reconciliation\Support\ReconcileActiveConnections;
@@ -164,6 +167,104 @@ final class EtsyPriceReconciliationTest extends TestCase
 
         $this->assertSame(0, $processed);
         Http::assertNothingSent();
+    }
+
+    // ══════════════════════════ SLICE 3.8 · STOK mutabakatı da Etsy'ye ulaşır
+
+    /**
+     * ⚠️ STOK SWEEP'İ DE ETSY'Yİ SEÇER ve SÜRÜKLENME BULUR (slice 3.8).
+     *
+     * Slice 3.6 FİYAT turunun Etsy'ye ulaştığını kanıtladı; bu test
+     * STOK turunu sürer. İkisi `ReconcileConnection` içinde AYNI beş
+     * adımı yürütür ama FARKLI yeteneği okur (`SupportsInventory` /
+     * `SupportsPricing`) ve farklı aday sorgusu kullanır — biri
+     * çalışırken öteki kopuk olabilir.
+     *
+     * ⚠️ STOK ADAYI `recently_sold` YOLUNDAN GELİR — fiyatın AKSİNE.
+     * Sıcak katman "son 30 dakikada SATILDI" der ve `inventory_movements`
+     * üzerinde SALE arar. Yalnızca açılış IMPORT'u yazan bir kurulum
+     * bağlantıyı seçtirir ama aday BULDURMAZ; kanala hiç istek gitmez ve
+     * test "taranıyor" derken hiçbir şey sınamamış olurdu.
+     *
+     * ⚠️ SÜRÜKLENME `max(available, 0)` İLE ÖLÇÜLÜR: kanaldaki değerle
+     * karşılaştırılan şey GİDEN değerdir, ham kanonik bakiye değil.
+     */
+    #[Test]
+    public function the_inventory_sweep_also_reaches_etsy(): void
+    {
+        [$tenant, $variant, $connection] = $this->etsyContext(price: '19.90');
+
+        $listing = $this->asTenant($tenant, fn (): Listing => Listing::factory()->create([
+            'channel_connection_id' => $connection->id,
+            'variant_id' => $variant->id,
+            'external_id' => '5001',
+            'external_parent_id' => '9001',
+            'lifecycle_status' => 'live',
+        ]));
+
+        // Bizde 17 olacak: 18 IMPORT + 1 SALE. SALE aynı zamanda satırı
+        // SICAK KATMAN ADAYI yapar — açılış IMPORT'u tek başına yapmaz.
+        $warehouseId = (string) $this->asTenant(
+            $tenant,
+            fn () => Warehouse::query()->where('is_default', true)->value('id')
+        );
+
+        $this->asTenant($tenant, fn () => app(ApplyMovement::class)->run(
+            warehouseId: $warehouseId,
+            variantId: $variant->id,
+            type: MovementType::IMPORT,
+            quantity: 18,
+            idempotencyKey: 'import:'.$variant->id,
+            sourceType: 'test',
+        ));
+
+        $this->asTenant($tenant, fn () => app(ApplyMovement::class)->run(
+            warehouseId: $warehouseId,
+            variantId: $variant->id,
+            type: MovementType::SALE,
+            quantity: 1,
+            idempotencyKey: 'recent-sale:'.$variant->id,
+            sourceType: 'test',
+        ));
+
+        // Kanal 99 diyor — bizdeki 17'den FARKLI.
+        Http::fake(['*' => Http::response(['products' => [[
+            'product_id' => 5001,
+            'sku' => 'TSH-M',
+            'offerings' => [[
+                'offering_id' => 7001,
+                'quantity' => 99,
+                'is_enabled' => true,
+                'price' => ['amount' => 1990, 'divisor' => 100, 'currency_code' => 'TRY'],
+            ]],
+        ]]], 200)]);
+
+        $processed = $this->asSystem(fn (): int => app(ReconcileActiveConnections::class)->sweep(
+            scope: ReconciliationScope::HOT,
+            budget: 50,
+            domain: SyncDomain::INVENTORY,
+        ));
+
+        $this->assertSame(
+            1,
+            $processed,
+            'Etsy bağlantısı STOK taramasında HİÇ seçilmedi — `fetchInventory` '
+            .'yazılmış ama çağıran yok demektir.',
+        );
+
+        $item = $this->asTenant($tenant, fn (): ?ReconciliationItem => ReconciliationItem::query()
+            ->where('listing_id', $listing->id)
+            ->orderByDesc('id')
+            ->first());
+
+        $this->assertNotNull($item, 'Stok mutabakat kalemi yazılmadı.');
+
+        // ⚠️ DURUM `REPAIR_QUEUED` — fiyatın AKSİNE. §10'un beş adımı tek
+        // turda yürür ve STOKTA onarım AÇILIR (fiyatta açılmaz, §9).
+        $this->assertSame('repair_queued', mb_strtolower((string) $item->status));
+
+        $this->assertSame(17, (int) ($item->local_value['expected_remote'] ?? null));
+        $this->assertSame(99, (int) ($item->remote_value['quantity'] ?? null));
     }
 
     // ────────────────────────────────────────────────────────── yardımcılar
