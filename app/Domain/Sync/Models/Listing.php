@@ -24,11 +24,19 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * ne gözlendi" sorusunu yanıtlar ve her senkronda yazılır. Tek tabloda
  * birleştirilseydi kimlik satırı senkron trafiğiyle sürekli kilitlenirdi.
  *
+ * CHANNEL_METADATA — kanala özgü KALICI uzak kimlikler (V3.0 · §03 · Delta 2).
+ * Shopify `inventory_item_gid`, Etsy `offering_id`, eBay `offer_id`. Yalnızca
+ * ADAPTER okur ve yazar; çekirdek bu alanı sorgulamaz.
+ *
+ * ⚠️ SIR TAŞIMAZ (P0-9 · T-V3-20): kolon şifresizdir ve panele gidebilir.
+ * Token, secret ve imza `channel_credentials`'ta yaşar. KİMLİK ≠ SIR.
+ *
  * @property string $id
  * @property string $tenant_id
  * @property string $channel_connection_id
  * @property string $variant_id
  * @property string|null $external_id
+ * @property array<string, mixed>|null $channel_metadata
  * @property string $lifecycle_status
  */
 class Listing extends Model
@@ -43,6 +51,7 @@ class Listing extends Model
         'variant_id',
         'external_id',
         'external_parent_id',
+        'channel_metadata',
         'external_url',
         'lifecycle_status',
         'listed_at',
@@ -57,6 +66,7 @@ class Listing extends Model
             'listed_at' => 'datetime',
             'delisted_at' => 'datetime',
             'approval_checked_at' => 'datetime',
+            'channel_metadata' => 'array',
         ];
     }
 

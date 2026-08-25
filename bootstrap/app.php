@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\Channels\Console\PruneApiCallsCommand;
+use App\Domain\Channels\Console\RefreshExpiringTokensCommand;
 use App\Domain\Channels\Console\SyncTaxonomyCommand;
 use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
@@ -63,6 +64,8 @@ return Application::configure(basePath: dirname(__DIR__))
         PollChannelOrdersCommand::class,
         // §13 · Faz 3 · api_calls saklama. Zamanlaması routes/console.php.
         PruneApiCallsCommand::class,
+        // V3.0 · §03 · Delta 3 · token yenileme. Zamanlaması routes/console.php.
+        RefreshExpiringTokensCommand::class,
         // §11 · metrik anlık görüntüleri. Zamanlaması routes/console.php.
         CaptureMetricsCommand::class,
         // §11 · §12 · eşik aşımı uyarıları. Zamanlaması routes/console.php.

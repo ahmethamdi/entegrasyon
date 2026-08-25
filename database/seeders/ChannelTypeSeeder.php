@@ -18,13 +18,16 @@ use Illuminate\Database\Seeder;
  * NOT: adapter_class alanları sonraki fazda yazılacak adapter sınıflarını
  * işaret eder. Bu turda adapter iş mantığı uygulanmadığı için sınıflar
  * henüz mevcut değildir; AdapterRegistry yazılırken çözülecektir.
+ *
+ * ⚠️ `is_active` VAR OLAN SATIRDA ASLA EZİLMEZ (V3.0 · §16 · DB Delta 4).
+ * Gerekçe `upsert()` yardımcısının başlığında; ChannelTypeSeederTest korur.
  */
 class ChannelTypeSeeder extends Seeder
 {
     public function run(): void
     {
         // İlk dikey dilim kanalı — mağaza (storefront).
-        ChannelType::updateOrCreate(
+        $this->upsert(
             ['code' => 'woocommerce'],
             [
                 'name' => 'WooCommerce',
@@ -52,7 +55,7 @@ class ChannelTypeSeeder extends Seeder
         );
 
         // İkinci kanal — pazaryeri (marketplace). Faz 2'de aktifleşir.
-        ChannelType::updateOrCreate(
+        $this->upsert(
             ['code' => 'trendyol'],
             [
                 'name' => 'Trendyol',
@@ -93,7 +96,7 @@ class ChannelTypeSeeder extends Seeder
         // görünür ve hiçbir şey gitmemiş olur.
         //
         // Aktifleştirme sırası `HepsiburadaEndpoints` sınıf başlığında.
-        ChannelType::updateOrCreate(
+        $this->upsert(
             ['code' => 'hepsiburada'],
             [
                 'name' => 'Hepsiburada',
@@ -130,5 +133,46 @@ class ChannelTypeSeeder extends Seeder
                 'is_active' => false,
             ],
         );
+    }
+
+    /**
+     * Tanımı yazar ama `is_active`'i VAR OLAN satırda EZMEZ.
+     *
+     * V3.0 · §16 · DB Delta 4 · P1-3 · T-V3-23.
+     *
+     * `updateOrCreate` kullanılamaz: güncelleme kümesine `is_active` de
+     * girer ve seeder her koşuşta kanalın operasyonel durumunu tohum
+     * değerine geri sarar. `356a662`'de tam olarak bu yaşandı —
+     * `db:seed --class=ChannelTypeSeeder` **Trendyol'u kapattı** ve kanal
+     * elle SQL ile geri açıldı. Altı kanalda bu tuzak altı kez ısırır.
+     *
+     * AÇIK/KAPALI KARARI SEEDER'IN DEĞİL OPERATÖRÜN KARARIDIR: §05'in 12
+     * adımlı listesi kanalı kapalı doğurur (adım 1) ve gerçek hesapla
+     * sağlık kontrolü GEÇTİKTEN sonra açar (adım 12). Adım 12'yi geri alan
+     * bir seeder o listeyi anlamsız kılar. Koruma İKİ YÖNLÜDÜR: sorun
+     * çıktığı için acilen kapatılan bir kanal da (§26 · geri alma) sessizce
+     * geri açılmamalıdır.
+     *
+     * DİĞER TÜM ALANLAR GÜNCELLENMEYE DEVAM EDER. "Satır varsa hiç dokunma"
+     * demek seeder'ı tanımların tek kaynağı olmaktan çıkarırdı: bir hız
+     * sınırı düzeltmesi veya yeni yetenek bayrağı üretime ASLA ulaşmaz,
+     * kod ile veritabanı sessizce ayrışırdı.
+     *
+     * @param  array<string, mixed>  $key
+     * @param  array<string, mixed>  $attributes
+     */
+    private function upsert(array $key, array $attributes): ChannelType
+    {
+        $type = ChannelType::query()->firstOrNew($key);
+
+        // Yalnızca YENİ satırda tohum değerini uygula; mevcut satırda
+        // operatörün kararı korunur.
+        if ($type->exists) {
+            unset($attributes['is_active']);
+        }
+
+        $type->fill([...$key, ...$attributes])->save();
+
+        return $type;
     }
 }

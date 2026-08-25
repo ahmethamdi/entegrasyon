@@ -219,3 +219,26 @@ Schedule::command('alerts:dispatch')
     ->dailyAt('09:00')
     ->onOneServer()
     ->withoutOverlapping();
+
+// V3.0 · §03 · Delta 3 · §20 · TOKEN YENİLEME — HER 15 DAKİKA.
+//
+// SIKLIK EN KISA TTL'İN DÖRTTE BİRİDİR: Etsy'nin access token'ı 1 SAAT
+// yaşar. Yarısı (30 dk) seçilseydi tek bir başarısız tur token'ın ölmesine
+// yeterdi; dörtte bir ÜÇ DENEME HAKKI verir. Daha sık koşmak hiçbir şey
+// kazandırmaz — yenilenecek satır yoksa tur boş döner.
+//
+// BU BLOK OLMADAN ETSY VE EBAY BAĞLANTILARI SESSİZCE ÖLÜR. 1 saatlik token
+// saatlik mutabakat turunu bile aşar: yenileme olmadan HER İKİNCİ TUR 401
+// alır ve `AUTHENTICATION` KALICI sayılır — listing'ler "anahtarın yanlış"
+// damgasıyla TOPLU ölür. Oysa anahtar doğrudur, yalnızca süresi dolmuştur.
+// Sınıfın var olması onu kimsenin çağırdığı anlamına gelmez.
+//
+// ⚠️ `withoutOverlapping` ZORUNLUDUR VE BİR EMNİYET DEĞİL, DOĞRULUK
+// KOŞULUDUR (P0-5): paralel iki tur aynı bağlantıyı yenilerse ikisi de yeni
+// token alır ve KANAL İLKİNİ İPTAL EDER — Etsy ve eBay'de refresh token TEK
+// KULLANIMLIKTIR. İkinci koruma katmanı `FOR UPDATE SKIP LOCKED`,
+// `TokenRefresher` içinde; çok sunuculu kurulumda ikisi de gerekir.
+Schedule::command('credentials:refresh')
+    ->everyFifteenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
