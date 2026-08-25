@@ -2183,10 +2183,16 @@ production'a hazır olan" tablosundaki **tüm "TAM" satırları artık
 gerçekten TAM.** Kalıcı kurallar yukarıda "Fiyat çakışması kuralları"
 başlığında. **BU MADDEYİ YENİDEN AÇMA.**
 
-**SIRADAKİ İŞ — HEPSİBURADA DOKÜMANTASYONU (kullanıcı ile BİRLİKTE).**
-Kullanıcı kararı (24 Ağustos): "dökümantasyonu beraber yazalım". Uç
-noktalar doğrulanmadan sonraki madde YAZILMAZ; ayrıntı DEVIR.md'nin en
-üstünde.
+**SIRADAKİ İŞ — 26 AĞUSTOS'TA KULLANICI SEÇECEK.** Üç seçenek var ve
+ayrıntısı DEVIR.md'nin EN ÜSTÜNDE:
+**A)** bağlanma formunu kanal başına dallandır (~4 sa · **ÖNERİLEN** —
+Etsy + Shopify panelde GÖRÜNÜYOR ama BAĞLANAMIYOR) ·
+**B)** §25'in üç metriği + token rozeti (~6 sa · Faz 1'de de atlanmış) ·
+**C)** Faz 4 · eBay (64 sa).
+
+**HEPSİBURADA DOKÜMANTASYONU HÂLÂ BEKLİYOR** (kullanıcı ile BİRLİKTE,
+24 Ağustos kararı: "dökümantasyonu beraber yazalım"). Uç noktalar
+doğrulanmadan o kanalda sonraki madde YAZILMAZ ve kanal KAPALI kalır.
 
 Bekleyen diğer maddeler: Faz 5 tampon (28 sa) · Stripe'ı uçtan uca
 sürmek (anahtarlar TEST moduna çevrilince) · proje ismi (~yarım saat).

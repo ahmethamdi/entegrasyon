@@ -1,12 +1,61 @@
-# Devir Notu — 25 Ağustos 2026 (V3.0 · Faz 1 KAPANDI · **Faz 3 Etsy sürüyor**)
+# Devir Notu — 25 Ağustos 2026 (V3.0 · **Faz 1 + Faz 3 KAPANDI**)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
 **1234 test yeşil** (4259 assertion), Pint temiz (426 dosya).
+Son commit `602fb32`. **Hiçbir şey push EDİLMEDİ** — dört commit
+yerelde bekliyor (`8869464` · `bccf77d` · `f0fb07a` · `602fb32`).
+
+---
+
+# 🌅 YARIN İLK İŞ — 26 Ağustos
+
+**Kullanıcı 25 Ağustos akşamı yorulup bıraktı.** Bu turda Faz 3
+(Etsy) kapandı. Yarın ÜÇ seçenek var ve **kullanıcı henüz seçmedi**:
+
+| # | İş | Süre | Neden şimdi |
+|---|---|---|---|
+| **A** | **Bağlanma formunu dallandır** | ~4 sa | **ÖNERİLEN.** Etsy + Shopify panelde GÖRÜNÜYOR ama BAĞLANAMIYOR; iki kanal da kullanılamaz durumda duruyor |
+| B | §25'in üç metriği + token rozeti | ~6 sa | Doküman istiyor, Faz 1'de de atlanmış; Shopify'ı da ilgilendirir |
+| C | Faz 4 · eBay | 64 sa | Yeni kanal; ama önceki ikisi yarım dururken başlamak riskli |
+
+**A'nın gerekçesi:** kullanıcı 25 Ağustos'ta "kanallardan bağlansın
+bütün platformlar" dedi ve kanalları AÇTIRDI. Bugün panelde
+görünüyorlar ama form OAuth/tek-token akışını bilmediği için
+bağlanamıyorlar — dürüst uyarı koyuldu (`f0fb07a`) ama bu GEÇİCİ bir
+çözüm. A bittiğinde kullanıcının o günkü isteği GERÇEKTEN karşılanmış
+olur.
+
+**A'nın iki parçası:**
+- **A1 · Shopify** (~1.5 sa): form Shopify seçilince TEK `access_token`
+  alanı + `webhook_secret` sorar. Shopify'ın kodu 52/52 BİTMİŞ, tek
+  eksiği buydu.
+- **A2 · Etsy** (~2.5 sa): form `keystring` alır ve "Etsy'ye bağlan"
+  düğmesi `EtsyOAuthController`'a YÖNLENDİRİR; `shop_id` callback'te
+  dolar. **OAuth rotaları ZATEN YAZILI** (slice 3.1) — eksik olan
+  yalnızca panelin o akışa yönlendirmesi.
+- Bitince `PanelConnectSupport` satırları TEKER TEKER silinir; liste
+  boşalınca sınıf da kaldırılır (sınıf başlığında yazılı).
+
+⚠️ **A bir PANEL maddesidir ve dokümanın §13 listesinde YOKTUR.**
+Kullanıcı onayladı (25 Ağustos, "C → 3.8 → A1+A2" kararı).
+
+## 🔑 Yerel ortam — yarın lazım olacak
+
+- Panel: `http://localhost:8080` · giriş
+  **`demo@entegrasyon.local` / `devpassword`**
+  (25 Ağustos'ta veritabanına karşı `Hash::check` ile doğrulandı;
+  notun eski bölümlerindeki `demo12345` YANLIŞTI ve düzeltildi)
+- DB kullanıcısı **`entegrasyon`**, `postgres` DEĞİL.
+- Panelde AÇIK kanallar: Woo · Trendyol · **Etsy** · **Shopify**.
+  Hepsiburada KAPALI (uç noktalar doğrulanmadı).
+- Tarayıcı doğrulaması için `npx --yes --package @playwright/cli
+  playwright-cli` çalışıyor (wrapper script YOK, doğrudan npx).
+  `open` komutu OTURUMU DÜŞÜRÜR — giriş yapıp menüden tıklayarak git.
 
 ## 🟢 FAZ 3 KAPANDI — ETSY 56/56 SAAT
 
-Slice 3.1–3.8'in sekizi de bitti. Sıradaki **Faz 4 · eBay (64 sa)**.
+Slice 3.1–3.8'in sekizi de bitti.
 
 ### ⚠️ SLICE 3.8'DE BULUNAN GERÇEK HATA — üç kanalda yetenek sürüklenmesi
 
@@ -2398,7 +2447,8 @@ siparişler · `/inventory` stok · `/reconciliation` mutabakat ·
 `/channels` kanallar · `/mappings` eşleştirme · **`/billing` abonelik**
 
 Panel gerçek çalıştırması: `http://localhost:8080` ·
-`demo@entegrasyon.local` / `demo12345`
+`demo@entegrasyon.local` / `devpassword`  ⚠️ (eskiden `demo12345`
+yazıyordu; 25 Ağustos'ta veritabanına karşı doğrulandı ve YANLIŞ çıktı)
 
 ## YOL HARİTASI — NE BİTTİ, NE KALDI (20 Ağustos 2026)
 
@@ -2507,7 +2557,8 @@ YAZILMAZ — yetenek `instanceof` ile okunur. Kanal başına kabaca
 
 ## Demo verisi panelde duruyor
 
-`demo@entegrasyon.local` / `demo12345` — gezilebilir bir kiracı.
+`demo@entegrasyon.local` / `devpassword` — gezilebilir bir kiracı.
+⚠️ Eskiden `demo12345` yazıyordu; 25 Ağustos'ta doğrulandı, YANLIŞMIŞ.
 6 ürün, 2 kanal bağlantısı, `demo-v3` taksonomisi (4 yaprak) ve
 **bilinçli olarak KISMİ** eşleştirmeler: `mutfak` eşleşmedi ·
 `kadin-elbise` zorunlu öznitelik eksik (Renk) · `tisort` hazır.
