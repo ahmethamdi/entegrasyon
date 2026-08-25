@@ -1,9 +1,8 @@
-# Devir Notu — 25 Ağustos 2026 (V3.0 ONAYLANDI · Faz 1 · Shopify SÜRÜYOR)
+# Devir Notu — 25 Ağustos 2026 (V3.0 · **FAZ 1 KAPANDI** · Shopify)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz ve **origin/main ile
-eşit**. Son commit `ef25db4`.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `8c852ae`.
 
-**1060 test yeşil** (3832 assertion), Pint temiz (403 dosya).
+**1071 test yeşil** (3855 assertion), Pint temiz (407 dosya).
 
 ---
 
@@ -26,54 +25,90 @@ Onay öncesindeki "kod yazılmaz" kuralı **ARTIK GEÇERLİ DEĞİL.**
 | 1.5 · Stok | ✅ KAPALI | `9b0b651` | 1010 |
 | 1.6 · Fiyat | ✅ KAPALI | `8bceac5` | 1026 |
 | 1.7 · Sipariş webhook | ✅ KAPALI | `72f01bb` | 1047 |
-| 1.8 · **Kargo** | ✅ KAPALI | `ef25db4` | **1060** |
-| **1.9 · `app/uninstalled` + mutabakat + production (4 sa)** | ⏭️ **SIRADAKİ** | — | — |
+| 1.8 · **Kargo** | ✅ KAPALI | `ef25db4` | 1060 |
+| 1.9 · `app/uninstalled` + mutabakat | ✅ KAPALI | `722cbc9` | **1071** |
+| 1.9 · **Kanal AÇILDI** (adım 12) | ✅ KAPALI | `8c852ae` | 1071 |
 
-Faz 1 = 52 saat; **~48'i bitti**. Sonraki fazlar: Hepsiburada 38
+**FAZ 1 KAPANDI (52/52 sa).** Sonraki fazlar: Hepsiburada 38
 (⚠️ uç nokta doğrulaması BLOKE) · Etsy 56 · eBay 64 · Hardening 30.
 
 **Shopify'ın yetenek matrisi TAMAMLANDI** (§04): catalog ·
 catalog_import · inventory · pricing · orders · fulfillment.
 `taxonomy` ve `approval` **HİÇ AÇILMAYACAK** (§04 dipnotları).
 
-## SIRADAKİ İŞ — Slice 1.9 · `app/uninstalled` + mutabakat (4 sa)
+## ⚠️ SHOPIFY AÇIK AMA GERÇEK MAĞAZADA HİÇ SÜRÜLMEDİ — YARIN İLK İŞ
 
-**ÜÇ PARÇA VAR ve ikisi muhtemelen ZATEN ÇALIŞIYOR:**
+`is_active = true` (`8c852ae`) ve kanal panelde GÖRÜNÜYOR. Bu
+**kullanıcının açık kararıyla** yapıldı; §05'in ADIM 12'si gerçek bir
+mağazada sağlık kontrolü ve tek kiracıda uçtan uca sürüm İSTER ve
+**ikisi de YAPILMADI** — gerçek Shopify mağazası + custom app Admin
+API anahtarı gerekiyor, ikisi de KULLANICIDADIR.
 
-**1 · `app/uninstalled` webhook (§06.7) — ASIL İŞ BU.**
-Satıcı custom app'i silerse token SESSİZCE geçersizleşir. Konu
-dinlenmezse her istek 401 alır, `AUTHENTICATION` KALICI sayılır ve
-satıcının tüm listing'leri TEKER TEKER ölür; panel "anahtarınız yanlış"
-der ama satıcı hiçbir şey değiştirmemiştir.
+Bu yüzden açılış commit'i **BİLEREK AYRI TUTULDU**: geri almak tek
+`git revert 8c852ae`.
 
-Dokümanın istediği davranış:
+**Emniyet var:** ilk gerçek bağlantıda sağlık kontrolü geçmezse
+bağlantı `pending` kalır ve `last_error` panelde gösterilir
+(`CheckChannelHealth`) — satıcı sessiz değil GÖRÜNÜR bir hataya düşer.
+
+⚠️ **MEVCUT VERİTABANLARINDA KANAL HÂLÂ KAPALI.** `upsert()`
+`is_active`'i YALNIZCA YENİ satırda uygular; mevcut satırda operatörün
+kararı korunur (P1-3). Zaten tohumlanmış bir kurulumda:
+
+```sql
+UPDATE channel_types SET is_active = true WHERE code = 'shopify';
 ```
-app/uninstalled webhook
-  → channel_credentials.revoked_at = now()
-  → channel_connections.status = 'inactive'
-  → last_error = 'Uygulama Shopify mağazasından kaldırıldı.'
-```
-> **BAĞLANTI SİLİNMEZ, İŞARETLENİR** — listing ve sipariş geçmişi ona
-> bağlıdır. Satıcı yeniden kurarsa `ConnectChannel` aynı satırı
-> `firstOrNew` ile kullanır (anahtar yenileme akışı) ve KOTADAN
-> ETKİLENMEZ.
 
-⚠️ Bu konu SİPARİŞ OLAYI DEĞİLDİR. `ShopifyOrderNormalizer`'ın
-`TOPIC_TO_TYPE` tablosunda YOKTUR ve bilinmeyen konu `updated` sayılır
-— yani bugün gelirse sipariş güncellemesi sanılır ve `resolveOrder`
-siparişi bulamayıp uyarı yazar. Yeni bir yol gerekir; hangi katmanda
-duracağı (inbox tüketicisi mi, ayrı bir router dalı mı) İLK KARAR.
+Gerçek mağaza bağlandığında sırasıyla: sağlık kontrolü → tek ürün
+gönder → stok değiştir → sipariş webhook'u → `app/uninstalled`.
+Custom app'te `webhook_secret` de kaydedilmelidir; sır yoksa imza
+doğrulaması "geçti" DEMEZ ve webhook 401 alır (§06.6).
 
-**2 · Mutabakat — `fetchInventory` / `fetchPrices` ZATEN YAZILDI**
-(slice 1.5 ve 1.6). §22: "Yeni kanal için yazılan TEK şey bu iki
-gövdedir." Yapılacak iş muhtemelen sadece GERÇEK BİR TURU SÜRMEK ve
-`ReconcileConnection`'ın Shopify'ı gerçekten seçtiğini doğrulamak.
+## Slice 1.9 NE YAPILDI (üç parça da kapandı)
 
-**3 · Production / kanalı açma — §05'in ADIM 12'si.**
-`is_active = true` ancak GERÇEK bir mağazada sağlık kontrolü geçtikten
-ve tek kiracıda uçtan uca sürüldükten sonra. **Bu adım kullanıcı ister:
-gerçek Shopify mağazası + custom app Admin API anahtarı gerekiyor.**
-Adım 1 ile 12'nin ayrı olması bilinçlidir (§05).
+**1 · `app/uninstalled` — `ChannelLifecycleRouter` yazıldı.**
+Katman kararı: `ProcessInboxMessage` **sipariş router'ından ÖNCE**
+lifecycle router'a sorar; router `bool` döner ve `true` ise sipariş
+yolu HİÇ çalışmaz. Dal `OrderEventRouter`'a KONMADI — o sınıf Orders
+domain'idir ve olay `channel_credentials` + `channel_connections`
+yazar; modül sınırı bunu yasaklar. Ama ikinci bir olay sistemi de
+açılmadı (§19): aynı inbox, aynı tekilleştirme, aynı `inbox:recover`.
+
+Durum geçişini `RevokeChannelAccess` action'ı yapar (§06.7 birebir) ve
+iki yazma TEK transaction'dadır.
+
+**SESSİZ HATA GERÇEKTEN VARDI ve günlükte görüldü:**
+`inbox.order_not_found_for_event {"external_order_id":"55555555",
+"type":"updated"}` — mağaza kimliği sipariş kimliği sanılıyordu.
+
+**2 · Mutabakat — yeni kod YOK, doğrulama var.**
+`ReconcileActiveConnections` kanal bilmiyor (`status='active'` +
+`instanceof`), yani Shopify zaten seçiliyordu.
+`ShopifyReconciliationTest` gerçek sweep'i sürüyor: istek Shopify'a
+GİDİYOR, sürüklenme kalemi yazılıyor ve `inactive` bağlantı
+TARANMIYOR. "Yazıldı" ile "çağrılıyor" farkını kapatan test budur.
+
+**3 · Kanal açıldı** — yukarıdaki uyarı bölümüne bak.
+
+### Bu turda mutasyonla bulunan sahte yeşil
+
+"Kaldırma olayı sipariş yoluna sızmaz" testi ilk yazımda
+`Order::count() === 0` iddia ediyordu ve **kapı TAMAMEN kaldırıldığında
+bile yeşil kalıyordu**: kaldırma gövdesinde `line_items` yoktur ve o
+yol zaten sipariş YARATMAZ. Ayırt edici işaret olayın MEVCUT bir kayda
+DOKUNMASIDIR (`order_events` satırı). Test düzeltildi, kural değil.
+Diğer dört mutasyon (kapı kaldır · kanal kodu yok say · revoke atla ·
+`pending` yaz) testler tarafından öldürüldü.
+
+## SIRADAKİ İŞ
+
+**Faz 1 bitti.** Seçenekler:
+
+1. **Shopify'ı gerçek mağazada sürmek** (yukarıdaki uyarı bölümü) —
+   kanal AÇIK olduğu için bu artık en yüksek öncelikli iş.
+2. **Hepsiburada (38 sa)** — ⚠️ uç nokta doğrulaması hâlâ BLOKE;
+   kullanıcı "dökümantasyonu beraber yazalım" dedi (24 Ağustos).
+3. Etsy 56 · eBay 64 · Hardening 30.
 
 ## Faz 1'de öğrenilenler — 1.6–1.8 (KALICI, CLAUDE.md'de de var)
 

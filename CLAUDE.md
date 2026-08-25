@@ -39,14 +39,85 @@ migration · `SupportsTokenRefresh` + `TokenRefresher` ·
 | 1.6 | Fiyat — string, `compareAtPrice`'a dokunulmaz | `8bceac5` |
 | 1.7 | Sipariş webhook — iptal AYRI konu | `72f01bb` |
 | 1.8 | **Kargo** — dürüst sınır KAPANDI | `ef25db4` |
-| **1.9** | **`app/uninstalled` + mutabakat + production — SIRADAKİ (4 sa)** | — |
+| 1.9 | **`app/uninstalled` + mutabakat** | `722cbc9` |
+| 1.9 | **Kanal AÇILDI** (§05 · adım 12, kullanıcı kararı) | `8c852ae` |
+
+**FAZ 1 KAPANDI (52/52 sa) — 1071 test yeşil.** Shopify `is_active =
+true` ve panelde GÖRÜNÜR. **Adım 12'nin gerçek mağaza doğrulaması
+YAPILMADI** (mağaza + Admin API anahtarı kullanıcıdadır); açılış
+kullanıcının açık kararıdır ve `8c852ae` tek `git revert` ile geri
+alınır.
 
 **Shopify'ın §04 sütunu TAMAM**: catalog · catalog_import · inventory ·
 pricing · orders · fulfillment. `SupportsTokenRefresh` UYGULANMAZ —
-offline token süresizdir, `app/uninstalled` `revoked_at` yazar (1.9).
+offline token süresizdir, `app/uninstalled` `revoked_at` yazar (1.9 ✓).
 
-Shopify `is_active = false` ve panelde GÖRÜNMEZ (§05 · adım 1).
 `taxonomy` ve `approval` **HİÇ AÇILMAYACAK** (§04 dipnotları).
+
+#### Faz 1 · slice 1.9'da öğrenilen — kalıcı kurallar
+
+- **HER WEBHOOK BİR SİPARİŞ OLAYI DEĞİLDİR ve bilinmeyen konu
+  SESSİZCE `updated` SAYILIR.** `ShopifyOrderNormalizer` tanımadığı
+  konuyu sipariş güncellemesi sayar; `app/uninstalled` o tabloda
+  YOKTU ve gövdedeki `id` — MAĞAZANIN kimliği — sipariş kimliği
+  yerine okunuyordu. Kanal yaşam döngüsü olayları
+  `ChannelLifecycleRouter` ile sipariş yolundan ÖNCE ele alınır.
+  **Yeni kanal eklerken "bu kanal sipariş DIŞINDA hangi konuları
+  gönderiyor" sorusu İLK İŞTİR.**
+- **YAŞAM DÖNGÜSÜ DALI `OrderEventRouter`'A KONMAZ.** O sınıf Orders
+  domain'idir ve olay `channel_credentials` + `channel_connections`
+  yazar; modül sınırı bir domain'in başka domainin modeline yazmasını
+  yasaklar. Ama **ikinci bir olay sistemi de AÇILMAZ** (§19): mesaj
+  aynı inbox hattından gelir, aynı tekilleştirmeden geçer ve aynı
+  `inbox:recover` onu kurtarır. Değişen tek şey SIRADIR.
+- **ROUTER `bool` DÖNER ve bu SÖZLEŞMEDİR.** `void` dönseydi tüketici
+  olayın ele alınıp alınmadığını bilemez, mesajı İKİ yoldan da geçirir
+  ve kaldırma olayı yine sipariş güncellemesi sanılırdı.
+- **KAPI HEM KANAL KODUNA HEM KONUYA BAKAR.** Yalnızca konuya
+  bakılsaydı başka kanalın aynı adlı olayı bağlantıyı sessizce
+  kapatırdı; yalnızca kanala bakılsaydı Shopify'ın TÜM webhook'ları
+  sipariş yolundan çıkar ve **siparişler HİÇ işlenmezdi** — kaldırmayı
+  kaçırmaktan çok daha ağır bir kayıp. Sebep metni de tabloda yaşar,
+  gövdede değil: gömülseydi ikinci kanalda satıcıya "Shopify
+  mağazasından kaldırıldı" yazılırdı.
+- **ERİŞİM İPTALİNDE DURUM `inactive`, `pending` DEĞİL.**
+  `CheckChannelHealth` sağlıksızlıkta `pending` yazar çünkü orada
+  durum GEÇİCİDİR ve sonraki tur satırı kendiliğinden `active` yapar.
+  Kaldırmada erişim kanal tarafında yok edilmiştir ve kendiliğinden
+  geri gelmez; `pending` yazılsaydı sağlık kontrolü her turda boşuna
+  denenir ve satır "birazdan düzelir" gibi görünürdü.
+- **İPTAL VE DURUM TEK TRANSACTION.** Araya düşen hata, kimlik
+  bilgisi iptal edilmiş ama bağlantısı hâlâ `active` bir satır
+  bırakırdı: fan-out ona iş atmaya devam eder, her iş kimliksiz gider
+  ve `AUTHENTICATION` KALICI sayılır — tam olarak bu maddenin
+  önlemek için yazıldığı hata biçimi.
+- **"SIZMADI" İDDİASI YOKLUKLA ÖLÇÜLEMEZ.** "Kaldırma olayı sipariş
+  yaratmadı" testi, kapı TAMAMEN kaldırıldığında bile yeşil kaldı:
+  kaldırma gövdesinde `line_items` yoktur ve o yol zaten sipariş
+  YARATMAZ. Ayırt edici işaret olayın MEVCUT bir kayda DOKUNMASIDIR
+  (`order_events` satırı). Slice 1.8'in "iki paket iki satır"
+  tuzağının aynısı — **mutasyon kaçtıysa test yanlış senaryoyu
+  kuruyordur.**
+- **MUTABAKAT AKIŞI KANAL BİLMEZ ve bu SINANIR.**
+  `ReconcileActiveConnections` yalnızca `status = 'active'` süzer ve
+  yeteneği `instanceof` ile okur — yeni kanal için yazılan TEK şey
+  `fetchInventory`/`fetchPrices` gövdeleridir (§22). Ama "yazıldı"
+  demek "çağrılıyor" demek DEĞİLDİR: entegrasyonun kurulduğu gerçek
+  sweep'le doğrulanır, yoksa iki gövde hiç çağrılmadan öylece durur.
+- **SICAK KATMAN ADAYI IMPORT'LA DOĞMAZ.** Aday sorgusu "son 30
+  dakikada SATILDI" der ve `inventory_movements` üzerinde SALE arar.
+  Yalnızca açılış IMPORT'u yazan test bağlantıyı seçtirir ama aday
+  BULDURMAZ; kanala hiç istek gitmez ve test "taranıyor" derken
+  hiçbir şey sınamamış olur.
+- **MUTABAKAT KALEMİNDE `expected_quantity` DİYE KOLON YOKTUR.**
+  Sayılar `local_value` / `remote_value` JSONB'sindedir
+  (`expected_remote`, `quantity`). Olmayan kolon okunursa Eloquent
+  null döner, `(int)` onu 0'a çevirir ve iddia "0 === 0" ile SESSİZCE
+  geçer — hiçbir şey ölçmeyen bir test.
+- **TEK TURDA DURUM `REPAIR_QUEUED` OLUR, `DRIFT_DETECTED` DEĞİL.**
+  §10'un beş adımı aynı turda yürür ve kalem SON durumunu taşır;
+  `DRIFT_DETECTED` beklemek akışın onarım adımına hiç gelmediğini
+  iddia etmek olurdu.
 
 #### Faz 1 · slice 1.6–1.8'de öğrenilen — kalıcı kurallar
 
