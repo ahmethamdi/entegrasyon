@@ -700,6 +700,34 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     }
 
     /**
+     * Yoklanan siparişin olay kimliği — `{orderNumber}:{status}`.
+     *
+     * ⚠️ KİMLİK DURUMU TAŞIR. Yalnızca sipariş numarasına bağlansaydı aynı
+     * siparişin sonraki İPTALİ birincil tekillik indeksine takılır ve
+     * `insertOrIgnore` tarafından SESSİZCE YUTULURDU — stok geri
+     * eklenmez, bakiye kalıcı eksik kalırdı (§1 · Karar 24).
+     *
+     * `parseOrderEvent()` ile AYNI biçimi üretir ve bu bir tesadüf
+     * değildir: normalizer `external_event_id`'yi çıpası olarak kullanır,
+     * ayrışsalardı inbox satırı ile `order_events` satırı farklı
+     * kimliklere bağlanırdı.
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function pollingEventIdFor(array $order): ?string
+    {
+        $number = $order['orderNumber'] ?? $order['id'] ?? null;
+
+        if ($number === null || (string) $number === '') {
+            return null;
+        }
+
+        $status = (string) ($order['status'] ?? '');
+
+        return $status === '' ? (string) $number : "{$number}:{$status}";
+    }
+
+    /**
      * Ham Trendyol siparişini kanonik olaya çevirir — TİP dahil.
      *
      * DEĞİŞMEZ KURAL — TİP AYRIMI (§1 · Karar 24):

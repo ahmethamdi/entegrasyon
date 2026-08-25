@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Channels;
 
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -324,15 +326,22 @@ final class EtsyAdapterTest extends TestCase
     {
         $adapter = $this->adapter();
 
-        // YAZILDI — slice 3.1 · 3.3 · 3.4 · 3.5 · 3.6
+        // YAZILDI — slice 3.1 · 3.3 · 3.4 · 3.5 · 3.6 · 3.7
         $this->assertInstanceOf(SupportsTokenRefresh::class, $adapter);
         $this->assertInstanceOf(SupportsTaxonomy::class, $adapter);
         $this->assertInstanceOf(SupportsCatalog::class, $adapter);
         $this->assertInstanceOf(SupportsInventory::class, $adapter);
         $this->assertInstanceOf(SupportsPricing::class, $adapter);
+        $this->assertInstanceOf(SupportsOrders::class, $adapter);
 
-        // HENÜZ YAZILMADI — 3.7
-        $this->assertNotInstanceOf(SupportsOrders::class, $adapter);
+        // ⚠️ HİÇ UYGULANMAYACAK — §11.5: Etsy'de onay süreci YOKTUR ve
+        // ilan yayınlanır yayınlanmaz canlıdır. Uygulansaydı panelde hiç
+        // dolmayacak bir sekme açılırdı.
+        $this->assertNotInstanceOf(SupportsApprovalWorkflow::class, $adapter);
+
+        // Slice tablosunda kendi satırı YOK — ilan edilip yazılmasaydı
+        // panelde çalışmayan bir sekme açardı (§05).
+        $this->assertNotInstanceOf(SupportsFulfillment::class, $adapter);
     }
 
     /** Registry gerçek istemciyle taze örnek kurar — asla paylaşılmaz. */

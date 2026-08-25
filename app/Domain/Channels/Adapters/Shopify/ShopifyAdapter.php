@@ -1246,6 +1246,24 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
     }
 
     /**
+     * ⚠️ SHOPIFY YOKLANMAZ — bu metot da ÇAĞRILMAMALIDIR.
+     *
+     * `fetchOrders()` ile AYNI gerekçe: çağrılması, yoklama turunun
+     * `supports_webhooks` kapısını atladığı anlamına gelir. Sessizce
+     * `null` dönmek o arızayı GİZLERDİ — kimlik üretilmez, tekilleştirme
+     * saatlik hash yoluna düşer ve sorunun sebebi hiçbir yerde görünmez.
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function pollingEventIdFor(array $order): ?string
+    {
+        throw new RuntimeException(
+            'Shopify siparişleri webhook ile gelir ve YOKLANMAZ; olay kimliği '.
+            'webhook başlığından (`extractEventId`) okunur.'
+        );
+    }
+
+    /**
      * Ayrı bir onay adımı YOKTUR.
      *
      * Sipariş webhook ile gelir ve kanal onu zaten kabul etmiştir; sözleşme

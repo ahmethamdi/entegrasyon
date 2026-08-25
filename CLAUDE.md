@@ -375,8 +375,8 @@ memory'deki "Repo Durumu" dosyasına bak.
 ## Etsy kuralları (beşinci kanal · Faz 3 · `6dcaf52`)
 
 Faz 2 (Hepsiburada) uç nokta doğrulaması BLOKE olduğu için atlandı;
-kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1–3.6 KAPALI**, 3.7
-(sipariş yoklaması) sırada.
+kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1–3.7 KAPALI**, 3.8
+(iptal + mutabakat + production) sırada.
 
 - **HIZ SINIRI PROFİLİNİN ANAHTAR ADI SÖZLEŞMEDİR** (`35b0209`).
   `RateLimitProfile::fromArray()` TAM OLARAK `requests_per_second`
@@ -511,6 +511,37 @@ kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1–3.6 KAPALI**, 3.7
   GELMEZDİ. **İADE İÇİN AYRI UÇ NOKTA DA YOKTUR**: yoklama iadeyi
   `updated` görür ve stok hareketi ÜRETMEZ. `returned` sayılsaydı
   satılmış stok geri eklenir ve bakiye bozulurdu.
+- **OLAY KİMLİĞİNİ ARTIK ADAPTER ÜRETİR** (`SupportsOrders::
+  pollingEventIdFor`, slice 3.7). Önce `PollChannelOrders` içinde tek
+  bir `orderNumber ?? id` zinciriydi ve Etsy'nin `receipt_id`'sini
+  BULAMIYORDU: kimlik SESSİZCE `null` döner, tekilleştirme saatlik
+  hash yoluna düşerdi. **Alan adı kanalın ŞEKLİDİR** (Trendyol
+  `orderNumber`, Woo `id`, Etsy `receipt_id`); çekirdekte tutulsaydı
+  her yeni kanalda o satır uzar ve biri eklenmeyi unuturdu. Yoklamayan
+  kanal (Shopify · Hepsiburada) bu metotta da İSTİSNA fırlatır —
+  sessiz `null` yoklama turunun `supports_webhooks` kapısını atladığını
+  GİZLERDİ.
+- **KİMLİK `{receipt_id}:{status}`'TİR** (§11.4 · P0) ve
+  `pollingEventIdFor()` ile `parseOrderEvent()` AYNI biçimi üretir —
+  ayrışsalardı inbox satırı ile `order_events` satırı farklı kimliklere
+  bağlanırdı. Durumu düşüren mutasyon ÜÇ testi kırdı.
+- **PARA SİPARİŞ GÖVDESİNDE DE NESNEDİR** — `EtsyProductMapper::money()`
+  çağrılır, yeniden yazılmaz. Ham `amount` okunsaydı 19.90 TL sipariş
+  toplamında **1990 TL** görünürdü (§11.3'ün fiyat kuralının sipariş
+  karşılığı). Kalem toplamı KURUŞ ölçeğinde tam sayıyla çarpılır.
+- **ZAMAN EPOCH'U SANİYEDİR — TRENDYOL MİLİSANİYE.** `min_created`
+  saniye ister; milisaniye gönderilseydi pencere 1970'e düşer ve her
+  tur TÜM sipariş geçmişini çekerek günlük kotayı yakardı.
+- **KALEM KİMLİĞİ `transaction_id`, SKU `transactions[].sku`** (§11.4).
+  `id` okunsaydı kalem kimliği boş kalırdı.
+- **`acknowledgeOrder` İSTİSNA FIRLATMAZ, NO-OP DÖNER.** Etsy'de
+  satıcının siparişi "üstlenmesi" kavramı YOKTUR (Woo/Shopify ile
+  aynı); istisna fırlatılsaydı çağıran sonsuza kadar hata alırdı —
+  oysa yapacak bir şey yok ve bu eksiklik değil kanalın şekli.
+- **`SupportsFulfillment` UYGULANMADI.** §11.4 ondan söz ediyor ama
+  slice tablosunda kendi satırı YOK; ilan edilip yazılmasaydı panelde
+  çalışmayan bir sekme açardı (§05). `EtsyAdapterTest` bunu
+  `assertNotInstanceOf` ile korur.
 - **ONAY SÜRECİ YOKTUR** (§11.5) — `SupportsApprovalWorkflow`
   UYGULANMAZ; panelde hiç dolmayacak bir sekme açardı.
 - **GÜNLÜK KOTA GERÇEK BİR ÖLÇEK SINIRIDIR**: 10.000 istek/gün, hesap

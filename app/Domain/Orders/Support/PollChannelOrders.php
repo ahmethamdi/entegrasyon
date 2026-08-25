@@ -44,6 +44,15 @@ use Throwable;
  *   ve sorun kendi bağlantılarında olmadığı için hiçbiri düzeltemezdi
  *   (taksonomide birebir aynı hata yaşandı).
  *
+ * DEĞİŞMEZ KURAL — OLAY KİMLİĞİNİ ADAPTER ÜRETİR, ÇEKİRDEK DEĞİL:
+ *   Kimlik alanının ADI kanalın şeklidir (Trendyol `orderNumber`, Woo
+ *   `id`, Etsy `receipt_id`) ve `pollingEventIdFor()` ile sorulur.
+ *   Çekirdekte tek bir `??` zinciri olarak tutulsaydı her yeni kanalda o
+ *   satır uzar, biri eklenmeyi unutur ve kimlik SESSİZCE `null` dönerdi.
+ *   Kimlik ayrıca DURUMU taşır: yalnızca sipariş numarasına bağlansaydı
+ *   aynı siparişin sonraki İPTALİ birincil tekillik indeksine takılır ve
+ *   `insertOrIgnore` tarafından SESSİZCE YUTULURDU (§1 · Karar 24).
+ *
  * DEĞİŞMEZ KURAL — BAŞARISIZ TURDA İMLEÇ İLERLEMEZ:
  *   İlerleseydi hata anındaki pencere sonsuza kadar atlanır ve o
  *   penceredeki siparişler bir daha HİÇ sorulmazdı. Sipariş kaybı en
@@ -163,7 +172,7 @@ final class PollChannelOrders
             $page = $adapter->fetchOrders($since, $cursor);
 
             foreach ($page->orders as $order) {
-                $ingested += $this->ingestOrder($connection, $order);
+                $ingested += $this->ingestOrder($connection, $adapter, $order);
             }
 
             $cursor = $page->nextCursor;
@@ -187,9 +196,18 @@ final class PollChannelOrders
      * @param  array<string, mixed>  $order
      * @return int 1 = yeni yazıldı, 0 = zaten vardı
      */
-    private function ingestOrder(ChannelConnection $connection, array $order): int
-    {
-        $eventId = $this->eventIdFor($order);
+    private function ingestOrder(
+        ChannelConnection $connection,
+        SupportsOrders $adapter,
+        array $order,
+    ): int {
+        // ⚠️ KİMLİĞİ ADAPTER ÜRETİR — alanın ADI kanalın şeklidir
+        // (Trendyol `orderNumber`, Woo `id`, Etsy `receipt_id`). Burada
+        // tek bir `??` zinciri tutulsaydı her yeni kanalda o satır uzar,
+        // biri eklenmeyi unutur ve kimlik SESSİZCE `null` dönerdi —
+        // tekilleştirme saatlik hash yoluna düşer ve aynı siparişin
+        // İPTALİ o pencerede kaybolabilirdi (§7 · "if (channel) yazılmaz").
+        $eventId = $adapter->pollingEventIdFor($order);
 
         $message = $this->ingest->run(
             connection: $connection,
@@ -212,33 +230,6 @@ final class PollChannelOrders
             ->onQueue('inbox:process');
 
         return 1;
-    }
-
-    /**
-     * Olay kimliği — SİPARİŞ NUMARASI + DURUM.
-     *
-     * KİMLİK YALNIZCA SİPARİŞ NUMARASINA BAĞLANAMAZ: birincil tekillik
-     * indeksi `(channel_connection_id, external_event_id)` üzerinedir ve
-     * aynı siparişin sonraki İPTALİ o indekse takılıp `insertOrIgnore`
-     * tarafından SESSİZCE YUTULURDU — stok geri eklenmez, bakiye kalıcı
-     * olarak eksik kalırdı. Karar 24'ün açıkça uyardığı hata biçimi budur.
-     *
-     * Kimlik üretilemezse `null` döner ve tekilleştirme hash + saatlik
-     * pencere yoluna düşer: mesaj yine KAYBEDİLMEZ.
-     *
-     * @param  array<string, mixed>  $order
-     */
-    private function eventIdFor(array $order): ?string
-    {
-        $number = $order['orderNumber'] ?? $order['id'] ?? null;
-
-        if ($number === null || (string) $number === '') {
-            return null;
-        }
-
-        $status = (string) ($order['status'] ?? '');
-
-        return $status === '' ? (string) $number : "{$number}:{$status}";
     }
 
     /**

@@ -88,6 +88,24 @@ final class FakeOrderAdapter implements ChannelAdapter, SupportsOrders
     }
 
     /**
+     * Olay kimliği — gerçek adapter'larla AYNI sözleşme: numara + DURUM.
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function pollingEventIdFor(array $order): ?string
+    {
+        $id = $order['id'] ?? $order['external_order_id'] ?? null;
+
+        if ($id === null || (string) $id === '') {
+            return null;
+        }
+
+        $status = (string) ($order['status'] ?? '');
+
+        return $status === '' ? (string) $id : "{$id}:{$status}";
+    }
+
+    /**
      * Ham yükü kanonik olaya çevirir.
      *
      * Test yükleri zaten kanonik biçimde yazılıyor; gerçek adapter burada

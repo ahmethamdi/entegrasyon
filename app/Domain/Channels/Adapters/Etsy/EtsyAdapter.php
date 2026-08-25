@@ -13,22 +13,28 @@ use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\NormalizedOrderEvent;
+use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -41,18 +47,23 @@ use Throwable;
  * V3.0 · §11 · §20 · §21 · v2.2 §7.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 3.1 · 3.2 · 3.3 · 3.4 · 3.5 · 3.6
+ * KAPSAM — SLICE 3.1 · 3.2 · 3.3 · 3.4 · 3.5 · 3.6 · 3.7
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata sınıflandırma,
  * hız sınırı profili, **token yenileme** (`SupportsTokenRefresh`),
  * **taksonomi** (`SupportsTaxonomy`), **katalog** (`SupportsCatalog`),
  * **stok** ve **fiyat** (`SupportsInventory` + `SupportsPricing` —
- * ikisi de AYNI oku-birleştir-yaz akışını paylaşır, §11.3).
+ * ikisi de AYNI oku-birleştir-yaz akışını paylaşır, §11.3) ve
+ * **sipariş yoklaması** (`SupportsOrders` — §11.4).
  *
- * HENÜZ YAZILMADI (sonraki slice): sipariş yoklaması (3.7). O yetenek
- * arayüzü BU SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek
- * panelde çalışmayan sekme demektir (§05) ve "yazılmamış yetenek
- * SESSİZCE BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
+ * UYGULANMAYAN YETENEKLER ve GEREKÇELERİ:
+ *   · `SupportsApprovalWorkflow` — Etsy'de onay süreci YOKTUR ve ilan
+ *     yayınlanır yayınlanmaz canlıdır (§11.5). Uygulansaydı panelde hiç
+ *     dolmayacak bir sekme açılırdı.
+ *   · `SupportsFulfillment` — §11.4 bunu öngörüyor ama slice tablosunda
+ *     kendi satırı YOKTUR; ilan edilip yazılmasaydı panelde çalışmayan
+ *     bir sekme açardı (§05).
+ *   · `SupportsCatalogImport` — slice tablosunda yok.
  *
  * ─────────────────────────────────────────────────────────────────────
  * ⚠️ İKİ AYRI KİMLİK BAŞLIĞI VARDIR (§11.2)
@@ -79,8 +90,40 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInventory, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
+    /**
+     * Etsy receipt durumu → kanonik olay tipi (§11.4).
+     *
+     * ⚠️ `returned` HİÇ ÜRETİLMEZ ve bu DÜRÜST bir sınırdır. Etsy iade
+     * için ayrı uç nokta VERMİYOR; satıcı iadeyi panelden işler ve
+     * `receipt` durumu `refunded` olur. `returned` sayılsaydı SATILMIŞ
+     * stok geri eklenir ve bakiye bozulurdu. `updated` stok hareketi
+     * ÜRETMEZ ve doğru davranıştır — gerçek iade panelden elle girilir.
+     *
+     * ⚠️ LİSTEDE OLMAYAN DURUM `updated` SAYILIR (`parseOrderEvent`):
+     * Etsy listeyi genişletebilir ve bilinmeyeni `created` ya da
+     * `cancelled` saymak bakiyeyi bozardı.
+     *
+     * `completed` stok hareketi ÜRETMEZ: stok sipariş oluştuğunda zaten
+     * düşülmüştür ve tamamlanma yalnızca anlık görüntüyü tazeler.
+     */
+    private const STATUS_TO_TYPE = [
+        'paid' => 'created',
+        'open' => 'created',
+        'completed' => 'updated',
+        'processing' => 'updated',
+        'refunded' => 'updated',
+        'partially_refunded' => 'updated',
+        'canceled' => 'cancelled',
+        'cancelled' => 'cancelled',
+    ];
+
+    /**
+     * Sipariş sayfası boyutu — Etsy'nin uç nokta üst sınırı 100 (§11.4).
+     */
+    private const ORDER_PAGE_SIZE = 100;
+
     /**
      * Uygulama anahtarının `settings` içindeki yeri.
      *
@@ -275,8 +318,9 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
      * Etsy adına İMZASIZ SİPARİŞ ENJEKTE etmenin kapısını açardı. Güvenli
      * taraf "evet" DEMEMEKTİR.
      *
-     * Sipariş yoklamayla gelir (slice 3.7) ve olay kimliği
-     * `{receipt_id}:{status}` biçiminde TÜRETİLİR.
+     * Sipariş YOKLAMAYLA gelir (slice 3.7 ✓) ve olay kimliği
+     * `{receipt_id}:{status}` biçiminde `pollingEventIdFor()` içinde
+     * TÜRETİLİR.
      *
      * @param  array<string, array<int, string|null>>  $headers
      */
@@ -285,10 +329,18 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
         return false;
     }
 
-    /** @param array<string, array<int, string|null>> $headers */
+    /**
+     * ⚠️ BAŞLIKTAN KİMLİK OKUNMAZ — Etsy webhook GÖNDERMEZ.
+     *
+     * Bu metot WEBHOOK yolunundur ve o yol Etsy'de HİÇ çalışmaz.
+     * Yoklamanın kimliği `pollingEventIdFor()` içinde ve gövdeden
+     * türetilir; ikisi KARIŞTIRILMAZ.
+     *
+     * @param  array<string, array<int, string|null>>  $headers
+     */
     public function extractEventId(array $headers): ?string
     {
-        return null;                    // yoklama kimliği normalizer türetir
+        return null;
     }
 
     /** @param array<string, array<int, string|null>> $headers */
@@ -1013,6 +1065,278 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
 
             return $map;
         });
+    }
+
+    // ------------------------------------------------------------ sipariş
+
+    /**
+     * Siparişleri YOKLAR — Etsy webhook SUNMAZ (§11.4).
+     *
+     * ⚠️ HAM GÖVDE DÖNER: ayrıştırma `parseOrderEvent()` ile SONRA
+     * yapılır. Sıra bilinçlidir — ayrıştırma hatası siparişin
+     * kaybolmasına değil, inbox satırının hata durumuna düşmesine yol
+     * açar ve satır yeniden işlenebilir.
+     *
+     * ⚠️ BAŞARISIZ YANIT YÜKSELTİLİR. `json()` bir 500 gövdesinde de dizi
+     * döndürür ve boş sayfa "yeni sipariş yok" diye okunurdu; imleç
+     * ilerler ve o penceredeki siparişler bir daha HİÇ sorulmazdı
+     * (Trendyol'daki kuralın aynısı).
+     *
+     * ⚠️ `min_created` GÖNDERİLMEZSE TÜM GEÇMİŞ ÇEKİLİR ve Etsy'nin
+     * GÜNLÜK kotası (§21: 10.000 istek/gün) tek turda yanardı.
+     *
+     * ⚠️ İMLEÇ `offset`'TİR ve OPAKTIR. `hasMore`, `nextCursor !== null`
+     * ile AYNI ŞEY DEĞİLDİR: turu durduran `hasMore`'dur ve o toplam
+     * sayıdan hesaplanır (`OrderPage` sözleşmesi).
+     */
+    public function fetchOrders(CarbonInterface $since, ?string $cursor = null): OrderPage
+    {
+        $offset = $cursor === null ? 0 : max(0, (int) $cursor);
+
+        $response = $this->client->get(
+            EtsyEndpoints::url(EtsyEndpoints::SHOP_RECEIPTS, ['shop_id' => $this->requireShopId()]),
+            query: [
+                // SANİYE epoch — Trendyol milisaniye ister, Etsy saniye.
+                // Karıştırılsaydı pencere 1970'e düşer ve her tur TÜM
+                // geçmişi çekerdi.
+                'min_created' => $since->getTimestamp(),
+                'limit' => self::ORDER_PAGE_SIZE,
+                'offset' => $offset,
+                // Eskiden yeniye: tur yarıda kalırsa imleç en eski
+                // işlenmemiş siparişin gerisinde kalır ve hiçbir şey
+                // atlanmaz.
+                'sort_on' => 'created',
+                'sort_order' => 'asc',
+            ],
+            headers: $this->apiKeyHeader(),
+        );
+
+        // Sessizce boş sayfaya düşme — yükselt.
+        $response->throw();
+
+        /** @var array<string, mixed> $body */
+        $body = $response->json() ?? [];
+
+        $receipts = array_values(array_filter(
+            (array) ($body['results'] ?? []),
+            'is_array',
+        ));
+
+        $total = (int) ($body['count'] ?? count($receipts));
+        $hasMore = $offset + count($receipts) < $total && $receipts !== [];
+
+        return new OrderPage(
+            orders: $receipts,
+            nextCursor: $hasMore ? (string) ($offset + self::ORDER_PAGE_SIZE) : null,
+            hasMore: $hasMore,
+        );
+    }
+
+    /**
+     * Yoklanan siparişin olay kimliği — `{receipt_id}:{status}` (§11.4 · P0).
+     *
+     * ═════════════════════════════════════════════════════════════════
+     * ⚠️ KİMLİK DURUMU TAŞIMAK ZORUNDADIR
+     * ═════════════════════════════════════════════════════════════════
+     * Yalnızca `receipt_id`'ye bağlansaydı aynı siparişin sonraki İPTALİ
+     * birincil tekillik indeksine (`channel_connection_id`,
+     * `external_event_id`) takılır ve `insertOrIgnore` tarafından
+     * SESSİZCE YUTULURDU — iptal hiç işlenmez, satılmış stok geri
+     * EKLENMEZ ve bakiye kalıcı olarak eksik kalırdı. §1 · Karar 24'ün
+     * açıkça uyardığı hata biçimi budur.
+     *
+     * ⚠️ ALAN ADI `receipt_id`'DİR — `orderNumber` ya da `id` DEĞİL.
+     * Kimlik üretimi ÇEKİRDEKTE tutulsaydı Trendyol'un alan adını okur,
+     * Etsy'de `null` dönerdi; tekilleştirme saatlik hash yoluna düşer ve
+     * korumanın kendisi sessizce zayıflardı.
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function pollingEventIdFor(array $order): ?string
+    {
+        $receiptId = $order['receipt_id'] ?? null;
+
+        if ($receiptId === null || (string) $receiptId === '') {
+            return null;
+        }
+
+        $status = (string) ($order['status'] ?? '');
+
+        return $status === '' ? (string) $receiptId : "{$receiptId}:{$status}";
+    }
+
+    /**
+     * Ham Etsy receipt'ini kanonik olaya çevirir — TİP dahil.
+     *
+     * ⚠️ TİP AYRIMI (§1 · Karar 24): created / updated / cancelled /
+     * returned AYRI yollara gider. Tek yola sokulsaydı iptal siparişin
+     * yeniden yaratılması gibi işlenir ve stok İKİ KEZ düşerdi.
+     *
+     * ⚠️ İADE İÇİN AYRI UÇ NOKTA YOKTUR ve `returned` HİÇ ÜRETİLMEZ
+     * (§11.4 · dürüst sınır). Satıcı iadeyi Etsy panelinden işler ve
+     * `receipt` durumu değişir; yoklama bunu `updated` görür ve stok
+     * hareketi ÜRETMEZ. `returned` sayılsaydı SATILMIŞ stok geri eklenir
+     * ve bakiye bozulurdu. Gerçek iade panelden elle girilir.
+     *
+     * ⚠️ BİLİNMEYEN DURUM `updated` SAYILIR. Etsy durum listesini
+     * genişletebilir; `created` saymak var olan siparişi yeniden
+     * yaratmayı denerdi, `cancelled` saymak satılmış stoğu geri eklerdi.
+     * İkisi de bakiyeyi bozar.
+     */
+    public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
+    {
+        /** @var array<string, mixed> $payload */
+        $payload = is_array($message->payload) ? $message->payload : [];
+
+        $receiptId = $payload['receipt_id'] ?? null;
+
+        if ($receiptId === null || (string) $receiptId === '') {
+            // Kimliksiz gövdeden sipariş yaratılamaz; satır hata durumuna
+            // düşer ve elle incelenir — sessizce yutulmaz.
+            return null;
+        }
+
+        $receiptId = (string) $receiptId;
+        $status = (string) ($payload['status'] ?? '');
+        $type = self::STATUS_TO_TYPE[$status] ?? 'updated';
+
+        return new NormalizedOrderEvent(
+            type: $type,
+            externalOrderId: $receiptId,
+            // Çıpa DURUMU taşır — `pollingEventIdFor()` ile AYNI biçim.
+            // Ayrışsalardı inbox satırı ile `order_events` satırı farklı
+            // kimliklere bağlanırdı.
+            externalRef: $message->external_event_id ?? "{$receiptId}:{$status}",
+            payload: $this->toCanonicalOrderPayload($payload, $type, $receiptId),
+            occurredAt: $this->receiptDate($payload),
+        );
+    }
+
+    /**
+     * Etsy gövdesini `OrderPayloadMapper`'ın beklediği biçime çevirir.
+     *
+     * ⚠️ PARA OKUMADA NESNEDİR — burada da (§11.3'ün fiyat kuralı).
+     * Ham `amount` okunsaydı 19.90 TL kanonik siparişte **1990 TL**
+     * görünür ve sipariş toplamları tamamen yanlış olurdu.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function toCanonicalOrderPayload(array $payload, string $type, string $receiptId): array
+    {
+        $grandTotal = $this->money($payload['grandtotal'] ?? null)
+            ?? $this->money($payload['total_price'] ?? null)
+            ?? '0';
+
+        return [
+            'type' => $type,
+            'external_number' => $receiptId,
+            'status' => (string) ($payload['status'] ?? 'pending'),
+            // İade AYRI bir tip üretmez ama finansal durum GÖRÜNÜR kalır:
+            // satıcı panelde neyin iade edildiğini görebilmelidir.
+            'financial_status' => ($payload['status'] ?? null) === 'refunded' ? 'refunded' : null,
+            'currency' => (string) ($payload['currency_code'] ?? 'TRY'),
+            'subtotal' => $this->money($payload['total_price'] ?? null) ?? '0',
+            'shipping_total' => $this->money($payload['total_shipping_cost'] ?? null) ?? '0',
+            'tax_total' => $this->money($payload['total_tax_cost'] ?? null) ?? '0',
+            'grand_total' => $grandTotal,
+            'lines' => $this->orderLines($payload),
+            // Kişisel veri taşınmaz; yalnızca referans.
+            'customer_ref' => array_filter([
+                'external_customer_id' => isset($payload['buyer_user_id'])
+                    ? (string) $payload['buyer_user_id']
+                    : null,
+            ]),
+        ];
+    }
+
+    /**
+     * Sipariş kalemleri — `transactions` dizisinden (§11.4).
+     *
+     * ⚠️ KALEM KİMLİĞİ `transaction_id`, SKU `transactions[].sku`.
+     * SKU eşleşmezse `order_lines.variant_id` NULL kalır, satır PENDING
+     * olur ve SİPARİŞ KAYBEDİLMEZ (Karar 24) — sipariş kaybetmek stok
+     * tutarsızlığından kötüdür.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<array<string, mixed>>
+     */
+    private function orderLines(array $payload): array
+    {
+        $lines = [];
+
+        foreach ((array) ($payload['transactions'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $quantity = (int) ($item['quantity'] ?? 0);
+            $unitPrice = $this->money($item['price'] ?? null) ?? '0';
+
+            $lines[] = [
+                'external_line_id' => (string) ($item['transaction_id'] ?? ''),
+                'sku' => (string) ($item['sku'] ?? ''),
+                'title' => (string) ($item['title'] ?? $item['sku'] ?? ''),
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                // Etsy kalem TOPLAMI vermez; birim fiyat × adet.
+                // Para KURUŞ ölçeğinde tam sayıyla çarpılır — float
+                // çarpımı kuruş kayması üretirdi (§7).
+                'line_total' => number_format(
+                    ((int) round(((float) $unitPrice) * 100) * $quantity) / 100,
+                    2,
+                    '.',
+                    '',
+                ),
+            ];
+        }
+
+        return $lines;
+    }
+
+    /**
+     * Etsy para nesnesi → string.
+     *
+     * Dönüşüm `EtsyProductMapper::money()`'dedir ve YENİDEN YAZILMAZ;
+     * burada yalnızca "nesne değilse dokunma" kapısı vardır.
+     */
+    private function money(mixed $money): ?string
+    {
+        return is_array($money) ? EtsyProductMapper::money($money) : null;
+    }
+
+    /**
+     * ⚠️ SANİYE EPOCH — Trendyol MİLİSANİYE gönderir.
+     *
+     * Karıştırılsaydı sipariş tarihi 1970'e ya da 55.000 yılına düşer ve
+     * panelde hiçbir sipariş doğru sıralanmazdı.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function receiptDate(array $payload): ?DateTimeImmutable
+    {
+        $raw = $payload['created_timestamp'] ?? $payload['create_timestamp'] ?? null;
+
+        if (! is_numeric($raw)) {
+            return null;
+        }
+
+        return (new DateTimeImmutable)->setTimestamp((int) $raw);
+    }
+
+    /**
+     * ⚠️ ONAY ADIMI YOKTUR ama İSTİSNA DA FIRLATILMAZ.
+     *
+     * Etsy'de satıcının siparişi "üstlenmesi" diye bir kavram yoktur
+     * (Woo ve Shopify ile aynı); pazaryerlerinde (Trendyol,
+     * Hepsiburada) bu adım gerçektir. İstisna fırlatılsaydı çağıran
+     * sonsuza kadar hata alırdı — oysa yapacak bir şey YOKTUR ve bu
+     * eksiklik değil kanalın şeklidir. Sonuç verisi NO-OP olduğunu
+     * GÖRÜNÜR kılar.
+     */
+    public function acknowledgeOrder(Order $order): AdapterResult
+    {
+        return AdapterResult::success(['acknowledged' => true]);
     }
 
     // ---------------------------------------------------------- taksonomi

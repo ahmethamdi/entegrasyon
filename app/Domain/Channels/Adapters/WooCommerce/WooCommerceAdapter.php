@@ -425,6 +425,36 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
      * gider. Tek yola sokulsaydı iptal ve iade siparişin yeniden yaratılması
      * gibi işlenir ve stok iki kez düşerdi (Karar 24).
      */
+    /**
+     * Yoklanan siparişin olay kimliği — `{id}:{status}`.
+     *
+     * Woo sipariş kimliğini `id` alanında taşır (Trendyol'un
+     * `orderNumber`'ı, Etsy'nin `receipt_id`'si). Alanın ADI kanalın
+     * şeklidir ve bu yüzden kimlik ÇEKİRDEKTE değil BURADA üretilir.
+     *
+     * ⚠️ KİMLİK DURUMU TAŞIR: yalnızca `id`'ye bağlansaydı aynı siparişin
+     * sonraki İPTALİ birincil tekillik indeksine takılır ve
+     * `insertOrIgnore` tarafından SESSİZCE YUTULURDU (§1 · Karar 24).
+     *
+     * ⚠️ WOO WEBHOOK GÖNDERİR ve normalde YOKLANMAZ; bu metot yoklamanın
+     * elle sürüldüğü hâller için sözleşmeyi karşılar. İstisna fırlatmak
+     * YANLIŞ olurdu — `fetchOrders()` burada GERÇEKTEN yazılıdır.
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function pollingEventIdFor(array $order): ?string
+    {
+        $id = $order['id'] ?? null;
+
+        if ($id === null || (string) $id === '') {
+            return null;
+        }
+
+        $status = (string) ($order['status'] ?? '');
+
+        return $status === '' ? (string) $id : "{$id}:{$status}";
+    }
+
     public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
     {
         return WooOrderNormalizer::normalize($message);

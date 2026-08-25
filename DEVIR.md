@@ -2,10 +2,30 @@
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1208 test yeşil** (4154 assertion), Pint temiz (424 dosya).
+**1228 test yeşil** (4198 assertion), Pint temiz (425 dosya).
 
-**Faz 3 · Etsy: 44/56 saat.** Slice 3.1–3.6 KAPALI, sıradaki
-**3.7 sipariş yoklaması** (8 sa).
+**Faz 3 · Etsy: 52/56 saat.** Slice 3.1–3.7 KAPALI, sıradaki
+**3.8 iptal + mutabakat + production** (4 sa).
+
+## ⚠️ SLICE 3.7'DE BULUNAN GERÇEK HATA — olay kimliği Etsy'de ÜRETİLMİYORDU
+
+`PollChannelOrders::eventIdFor()` çekirdekte yaşıyor ve
+`orderNumber ?? id` okuyordu — Trendyol'un şekli. Etsy'nin gövdesinde
+`receipt_id` var, yani kimlik **SESSİZCE `null`** dönerdi ve
+tekilleştirme `payload_hash + saatlik pencere` yoluna düşerdi.
+
+Bedeli §11.4'ün P0'ıdır: aynı saatte gelen İPTAL, gövdesi farklı olduğu
+için yeni satır sayılabilirdi ama **kimliğe bağlı sıra garantisi
+olmazdı** — ve hash yolu saat sınırında bölünür.
+
+**Kullanıcı kararıyla** `SupportsOrders`'a `pollingEventIdFor()` eklendi
+(alternatifler: çekirdeğe alan adı eklemek · Etsy gövdesini
+normalize etmek). Gerekçe §7'nin kuralı: **alan adı kanalın ŞEKLİDİR**
+ve `if ($channel === '...')` yazılmaz. Beş uygulayıcı dokunuldu;
+yoklamayan kanallar (Shopify · Hepsiburada) İSTİSNA fırlatır.
+
+Çekirdeği eski hâline döndüren mutasyon **DÖRT testi** kırdı — ikisi
+Trendyol'un ESKİ testleriydi, yani delege gerçekten bağlı.
 
 ## Slice 3.6 · fiyat — NE YAPILDI
 
@@ -183,9 +203,9 @@ kullanıcı kararı: "dökümantasyonu beraber yazalım" (24 Ağustos).
 | 3.3 | Taksonomi (8 sa) | ✅ KAPALI | `312445f` |
 | 3.4 | Katalog — listing/product/offering (10 sa) | ✅ KAPALI | `606d999` |
 | 3.5 | **Stok — oku-birleştir-yaz (8 sa)** | ✅ KAPALI | `2c522ed` |
-| 3.6 | **Fiyat (4 sa)** | ✅ KAPALI | bu tur |
-| **3.7** | **Sipariş yoklama (8 sa)** | ⏭️ **SIRADAKİ** | — |
-| 3.8 | İptal + mutabakat + production (4 sa) | — | — |
+| 3.6 | **Fiyat (4 sa)** | ✅ KAPALI | `8869464` |
+| 3.7 | **Sipariş yoklama (8 sa)** | ✅ KAPALI | bu tur |
+| **3.8** | **İptal + mutabakat + production (4 sa)** | ⏭️ **SIRADAKİ** | — |
 
 **Yazılan dosyalar:** `EtsyEndpoints` · `EtsyAuth` (saf PKCE) ·
 `EtsyAdapter` · `EtsyProductMapper` · `EtsyInventoryMerger` ·
@@ -193,33 +213,58 @@ kullanıcı kararı: "dökümantasyonu beraber yazalım" (24 Ağustos).
 Kanal `is_active = false` (§05 · adım 1) — sipariş yolu HENÜZ YOK.
 
 **Uygulanan arayüzler:** `ChannelAdapter` · `SupportsCatalog` ·
-`SupportsInventory` · `SupportsPricing` · `SupportsTaxonomy` ·
-`SupportsTokenRefresh`. `SupportsOrders` 3.7'de gelir.
-`SupportsApprovalWorkflow` HİÇ uygulanmayacak (§11.5 — Etsy'de onay
-süreci yoktur, panelde hiç dolmayacak bir sekme açardı).
+`SupportsInventory` · `SupportsOrders` · `SupportsPricing` ·
+`SupportsTaxonomy` · `SupportsTokenRefresh`.
+**UYGULANMAYANLAR ve gerekçeleri:** `SupportsApprovalWorkflow` HİÇ
+uygulanmayacak (§11.5 — Etsy'de onay süreci yoktur, panelde hiç
+dolmayacak bir sekme açardı) · `SupportsFulfillment` §11.4'te geçiyor
+ama slice tablosunda satırı YOK (açık madde) · `SupportsCatalogImport`
+slice tablosunda yok.
 
-### Slice 3.7 · sipariş yoklaması — ÜÇ ŞEYİ BİLEREK BAŞLA
+### Slice 3.7 · sipariş yoklaması — NE YAPILDI
 
-**1 · WEBHOOK YOKTUR** (§11.4). Sipariş YOKLAMAYLA gelir — Trendyol
-kalıbı birebir. `verifyWebhookSignature()` zaten daima `false` ve
-`supports_webhooks = false`; `true` olsaydı yoklama turu bu kanalı
-ATLAR ve siparişler HİÇ GELMEZDİ.
+Trendyol kalıbı birebir uygulandı: `fetchOrders` (receipts uç noktası,
+`min_created` penceresi, offset imleci) · `pollingEventIdFor`
+(`{receipt_id}:{status}`) · `parseOrderEvent` (receipt → kanonik olay) ·
+`acknowledgeOrder` (NO-OP).
 
-**2 · OLAY KİMLİĞİ `{receipt_id}:{status}`** (§11.4) — yalnızca
-`receipt_id`'ye bağlansaydı aynı siparişin sonraki İPTALİ birincil
-tekillik indeksine takılır ve `insertOrIgnore` tarafından SESSİZCE
-YUTULURDU; stok geri eklenmez, bakiye kalıcı eksik kalırdı.
-
-**3 · İADE İÇİN AYRI UÇ NOKTA YOKTUR ve bu DÜRÜST bir sınırdır.**
-Satıcı iadeyi Etsy panelinden işler, `receipt` durumu değişir ve
+**İADE İÇİN AYRI UÇ NOKTA YOKTUR ve bu DÜRÜST bir sınırdır.** Satıcı
+iadeyi Etsy panelinden işler, `receipt` durumu `refunded` olur ve
 yoklama bunu `updated` görür — stok hareketi ÜRETMEZ. `returned`
-sayılsaydı satılmış stok geri eklenir ve bakiye bozulurdu.
+sayılsaydı satılmış stok geri eklenir ve bakiye bozulurdu. Mutasyon
+(`refunded => returned`) testi kırdı.
 
-Eşleme (§11.4): `receipt_id` → `orders.external_id` · `transaction_id`
-→ `order_lines.external_line_id` · `transactions[].sku` →
-`order_lines.sku`. Pencere 5 dk GERİYE bakar, imleç turun BAŞLAMA
-anına yazılır ve BAŞARISIZ TURDA İLERLEMEZ. Yoklamada
-`signature_valid = true` ve bu eksiklik değildir.
+**PARA SİPARİŞ GÖVDESİNDE DE NESNEDİR** ve `EtsyProductMapper::money()`
+çağrılır — ham `amount` okunsaydı 19.90 TL sipariş toplamında 1990 TL
+görünürdü. **ZAMAN EPOCH'U SANİYE** (Trendyol milisaniye): karışsaydı
+pencere 1970'e düşer ve her tur tüm geçmişi çekerdi.
+
+**`SupportsFulfillment` UYGULANMADI.** §11.4 ondan söz ediyor ama
+slice tablosunda kendi satırı YOK; ilan edilip yazılmasaydı panelde
+çalışmayan bir sekme açardı (§05). `EtsyAdapterTest` bunu
+`assertNotInstanceOf` ile korur — bilinçli bir açık madde.
+
+### Slice 3.7'de "yazıldı" ≠ "çalışıyor" — ÜÇ KATMAN SÜRÜLDÜ
+
+Ayrıştırma testleri normalizer'ın DOĞRU olduğunu kanıtlar, zincirin
+ÇALIŞTIĞINI kanıtlamaz. Bu yüzden:
+
+1. **Dikey dilim** — yoklama → inbox → `ProcessInboxMessage` →
+   `OrderEventRouter` → `IngestChannelOrder` → `ApplyMovement`.
+   İddia: stok **10 → 8**. Bir halka kopuk olsaydı bakiye 10'da kalırdı.
+2. **Zamanlanmış komut** — `orders:poll` GERÇEKTEN sürüldü
+   (destek sınıfı değil). Komut yanlış scope sürüyor olsaydı destek
+   sınıfının testleri yine yeşil kalırdı.
+3. **Eşleşmeyen SKU** — sipariş YAZILIR, satır PENDING kalır, stok
+   düşmez (Karar 24: sipariş kaybetmek stok tutarsızlığından kötüdür).
+
+`'paid' => 'updated'` ve "SKU'yu boş bırak" mutasyonlarının HER İKİSİ
+de dikey dilim testlerini kırdı — yani o testler gerçekten ısırıyor.
+
+Dokuz mutasyonun dokuzu da öldürüldü: kimlikten durumu düşür ·
+`refunded => returned` · bilinmeyen durum `created` · ham `amount` oku ·
+çekirdek adapter'ı sormasın · kalem kimliği `id` oku · `min_created`
+gönderme · `paid => updated` · SKU'yu boşalt.
 
 ### Slice 3.5'in kalıcı dersi — mutasyonla kanıtlandı
 

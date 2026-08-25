@@ -340,6 +340,23 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
         );
     }
 
+    /**
+     * ⚠️ YAZILMAMIŞ YETENEK SESSİZCE `null` DÖNMEZ.
+     *
+     * `null` dönseydi tekilleştirme saatlik hash yoluna düşer ve yoklama
+     * "çalışıyor" görünürken aynı siparişin İPTALİ o pencerede
+     * kaybolabilirdi (v2.2 · §7).
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function pollingEventIdFor(array $order): ?string
+    {
+        throw new RuntimeException(
+            'Hepsiburada sipariş yoklaması henüz yazılmadı — uç noktalar '.
+            'doğrulanmadı.'
+        );
+    }
+
     public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
     {
         throw new RuntimeException(
