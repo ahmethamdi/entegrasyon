@@ -44,6 +44,18 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
     /** Kanal kodu → yaratılan listing'e verilecek external id. */
     private static array $nextExternalId = [];
 
+    /**
+     * Kanal kodu → create/update yanıtına eklenecek EK kimlikler.
+     *
+     * V3.0 · §07: bazı kanallar TEK kimlik döndürmez. Shopify variant +
+     * product + inventory item, eBay listing + offer taşır ve ikisi de
+     * KALICIDIR. Bu program `PushListing`'in o kimlikleri gerçekten
+     * yazdığını sınamak için var.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private static array $extraIdentity = [];
+
     public function __construct(
         private readonly ChannelConnection $connection,
         public readonly mixed $client = null,
@@ -74,12 +86,23 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
         self::$existing[$channelTypeCode][$sku] = $externalId;
     }
 
+    /**
+     * Create/update yanıtına EK kimlikler ekler (üst ürün, kanala özgü).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function alsoReturns(string $channelTypeCode, array $data): void
+    {
+        self::$extraIdentity[$channelTypeCode] = $data;
+    }
+
     public static function reset(): void
     {
         self::$plan = [];
         self::$calls = [];
         self::$existing = [];
         self::$nextExternalId = [];
+        self::$extraIdentity = [];
     }
 
     /** @return list<array{op: string, title: string, sku: ?string, version: int, externalId: ?string}> */
@@ -138,6 +161,7 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
         return AdapterResult::success([
             'external_id' => $externalId,
             'external_url' => 'https://example.test/p/'.$externalId,
+            ...(self::$extraIdentity[$this->code()] ?? []),
         ]);
     }
 
@@ -149,6 +173,7 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
 
         return AdapterResult::success([
             'external_id' => $payload->listing->external_id,
+            ...(self::$extraIdentity[$this->code()] ?? []),
         ]);
     }
 

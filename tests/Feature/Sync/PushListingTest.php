@@ -603,6 +603,114 @@ final class PushListingTest extends TestCase
         ));
     }
 
+    // ───────────────────────────────── V3.0 · çok kimlikli kanallar (§07)
+
+    /**
+     * ÜST ÜRÜN VE KANALA ÖZGÜ KİMLİKLER DE YAZILIR.
+     *
+     * V3.0 · §03 · Delta 2 · §07.
+     *
+     * Bazı kanallar TEK kimlik döndürmez: Shopify variant + product +
+     * inventory item, Etsy product + listing + offering, eBay listing +
+     * offer taşır ve ikisi de KALICIDIR.
+     *
+     * `inventory_item_gid` STOK YAZMA HEDEFİDİR — Shopify'ın stok
+     * mutation'ı variant gid'i KABUL ETMEZ. Yazılmazsa her stok itmesi ek
+     * bir GraphQL sorgusu gerektirir ve kritik yolu İKİ KATINA çıkarır.
+     *
+     * YAZIM KANAL-AGNOSTİKTİR: adapter hangi kimlikleri döndüreceğini
+     * bilir, çekirdek yalnızca taşır. `if ($channel === 'shopify')`
+     * YAZILMAZ.
+     */
+    #[Test]
+    public function channel_specific_identifiers_are_persisted(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $listing = $this->draftListing($tenant, $variant, 'woocommerce');
+
+        ProgrammableCatalogAdapter::succeedOn('woocommerce', externalId: 'gid://shopify/ProductVariant/456');
+        ProgrammableCatalogAdapter::alsoReturns('woocommerce', [
+            'external_parent_id' => 'gid://shopify/Product/123',
+            'channel_metadata' => ['inventory_item_gid' => 'gid://shopify/InventoryItem/789'],
+        ]);
+
+        $operation = $this->openOperation($tenant, $listing, version: 1);
+
+        $this->runJob($tenant, $operation->id);
+
+        $fresh = $this->asTenant($tenant, fn () => $listing->fresh());
+
+        $this->assertSame('gid://shopify/Product/123', $fresh->external_parent_id);
+        $this->assertSame(
+            'gid://shopify/InventoryItem/789',
+            $fresh->channel_metadata['inventory_item_gid'] ?? null,
+            'channel_metadata yazılmadı — stok yazma hedefi kaybolur.',
+        );
+    }
+
+    /**
+     * ⚠️ `channel_metadata` BİRLEŞTİRİLİR, EZİLMEZ.
+     *
+     * eBay'in üç adımlı yayını `offer_id`'yi ilk adımda, `listing_id`'yi
+     * üçüncüde yazar (§13.2). Ezilseydi ara başarısızlıktan sonraki tur
+     * `offer_id`'yi KAYBEDER, ikinci bir offer yaratır ve eBay `25002`
+     * duplicate döndürürdü — KALICI hata, listing "düzeltilemez"
+     * damgasıyla ölür.
+     */
+    #[Test]
+    public function channel_metadata_is_merged_not_replaced(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $listing = $this->draftListing($tenant, $variant, 'woocommerce');
+
+        // Önceki turdan kalan kimlik — eBay senaryosunda `offer_id`.
+        $this->asTenant($tenant, fn () => $listing->forceFill([
+            'channel_metadata' => ['offer_id' => '8912345'],
+        ])->save());
+
+        ProgrammableCatalogAdapter::succeedOn('woocommerce', externalId: '4242');
+        ProgrammableCatalogAdapter::alsoReturns('woocommerce', [
+            'channel_metadata' => ['listing_id' => '110123456789'],
+        ]);
+
+        $operation = $this->openOperation($tenant, $listing, version: 1);
+
+        $this->runJob($tenant, $operation->id);
+
+        $metadata = $this->asTenant($tenant, fn () => $listing->fresh()->channel_metadata);
+
+        $this->assertSame('8912345', $metadata['offer_id'] ?? null,
+            'Önceki kimlik EZİLDİ — eBay\'de ikinci offer yaratılır ve 25002 alınır.');
+        $this->assertSame('110123456789', $metadata['listing_id'] ?? null);
+    }
+
+    /**
+     * Kanal ek kimlik döndürmezse mevcut değerlere DOKUNULMAZ.
+     *
+     * Woo ve Trendyol tek kimlik taşır; `external_parent_id` ve
+     * `channel_metadata` onlarda NULL kalır ve kalmaya devam etmelidir.
+     */
+    #[Test]
+    public function channels_returning_a_single_identifier_leave_the_extras_null(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $listing = $this->draftListing($tenant, $variant, 'woocommerce');
+
+        ProgrammableCatalogAdapter::succeedOn('woocommerce', externalId: '4242');
+
+        $operation = $this->openOperation($tenant, $listing, version: 1);
+
+        $this->runJob($tenant, $operation->id);
+
+        $fresh = $this->asTenant($tenant, fn () => $listing->fresh());
+
+        $this->assertNull($fresh->external_parent_id);
+        $this->assertNull($fresh->channel_metadata);
+    }
+
     /**
      * İşi worker'daki gibi çalıştırır — BAĞLAM SARMALAYICISI YOK.
      *

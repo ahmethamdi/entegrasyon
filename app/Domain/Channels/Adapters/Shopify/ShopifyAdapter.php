@@ -4,13 +4,19 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Shopify;
 
+use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\RemoteListing;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -65,17 +71,18 @@ use Throwable;
  * yanlış" diyerek ölürdü — oysa anahtar doğrudur.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — BU SLICE: BAĞLANTI · KİMLİK · SAĞLIK · GRAPHQL SARMALAYICI
+ * KAPSAM — SLICE 1.1–1.3
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü (konum kontrolü dahil),
  * hata sınıflandırma, hız sınırı profili, webhook imza doğrulaması,
- * GraphQL sarmalayıcı + `userErrors` kontrolü.
+ * GraphQL sarmalayıcı + `userErrors` kontrolü, **katalog** (create /
+ * update / delist / findExisting / fetchListing).
  *
- * YAZILMAYAN: katalog, stok, fiyat, sipariş, içe aktarma (§27 · slice
- * 1.3–1.9). Yetenek arayüzleri o slice'larda İLAN EDİLİR — ilan edilen
- * ama çalışmayan yetenek panelde çalışmayan sekme demektir (§05).
+ * YAZILMAYAN: stok, fiyat, sipariş, içe aktarma (§27 · slice 1.4–1.9).
+ * Yetenek arayüzleri o slice'larda İLAN EDİLİR — ilan edilen ama
+ * çalışmayan yetenek panelde çalışmayan sekme demektir (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter
+final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog
 {
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';
@@ -434,6 +441,277 @@ final class ShopifyAdapter implements ChannelAdapter
         }
 
         return ['bucket' => $bucket, 'restoreRate' => $restore];
+    }
+
+    // ------------------------------------------------------------- katalog
+
+    /**
+     * Ürünü kanalda YARATIR — tek `productSet` mutation'ı.
+     *
+     * TEK ÇAĞRI, ARA KİMLİK YOK: Shopify ürünü ve varyantını birlikte
+     * yazar. Ayrı `productCreate` + `productVariantsBulkCreate` çağrılsaydı
+     * ara başarısızlıkta ürün yaratılmış ama varyantı olmayan bir kabuk
+     * kalırdı — eBay'in üç adımlı zincirindeki tuzağın aynısı (§13.2) ve
+     * Shopify'da buna GEREK YOKTUR (`SupportsOfferLifecycle` bu kanalda
+     * UYGULANMAZ).
+     *
+     * ÜÇ KİMLİK BİRDEN OKUNUR: variant gid (`external_id`), product gid
+     * (`external_parent_id`) ve **inventory item gid** (`channel_metadata`).
+     * Sonuncusu stok yazma hedefidir ve burada okunmasaydı her stok itmesi
+     * ek bir GraphQL sorgusu gerektirir, kritik yolu İKİ KATINA çıkarırdı
+     * (§06.4).
+     *
+     * ⚠️ `userErrors` KONTROLÜ `gql()` İÇİNDE — 200 dönen bir başarısızlık
+     * burada BAŞARI sayılmaz (P0-1).
+     */
+    public function createListing(ListingPayload $payload): AdapterResult
+    {
+        $data = $this->gql(
+            <<<'GQL'
+            mutation CreateProduct($input: ProductSetInput!) {
+              productSet(synchronous: true, input: $input) {
+                product {
+                  id
+                  variants(first: 1) {
+                    nodes { id sku inventoryItem { id } }
+                  }
+                }
+                userErrors { field message code }
+              }
+            }
+            GQL,
+            variables: ['input' => ShopifyProductMapper::toProductSetInput($payload)],
+            operation: 'productSet',
+            userErrorPath: 'productSet',
+        );
+
+        $product = $data['productSet']['product'] ?? null;
+
+        if (! is_array($product)) {
+            // Yanıt 200, `userErrors` boş ama ürün YOK: sözleşme ihlali.
+            // Başarı dönülseydi `synced_version` ilerler ve satır kanalda
+            // karşılığı olmadan "senkron" görünürdü (P0-1'in kardeşi).
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Shopify productSet yanıtı ürün taşımıyor.',
+            );
+        }
+
+        $identity = ShopifyProductMapper::toIdentityResult($product, $this->shopDomain());
+
+        if (! isset($identity['external_id'])) {
+            // Varyant kimliği yoksa listing kanalda ADRESLENEMEZ: sonraki
+            // tur update çağırır, Shopify boş gid'i tanımaz ve `VALIDATION`
+            // döner — o hata KALICIDIR.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Shopify yanıtı varyant kimliği taşımıyor; listing adreslenemez.',
+            );
+        }
+
+        return AdapterResult::success($identity);
+    }
+
+    /**
+     * Var olan ürünü GÜNCELLER.
+     *
+     * HEDEF ÜRÜNDÜR, VARYANT DEĞİL: içerik (başlık, açıklama) ürün
+     * seviyesindedir. `external_parent_id` yoksa güncelleme yapılamaz —
+     * `external_id` (varyant gid) tek başına ürün mutation'ına verilemez.
+     */
+    public function updateListing(ListingPayload $payload): AdapterResult
+    {
+        $listing = $payload->listing;
+        $productGid = $listing->external_parent_id;
+
+        if ($productGid === null || $productGid === '') {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Güncellenecek Shopify ürünü bilinmiyor (external_parent_id boş).',
+            );
+        }
+
+        $input = ShopifyProductMapper::toProductSetInput($payload);
+        $input['id'] = $productGid;
+
+        $data = $this->gql(
+            <<<'GQL'
+            mutation UpdateProduct($input: ProductSetInput!) {
+              productSet(synchronous: true, input: $input) {
+                product {
+                  id
+                  variants(first: 1) {
+                    nodes { id sku inventoryItem { id } }
+                  }
+                }
+                userErrors { field message code }
+              }
+            }
+            GQL,
+            variables: ['input' => $input],
+            operation: 'productSet',
+            userErrorPath: 'productSet',
+        );
+
+        $product = $data['productSet']['product'] ?? null;
+
+        if (! is_array($product)) {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Shopify productSet yanıtı ürün taşımıyor.',
+            );
+        }
+
+        // Kimlikler YENİDEN okunur: satıcı Shopify panelinden varyantı
+        // silip yeniden yaratmış olabilir ve o zaman inventory item gid
+        // DEĞİŞİR. Eski kimlikle stok yazmak sessizce YANLIŞ varyanta
+        // giderdi.
+        return AdapterResult::success(
+            ShopifyProductMapper::toIdentityResult($product, $this->shopDomain())
+        );
+    }
+
+    /**
+     * Yayından kaldırır — SİLMEZ, ARŞİVLER.
+     *
+     * v2.2 · `delist` kuralı: silme geri alınamaz ve kanaldaki yorumları,
+     * sıralamayı, SEO geçmişini de götürür. Shopify'da karşılık `ARCHIVED`
+     * durumudur; ürün satıcının panelinde durur ama satışta değildir.
+     *
+     * `DRAFT` DEĞİL `ARCHIVED` seçildi: taslak "henüz yayınlanmadı" der,
+     * arşiv "yayındaydı, kaldırıldı" der. İkisi satıcıya farklı şey söyler
+     * ve delist ikincisidir.
+     */
+    public function delist(Listing $listing): AdapterResult
+    {
+        $productGid = $listing->external_parent_id;
+
+        if ($productGid === null || $productGid === '') {
+            // Kanalda karşılığı yoksa yapılacak bir şey de yok.
+            return AdapterResult::success(['already_absent' => true]);
+        }
+
+        $this->gql(
+            <<<'GQL'
+            mutation ArchiveProduct($input: ProductSetInput!) {
+              productSet(synchronous: true, input: $input) {
+                product { id status }
+                userErrors { field message code }
+              }
+            }
+            GQL,
+            variables: ['input' => ['id' => $productGid, 'status' => 'ARCHIVED']],
+            operation: 'productSet',
+            userErrorPath: 'productSet',
+        );
+
+        return AdapterResult::success(['external_id' => $listing->external_id]);
+    }
+
+    /**
+     * Kanalda AYNI SKU'yu arar — create'ten ÖNCE sorulur.
+     *
+     * Bu adım olmadan satıcının Shopify panelinden elle açtığı ürünler
+     * yeniden yaratılır ve kanalda KOPYA listeler oluşur; geri alınamaz ve
+     * yorumlar, sıralama, SEO geçmişi ilk üründe kalır (v2.2 · §7).
+     *
+     * SKU İLE ARANIR, başlıkla değil: başlık değişebilir ve iki farklı ürün
+     * aynı başlığı taşıyabilir. SKU kiracı içinde tekildir ve kanalla
+     * eşleşmenin anahtarıdır.
+     */
+    public function findExistingListing(Variant $variant): ?RemoteListing
+    {
+        $sku = trim((string) $variant->sku);
+
+        if ($sku === '') {
+            return null;
+        }
+
+        $data = $this->gql(
+            <<<'GQL'
+            query FindVariantBySku($query: String!) {
+              productVariants(first: 1, query: $query) {
+                nodes {
+                  id sku price inventoryQuantity
+                  inventoryItem { id }
+                  product { id title status }
+                }
+              }
+            }
+            GQL,
+            // Arama dizesi TIRNAK İÇİNDE verilir: boşluk veya tire içeren
+            // SKU (`TSH-KIRMIZI-M`) tırnaksız yazılsaydı Shopify onu birden
+            // çok terime böler ve BAŞKA ürünü döndürürdü.
+            variables: ['query' => 'sku:"'.$this->escapeSearchTerm($sku).'"'],
+            operation: 'productVariants',
+        );
+
+        $node = $data['productVariants']['nodes'][0] ?? null;
+
+        if (! is_array($node) || ! isset($node['id'])) {
+            return null;
+        }
+
+        // SKU TAM EŞLEŞMELİ: Shopify'ın arama motoru ön ek eşleşmesi
+        // yapabilir ve `TSH-1` sorgusu `TSH-10`'u döndürebilir. Yanlış
+        // ürünü benimsemek, satıcının BAŞKA ürününü bizim listing'imiz
+        // sanıp üzerine yazmak demektir.
+        if (! isset($node['sku']) || (string) $node['sku'] !== $sku) {
+            return null;
+        }
+
+        return ShopifyProductMapper::toRemoteListing($node, $this->shopDomain());
+    }
+
+    /**
+     * Uzak durumu okur — mutabakat ve çakışma tespiti için (§10).
+     *
+     * VARYANT gid ile sorgulanır: `external_id` odur ve stok/fiyat orada
+     * yaşar.
+     */
+    public function fetchListing(Listing $listing): ?RemoteListing
+    {
+        $variantGid = $listing->external_id;
+
+        if ($variantGid === null || $variantGid === '') {
+            return null;
+        }
+
+        $data = $this->gql(
+            <<<'GQL'
+            query FetchVariant($id: ID!) {
+              productVariant(id: $id) {
+                id sku price inventoryQuantity
+                inventoryItem { id }
+                product { id title status }
+              }
+            }
+            GQL,
+            variables: ['id' => $variantGid],
+            operation: 'productVariant',
+        );
+
+        $node = $data['productVariant'] ?? null;
+
+        // NULL "KANALDA YOK" DEMEKTİR ve mutabakat bunu `REMOTE_MISSING`
+        // olarak sınıflandırır; otomatik onarım AÇILMAZ (v2.2 · §10) —
+        // sessizce yeniden yaratmak kanalda kopya ürün açardı.
+        if (! is_array($node) || ! isset($node['id'])) {
+            return null;
+        }
+
+        return ShopifyProductMapper::toRemoteListing($node, $this->shopDomain());
+    }
+
+    /**
+     * Shopify arama dizesindeki özel karakterleri kaçırır.
+     *
+     * Tırnak ve ters eğik çizgi sorguyu BOZAR; kaçırılmazsa `12"` SKU'su
+     * sorguyu ortadan böler ve sorgu ya hata verir ya BAŞKA ürünü döndürür.
+     */
+    private function escapeSearchTerm(string $term): string
+    {
+        return str_replace(['\\', '"'], ['\\\\', '\\"'], $term);
     }
 
     // ------------------------------------------------------------------- iç

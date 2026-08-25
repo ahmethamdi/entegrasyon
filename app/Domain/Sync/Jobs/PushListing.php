@@ -224,6 +224,22 @@ final class PushListing implements ShouldQueue
      *
      *   Yetenek `instanceof` ile okunur: Woo'da onay süreci yoktur ve
      *   satır eskisi gibi doğrudan canlı olur.
+     *
+     * ÜST ÜRÜN VE KANALA ÖZGÜ KİMLİKLER DE BURADA YAZILIR (V3.0 · §07):
+     *   Bazı kanallar TEK bir kimlik döndürmez. Shopify variant + product +
+     *   inventory item, Etsy product + listing + offering, eBay listing +
+     *   offer taşır ve ikisi de KALICIDIR. `external_parent_id` v2.2'de
+     *   tanımlı ama hiç kullanılmamıştı; `channel_metadata` Faz 0'da eklendi.
+     *
+     *   YAZIM KANAL-AGNOSTİKTİR: adapter hangi kimlikleri döndüreceğini
+     *   bilir, çekirdek yalnızca taşır. `if ($channel === 'shopify')`
+     *   YAZILMAZ — yeni kanal eklendiğinde bu metot DEĞİŞMEZ.
+     *
+     *   `channel_metadata` BİRLEŞTİRİLİR, EZİLMEZ: eBay'in üç adımlı yayını
+     *   `offer_id`'yi ilk adımda, `listing_id`'yi üçüncüde yazar (§13.2).
+     *   Ezilseydi ara başarısızlıktan sonraki tur `offer_id`'yi kaybeder,
+     *   ikinci bir offer yaratır ve kanal `25002` duplicate döndürürdü —
+     *   KALICI hata, listing "düzeltilemez" damgasıyla ölür.
      */
     private function adoptRemoteIdentity(
         Listing $listing,
@@ -238,9 +254,11 @@ final class PushListing implements ShouldQueue
 
         $awaitsApproval = $adapter instanceof SupportsApprovalWorkflow;
 
-        $listing->forceFill(array_filter([
+        $attributes = array_filter([
             'external_id' => (string) $externalId,
             'external_url' => $result->data['external_url'] ?? $listing->external_url,
+            'external_parent_id' => $result->data['external_parent_id']
+                ?? $listing->external_parent_id,
             'lifecycle_status' => $awaitsApproval ? 'pending_approval' : 'live',
             // Yayına giriş tarihi ancak GERÇEKTEN yayındayken anlamlıdır;
             // onay bekleyen satırda yazılsaydı ürünün kanaldaki yaşı
@@ -248,6 +266,18 @@ final class PushListing implements ShouldQueue
             'listed_at' => $awaitsApproval
                 ? $listing->listed_at
                 : ($listing->listed_at ?? now()),
-        ], static fn (mixed $value): bool => $value !== null))->save();
+        ], static fn (mixed $value): bool => $value !== null);
+
+        // BİRLEŞTİRME: adapter yalnızca DEĞİŞEN anahtarları döndürür.
+        $metadata = $result->data['channel_metadata'] ?? null;
+
+        if (is_array($metadata) && $metadata !== []) {
+            $attributes['channel_metadata'] = [
+                ...($listing->channel_metadata ?? []),
+                ...$metadata,
+            ];
+        }
+
+        $listing->forceFill($attributes)->save();
     }
 }
