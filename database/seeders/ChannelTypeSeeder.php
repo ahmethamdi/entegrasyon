@@ -166,7 +166,7 @@ class ChannelTypeSeeder extends Seeder
                     'catalog_import' => true,   // slice 1.4 ✓
                     'inventory' => true,        // slice 1.5 ✓
                     'pricing' => true,          // slice 1.6 ✓
-                    'orders' => false,          // slice 1.7
+                    'orders' => true,           // slice 1.7 ✓
                     // Shopify'da kategori zorunlu DEĞİL (`product_type`
                     // serbest metin) — taksonomi arayüzü HİÇ uygulanmaz.
                     'taxonomy' => false,

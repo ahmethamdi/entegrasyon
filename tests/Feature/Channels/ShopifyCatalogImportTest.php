@@ -294,14 +294,15 @@ final class ShopifyCatalogImportTest extends TestCase
             );
         });
 
-        // Slice 1.3–1.6'da yazıldı.
+        // Slice 1.3–1.7'de yazıldı.
         $this->assertTrue($capabilities['catalog']);
         $this->assertTrue($capabilities['catalog_import']);
         $this->assertTrue($capabilities['inventory']);
         $this->assertTrue($capabilities['pricing']);
+        $this->assertTrue($capabilities['orders']);
 
-        // Henüz yazılmadı — slice 1.7–1.9.
-        $this->assertFalse($capabilities['orders']);
+        // Henüz yazılmadı — slice 1.8 (kargo).
+        $this->assertFalse($capabilities['fulfillment']);
 
         // HİÇ yazılmayacak: Shopify'da kategori zorunlu değil ve onay
         // süreci yoktur (§04 · dipnotlar).

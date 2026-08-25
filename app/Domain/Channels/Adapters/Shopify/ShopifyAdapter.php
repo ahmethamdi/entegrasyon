@@ -12,20 +12,26 @@ use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\NormalizedOrderEvent;
+use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
@@ -86,13 +92,16 @@ use Throwable;
  * GraphQL sarmalayıcı + `userErrors` kontrolü, **katalog** (create /
  * update / delist / findExisting / fetchListing), **ürün içe aktarma**,
  * **stok** (mutlak değer, `inventorySetOnHandQuantities`), **fiyat**
- * (mutlak değer, string, `productVariantsBulkUpdate`).
+ * (mutlak değer, string, `productVariantsBulkUpdate`), **sipariş webhook'u**
+ * (`ShopifyOrderNormalizer` — iptal AYRI konudur, Woo'nun ezme kuralı
+ * KOPYALANMAZ).
  *
- * YAZILMAYAN: sipariş (§27 · slice 1.7–1.9).
- * Yetenek arayüzleri o slice'larda İLAN EDİLİR — ilan edilen ama
- * çalışmayan yetenek panelde çalışmayan sekme demektir (§05).
+ * YAZILMAYAN: kargo (`SupportsFulfillment`) ve `app/uninstalled`
+ * (§27 · slice 1.8–1.9). Yetenek arayüzleri o slice'larda İLAN EDİLİR —
+ * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
+ * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsPricing
+final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';
@@ -1197,6 +1206,54 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
 
             return $map;
         });
+    }
+
+    // ------------------------------------------------------------- sipariş
+
+    /**
+     * Ham webhook gövdesini kanonik olaya çevirir.
+     *
+     * V3.0 · §06.6 · slice 1.7. Dönüşüm `ShopifyOrderNormalizer`'dadır ve
+     * TİP AYRIMININ gerekçesi orada yazılıdır: Shopify'da iptal AYRI bir
+     * konudur ve Woo'nun "durum topic'i ezer" kuralı BURAYA KOPYALANMAZ.
+     */
+    public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
+    {
+        return ShopifyOrderNormalizer::normalize($message);
+    }
+
+    /**
+     * ⚠️ SHOPIFY YOKLANMAZ — WEBHOOK GÖNDERİR (§19 · `supports_webhooks`).
+     *
+     * Bu metot çağrılırsa bir PROGRAMLAMA HATASI vardır: yoklama turu
+     * `supports_webhooks` kapısını okur ve bu kanalı HİÇ seçmemelidir.
+     *
+     * SESSİZCE BOŞ SAYFA DÖNÜLMEZ. Dönülseydi hata gizlenir, yoklama turu
+     * her seferinde "sipariş yok" der ve kimse sebebini aramazdı —
+     * "yazılmamış yetenek SESSİZCE BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
+     * Trendyol'un `verifyWebhookSignature` `false` dönmesiyle simetriktir:
+     * orada da güvenli taraf "evet" DEMEMEKTİR.
+     */
+    public function fetchOrders(CarbonInterface $since, ?string $cursor = null): OrderPage
+    {
+        throw new RuntimeException(
+            'Shopify siparişleri webhook ile gelir ve YOKLANMAZ. Bu çağrı '.
+            'yoklama turunun `supports_webhooks` kapısını atladığı anlamına '.
+            'gelir; sessizce boş sayfa dönmek hatayı gizlerdi.'
+        );
+    }
+
+    /**
+     * Ayrı bir onay adımı YOKTUR.
+     *
+     * Sipariş webhook ile gelir ve kanal onu zaten kabul etmiştir; sözleşme
+     * gereği başarı döner (Woo ile aynı). Pazaryerlerinde (Trendyol,
+     * Hepsiburada) bu adım gerçektir ve satıcının siparişi üstlenmesini
+     * bildirir; storefront'ta böyle bir kavram yoktur.
+     */
+    public function acknowledgeOrder(Order $order): AdapterResult
+    {
+        return AdapterResult::success(['acknowledged' => true]);
     }
 
     // ------------------------------------------------------ ürün içe aktarma
