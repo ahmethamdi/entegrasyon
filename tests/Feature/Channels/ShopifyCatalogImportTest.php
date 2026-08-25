@@ -273,7 +273,7 @@ final class ShopifyCatalogImportTest extends TestCase
      * kaynak `instanceof`'tur (§07 · değişmez kural). Panel bu haritayı
      * okur ve `if type === 'shopify'` bloğu YAZILMAZ.
      *
-     * Bugün açık olan yetenekler yazıldı; kapalı olanlar slice 1.5–1.9'da
+     * Bugün açık olan yetenekler yazıldı; kapalı olanlar slice 1.6–1.9'da
      * açılacak. Kapalı bir yeteneğin `false` görünmesi bir eksiklik değil,
      * §05'in "ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme
      * demektir" kuralının uygulanmasıdır.
@@ -294,12 +294,12 @@ final class ShopifyCatalogImportTest extends TestCase
             );
         });
 
-        // Slice 1.3–1.4'te yazıldı.
+        // Slice 1.3–1.5'te yazıldı.
         $this->assertTrue($capabilities['catalog']);
         $this->assertTrue($capabilities['catalog_import']);
+        $this->assertTrue($capabilities['inventory']);
 
-        // Henüz yazılmadı — slice 1.5–1.9.
-        $this->assertFalse($capabilities['inventory']);
+        // Henüz yazılmadı — slice 1.6–1.9.
         $this->assertFalse($capabilities['pricing']);
         $this->assertFalse($capabilities['orders']);
 

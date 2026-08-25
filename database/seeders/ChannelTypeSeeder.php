@@ -164,7 +164,7 @@ class ChannelTypeSeeder extends Seeder
                     // çalışmayan yetenek panelde çalışmayan sekme demektir.
                     'catalog' => true,          // slice 1.3 ✓
                     'catalog_import' => true,   // slice 1.4 ✓
-                    'inventory' => false,       // slice 1.5
+                    'inventory' => true,        // slice 1.5 ✓
                     'pricing' => false,         // slice 1.6
                     'orders' => false,          // slice 1.7
                     // Shopify'da kategori zorunlu DEĞİL (`product_type`

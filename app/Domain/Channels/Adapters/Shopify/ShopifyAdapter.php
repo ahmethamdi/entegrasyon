@@ -11,12 +11,15 @@ use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
@@ -73,18 +76,19 @@ use Throwable;
  * yanlış" diyerek ölürdü — oysa anahtar doğrudur.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 1.1–1.4
+ * KAPSAM — SLICE 1.1–1.5
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü (konum kontrolü dahil),
  * hata sınıflandırma, hız sınırı profili, webhook imza doğrulaması,
  * GraphQL sarmalayıcı + `userErrors` kontrolü, **katalog** (create /
- * update / delist / findExisting / fetchListing), **ürün içe aktarma**.
+ * update / delist / findExisting / fetchListing), **ürün içe aktarma**,
+ * **stok** (mutlak değer, `inventorySetOnHandQuantities`).
  *
- * YAZILMAYAN: stok, fiyat, sipariş (§27 · slice 1.5–1.9).
+ * YAZILMAYAN: fiyat, sipariş (§27 · slice 1.6–1.9).
  * Yetenek arayüzleri o slice'larda İLAN EDİLİR — ilan edilen ama
  * çalışmayan yetenek panelde çalışmayan sekme demektir (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport
+final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsInventory
 {
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';
@@ -112,6 +116,15 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
     private const DEFAULT_RESTORE_RATE = 50;
 
     private const DEFAULT_BUCKET_SIZE = 1000;
+
+    /**
+     * `inventorySetOnHandQuantities` tek mutation'da çok kalem kabul eder.
+     *
+     * 250 seçildi (§06.5): Shopify'ın belgelenmiş sınırı budur. Aşımın
+     * bedeli ağır — kanal isteği kısmen işlerse hangi kalemin gittiği
+     * bilinmez (Hepsiburada'daki parti boyutu gerekçesinin aynısı).
+     */
+    private const MAX_INVENTORY_BATCH = 250;
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -714,6 +727,233 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
     private function escapeSearchTerm(string $term): string
     {
         return str_replace(['\\', '"'], ['\\\\', '\\"'], $term);
+    }
+
+    // ---------------------------------------------------------------- stok
+
+    /**
+     * Stok yazar — MUTLAK DEĞER, delta ASLA.
+     *
+     * V3.0 · §06.5 · v2.2 §7 · Karar 25.
+     *
+     * ⚠️ DELTA MUTATION'I (`inventoryAdjustQuantities`) YASAKTIR ve sebebi
+     * v2.2'de yazılı: kaybolan veya İKİ KEZ işlenen bir istek kanaldaki
+     * bakiyeyi KALICI olarak kaydırır ve fark geri kazanılamaz. Mutlak
+     * değerde tekrar ZARARSIZDIR — aynı sayıyı ikinci kez yazmak durumu
+     * değiştirmez. Yeniden denemenin güvenli olmasının ve mutabakatın
+     * çalışabilmesinin dayanağı budur. Shopify'ın delta API'si daha
+     * "verimli" görünür; bu görüntü ALDATICIDIR.
+     *
+     * ⚠️ HEDEF `inventoryItemId`, VARIANT GID DEĞİL. Mutation variant
+     * gid'ini KABUL ETMEZ. Kimlik listing yaratılırken `channel_metadata`'ya
+     * yazıldı (slice 1.3) ve burada TEK sorguyla okunur — her kalem için
+     * ayrı GraphQL çevrimi yapılsaydı stok yolu (projenin en kritik yolu,
+     * `inventory:high`, 45 sn) İKİ KATINA çıkardı.
+     *
+     * Okuma adapter'ın YAN ETKİSİ DEĞİLDİR: veritabanına yazmaz, yalnızca
+     * kendi bağlantısının listing'lerini okur ve `Listing::query()` global
+     * scope'a tabidir (ham sorgu kullanılmaz, §24).
+     *
+     * ⚠️ KİMLİĞİ OLMAYAN KALEM YÜKE ALINMAZ ve bu SESSİZ BİR ATLAMA
+     * DEĞİLDİR — sonuçta raporlanır. Boş `inventoryItemId` ile giden
+     * mutation `userErrors` döner, o hata `VALIDATION` yani KALICIDIR ve
+     * listing "düzeltilemez" damgasıyla ölürdü. Kimlik eksikse listing'in
+     * yeniden gönderilmesi gerekir (Hepsiburada'daki "satıcı kimliği yoksa
+     * istek atılmaz" kuralının aynısı).
+     */
+    public function pushInventory(InventoryPushBatch $batch): AdapterResult
+    {
+        if ($batch->isEmpty()) {
+            // Boş yük için çağrı yapılmaz; kota boşa harcanmaz.
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $locationGid = $this->locationGid();
+
+        if ($locationGid === null) {
+            // Konum olmadan stok YAZILAMAZ. Sağlık kontrolü bunu bağlantı
+            // kurulurken yakalar (P1-5); buraya düşmesi bağlantının sonradan
+            // bozulduğu anlamına gelir.
+            throw new RuntimeException(
+                'Shopify stok konumu (location_gid) tanımsız — stok hangi '.
+                'depoya yazılacağı bilinmeden gönderilemez.'
+            );
+        }
+
+        $inventoryItemGids = $this->inventoryItemGidsFor($batch);
+
+        $quantities = [];
+        $missing = [];
+
+        foreach ($batch->toArray() as $item) {
+            $gid = $inventoryItemGids[$item['listing_id']] ?? null;
+
+            if ($gid === null) {
+                $missing[] = $item['sku'];
+
+                continue;
+            }
+
+            $quantities[] = [
+                'inventoryItemId' => $gid,
+                'locationId' => $locationGid,
+                // MUTLAK değer. Kırpma `OutboundQuantity::forChannel()`
+                // içinde YAPILDI; burada tekrar YOK.
+                'quantity' => $item['quantity'],
+            ];
+        }
+
+        if ($quantities === []) {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Shopify stok yükündeki hiçbir kalemin inventory item kimliği yok: '
+                .implode(', ', $missing),
+            );
+        }
+
+        $this->gql(
+            <<<'GQL'
+            mutation SetOnHand($input: InventorySetOnHandQuantitiesInput!) {
+              inventorySetOnHandQuantities(input: $input) {
+                inventoryAdjustmentGroup { createdAt }
+                userErrors { field message code }
+              }
+            }
+            GQL,
+            variables: ['input' => [
+                // Shopify denetim izinde görünür; satıcı stok değişiminin
+                // NEREDEN geldiğini panelde görebilmelidir.
+                'reason' => 'correction',
+                'setQuantities' => $quantities,
+            ]],
+            operation: 'inventorySetOnHandQuantities',
+            userErrorPath: 'inventorySetOnHandQuantities',
+        );
+
+        return AdapterResult::success(array_filter([
+            'pushed' => count($quantities),
+            // Atlanan kalemler SESSİZ DEĞİL: sonuç verisinde taşınır ve
+            // denetim izine yazılır.
+            'skipped_without_inventory_item' => $missing === [] ? null : $missing,
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Uzak stok durumunu okur — mutabakatın karşılaştırma girdisi (§10).
+     *
+     * ⚠️ TOPLU OKUNUR — 50 listing TEK istekte. Listing başına ayrı istek
+     * ölçek hesabını YÜZ KATINA çıkarırdı (v2.2 · §10).
+     *
+     * ⚠️ ANAHTAR `external_id` (VARIANT GID) OLMALIDIR — mutabakat kalemi
+     * onunla eşleştirir. `inventoryItemId` ile anahtarlansaydı karşılaştırma
+     * HİÇBİR listing'i bulamaz ve her tur "uzak değer okunamadı" derdi.
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchInventory(array $listings): RemoteInventorySnapshot
+    {
+        $gids = [];
+
+        foreach ($listings as $listing) {
+            if (is_string($listing->external_id) && $listing->external_id !== '') {
+                $gids[] = $listing->external_id;
+            }
+        }
+
+        if ($gids === []) {
+            return new RemoteInventorySnapshot([]);
+        }
+
+        $data = $this->gql(
+            <<<'GQL'
+            query FetchInventory($ids: [ID!]!) {
+              nodes(ids: $ids) {
+                ... on ProductVariant { id inventoryQuantity }
+              }
+            }
+            GQL,
+            variables: ['ids' => $gids],
+            operation: 'nodes',
+        );
+
+        $quantities = [];
+
+        foreach ((array) ($data['nodes'] ?? []) as $node) {
+            // SİLİNMİŞ varyant `null` döner ve ATLANIR: sıfır yazılsaydı
+            // mutabakat "kanalda 0 var" sanır ve sürüklenme raporlardı;
+            // oysa satır kanalda HİÇ YOKTUR ve doğru sınıflandırma
+            // `REMOTE_MISSING`'dir (v2.2 · §10).
+            if (! is_array($node) || ! isset($node['id'])) {
+                continue;
+            }
+
+            if (! array_key_exists('inventoryQuantity', $node) || $node['inventoryQuantity'] === null) {
+                continue;
+            }
+
+            $quantities[(string) $node['id']] = (int) $node['inventoryQuantity'];
+        }
+
+        return new RemoteInventorySnapshot($quantities, new \DateTimeImmutable);
+    }
+
+    /**
+     * Tek mutation'da kaç kalem gönderilebilir.
+     *
+     * `InventoryBatchBuilder` bu sınıra göre GRUPLAMA yapar; operasyon
+     * sayısı DEĞİŞMEZ (v2.2 · fan-out kuralı).
+     */
+    public function maxInventoryBatchSize(): int
+    {
+        return self::MAX_INVENTORY_BATCH;
+    }
+
+    /**
+     * Yükteki listing'lerin `inventory_item_gid` haritası — TEK sorgu.
+     *
+     * `channel_metadata` Faz 0'da eklendi ve slice 1.3'te dolduruldu.
+     * Kalem başına ayrı GraphQL çevrimi yapılsaydı 50'lik bir yük 51 istek
+     * atardı.
+     *
+     * ⚠️ OKUMA AÇIKÇA SİSTEM BAĞLAMINDA YAPILIR — kimlik bilgisi okumayla
+     * AYNI gerekçe (`97a7eb7`'de yaşanmış hata). Bu adapter iki farklı
+     * bağlamdan çağrılır:
+     *
+     *   `PushInventory` işi  → kendi kiracı bağlamını kurar
+     *   Mutabakat taraması   → `runAsSystem()` altında, KİRACI BAĞLAMI YOK
+     *
+     * Kapsanmış sorgu ikincisinde İSTİSNA fırlatır ve mutabakat turu o
+     * bağlantıda çöker. Kapsama burada bir şey KORUMAZ: sorgu zaten yükün
+     * taşıdığı listing kimlikleriyle sınırlıdır ve o kimlikler bu
+     * bağlantının fan-out'undan gelir — başka kiracının satırı yüke HİÇ
+     * girmez.
+     *
+     * HAM SORGU KULLANILMAZ (§24): `Listing::query()` model üzerinden
+     * gider; `DB::table()` kullanılsaydı kiracı filtresi ELLE yazılmak
+     * zorunda kalırdı ve o filtre projede BEŞ KEZ unutuldu.
+     *
+     * @return array<string, string> listing id → inventory item gid
+     */
+    private function inventoryItemGidsFor(InventoryPushBatch $batch): array
+    {
+        $listingIds = array_map(
+            static fn (array $item): string => (string) $item['listing_id'],
+            $batch->toArray(),
+        );
+
+        return TenantContext::runAsSystem(function () use ($listingIds): array {
+            $map = [];
+
+            foreach (Listing::query()->whereIn('id', $listingIds)->get() as $listing) {
+                $gid = $listing->channel_metadata['inventory_item_gid'] ?? null;
+
+                if (is_string($gid) && $gid !== '') {
+                    $map[(string) $listing->id] = $gid;
+                }
+            }
+
+            return $map;
+        });
     }
 
     // ------------------------------------------------------ ürün içe aktarma
