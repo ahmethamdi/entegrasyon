@@ -12,6 +12,7 @@ use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -19,8 +20,10 @@ use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
+use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Client\ConnectionException;
@@ -82,13 +85,14 @@ use Throwable;
  * hata sınıflandırma, hız sınırı profili, webhook imza doğrulaması,
  * GraphQL sarmalayıcı + `userErrors` kontrolü, **katalog** (create /
  * update / delist / findExisting / fetchListing), **ürün içe aktarma**,
- * **stok** (mutlak değer, `inventorySetOnHandQuantities`).
+ * **stok** (mutlak değer, `inventorySetOnHandQuantities`), **fiyat**
+ * (mutlak değer, string, `productVariantsBulkUpdate`).
  *
- * YAZILMAYAN: fiyat, sipariş (§27 · slice 1.6–1.9).
+ * YAZILMAYAN: sipariş (§27 · slice 1.7–1.9).
  * Yetenek arayüzleri o slice'larda İLAN EDİLİR — ilan edilen ama
  * çalışmayan yetenek panelde çalışmayan sekme demektir (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsInventory
+final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsPricing
 {
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';
@@ -125,6 +129,16 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
      * bilinmez (Hepsiburada'daki parti boyutu gerekçesinin aynısı).
      */
     private const MAX_INVENTORY_BATCH = 250;
+
+    /**
+     * Fiyat turunda kaç kalem gruplanır.
+     *
+     * Stokla AYNI değer: `productVariantsBulkUpdate` ürün başına ayrıştığı
+     * için gerçek sınır kalem sayısı değil ÇAĞRI sayısıdır (§06.8'in
+     * maliyet kovası). 250 kalem en kötü durumda — her kalem ayrı üründe —
+     * 250 çağrı demektir ve daha büyük bir sayı kovayı tek turda boşaltır.
+     */
+    private const MAX_PRICE_BATCH = 250;
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -946,6 +960,235 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
 
             foreach (Listing::query()->whereIn('id', $listingIds)->get() as $listing) {
                 $gid = $listing->channel_metadata['inventory_item_gid'] ?? null;
+
+                if (is_string($gid) && $gid !== '') {
+                    $map[(string) $listing->id] = $gid;
+                }
+            }
+
+            return $map;
+        });
+    }
+
+    // --------------------------------------------------------------- fiyat
+
+    /**
+     * Fiyat yazar — MUTLAK DEĞER ve STRING.
+     *
+     * V3.0 · §04 (capability matrisi) · §22 · v2.2 §7 · §9 · slice 1.6.
+     *
+     * ⚠️ FİYAT STRING TAŞINIR, FLOAT ASLA. `19.90 * 100` IEEE-754'te
+     * `1989.99...` olur ve `(int)` cast'i onu AŞAĞI keser. Kolon
+     * `decimal(12,2)` ve PHP'ye zaten string döner; buradaki tek görev o
+     * stringi BOZMADAN taşımaktır. Trendyol adapter'ı `(float)` dönüşümü
+     * yapıyor çünkü o kanalın uç noktası sayı bekliyor — Shopify string
+     * kabul eder ve o satır BURAYA KOPYALANMAZ.
+     *
+     * ⚠️ `compareAtPrice` YÜKE HİÇ KONULMAZ. Kanonik `compare_at_price`
+     * alanımız DOLU olsa bile gönderilmez: o alan Shopify'da satıcının
+     * KAMPANYASIDIR ve §9'un politikası "fiyatta ÜZERİNE YAZILMAZ" der —
+     * "sessizce ezmek EN SIK ŞİKAYET". Trendyol'daki `listPrice` kuralı
+     * (üstü çizili fiyat yoksa satış fiyatına düş) TERS SEBEPTEN doğdu:
+     * orada alan ZORUNLUDUR ve atlanırsa kanal `VALIDATION` döner. Burada
+     * alan İSTEĞE BAĞLIDIR; göndermek kazanç değil KAYIPTIR.
+     *
+     * ⚠️ `productSet` KULLANILMAZ. O ürünün TAMAMINI yazar; fiyat turu
+     * başlığa, açıklamaya ve duruma DOKUNMAMALIDIR. İçerik kendi
+     * domainindedir ve `PushListing` üzerinden gider — burada yazılsaydı
+     * her fiyat değişimi içeriği de gönderir ve `content_version`
+     * kapısının anlamı kalmazdı.
+     *
+     * ⚠️ MUTATION ÜRÜN BAŞINADIR ve bu Shopify'ın GERÇEK SINIRIDIR:
+     * `productVariantsBulkUpdate` tekil bir `productId` ister. Yük bu
+     * yüzden ÜST ÜRÜNE GÖRE gruplanır ve ürün başına bir çağrı atılır.
+     * Tek çağrıya sıkıştırılsaydı Shopify ikinci ürünün varyantlarını
+     * TANIMAZ, `userErrors` döner ve o hata KALICIDIR.
+     *
+     * ⚠️ ÜST ÜRÜN KİMLİĞİ OLMAYAN KALEM YÜKE ALINMAZ ve bu SESSİZ BİR
+     * ATLAMA DEĞİLDİR — sonuçta raporlanır (stoktaki "kimliği olmayan
+     * kalem" kuralının aynısı).
+     */
+    public function pushPrices(PricePushBatch $batch): AdapterResult
+    {
+        if ($batch->isEmpty()) {
+            // Boş yük için çağrı yapılmaz; kota boşa harcanmaz.
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $productGids = $this->productGidsFor($batch);
+
+        $byProduct = [];
+        $missing = [];
+
+        foreach ($batch->items as $item) {
+            $productGid = $productGids[(string) $item['listing_id']] ?? null;
+
+            if ($productGid === null) {
+                $missing[] = (string) $item['external_id'];
+
+                continue;
+            }
+
+            $byProduct[$productGid][] = [
+                'id' => (string) $item['external_id'],
+                // STRING — dönüşüm YOK. `compareAtPrice` BİLİNÇLİ OLARAK
+                // yoktur ve eklenmemelidir (metot başlığı).
+                'price' => (string) $item['price'],
+            ];
+        }
+
+        if ($byProduct === []) {
+            // Başarı dönülseydi `synced_version` ilerler ve satır kanalda
+            // hiçbir şey değişmemişken "senkron" görünürdü (P0-1'in kardeşi).
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Shopify fiyat yükündeki hiçbir kalemin üst ürün kimliği yok: '
+                .implode(', ', $missing),
+            );
+        }
+
+        $pushed = 0;
+
+        foreach ($byProduct as $productGid => $variants) {
+            $this->gql(
+                <<<'GQL'
+                mutation UpdateVariantPrices($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+                  productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                    productVariants { id price }
+                    userErrors { field message code }
+                  }
+                }
+                GQL,
+                variables: [
+                    'productId' => $productGid,
+                    'variants' => $variants,
+                ],
+                operation: 'productVariantsBulkUpdate',
+                userErrorPath: 'productVariantsBulkUpdate',
+            );
+
+            $pushed += count($variants);
+        }
+
+        return AdapterResult::success(array_filter([
+            'pushed' => $pushed,
+            // Atlanan kalemler SESSİZ DEĞİL: sonuç verisinde taşınır ve
+            // denetim izine yazılır.
+            'skipped_without_product' => $missing === [] ? null : $missing,
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Uzak fiyat durumunu okur — mutabakatın karşılaştırma girdisi (§9 · §10).
+     *
+     * ⚠️ TOPLU OKUNUR — 50 listing TEK istekte (v2.2 · §10).
+     *
+     * ⚠️ ANAHTAR `external_id` (VARIANT GID) OLMALIDIR — mutabakat kalemi
+     * onunla eşleştirir. Ürün gid'i ile anahtarlansaydı karşılaştırma
+     * HİÇBİR listing'i bulamaz ve her tur "uzak değer okunamadı" derdi.
+     *
+     * ⚠️ FİYAT STRING KALIR. §9'un para karşılaştırması kuruş ölçeğinde
+     * TAM SAYIDIR ve `round()` zorunludur; snapshot float taşısaydı o hesap
+     * daha kaynağında bozulurdu.
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchPrices(array $listings): RemotePriceSnapshot
+    {
+        $gids = [];
+
+        foreach ($listings as $listing) {
+            if (is_string($listing->external_id) && $listing->external_id !== '') {
+                $gids[] = $listing->external_id;
+            }
+        }
+
+        if ($gids === []) {
+            return new RemotePriceSnapshot([]);
+        }
+
+        $data = $this->gql(
+            <<<'GQL'
+            query FetchPrices($ids: [ID!]!) {
+              nodes(ids: $ids) {
+                ... on ProductVariant { id price }
+              }
+            }
+            GQL,
+            variables: ['ids' => $gids],
+            operation: 'nodes',
+        );
+
+        $prices = [];
+
+        foreach ((array) ($data['nodes'] ?? []) as $node) {
+            // SİLİNMİŞ varyant `null` döner ve ATLANIR: `"0"` yazılsaydı
+            // mutabakat "kanalda 0 TL" sanır ve `PRICE_CONFLICT` açardı —
+            // satıcı var olmayan bir fiyat için karar vermeye zorlanırdı.
+            // Doğru sınıflandırma `REMOTE_MISSING`'dir (v2.2 · §10).
+            if (! is_array($node) || ! isset($node['id'])) {
+                continue;
+            }
+
+            // FİYATI OLMAYAN DÜĞÜM DE SIFIR OKUNMAZ: kimlik dolu olduğu için
+            // yukarıdaki elemeye TAKILMAZ ve `"0"` yazılsaydı her tur SAHTE
+            // bir çakışma üretirdi (slice 1.5'in "takibi kapalı varyant"
+            // tuzağının fiyat karşılığı).
+            if (! isset($node['price']) || $node['price'] === '') {
+                continue;
+            }
+
+            $prices[(string) $node['id']] = (string) $node['price'];
+        }
+
+        return new RemotePriceSnapshot($prices, new \DateTimeImmutable);
+    }
+
+    /**
+     * Tek turda kaç kalem gruplanabilir.
+     *
+     * `PriceBatchBuilder` bu sınıra göre GRUPLAMA yapar; operasyon sayısı
+     * DEĞİŞMEZ (v2.2 · fan-out kuralı). Stokla AYNI değer seçildi —
+     * mutation ürün başına ayrıştığı için gerçek sınır Shopify'ın kalem
+     * sayısı değil ÇAĞRI sayısıdır ve 250 kalem en kötü durumda 250 çağrı
+     * demektir; daha büyük bir sayı maliyet kovasını (§06.8) tek turda
+     * boşaltırdı.
+     */
+    public function maxPriceBatchSize(): int
+    {
+        return self::MAX_PRICE_BATCH;
+    }
+
+    /**
+     * Yükteki listing'lerin `external_parent_id` haritası — TEK sorgu.
+     *
+     * ⚠️ KALEM BAŞINA AYRI SORGU YAPILMAZ — `inventoryItemGidsFor()` ile
+     * aynı gerekçe: 250'lik bir yük 250 sorgu atardı.
+     *
+     * ⚠️ OKUMA AÇIKÇA SİSTEM BAĞLAMINDA YAPILIR. Bu adapter hem kuyruk
+     * işinden (kiracı bağlamı VAR) hem mutabakat taramasından
+     * (`runAsSystem`, bağlam YOK) çağrılır; kapsanmış sorgu ikincisinde
+     * istisna fırlatır ve fiyat turu o bağlantıda çökerdi (`97a7eb7`
+     * hata biçimi, slice 1.5'te testte yakalandı).
+     *
+     * HAM SORGU KULLANILMAZ (§24): `Listing::query()` model üzerinden
+     * gider; `DB::table()` kiracı filtresini ELLE yazdırır ve o filtre
+     * projede BEŞ KEZ unutuldu.
+     *
+     * @return array<string, string> listing id → product gid
+     */
+    private function productGidsFor(PricePushBatch $batch): array
+    {
+        $listingIds = array_map(
+            static fn (array $item): string => (string) $item['listing_id'],
+            $batch->items,
+        );
+
+        return TenantContext::runAsSystem(function () use ($listingIds): array {
+            $map = [];
+
+            foreach (Listing::query()->whereIn('id', $listingIds)->get() as $listing) {
+                $gid = $listing->external_parent_id;
 
                 if (is_string($gid) && $gid !== '') {
                     $map[(string) $listing->id] = $gid;
