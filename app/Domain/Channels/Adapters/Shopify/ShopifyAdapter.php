@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -17,6 +18,7 @@ use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\RemoteListing;
+use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -71,18 +73,18 @@ use Throwable;
  * yanlış" diyerek ölürdü — oysa anahtar doğrudur.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 1.1–1.3
+ * KAPSAM — SLICE 1.1–1.4
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü (konum kontrolü dahil),
  * hata sınıflandırma, hız sınırı profili, webhook imza doğrulaması,
  * GraphQL sarmalayıcı + `userErrors` kontrolü, **katalog** (create /
- * update / delist / findExisting / fetchListing).
+ * update / delist / findExisting / fetchListing), **ürün içe aktarma**.
  *
- * YAZILMAYAN: stok, fiyat, sipariş, içe aktarma (§27 · slice 1.4–1.9).
+ * YAZILMAYAN: stok, fiyat, sipariş (§27 · slice 1.5–1.9).
  * Yetenek arayüzleri o slice'larda İLAN EDİLİR — ilan edilen ama
  * çalışmayan yetenek panelde çalışmayan sekme demektir (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog
+final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport
 {
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';
@@ -712,6 +714,86 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog
     private function escapeSearchTerm(string $term): string
     {
         return str_replace(['\\', '"'], ['\\\\', '\\"'], $term);
+    }
+
+    // ------------------------------------------------------ ürün içe aktarma
+
+    /**
+     * Kanaldaki ürünleri sayfa sayfa okur — YEREL KAYIT GEREKTİRMEZ.
+     *
+     * V3.0 · §06 · slice 1.4 · v2.2 §13 · Faz 3 · madde 5.
+     *
+     * ⚠️ VARYANT SORGULANIR, ÜRÜN DEĞİL. Bizim kanonik modelimizde
+     * satılabilir birim VARYANTTIR ve SKU orada yaşar. `products` sorgusu
+     * kullanılsaydı çok varyantlı bir Shopify ürünü tek satıra çöker ve
+     * varyantların SKU'ları KAYBOLURDU — satıcı "50 ürünüm vardı, 12'si
+     * geldi" der ve sebebini bulamazdı.
+     *
+     * ⚠️ İMLEÇ OPAKTIR ve Shopify'da GERÇEKTEN opak bir token'dır
+     * (`pageInfo.endCursor`) — Woo'daki sayfa numarasının aksine. Çekirdek
+     * onu YORUMLAMAZ; sayı varsayılsaydı bu kanal eklenirken kırılırdı
+     * (`OrderPage` ile aynı kural).
+     *
+     * ⚠️ `hasMore` `nextCursor !== null` İLE AYNI ŞEY DEĞİLDİR. Shopify son
+     * sayfada bile `endCursor` döndürür; turu durduran `hasNextPage`'dir.
+     * İmlece bakılsaydı tur sonsuza kadar boş sayfa çeker ve kotayı yakardı.
+     */
+    public function fetchProductPage(?string $cursor = null): RemoteProductPage
+    {
+        $data = $this->gql(
+            <<<'GQL'
+            query ImportVariants($cursor: String) {
+              productVariants(first: 100, after: $cursor) {
+                nodes {
+                  id sku barcode price inventoryQuantity
+                  inventoryItem { id }
+                  product { id title status vendor descriptionHtml }
+                }
+                pageInfo { hasNextPage endCursor }
+              }
+            }
+            GQL,
+            variables: ['cursor' => $cursor],
+            operation: 'productVariants',
+        );
+
+        $nodes = $data['productVariants']['nodes'] ?? [];
+        $pageInfo = $data['productVariants']['pageInfo'] ?? [];
+
+        $products = [];
+
+        foreach (is_array($nodes) ? $nodes : [] as $node) {
+            if (is_array($node)) {
+                $products[] = ShopifyProductMapper::toRemoteProduct($node);
+            }
+        }
+
+        $hasMore = (bool) ($pageInfo['hasNextPage'] ?? false);
+
+        return new RemoteProductPage(
+            products: $products,
+            // İmleç YALNIZCA devam edilecekse taşınır: son sayfada
+            // döndürülen imleci saklamak, bir sonraki turun boş sayfadan
+            // başlamasına yol açardı.
+            nextCursor: $hasMore && isset($pageInfo['endCursor'])
+                ? (string) $pageInfo['endCursor']
+                : null,
+            hasMore: $hasMore,
+        );
+    }
+
+    /**
+     * Tur başına en fazla 50 sayfa — 100'lük sayfayla 5.000 varyant.
+     *
+     * SINIR KOTA DEĞİL EMNİYETTİR: `hasNextPage` sonsuza kadar `true`
+     * dönen bozuk bir kanalda tur hiç bitmez ve worker'ı süresiz meşgul
+     * ederdi. Sınıra takılan tur kullanıcıya SÖYLER — sessiz kırpma yok
+     * (§13 · madde 5). Kalan ürünler ikinci turda gelir; içe aktarma var
+     * olan SKU'yu günceller, yani tekrar zararsızdır.
+     */
+    public function maxImportPages(): int
+    {
+        return 50;
     }
 
     // ------------------------------------------------------------------- iç

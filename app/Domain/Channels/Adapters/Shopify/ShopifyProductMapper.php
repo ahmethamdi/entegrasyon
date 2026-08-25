@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Adapters\Shopify;
 
 use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\RemoteListing;
+use App\Domain\Sync\Support\RemoteProduct;
 use DateTimeImmutable;
 
 /**
@@ -146,6 +147,75 @@ final class ShopifyProductMapper
         }
 
         return $data;
+    }
+
+    /**
+     * Shopify varyant düğümünden İÇE AKTARILABİLİR ürün.
+     *
+     * V3.0 · §06 · slice 1.4 · v2.2 §13 · Faz 3 · madde 5.
+     *
+     * `toRemoteListing()` ile AYNI gövdeyi okur ama FARKLI soruyu
+     * cevaplar: o "benim listemin kanaldaki hâli ne", bu "kanaldaki bu
+     * ürünü kataloğuma nasıl yazarım". Çıpa bu yüzden gid değil **SKU**'dur.
+     *
+     * ⚠️ VARYANT DÜĞÜMÜNDEN OKUNUR, ÜRÜNDEN DEĞİL. Bizim kanonik modelimizde
+     * satılabilir birim VARYANTTIR ve SKU orada yaşar; ürün düğümünden
+     * okunsaydı çok varyantlı bir Shopify ürünü tek bir kanonik ürüne
+     * çökerdi ve varyantların SKU'ları KAYBOLURDU.
+     *
+     * ⚠️ SKU BOŞSA `null` YAZILIR, UYDURULMAZ. Shopify'da SKU zorunlu
+     * DEĞİLDİR. Kanal kimliğini (gid) SKU yapmak, satıcı aynı ürünü kendi
+     * SKU'suyla yüklediğinde KOPYA ürün üretirdi ve iki satır ayrı ayrı
+     * senkronlanırdı. `RemoteProduct::isImportable()` bu satırı eler ve
+     * içe aktarma onu ADIYLA raporlar — sessizce düşmez (§13 · madde 5).
+     *
+     * ⚠️ FİYAT VARYANTIN `price` ALANINDAN OKUNUR. Shopify'da
+     * `compareAtPrice` üstü çizili fiyattır; `price` gerçek satış
+     * fiyatıdır ve kanonik alana yazılacak olan odur. Woo'da durum TERSTİR
+     * (`regular_price` liste fiyatı, `price` indirimliyi taşır) — o kanalın
+     * mapper'ındaki kural buraya KOPYALANMAZ.
+     *
+     * @param  array<string, mixed>  $variant
+     */
+    public static function toRemoteProduct(array $variant): RemoteProduct
+    {
+        $sku = isset($variant['sku']) ? trim((string) $variant['sku']) : '';
+        $product = is_array($variant['product'] ?? null) ? $variant['product'] : [];
+
+        return new RemoteProduct(
+            // Kanal kimliği VARYANT gid'idir — `external_id` ile aynı çıpa.
+            externalId: (string) ($variant['id'] ?? ''),
+            sku: $sku !== '' ? $sku : null,
+            title: isset($product['title']) ? (string) $product['title'] : null,
+            // Fiyat STRING kalır — float dönüşümü kuruş kayması üretir.
+            price: isset($variant['price']) && $variant['price'] !== ''
+                ? (string) $variant['price']
+                : null,
+            quantity: isset($variant['inventoryQuantity']) && $variant['inventoryQuantity'] !== null
+                ? (int) $variant['inventoryQuantity']
+                : null,
+            description: isset($product['descriptionHtml']) && $product['descriptionHtml'] !== ''
+                ? (string) $product['descriptionHtml']
+                : null,
+            // Shopify'da marka `vendor` alanıdır ve ÜRÜN seviyesindedir.
+            // Boş dize DEĞİL null: boş dize bir marka adı değildir ve
+            // panel "markası var ama boş" gösterirdi.
+            brand: self::nonEmptyString($product['vendor'] ?? null),
+            barcode: self::nonEmptyString($variant['barcode'] ?? null),
+            status: isset($product['status']) ? (string) $product['status'] : null,
+            raw: $variant,
+        );
+    }
+
+    private static function nonEmptyString(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed !== '' ? $trimmed : null;
     }
 
     /**
