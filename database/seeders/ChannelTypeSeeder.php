@@ -268,7 +268,7 @@ class ChannelTypeSeeder extends Seeder
                     // metotları YEREL kayıttan başlar. İkisi karıştırılsa
                     // panel çalışmayan bir sekme gösterirdi.
                     'catalog_import' => false,
-                    'inventory' => false,       // slice 3.5
+                    'inventory' => true,        // slice 3.5 ✓
                     'pricing' => false,         // slice 3.6
                     'orders' => false,          // slice 3.7
                     'taxonomy' => true,         // slice 3.3 ✓

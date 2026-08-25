@@ -323,13 +323,13 @@ final class EtsyAdapterTest extends TestCase
     {
         $adapter = $this->adapter();
 
-        // YAZILDI — slice 3.1 · 3.3 · 3.4
+        // YAZILDI — slice 3.1 · 3.3 · 3.4 · 3.5
         $this->assertInstanceOf(SupportsTokenRefresh::class, $adapter);
         $this->assertInstanceOf(SupportsTaxonomy::class, $adapter);
         $this->assertInstanceOf(SupportsCatalog::class, $adapter);
+        $this->assertInstanceOf(SupportsInventory::class, $adapter);
 
-        // HENÜZ YAZILMADI — 3.5 · 3.7
-        $this->assertNotInstanceOf(SupportsInventory::class, $adapter);
+        // HENÜZ YAZILMADI — 3.7
         $this->assertNotInstanceOf(SupportsOrders::class, $adapter);
     }
 

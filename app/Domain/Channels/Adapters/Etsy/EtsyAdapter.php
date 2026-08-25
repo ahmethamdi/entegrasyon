@@ -12,6 +12,7 @@ use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -20,7 +21,9 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\CategoryTreeSnapshot;
+use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
@@ -35,15 +38,15 @@ use Throwable;
  * V3.0 · §11 · §20 · §21 · v2.2 §7.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 3.1 · 3.2 · 3.3 · 3.4
+ * KAPSAM — SLICE 3.1 · 3.2 · 3.3 · 3.4 · 3.5
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata sınıflandırma,
  * hız sınırı profili, **token yenileme** (`SupportsTokenRefresh`),
- * **taksonomi** (`SupportsTaxonomy`) ve **katalog** (`SupportsCatalog`).
+ * **taksonomi** (`SupportsTaxonomy`), **katalog** (`SupportsCatalog`) ve
+ * **stok** (`SupportsInventory` — oku-birleştir-yaz).
  *
- * HENÜZ YAZILMADI (sonraki slice'lar): stok (3.5) · fiyat (3.6) ·
- * sipariş yoklaması (3.7). O yetenek arayüzleri BU
- * SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek panelde
+ * HENÜZ YAZILMADI (sonraki slice'lar): fiyat (3.6) · sipariş yoklaması
+ * (3.7). O yetenek arayüzleri BU SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek panelde
  * çalışmayan sekme demektir (§05) ve "yazılmamış yetenek SESSİZCE
  * BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
  *
@@ -72,7 +75,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInventory, SupportsTaxonomy, SupportsTokenRefresh
 {
     /**
      * Uygulama anahtarının `settings` içindeki yeri.
@@ -539,6 +542,264 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsTaxo
         }
 
         return $shopId;
+    }
+
+    // ---------------------------------------------------------------- stok
+
+    /**
+     * Stok yazar — OKU-BİRLEŞTİR-YAZ (§11.3).
+     *
+     * ═════════════════════════════════════════════════════════════════
+     * ⚠️ ETSY'NİN EN TEHLİKELİ MADDESİ: BU ÇAĞRI TÜM ENVANTERİ EZER
+     * ═════════════════════════════════════════════════════════════════
+     * Etsy KISMİ GÜNCELLEME DESTEKLEMEZ. `PUT .../inventory` gövdesi o
+     * ilanın BÜTÜN `products` ve `offerings` dizisini taşımak
+     * ZORUNDADIR. Yalnızca değiştirdiğimiz varyant gönderilseydi
+     * ÖTEKİLER KANALDAN SİLİNİRDİ — sessiz, GERİ ALINAMAZ ve satıcı
+     * bunu ancak siparişler kesilince fark eder.
+     *
+     * Bu yüzden akış ÜÇ ADIMDIR ve kısaltılamaz:
+     *   1. GET  — mevcut TÜM envanter okunur
+     *   2. Bizim değişikliğimiz İLGİLİ offering'e uygulanır
+     *   3. PUT  — TAM gövde geri yazılır
+     *
+     * ⚠️ BU, "MUTLAK DEĞER GÖNDERİLİR" KURALININ İHLALİ DEĞİLDİR.
+     * Gönderilen değer hâlâ mutlaktır; okunan şey BİZİM YAZMADIĞIMIZ
+     * kardeş varyantlardır. Woo'da yük BİZİM gerçeğimizi taşır; Etsy'de
+     * yük KANALIN gerçeğini de taşımak zorundadır.
+     *
+     * ⚠️ YARIŞ PENCERESİ VARDIR ve KABUL EDİLİR: okuma ile yazma
+     * arasında satıcı Etsy panelinden kardeş varyantı değiştirirse o
+     * değişiklik ezilir. Pencere saniyelerdir ve mutabakat turu farkı
+     * SONRAKİ turda yakalar. Alternatif (varyant başına kilit) KANAL
+     * TARAFINDA YOKTUR.
+     *
+     * ⚠️ İLAN BAŞINA AYRI ÇAĞRI. `maxInventoryBatchSize()` 1'dir ama
+     * `InventoryBatchBuilder` yine gruplama yapar; burada kalemler
+     * `external_parent_id`'ye göre toplanır ve AYNI ilanın varyantları
+     * TEK çağrıda gider. Gruplanmasaydı iki varyantlı bir ürünün ikinci
+     * çağrısı birincinin yazdığını okumadan ezerdi.
+     */
+    public function pushInventory(InventoryPushBatch $batch): AdapterResult
+    {
+        if ($batch->isEmpty()) {
+            // Boş yük için çağrı yapılmaz; kota boşa harcanmaz.
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $parents = $this->parentListingIdsFor($batch);
+
+        // Kalemler İLAN BAŞINA gruplanır — gerekçe metot başlığında.
+        $byListing = [];
+        $missing = [];
+
+        foreach ($batch->toArray() as $item) {
+            $parentId = $parents[$item['listing_id']] ?? null;
+
+            if ($parentId === null) {
+                $missing[] = (string) $item['sku'];
+
+                continue;
+            }
+
+            $byListing[$parentId][] = $item;
+        }
+
+        if ($byListing === []) {
+            // ⚠️ SESSİZCE BAŞARILI DÖNÜLMEZ (v2.2 · §7): dönülseydi
+            // operasyon tamamlandı sanılır, `synced_version` ilerler ve
+            // satır kanalda hiçbir şey değişmemişken "senkron" görünürdü.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Etsy stok yükündeki hiçbir kalemin ilan kimliği yok: '
+                .implode(', ', $missing),
+            );
+        }
+
+        $pushed = 0;
+
+        foreach ($byListing as $listingId => $items) {
+            $this->writeInventory((string) $listingId, $items);
+            $pushed += count($items);
+        }
+
+        return AdapterResult::success(array_filter([
+            'pushed' => $pushed,
+            // Kimliği çözülemeyen kalemler SESSİZCE yutulmaz; sonuç
+            // veride görünür ve `SyncResultRecorder` bunu yazar.
+            'skipped_skus' => $missing === [] ? null : $missing,
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Tek ilanın envanterini OKU-BİRLEŞTİR-YAZ ile günceller.
+     *
+     * @param  list<array<string, mixed>>  $items
+     */
+    private function writeInventory(string $listingId, array $items): void
+    {
+        // ① OKU — mevcut TÜM envanter.
+        $response = $this->client->get(
+            EtsyEndpoints::url(EtsyEndpoints::LISTING_INVENTORY, ['listing_id' => $listingId]),
+            headers: $this->apiKeyHeader(),
+        );
+
+        $response->throw();
+
+        /** @var array<string, mixed> $current */
+        $current = $response->json() ?? [];
+
+        /** @var list<array<string, mixed>> $products */
+        $products = $current['products'] ?? [];
+
+        if ($products === []) {
+            // ⚠️ BOŞ ENVANTER OKUNDUYSA YAZILMAZ. Yazılsaydı gövde bizim
+            // tek varyantımızı taşır ve kanaldaki DİĞER TÜM varyantlar
+            // silinirdi — tam olarak bu metodun önlemek için var olduğu
+            // felaket. Okuma başarısızsa yazma HAKKI DA YOKTUR.
+            throw new RuntimeException(
+                "Etsy ilanı {$listingId} için envanter okunamadı; boş gövdeyle "
+                .'yazmak kanaldaki tüm varyantları SİLERDİ.'
+            );
+        }
+
+        // ② BİRLEŞTİR — yalnızca bizim kalemlerimizin miktarı değişir.
+        $quantityBySku = [];
+
+        foreach ($items as $item) {
+            $quantityBySku[(string) $item['sku']] = (int) $item['quantity'];
+        }
+
+        $merged = EtsyInventoryMerger::merge($products, $quantityBySku);
+
+        // ③ YAZ — TAM gövde.
+        $write = $this->client->request(
+            'PUT',
+            EtsyEndpoints::url(EtsyEndpoints::LISTING_INVENTORY, ['listing_id' => $listingId]),
+            body: ['products' => $merged],
+            headers: $this->apiKeyHeader(),
+        );
+
+        $write->throw();
+    }
+
+    /**
+     * Uzak stok durumunu okur — mutabakat için.
+     *
+     * ⚠️ İLAN BAŞINA TEK ÇAĞRI, VARYANT BAŞINA DEĞİL. Aynı ilanın üç
+     * varyantı tek okumadan çözülür; varyant başına istek atılsaydı
+     * ölçek hesabı üç katına çıkar ve Etsy'nin GÜNLÜK kotası (§21)
+     * mutabakat turlarıyla dolardı.
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchInventory(array $listings): RemoteInventorySnapshot
+    {
+        $quantities = [];
+        $seen = [];
+
+        foreach ($listings as $listing) {
+            $parentId = $listing->external_parent_id;
+            $externalId = $listing->external_id;
+
+            if (! is_string($parentId) || $parentId === ''
+                || ! is_string($externalId) || $externalId === '') {
+                continue;
+            }
+
+            // AYNI İLAN İKİNCİ KEZ OKUNMAZ.
+            if (! isset($seen[$parentId])) {
+                $seen[$parentId] = $this->readInventoryProducts($parentId);
+            }
+
+            foreach ($seen[$parentId] as $product) {
+                if ((string) ($product['product_id'] ?? '') !== $externalId) {
+                    continue;
+                }
+
+                $quantity = EtsyInventoryMerger::quantityOf($product);
+
+                if ($quantity !== null) {
+                    $quantities[$externalId] = $quantity;
+                }
+
+                break;
+            }
+        }
+
+        return new RemoteInventorySnapshot(
+            quantitiesByExternalId: $quantities,
+            observedAt: new DateTimeImmutable,
+        );
+    }
+
+    /**
+     * Bir ilanın envanterindeki `products` dizisi.
+     *
+     * ⚠️ 404 İSTİSNA DEĞİLDİR — ilan silinmiş olabilir ve mutabakat bunu
+     * `REMOTE_MISSING` görmelidir; istisna tek silinmiş ilanla tüm turu
+     * düşürürdü.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function readInventoryProducts(string $listingId): array
+    {
+        $response = $this->client->get(
+            EtsyEndpoints::url(EtsyEndpoints::LISTING_INVENTORY, ['listing_id' => $listingId]),
+            headers: $this->apiKeyHeader(),
+        );
+
+        if ($response->status() === 404) {
+            return [];
+        }
+
+        $response->throw();
+
+        /** @var array<string, mixed> $body */
+        $body = $response->json() ?? [];
+
+        /** @var list<array<string, mixed>> $products */
+        $products = $body['products'] ?? [];
+
+        return $products;
+    }
+
+    /**
+     * Yükteki kalemlerin İLAN kimlikleri — TEK sorguda.
+     *
+     * ⚠️ KALEM BAŞINA AYRI SORGU YAPILMAZ. Yüzlük bir yük yüz sorgu
+     * atardı (Shopify'daki kararın aynısı).
+     *
+     * ⚠️ OKUMA AÇIKÇA SİSTEM BAĞLAMINDA YAPILIR: bu adapter hem kuyruk
+     * işinden (bağlam VAR) hem mutabakat taramasından (`runAsSystem`,
+     * bağlam YOK) çağrılır; kapsanmış sorgu ikincisinde istisna fırlatır
+     * ve tur o bağlantıda çökerdi (`97a7eb7` hata biçimi).
+     *
+     * HAM SORGU KULLANILMAZ: `DB::table()` kiracı filtresini ELLE
+     * yazdırır ve o filtre projede BEŞ KEZ unutuldu.
+     *
+     * @return array<string, string> listing id → Etsy listing_id
+     */
+    private function parentListingIdsFor(InventoryPushBatch $batch): array
+    {
+        $listingIds = array_map(
+            static fn (array $item): string => (string) $item['listing_id'],
+            $batch->toArray(),
+        );
+
+        return TenantContext::runAsSystem(function () use ($listingIds): array {
+            $map = [];
+
+            foreach (Listing::query()->whereIn('id', $listingIds)->get() as $listing) {
+                $parentId = $listing->external_parent_id;
+
+                if (is_string($parentId) && $parentId !== '') {
+                    $map[(string) $listing->id] = $parentId;
+                }
+            }
+
+            return $map;
+        });
     }
 
     // ---------------------------------------------------------- taksonomi
