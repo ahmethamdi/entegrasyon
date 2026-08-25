@@ -1,73 +1,120 @@
-# Devir Notu — 24 Ağustos 2026 (v2.2 KAPANDI · V3.0 DOKÜMANI ONAY BEKLİYOR)
+# Devir Notu — 25 Ağustos 2026 (V3.0 ONAYLANDI · Faz 1 · Shopify SÜRÜYOR)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `cc44dac`.
-**FAZ 1–4 KAPALI**, **artık madde de kalmadı** ve **v2.2'nin
-"production'a hazır" tablosundaki tüm "TAM" satırları gerçekten TAM.**
+Kod tarafında yarım iş YOK; çalışma ağacı temiz ve **origin/main ile
+eşit**. Son commit `9b0b651`.
 
-**923 test yeşil** (3580 assertion), Pint temiz (381 dosya).
-Panelde **ON BEŞ** ekran (`/approvals` eklendi).
+**1010 test yeşil** (3747 assertion), Pint temiz (376 dosya).
 
 ---
 
-# 🔴🔴 ÖNCE BUNU OKU — V3.0 DOKÜMANI ONAY BEKLİYOR
+# 🟢 ÖNCE BUNU OKU — V3.0 ONAYLANDI, KOD YAZIMI SÜRÜYOR
 
-**Kullanıcı V3.0 mimari dokümanını PDF olarak kontrol ediyor**
-(24 Ağustos, oturum sonu). Yeni sohbet buradan devam edecek.
+**Kullanıcı 25 Ağustos'ta PDF'i onayladı: "bu pdf onaylandı başlayabiliriz".**
 
-## KURAL — ONAY GELMEDEN KOD YAZILMAZ
+Onay öncesindeki "kod yazılmaz" kuralı **ARTIK GEÇERLİ DEĞİL.**
+`docs/ENTEGRASYON-V3.0.md` implementation referansıdır ve **kod ile
+çelişirse doküman esastır.**
 
-> **V3.0'IN HİÇBİR MADDESİ UYGULANMAZ** — ne migration, ne adapter, ne
-> arayüz. Kullanıcı "onayladım, başlayalım" demeden `app/` altında V3
-> için tek satır yazılmaz.
->
-> Bu, v2.2'nin "doküman önce, kod sonra" kuralının aynısıdır ve
-> dokümanın kendisi de §18'de testlerin ÖNCE yazılmasını şart koşuyor.
+## Nerede kaldık
 
-## Dosyalar
+| Faz / Slice | Durum | Commit | Test |
+|---|---|---|---|
+| **Faz 0** · Ortak altyapı (12 sa) | ✅ KAPALI | `4b1600f` | 943 |
+| 1.1–1.2 · İstemci + GraphQL | ✅ KAPALI | `9146315` | 964 |
+| 1.3 · Katalog | ✅ KAPALI | `7369c5c` | 984 |
+| 1.4 · Ürün içe aktarma | ✅ KAPALI | `e443485` | 995 |
+| 1.5 · **Stok** | ✅ KAPALI | `9b0b651` | **1010** |
+| **1.6 · Fiyat (3 sa)** | ⏭️ **SIRADAKİ** | — | — |
+| 1.7 · Sipariş webhook (8 sa) | ⬜ | | |
+| 1.8 · İptal / iade / kargo (5 sa) | ⬜ | | |
+| 1.9 · `app/uninstalled` + mutabakat (4 sa) | ⬜ | | |
 
-| Ne | Nerede |
-|---|---|
-| **PDF** (kullanıcı bunu inceliyor) | `~/Desktop/Entegrasyon-Mimari-v3.0.pdf` · 46 sayfa · 1.76 MB |
-| **Markdown kaynağı** (tek gerçek kaynak) | `docs/ENTEGRASYON-V3.0.md` · commit `cc44dac` |
-| v2.2 PDF (baseline, DONDURULMUŞ) | `~/Desktop/Entegrasyon-Mimari-v2.2.pdf` |
+Faz 1 = 52 saat; ~35'i bitti. Sonraki fazlar: Hepsiburada 38
+(⚠️ uç nokta doğrulaması BLOKE) · Etsy 56 · eBay 64 · Hardening 30.
+
+## SIRADAKİ İŞ — Slice 1.6 · Fiyat (3 sa)
+
+`SupportsPricing` uygulanır: `productVariantsBulkUpdate` ile fiyat
+yazma, `fetchPrices` ile mutabakat okuması. Kritik maddeler:
+
+- **FİYAT STRING TAŞINIR** — float kuruş kayması üretir
+  (`19.90 * 100` IEEE-754'te `1989.99...`).
+- **`compareAtPrice`'A DOKUNULMAZ** — o üstü çizili fiyattır ve
+  satıcının kampanyasıdır; ezmek §9'un "EN SIK ŞİKAYET" dediği şeydir.
+- **§9 POLİTİKASI DEĞİŞMEDEN GEÇERLİ**: stokta üzerine yazılır, fiyatta
+  YAZILMAZ — fark bulununca `PRICE_CONFLICT` ve satıcı seçer.
+  `ReconcileConnection` ve `reconcile:prices` için **tek satır kod
+  yazılmaz**, yetenek `instanceof` ile okunur.
+- Yazıldıktan sonra `ChannelTypeSeeder` → `'pricing' => true`.
+
+## Faz 0–1.5'te öğrenilenler — KALICI, CLAUDE.md'de de var
+
+- **Laravel'de `skipLocked()` METODU YOKTUR.** `FOR UPDATE SKIP LOCKED`
+  için `->lock('for update skip locked')` yazılır. `lockForUpdate()`
+  düz `FOR UPDATE` üretir ve ikinci turu BEKLETİR — mutasyonda test
+  asılı kaldı (kırmızı bile olmadı).
+- **Adapter İKİ FARKLI BAĞLAMDAN çağrılır**: kuyruk işi kendi kiracı
+  bağlamını kurar, mutabakat taraması `runAsSystem()` altında koşar ve
+  bağlam YOKTUR. Adapter içinde model sorgusu yapılıyorsa
+  `runAsSystem()` ile sarılmalıdır (slice 1.5'te testte yakalandı,
+  `97a7eb7` hata biçimi).
+- **`channel_metadata` BİRLEŞTİRİLİR, EZİLMEZ** — eBay'in üç adımlı
+  yayını için hayati (§13.2).
+- **MUTASYON TURU ASILI TRANSACTION BIRAKABİLİR** ve sonraki tam test
+  koşusu `DROP TABLE`'da bloke olur (600 sn timeout ve 3 sahte deadlock
+  olarak yaşandı). Teşhis:
+  `docker compose exec -T postgres psql -U entegrasyon -d entegrasyon_test
+  -c "SELECT pid, state FROM pg_stat_activity WHERE datname='entegrasyon_test'
+  AND state <> 'idle';"` · Temizlik: `pg_terminate_backend`.
+  **DB kullanıcısı `entegrasyon`, `postgres` DEĞİL.**
+- **MUTASYON TESTİ SAHTE YEŞİL YAKALAYABİLİR — KENDİ TESTİNDE.**
+  Slice 1.5'te "silinmiş varyant sıfır okunmaz" testi mutasyonu KAÇIRDI:
+  `null` düğüm zaten kimlik elemesine takılıyordu ve korunan satıra hiç
+  ulaşılmıyordu. Gerçek tuzak **stok takibi kapalı varyanttı**
+  (kimlik DOLU, `inventoryQuantity` NULL). Ayrı test yazılınca yakalandı.
+
+## Shopify'ın bugünkü hâli
+
+`app/Domain/Channels/Adapters/Shopify/`:
+`ShopifyAdapter` · `ShopifyEndpoints` · `ShopifyProductMapper` ·
+`ShopifyGraphqlException`
+
+Uygulanan arayüzler: `ChannelAdapter`, `SupportsCatalog`,
+`SupportsCatalogImport`, `SupportsInventory`.
+
+**Kanal `is_active = false`** ve panelde GÖRÜNMEZ — §05'in 12 adımlı
+listesinde ADIM 1. Açılması için gerçek mağazada sağlık kontrolü +
+tek kiracıda uçtan uca sürüm gerekir (adım 12, §26).
+
+`taxonomy` ve `approval` **HİÇ AÇILMAYACAK**: Shopify'da kategori
+zorunlu değil ve onay süreci yok (§04 dipnotları).
+
+**Yetenekler `capabilities` kolonundan DEĞİL,
+`AdapterRegistry::capabilitiesFor()` içindeki `instanceof`'tan okunur.**
+Kolon yalnızca yansımadır.
+
+## Testler (V3'te eklenenler)
+
+`ChannelTypeSeederTest` (4) · `ChannelMetadataTest` (6) ·
+`TokenRefreshTest` (8) · `ConcurrentTokenRefreshTest` (2) ·
+`ShopifyAdapterTest` (21) · `ShopifyCatalogTest` (17) ·
+`ShopifyCatalogImportTest` (11) · `ShopifyInventoryTest` (15) ·
+`PushListingTest`'e 3 çekirdek testi.
 
 ## ⚠️ DOKÜMAN DEĞİŞİRSE — İKİ DOSYA BİRDEN
 
-**Kullanıcı düzeltme isterse SIRA ŞUDUR:**
-
 1. `docs/ENTEGRASYON-V3.0.md` düzenlenir — **tek gerçek kaynak budur**
-2. PDF **yeniden üretilir** (aşağıdaki komut)
+2. `docs/pdf/build-v3.sh` ile PDF yeniden üretilir (47 sayfa)
 3. İkisi birlikte commit edilir
 
-> **YALNIZCA PDF'İ DÜZELTMEK YASAKTIR.** PDF bir ÇIKTIDIR; kaynak
-> Markdown'dır. PDF elle düzeltilirse bir sonraki üretim düzeltmeyi
-> SESSİZCE geri alır ve kimse fark etmez.
+> **YALNIZCA PDF'İ DÜZELTMEK YASAKTIR.** PDF bir ÇIKTIDIR; sonraki
+> üretim düzeltmeyi SESSİZCE geri alır.
 
-### PDF yeniden üretme — TEK KOMUT
+**Betik Markdown'ın ilk 7 satırını atlar** (`tail -n +8`) — dokümanın
+BAŞI değişirse bu sayı da güncellenmelidir.
+**`text-transform: uppercase` KULLANILMAZ** (Chrome tr locale `i` → `İ`).
 
-```bash
-docs/pdf/build-v3.sh          # → ~/Desktop/Entegrasyon-Mimari-v3.0.pdf
-```
-
-Betik ve stil dosyaları **repo'da** (`docs/pdf/`) — scratchpad'de
-DEĞİL, çünkü scratchpad oturuma özeldir ve yeni sohbette kaybolur.
-Araç zinciri `pandoc` + **Chrome headless** (weasyprint/wkhtmltopdf YOK,
-LaTeX YOK). Çalıştığı doğrulandı: 46 sayfa.
-
-| Dosya | Ne |
-|---|---|
-| `docs/pdf/build-v3.sh` | Üretim betiği |
-| `docs/pdf/v3.css` | Stil — A4, 9.2pt, marka rengi `#a8532b` (panelle AYNI) |
-| `docs/pdf/cover.html` | Kapak sayfası |
-
-> **`text-transform: uppercase` KULLANILMAZ.** Chrome Türkçe locale'de
-> `i` harfini `İ`ye çeviriyor: "IMPLEMENTATION" → "IMPLEMENTATİON"
-> oluyordu. Metin doğrudan BÜYÜK yazılır (kapak) veya küçük bırakılır
-> (tablo başlıkları). Bu turda bulundu ve düzeltildi.
->
-> **BETİK MARKDOWN'IN İLK 7 SATIRINI ATLAR** (`tail -n +8`) — o blok
-> kapağa taşındı. Dokümanın BAŞI değişirse bu sayı da güncellenmelidir;
-> güncellenmezse başlık gövdede İKİ KEZ görünür.
+---
 
 ## V3.0 dokümanının özeti — kullanıcı sorarsa
 

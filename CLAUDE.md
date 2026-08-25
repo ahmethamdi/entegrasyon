@@ -26,11 +26,23 @@ referansıdır ve **kod ile çelişirse doküman esastır**.
 **FAZ 0 KAPANDI** (`4b1600f` · 12 sa): `listings.channel_metadata`
 migration · `SupportsTokenRefresh` + `TokenRefresher` ·
 `credentials:refresh` komutu + 15 dk zamanlama · `ChannelTypeSeeder`
-`is_active` düzeltmesi. **943 test yeşil.**
+`is_active` düzeltmesi.
 
-**SIRADAKİ: Faz 1 · Shopify (52 sa)** — §27'de dokuz slice.
+**FAZ 1 · SHOPIFY SÜRÜYOR** (52 sa · ~35'i bitti) — **1010 test yeşil**:
 
-#### Faz 0'da öğrenilen — kalıcı kurallar
+| Slice | Ne | Commit |
+|---|---|---|
+| 1.1–1.2 | İstemci + GraphQL sarmalayıcı (P0-1) | `9146315` |
+| 1.3 | Katalog — create/update/delist/find/fetch | `7369c5c` |
+| 1.4 | Ürün içe aktarma | `e443485` |
+| 1.5 | **Stok** — mutlak değer, `inventoryItemId` | `9b0b651` |
+| **1.6** | **Fiyat — SIRADAKİ (3 sa)** | — |
+| 1.7–1.9 | Sipariş webhook · iptal/iade/kargo · `app/uninstalled` | — |
+
+Shopify `is_active = false` ve panelde GÖRÜNMEZ (§05 · adım 1).
+`taxonomy` ve `approval` **HİÇ AÇILMAYACAK** (§04 dipnotları).
+
+#### Faz 0–1.5'te öğrenilen — kalıcı kurallar
 
 - **Laravel'de `skipLocked()` METODU YOKTUR.** `FOR UPDATE SKIP LOCKED`
   için `->lock('for update skip locked')` yazılır. `lockForUpdate()`
@@ -51,6 +63,23 @@ migration · `SupportsTokenRefresh` + `TokenRefresher` ·
   koşusu `DROP TABLE`'da bloke olur (bu turda yaşandı, 600 sn timeout).
   Teşhis: `pg_stat_activity WHERE state <> 'idle'`. Temizlik:
   `pg_terminate_backend`. DB kullanıcısı **`entegrasyon`**, `postgres` değil.
+- **ADAPTER İKİ FARKLI BAĞLAMDAN ÇAĞRILIR.** Kuyruk işi kendi kiracı
+  bağlamını kurar; mutabakat taraması `runAsSystem()` altında koşar ve
+  bağlam YOKTUR. Adapter içinde model sorgusu yapılıyorsa `runAsSystem()`
+  ile sarılmalıdır — sarılmazsa mutabakat turu o bağlantıda çöker
+  (`97a7eb7` hata biçimi, slice 1.5'te testte yakalandı). Ham sorgu
+  KULLANILMAZ: `DB::table()` kiracı filtresini ELLE yazdırır ve o filtre
+  projede BEŞ KEZ unutuldu.
+- **MUTASYON TESTİ KENDİ TESTİNDE SAHTE YEŞİL YAKALAYABİLİR.** Slice
+  1.5'te "silinmiş varyant sıfır okunmaz" testi mutasyonu KAÇIRDI: `null`
+  düğüm zaten önceki elemeye takılıyordu ve korunan satıra HİÇ
+  ulaşılmıyordu. Gerçek tuzak farklı bir şekildeydi (stok takibi kapalı
+  varyant: kimlik DOLU, miktar NULL). **Mutasyon kaçtıysa test yanlış
+  senaryoyu kuruyordur** — testi düzelt, kuralı değil.
+- **`channel_metadata` BİRLEŞTİRİLİR, EZİLMEZ** (`PushListing::
+  adoptRemoteIdentity`). eBay'in üç adımlı yayını `offer_id`'yi ilk
+  adımda, `listing_id`'yi üçüncüde yazar; ezilseydi ara başarısızlıktan
+  sonraki tur `offer_id`'yi kaybeder ve `25002` duplicate alınırdı.
 
 **Doküman değişirse İKİ DOSYA BİRDEN:** önce `docs/ENTEGRASYON-V3.0.md`
 (tek gerçek kaynak), sonra `docs/pdf/build-v3.sh` ile PDF yeniden
