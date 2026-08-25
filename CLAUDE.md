@@ -424,9 +424,45 @@ kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1 KAPALI**, 3.2 sırada.
   varyant başınadır ve `UNIQUE(connection, external_id)` ikinciyi
   reddederdi); `external_parent_id` = `listing_id`. Dönüşüm MAPPER'da,
   çekirdek model DEĞİŞMEZ.
-- **ENVANTER PUT'U TÜM ENVANTERİ EZER** (§11.3 · slice 3.5'te gelecek).
+- **ENVANTER PUT'U TÜM ENVANTERİ EZER** (§11.3 · slice 3.5 ✓ `2c522ed`).
   Kısmi güncelleme YOKTUR; gönderilmeyen varyantlar KANALDAN SİLİNİR —
-  sessiz, geri alınamaz. Zorunlu akış **oku-birleştir-yaz**.
+  kanal 200 döner (senkron BAŞARILI görünür), geri alınamaz ve satıcı
+  ancak siparişler kesilince fark eder. Akış **oku-birleştir-yaz**tır ve
+  kural `EtsyInventoryMerger` içinde SAF bir sınıfta yaşar.
+  "Yalnızca bizim varyantımızı gönder" mutasyonu YEDİ testi birden
+  kırdı — koruma tesadüf değil.
+- **OFFERING NESNESİ FİYATI DA TAŞIR.** Gövdede eksik bırakılırsa kanal
+  fiyatı SIFIRLAR: bir STOK turu sessizce bir FİYAT sıfırlaması yapardı
+  (§9'un "sessizce ezmek EN SIK ŞİKAYET" kuralının en ağır biçimi).
+  Varyant özellikleri (beden/renk) de korunur — atılsaydı çok varyantlı
+  ürün TEK varyanta çökerdi.
+- **FİYAT OKUMADA NESNE, YAZMADA DÜZ SAYI.** Okuma
+  `{amount: 1990, divisor: 100}` verir, yazma `19.90` bekler. Ham
+  `amount` gönderilseydi 19.90 TL kanalda **1990 TL** olurdu.
+- **OKUMA-ÖZEL KİMLİKLER YAZMA GÖVDESİNE KONMAZ** (`product_id`,
+  `offering_id`) — konsaydı Etsy `VALIDATION` döner ve o hata KALICIDIR.
+- **OKUMA BAŞARISIZSA YAZMA HAKKI DA YOKTUR.** Boş envanter okunduysa
+  istisna fırlatılır; boş gövdeyle yazmak TÜM varyantları silerdi.
+- **AYNI İLANIN VARYANTLARI TEK ÇAĞRIDA GİDER.** Gruplanmasaydı ikinci
+  çağrı birincinin yazdığını OKUMADAN ezerdi.
+- **SKU EŞLEŞMEZSE İLK ELEMANA DÜŞÜLMEZ** (`EtsyProductMapper`).
+  Düşülseydi çok varyantlı üründe BAŞKA varyantın kimliği yazılır ve o
+  satır sonsuza kadar yanlış varyantı güncellerdi.
+- **`delist` SİLMEZ, `inactive` YAPAR** — Etsy'de silme FAVORİLERİ de
+  götürür ve favori sayısı satıcının en değerli sinyalidir.
+- **`fetchListing`/`fetchInventory` 404'TE İSTİSNA FIRLATMAZ** — "ilan
+  silinmiş" demektir ve mutabakat bunu `REMOTE_MISSING` görmelidir;
+  istisna tek silinmiş ilanla tüm turu düşürürdü.
+
+### Test tuzakları — bu turda ısırdı
+
+- **`Http::fake()` AYNI TESTTE İKİ KEZ ÇAĞRILAMAZ.** İkinci çağrı
+  birincinin YERİNE GEÇMEZ; ilk sahte yanıt kullanılmaya devam eder ve
+  iki farklı gövde bekleyen test SAHTE YEŞİL olur. `Http::sequence()`
+  kullanılır.
+- **`SyncTaxonomy::run()`'ın `withAttributes` PARAMETRESİ VARSAYILAN
+  `false`.** Açıkça geçilmezse `leavesFetched = 0` çıkar ve "yaprak
+  filtresi çalışıyor" diye YANLIŞ sonuç çıkarılır.
 - **WEBHOOK YOKTUR** (§11.4): `verifyWebhookSignature` daima `false`
   (Trendyol kararının aynısı) ve `supports_webhooks = false` —
   `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ

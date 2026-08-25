@@ -1,8 +1,10 @@
 # Devir Notu — 25 Ağustos 2026 (V3.0 · Faz 1 KAPANDI · **Faz 3 Etsy sürüyor**)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `35b0209`.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `2c522ed`.
 
-**1126 test yeşil** (3968 assertion), Pint temiz (415 dosya).
+**1181 test yeşil** (4087 assertion), Pint temiz (422 dosya).
+
+**Faz 3 · Etsy: 40/56 saat.** Slice 3.1–3.5 KAPALI, sıradaki **3.6 fiyat**.
 
 ## ⚠️ BU TURDA BULUNAN GERÇEK HATA — hız sınırı HİÇ UYGULANMIYORDU
 
@@ -18,6 +20,19 @@ sonucu yanlış veri değil YAVAŞLIKTI — hiçbir alarm çalmaz.
 
 Düzeltildi (`35b0209`) ve `SeededRateLimitContractTest` tohumlanmış
 satırı okuyarak koruyor.
+
+## ⚠️ BU TURDA BULUNAN İKİ TEST TUZAĞI — tekrar ısırır
+
+**1 · `Http::fake()` AYNI TESTTE İKİ KEZ ÇAĞRILAMAZ.** İkinci çağrı
+birincinin YERİNE GEÇMEZ; ilk sahte yanıt kullanılmaya devam eder.
+"Değişen ağaç yeni sürüm üretir" testi bu yüzden SAHTE YEŞİLDİ — iki
+ağaç da aynı gövdeden okunuyordu. Çözüm `Http::sequence()`.
+Tinker'da doğrulandı: ikinci `fake()` sonrası yanıt hâlâ `{"a":1}`.
+
+**2 · `SyncTaxonomy::run()`'ın `withAttributes` parametresi VARSAYILAN
+`false`'tur** (öznitelik çekmek yaprak başına ayrı istek demektir; komut
+`--with-attributes` ile açar). Açıkça geçilmezse `leavesFetched = 0`
+çıkar ve "yaprak filtresi çalışıyor" diye YANLIŞ sonuç çıkarılabilir.
 
 ---
 
@@ -123,25 +138,41 @@ kullanıcı kararı: "dökümantasyonu beraber yazalım" (24 Ağustos).
 | Slice | İş | Durum | Commit |
 |---|---|---|---|
 | 3.1 | OAuth2 + PKCE + callback (10 sa) | ✅ KAPALI | `6dcaf52` |
-| **3.2** | **Token yenileme entegrasyonu (4 sa)** | ⏭️ **SIRADAKİ** | — |
-| 3.3 | Taksonomi (8 sa) | — | — |
-| 3.4 | Katalog — listing/product/offering (10 sa) | — | — |
-| 3.5 | **Stok — oku-birleştir-yaz (8 sa)** | — | — |
-| 3.6 | Fiyat (4 sa) | — | — |
+| 3.2 | Token yenileme entegrasyonu (4 sa) | ✅ KAPALI | `01b1f3c` |
+| 3.3 | Taksonomi (8 sa) | ✅ KAPALI | `312445f` |
+| 3.4 | Katalog — listing/product/offering (10 sa) | ✅ KAPALI | `606d999` |
+| 3.5 | **Stok — oku-birleştir-yaz (8 sa)** | ✅ KAPALI | `2c522ed` |
+| **3.6** | **Fiyat (4 sa)** | ⏭️ **SIRADAKİ** | — |
 | 3.7 | Sipariş yoklama (8 sa) | — | — |
 | 3.8 | İptal + mutabakat + production (4 sa) | — | — |
 
-**Slice 3.1'de yazılanlar:** `EtsyEndpoints` · `EtsyAuth` (saf PKCE) ·
-`EtsyAdapter` (kimlik/sağlık/hata/hız/token yenileme) ·
-`EtsyOAuthController` + iki rota · seeder satırı (`is_active = false`).
+**Yazılan dosyalar:** `EtsyEndpoints` · `EtsyAuth` (saf PKCE) ·
+`EtsyAdapter` · `EtsyProductMapper` · `EtsyInventoryMerger` ·
+`Taxonomy/EtsyTaxonomyClient` · `EtsyOAuthController` + iki rota.
+Kanal `is_active = false` (§05 · adım 1) — sipariş yolu HENÜZ YOK.
 
-### Etsy'nin EN TEHLİKELİ maddesi — slice 3.5'te gelecek
+### Slice 3.6 · fiyat — İKİ ŞEYİ BİLEREK BAŞLA
 
-§11.3: envanter PUT'u **TÜM ENVANTERİ EZER.** Kısmi güncelleme YOKTUR;
-gövde o ilanın BÜTÜN `products` + `offerings` dizisini taşımak
-zorundadır. Gönderilmeyen varyantlar **KANALDAN SİLİNİR** — sessiz,
-geri alınamaz ve satıcı ancak siparişler kesilince fark eder. Zorunlu
-akış **oku-birleştir-yaz**tır.
+**1 · Fiyat de ENVANTER uç noktasında yaşar** (§11.3). Yani 3.6 yeni bir
+uç nokta DEĞİL, `EtsyInventoryMerger`'ın fiyat tarafıdır ve AYNI
+oku-birleştir-yaz akışını kullanır. Birleştirici fiyatı ZATEN koruyor
+(`priceValue()`); eksik olan, fiyatı DEĞİŞTİREN yol ve `SupportsPricing`.
+
+**2 · Fiyat okumada NESNE, yazmada DÜZ SAYI.** Okuma
+`{amount: 1990, divisor: 100}` verir, yazma `19.90` bekler. Ham `amount`
+gönderilirse 19.90 TL kanalda **1990 TL** olur. Dönüşüm
+`EtsyProductMapper::money()` ve `EtsyInventoryMerger::priceValue()`
+içinde ZATEN var — yeniden yazma, çağır.
+
+### Slice 3.5'in kalıcı dersi — mutasyonla kanıtlandı
+
+§11.3'ün "en tehlikeli madde"si kapandı: envanter PUT'u TÜM ENVANTERİ
+EZER ve gönderilmeyen varyantlar KANALDAN SİLİNİR. "Yalnızca bizim
+varyantımızı gönder" mutasyonu **YEDİ testi birden** kırmızıya çevirdi.
+
+Beklenmeyen tuzak: Etsy'nin offering nesnesi **fiyatı da taşıyor** —
+gövdede eksik bırakılsa kanal fiyatı SIFIRLAR, yani bir STOK turu
+sessizce bir FİYAT sıfırlaması yapardı.
 
 ### Sonraki fazlar
 
