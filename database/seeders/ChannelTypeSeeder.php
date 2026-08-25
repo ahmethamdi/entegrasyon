@@ -133,6 +133,69 @@ class ChannelTypeSeeder extends Seeder
                 'is_active' => false,
             ],
         );
+
+        // DÖRDÜNCÜ KANAL — mağaza (storefront). V3.0 · Faz 1 · §06.
+        //
+        // ⚠️ v2.2'DEN BİLİNÇLİ SAPMA: doküman §2/§11 Shopify'ı ayrı bir
+        // Node/Remix servisi olarak öngörüyor (App Store yolu, Ay 8+).
+        // V3.0 onaylanmış proje kararıyla LARAVEL ADAPTER yazıyor:
+        // satıcı kendi custom app Admin API anahtarıyla bağlanır, projeye
+        // ikinci teknoloji yığını SOKULMAZ. §11'in servis token'ı
+        // değişmezi İPTAL EDİLMEDİ, ERTELENDİ.
+        //
+        // ⚠️ `is_active = false` — §05'in 12 adımlı listesinde ADIM 1.
+        // Kanal ancak GERÇEK bir mağazada sağlık kontrolü geçtikten ve
+        // tek kiracıda uçtan uca sürüldükten sonra açılır (adım 12,
+        // §26 · kademeli açılış). Uç noktaları doğrulanabilir olsa da
+        // (Hepsiburada'nın aksine) bu sıra ATLANMAZ.
+        //
+        // YETENEKLER SLICE SLICE AÇILIR: bu turda yalnızca istemci
+        // katmanı yazıldı. İlan edilen ama çalışmayan yetenek panelde
+        // çalışmayan sekme demektir (§05).
+        $this->upsert(
+            ['code' => 'shopify'],
+            [
+                'name' => 'Shopify',
+                'kind' => 'storefront',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Shopify\\ShopifyAdapter',
+                'capabilities' => [
+                    // Slice 1.3–1.9'da açılacak. §04'ün capability
+                    // matrisi V3 HEDEFİDİR, bugünkü durum değil.
+                    'catalog' => false,
+                    'inventory' => false,
+                    'pricing' => false,
+                    'orders' => false,
+                    // Shopify'da kategori zorunlu DEĞİL (`product_type`
+                    // serbest metin) — taksonomi arayüzü HİÇ uygulanmaz.
+                    'taxonomy' => false,
+                    // Onay süreci YOKTUR: ürün yayınlanır yayınlanmaz canlı.
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    // MALİYET TABANLI — istek sayısı değil SORGU MALİYETİ
+                    // (§06.8). 1.000 puanlık kova, saniyede 50 puan
+                    // yenilenir. `ChannelRateLimiter` DEĞİŞMEZ: bir jeton
+                    // bir puan olarak yorumlanır.
+                    //
+                    // GERÇEK DEĞER YANIT GÖVDESİNDEN ÖĞRENİLİR
+                    // (`extensions.cost.throttleStatus`) — Plus'ta kova
+                    // 2.000 puandır ve sabit profil Plus'ı yavaşlatır,
+                    // standardı 429'a sokardı.
+                    'strategy' => 'token_bucket',
+                    'requests' => 50,
+                    'window_seconds' => 1,
+                    'burst_capacity' => 1000,
+                    // `inventorySetOnHandQuantities` tek mutation'da çok
+                    // kalem kabul eder (§06.5).
+                    'max_inventory_batch' => 250,
+                    'max_price_batch' => 250,
+                ],
+                // Woo ile aynı: webhook VAR (`X-Shopify-Hmac-Sha256`).
+                'supports_webhooks' => true,
+                'is_active' => false,
+            ],
+        );
     }
 
     /**
