@@ -43,8 +43,21 @@ class ChannelTypeSeeder extends Seeder
                     'fulfillment' => true,
                 ],
                 'rate_limit_profile' => [
+                    // ⚠️ `requests_per_second` ADI SÖZLEŞMEDİR —
+                    // `RateLimitProfile::fromArray()` TAM OLARAK bu adı
+                    // okur. `requests` yazıldığında `??` varsayılanı
+                    // devreye girer ve profil SESSİZCE 5/sn'ye düşer;
+                    // senkron çalışmaya devam eder, yalnızca kat kat
+                    // yavaş akar ve hiçbir alarm çalmaz. Beş kanalda
+                    // birden yaşandı (Etsy slice 3.1 · gerçek çalıştırma).
+                    //
+                    // WOO §21'DE "istek/dk"DIR: 120/dk = 2/sn.
+                    // `window_seconds` bilgi amaçlıdır — kova saniyelik
+                    // yenilenir ve o alanı OKUMAZ, bu yüzden dönüşüm
+                    // BURADA yapılır.
                     'strategy' => 'fixed_window',
-                    'requests' => 120,
+                    'requests_per_second' => 2,
+                    'burst_capacity' => 10,
                     'window_seconds' => 60,
                     'max_inventory_batch' => 100,
                     'max_price_batch' => 100,
@@ -71,8 +84,17 @@ class ChannelTypeSeeder extends Seeder
                     'fulfillment' => false,
                 ],
                 'rate_limit_profile' => [
+                    // ⚠️ ANAHTAR ADI `requests_per_second` (yukarıdaki
+                    // gerekçe). Trendyol §21'de "istek/sn"dir ama TABAN
+                    // profil TUTUCU seçilir: gerçek sınır SATICI
+                    // SEVİYESİNE göre değişir ve YANIT BAŞLIĞINDAN
+                    // öğrenilip bağlantıya yazılır (`learned_rate_limit`).
+                    // Yüksek bir taban, düşük seviyeli satıcıyı ilk
+                    // turdan 429'a sokardı — öğrenme ancak bir yanıt
+                    // geldikten SONRA devreye girer.
                     'strategy' => 'fixed_window',
-                    'requests' => 50,
+                    'requests_per_second' => 1,
+                    'burst_capacity' => 10,
                     'window_seconds' => 60,
                     'max_inventory_batch' => 1000,
                     'max_price_batch' => 1000,
@@ -120,7 +142,10 @@ class ChannelTypeSeeder extends Seeder
                     // tek kova iki farklı uç nokta sınırını (listing ~30/sn,
                     // sipariş ~10/sn) ayrı ayrı temsil edemez. Yüksek
                     // sınır sipariş çağrılarını sürekli 429'a sokardı.
-                    'requests' => 10,
+                    // ⚠️ ANAHTAR ADI `requests_per_second` — `requests`
+                    // yazıldığında profil SESSİZCE 5/sn'ye düşer.
+                    'requests_per_second' => 10,
+                    'burst_capacity' => 10,
                     'window_seconds' => 1,
                     // İkincil kaynak 4000 diyor; doğrulanmadığı için
                     // 1000'de tutuluyor. Küçük parti yalnızca daha çok
@@ -194,8 +219,12 @@ class ChannelTypeSeeder extends Seeder
                     // (`extensions.cost.throttleStatus`) — Plus'ta kova
                     // 2.000 puandır ve sabit profil Plus'ı yavaşlatır,
                     // standardı 429'a sokardı.
+                    // ⚠️ ANAHTAR ADI `requests_per_second` — `requests`
+                    // yazıldığında profil SESSİZCE 5/sn'ye düşerdi ve
+                    // maliyet kovasının 50 puan/sn yenilenmesi HİÇ
+                    // uygulanmazdı.
                     'strategy' => 'token_bucket',
-                    'requests' => 50,
+                    'requests_per_second' => 50,
                     'window_seconds' => 1,
                     'burst_capacity' => 1000,
                     // `inventorySetOnHandQuantities` tek mutation'da çok
@@ -255,8 +284,9 @@ class ChannelTypeSeeder extends Seeder
                     // başına ayrı çağrı gerektirdiği için (§11.3) bu
                     // gerçek bir TAVANDIR ve 5.000+ ürünlü mağazalarda
                     // AŞILIR — §21'de açıkça kayıtlı bir ölçek sınırı.
+                    // ⚠️ ANAHTAR ADI `requests_per_second` (sözleşme).
                     'strategy' => 'token_bucket',
-                    'requests' => 10,
+                    'requests_per_second' => 10,
                     'window_seconds' => 1,
                     'burst_capacity' => 10,
                     // ⚠️ İLAN BAŞINA **1** (§11.3): envanter uç noktası
