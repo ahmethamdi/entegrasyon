@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Messaging\Jobs;
 
+use App\Domain\Channels\Routing\ChannelLifecycleRouter;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Routing\OrderEventRouter;
 use App\Support\Tenancy\TenantAwareJob;
@@ -25,6 +26,13 @@ use Throwable;
  *   Koşullu geçiş olmasaydı iki worker aynı siparişi eşzamanlı işler ve
  *   ikisi de kilit sırasına girerdi. Sipariş yazımı tekillik kısıtıyla zaten
  *   korunuyor ama gereksiz çekişme ve yarı işlenmiş durumlar doğardı.
+ *
+ * İKİ ROUTER, TEK HAT (V3.0 · §06.7 · §19):
+ *   Gelen her webhook bir sipariş olayı değildir. Kanal yaşam döngüsü
+ *   olayları (bugün yalnızca Shopify `app/uninstalled`) ÖNCE sorulur ve
+ *   ele alınmışsa sipariş yolu HİÇ çalışmaz. İkinci bir olay sistemi
+ *   AÇILMAZ: mesaj aynı inbox hattından gelir, aynı tekilleştirmeden geçer
+ *   ve aynı `inbox:recover` onu kurtarır.
  */
 final class ProcessInboxMessage extends TenantAwareJob
 {
@@ -70,7 +78,27 @@ final class ProcessInboxMessage extends TenantAwareJob
         }
 
         try {
-            app(OrderEventRouter::class)->route($message);
+            // KANAL YAŞAM DÖNGÜSÜ ÖNCE SORULUR (V3.0 · §06.7).
+            //
+            // Her webhook bir sipariş olayı DEĞİLDİR. Shopify'ın
+            // `app/uninstalled` konusu `ShopifyOrderNormalizer`'ın konu
+            // tablosunda YOKTUR ve **bilinmeyen konu `updated` sayılır** —
+            // yani bu kapı olmasaydı kaldırma olayı bir sipariş güncellemesi
+            // sanılır, gövdedeki `id` (MAĞAZANIN kimliği) sipariş kimliği
+            // yerine okunur ve `resolveOrder()` onu bulamayıp yalnızca uyarı
+            // yazardı. Token sessizce geçersizken bağlantı `active` kalır ve
+            // satıcının tüm listing'leri teker teker `AUTHENTICATION` ile
+            // ölürdü.
+            //
+            // İKİNCİ BİR OLAY SİSTEMİ DEĞİLDİR (§19): mesaj aynı inbox
+            // hattından geldi, aynı tekilleştirmeden geçti ve aynı
+            // `inbox:recover` onu kurtarır. Değişen tek şey, sipariş
+            // router'ından ÖNCE sorulmasıdır.
+            $handled = app(ChannelLifecycleRouter::class)->route($message);
+
+            if (! $handled) {
+                app(OrderEventRouter::class)->route($message);
+            }
 
             $message->markProcessed();
         } catch (Throwable $e) {
