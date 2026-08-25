@@ -1,9 +1,9 @@
 # Devir Notu — 25 Ağustos 2026 (V3.0 ONAYLANDI · Faz 1 · Shopify SÜRÜYOR)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz ve **origin/main ile
-eşit**. Son commit `9b0b651`.
+eşit**. Son commit `ef25db4`.
 
-**1010 test yeşil** (3747 assertion), Pint temiz (376 dosya).
+**1060 test yeşil** (3832 assertion), Pint temiz (403 dosya).
 
 ---
 
@@ -23,29 +23,92 @@ Onay öncesindeki "kod yazılmaz" kuralı **ARTIK GEÇERLİ DEĞİL.**
 | 1.1–1.2 · İstemci + GraphQL | ✅ KAPALI | `9146315` | 964 |
 | 1.3 · Katalog | ✅ KAPALI | `7369c5c` | 984 |
 | 1.4 · Ürün içe aktarma | ✅ KAPALI | `e443485` | 995 |
-| 1.5 · **Stok** | ✅ KAPALI | `9b0b651` | **1010** |
-| **1.6 · Fiyat (3 sa)** | ⏭️ **SIRADAKİ** | — | — |
-| 1.7 · Sipariş webhook (8 sa) | ⬜ | | |
-| 1.8 · İptal / iade / kargo (5 sa) | ⬜ | | |
-| 1.9 · `app/uninstalled` + mutabakat (4 sa) | ⬜ | | |
+| 1.5 · Stok | ✅ KAPALI | `9b0b651` | 1010 |
+| 1.6 · Fiyat | ✅ KAPALI | `8bceac5` | 1026 |
+| 1.7 · Sipariş webhook | ✅ KAPALI | `72f01bb` | 1047 |
+| 1.8 · **Kargo** | ✅ KAPALI | `ef25db4` | **1060** |
+| **1.9 · `app/uninstalled` + mutabakat + production (4 sa)** | ⏭️ **SIRADAKİ** | — | — |
 
-Faz 1 = 52 saat; ~35'i bitti. Sonraki fazlar: Hepsiburada 38
+Faz 1 = 52 saat; **~48'i bitti**. Sonraki fazlar: Hepsiburada 38
 (⚠️ uç nokta doğrulaması BLOKE) · Etsy 56 · eBay 64 · Hardening 30.
 
-## SIRADAKİ İŞ — Slice 1.6 · Fiyat (3 sa)
+**Shopify'ın yetenek matrisi TAMAMLANDI** (§04): catalog ·
+catalog_import · inventory · pricing · orders · fulfillment.
+`taxonomy` ve `approval` **HİÇ AÇILMAYACAK** (§04 dipnotları).
 
-`SupportsPricing` uygulanır: `productVariantsBulkUpdate` ile fiyat
-yazma, `fetchPrices` ile mutabakat okuması. Kritik maddeler:
+## SIRADAKİ İŞ — Slice 1.9 · `app/uninstalled` + mutabakat (4 sa)
 
-- **FİYAT STRING TAŞINIR** — float kuruş kayması üretir
-  (`19.90 * 100` IEEE-754'te `1989.99...`).
-- **`compareAtPrice`'A DOKUNULMAZ** — o üstü çizili fiyattır ve
-  satıcının kampanyasıdır; ezmek §9'un "EN SIK ŞİKAYET" dediği şeydir.
-- **§9 POLİTİKASI DEĞİŞMEDEN GEÇERLİ**: stokta üzerine yazılır, fiyatta
-  YAZILMAZ — fark bulununca `PRICE_CONFLICT` ve satıcı seçer.
-  `ReconcileConnection` ve `reconcile:prices` için **tek satır kod
-  yazılmaz**, yetenek `instanceof` ile okunur.
-- Yazıldıktan sonra `ChannelTypeSeeder` → `'pricing' => true`.
+**ÜÇ PARÇA VAR ve ikisi muhtemelen ZATEN ÇALIŞIYOR:**
+
+**1 · `app/uninstalled` webhook (§06.7) — ASIL İŞ BU.**
+Satıcı custom app'i silerse token SESSİZCE geçersizleşir. Konu
+dinlenmezse her istek 401 alır, `AUTHENTICATION` KALICI sayılır ve
+satıcının tüm listing'leri TEKER TEKER ölür; panel "anahtarınız yanlış"
+der ama satıcı hiçbir şey değiştirmemiştir.
+
+Dokümanın istediği davranış:
+```
+app/uninstalled webhook
+  → channel_credentials.revoked_at = now()
+  → channel_connections.status = 'inactive'
+  → last_error = 'Uygulama Shopify mağazasından kaldırıldı.'
+```
+> **BAĞLANTI SİLİNMEZ, İŞARETLENİR** — listing ve sipariş geçmişi ona
+> bağlıdır. Satıcı yeniden kurarsa `ConnectChannel` aynı satırı
+> `firstOrNew` ile kullanır (anahtar yenileme akışı) ve KOTADAN
+> ETKİLENMEZ.
+
+⚠️ Bu konu SİPARİŞ OLAYI DEĞİLDİR. `ShopifyOrderNormalizer`'ın
+`TOPIC_TO_TYPE` tablosunda YOKTUR ve bilinmeyen konu `updated` sayılır
+— yani bugün gelirse sipariş güncellemesi sanılır ve `resolveOrder`
+siparişi bulamayıp uyarı yazar. Yeni bir yol gerekir; hangi katmanda
+duracağı (inbox tüketicisi mi, ayrı bir router dalı mı) İLK KARAR.
+
+**2 · Mutabakat — `fetchInventory` / `fetchPrices` ZATEN YAZILDI**
+(slice 1.5 ve 1.6). §22: "Yeni kanal için yazılan TEK şey bu iki
+gövdedir." Yapılacak iş muhtemelen sadece GERÇEK BİR TURU SÜRMEK ve
+`ReconcileConnection`'ın Shopify'ı gerçekten seçtiğini doğrulamak.
+
+**3 · Production / kanalı açma — §05'in ADIM 12'si.**
+`is_active = true` ancak GERÇEK bir mağazada sağlık kontrolü geçtikten
+ve tek kiracıda uçtan uca sürüldükten sonra. **Bu adım kullanıcı ister:
+gerçek Shopify mağazası + custom app Admin API anahtarı gerekiyor.**
+Adım 1 ile 12'nin ayrı olması bilinçlidir (§05).
+
+## Faz 1'de öğrenilenler — 1.6–1.8 (KALICI, CLAUDE.md'de de var)
+
+- **FİYATTA `compareAtPrice`'A DOKUNULMAZ.** Trendyol'un `listPrice`
+  kuralı (üstü çizili yoksa satış fiyatına düş) TERS SEBEPTEN doğdu:
+  orada alan ZORUNLU ve atlanırsa `VALIDATION`; Shopify'da isteğe
+  bağlı ve göndermek satıcının kampanyasını EZER. **Aynı kural iki
+  kanalda ters sonuç verir — kopyalama.**
+- **İPTAL AYRI KONUDA GELİR — WOO'NUN TERSİ.** Woo'nun "durum alanı
+  topic'i ezer" kuralı Shopify'a KOPYALANMAZ: kopyalansaydı
+  `cancelled_at` dolu bir `orders/updated` (iptal edilmiş siparişin
+  sonraki etiket/not güncellemesi) yeniden iptal sanılır ve stok İKİNCİ
+  KEZ geri eklenirdi.
+- **İADE VE KARGO GÖVDELERİNİN KÖKÜ FARKLIDIR:** `id` o nesnenin KENDİ
+  kimliğidir, sipariş `order_id`'dedir. Kargo tarafı GERÇEK
+  ÇALIŞTIRMADA bulundu — testler görmüyordu çünkü o yolu kimse
+  çalıştırmıyordu.
+- **`UpdateFulfillment`'IN DÜRÜST SINIRI KAPANDI.** "Hiçbir normalizer
+  `fulfilled` üretmiyor, mutasyon orada hayatta KALMALIDIR" kuralı
+  ARTIK GEÇERSİZ; Shopify o konuları gönderiyor ve router dalı gerçek
+  yoldan sınanıyor. Sınıf başlığı ve CLAUDE.md güncellendi.
+- **MUTASYON TESTİ DOĞRU SONUCU YANLIŞ SEBEPLE ÖLÇEBİLİR.** "İki paket
+  iki satır üretir" testi, paket kimliği HİÇ yazılmasa da yeşil
+  kalıyordu (tekillik kısıtı NULL'ları kapsamaz). Kimlik iddiası
+  eklendi. Slice 1.7'de de bir mutasyon kaçtı ve eksik testi gösterdi
+  (iade sipariş kimliği). **Mutasyon kaçtıysa test yanlış senaryoyu
+  kuruyordur — testi düzelt, kuralı değil.**
+- **SİPARİŞ/INBOX SATIRI ELLE YAZILMAZ.** Factory yok; sipariş
+  `IngestChannelOrder`, inbox `IngestInboxMessage` üzerinden kurulur
+  (`OrderScreenTest`'in kuralı). Elle yazmak `stock_status` gibi
+  alanları uydurmak demektir.
+- **CAPABILITY TESTİ HER SLICE'TA KIRILIR ve bu DOĞRUDUR.**
+  `ShopifyCatalogImportTest` yetenekleri `capabilities` kolonundan
+  DEĞİL `AdapterRegistry`'nin `instanceof` yansımasından okur; yani
+  gerçekten uygulamayı izler. Her slice sonunda o satır taşınır.
 
 ## Faz 0–1.5'te öğrenilenler — KALICI, CLAUDE.md'de de var
 
@@ -77,10 +140,18 @@ yazma, `fetchPrices` ile mutabakat okuması. Kritik maddeler:
 
 `app/Domain/Channels/Adapters/Shopify/`:
 `ShopifyAdapter` · `ShopifyEndpoints` · `ShopifyProductMapper` ·
-`ShopifyGraphqlException`
+`ShopifyOrderNormalizer` · `ShopifyGraphqlException`
 
 Uygulanan arayüzler: `ChannelAdapter`, `SupportsCatalog`,
-`SupportsCatalogImport`, `SupportsInventory`.
+`SupportsCatalogImport`, `SupportsFulfillment`, `SupportsInventory`,
+`SupportsOrders`, `SupportsPricing` — **§04'ün Shopify sütunu TAMAM.**
+
+`SupportsTokenRefresh` UYGULANMAZ (§04 dipnotu): offline access token
+süresizdir, `app/uninstalled` webhook'u `revoked_at` yazar (slice 1.9).
+
+**Webhook HTTP katmanı DEĞİŞMEDİ** — `WebhookController` zaten kanaldan
+bağımsız ve rota `{connectionId}` taşıyor; shop-domain başlığı
+yönlendirme için GEREKMİYOR.
 
 **Kanal `is_active = false`** ve panelde GÖRÜNMEZ — §05'in 12 adımlı
 listesinde ADIM 1. Açılması için gerçek mağazada sağlık kontrolü +
@@ -99,7 +170,26 @@ Kolon yalnızca yansımadır.
 `TokenRefreshTest` (8) · `ConcurrentTokenRefreshTest` (2) ·
 `ShopifyAdapterTest` (21) · `ShopifyCatalogTest` (17) ·
 `ShopifyCatalogImportTest` (11) · `ShopifyInventoryTest` (15) ·
-`PushListingTest`'e 3 çekirdek testi.
+**`ShopifyPricingTest` (16)** · **`ShopifyOrderTest` (21)** ·
+**`ShopifyFulfillmentTest` (13)** · `PushListingTest`'e 3 çekirdek testi.
+
+## Gerçek çalıştırma kayıtları (slice 1.7–1.8)
+
+Her slice testlere ek olarak GERÇEK HTTP yolundan sürüldü — proje
+kuralı: yeşil testler ölümcül hatayı gizler.
+
+- **1.7:** elle HMAC imzalanmış `orders/create` → gerçek uç nokta →
+  HTTP 202 → inbox → `ProcessInboxMessage` → sipariş 1042 (paid,
+  54.80) → SALE hareketi. **Stok 10 → 7**, SKU eşleşti.
+- **1.8:** `orders/create` + `fulfillments/create` +
+  `fulfillments/update` → üçü de 202. Paket YERİNDE ilerledi
+  (`success` → `delivered`), takip korundu, **LEDGER DEĞİŞMEDİ**
+  (2 → 2 hareket), stok 8'de kaldı — §4'ün "kargo stok hareketi
+  üretmez" kuralı gerçek yolda doğrulandı.
+
+⚠️ Tinker'da worker YOKTUR: webhook 202 döner ama satır `pending`
+bekler. Zinciri görmek için `ProcessInboxMessage` ELLE çağrılmalıdır
+(1.7'de ilk denemede "sipariş YOK" çıktı, sebep kod değil buydu).
 
 ## ⚠️ DOKÜMAN DEĞİŞİRSE — İKİ DOSYA BİRDEN
 

@@ -28,19 +28,57 @@ migration · `SupportsTokenRefresh` + `TokenRefresher` ·
 `credentials:refresh` komutu + 15 dk zamanlama · `ChannelTypeSeeder`
 `is_active` düzeltmesi.
 
-**FAZ 1 · SHOPIFY SÜRÜYOR** (52 sa · ~35'i bitti) — **1010 test yeşil**:
+**FAZ 1 · SHOPIFY SÜRÜYOR** (52 sa · ~48'i bitti) — **1060 test yeşil**:
 
 | Slice | Ne | Commit |
 |---|---|---|
 | 1.1–1.2 | İstemci + GraphQL sarmalayıcı (P0-1) | `9146315` |
 | 1.3 | Katalog — create/update/delist/find/fetch | `7369c5c` |
 | 1.4 | Ürün içe aktarma | `e443485` |
-| 1.5 | **Stok** — mutlak değer, `inventoryItemId` | `9b0b651` |
-| **1.6** | **Fiyat — SIRADAKİ (3 sa)** | — |
-| 1.7–1.9 | Sipariş webhook · iptal/iade/kargo · `app/uninstalled` | — |
+| 1.5 | Stok — mutlak değer, `inventoryItemId` | `9b0b651` |
+| 1.6 | Fiyat — string, `compareAtPrice`'a dokunulmaz | `8bceac5` |
+| 1.7 | Sipariş webhook — iptal AYRI konu | `72f01bb` |
+| 1.8 | **Kargo** — dürüst sınır KAPANDI | `ef25db4` |
+| **1.9** | **`app/uninstalled` + mutabakat + production — SIRADAKİ (4 sa)** | — |
+
+**Shopify'ın §04 sütunu TAMAM**: catalog · catalog_import · inventory ·
+pricing · orders · fulfillment. `SupportsTokenRefresh` UYGULANMAZ —
+offline token süresizdir, `app/uninstalled` `revoked_at` yazar (1.9).
 
 Shopify `is_active = false` ve panelde GÖRÜNMEZ (§05 · adım 1).
 `taxonomy` ve `approval` **HİÇ AÇILMAYACAK** (§04 dipnotları).
+
+#### Faz 1 · slice 1.6–1.8'de öğrenilen — kalıcı kurallar
+
+- **AYNI KURAL İKİ KANALDA TERS SONUÇ VEREBİLİR — KOPYALAMA.**
+  Trendyol'da `listPrice` ZORUNLUDUR ve atlanırsa `VALIDATION`; bu
+  yüzden "üstü çizili yoksa satış fiyatına düş" kuralı doğdu.
+  Shopify'da `compareAtPrice` İSTEĞE BAĞLIDIR ve göndermek satıcının
+  KAMPANYASINI EZER (§9: "sessizce ezmek EN SIK ŞİKAYET"). Aynı
+  simetri iptal tarafında da var: Woo'nun "durum alanı topic'i ezer"
+  kuralı Shopify'da `orders/updated`'ı yeniden iptal sandırır ve stok
+  İKİNCİ KEZ geri eklenir.
+- **ALT NESNE WEBHOOK'UNDA `id` O NESNENİN KENDİ KİMLİĞİDİR.**
+  `refunds/create` ve `fulfillments/*` gövdelerinde sipariş
+  `order_id`'dedir; `id` iadenin/paketin kimliğidir. `id` okunursa
+  `resolveOrder()` siparişi bulamaz, yalnızca uyarı yazılır ve iadede
+  stok geri eklenmez, kargoda takip numarası SESSİZCE kaybolur. Kargo
+  tarafı GERÇEK ÇALIŞTIRMADA bulundu — testler görmüyordu.
+- **MUTASYON DOĞRU SONUCU YANLIŞ SEBEPLE ÖLÇEBİLİR.** "İki paket iki
+  satır üretir" testi, paket kimliği HİÇ yazılmasa da yeşil kalıyordu:
+  tekillik kısıtı NULL'ları kapsamaz, yani iki satır yine oluşuyordu.
+  Sayım iddiası TEK BAŞINA yetmez; ayırt edici alanın kendisi de
+  iddia edilmelidir.
+- **CAPABILITY TESTİ HER SLICE'TA KIRILIR ve bu DOĞRUDUR.**
+  `ShopifyCatalogImportTest` yetenekleri `capabilities` kolonundan
+  DEĞİL `AdapterRegistry`'nin `instanceof` yansımasından okur — yani
+  gerçekten uygulamayı izler. Slice sonunda o satır taşınır, test
+  gevşetilmez.
+- **SİPARİŞ/INBOX SATIRI ELLE YAZILMAZ.** `Order`/`Fulfillment`/
+  `InboxMessage` için factory YOKTUR ve eklenmez: sipariş
+  `IngestChannelOrder`, inbox `IngestInboxMessage` üzerinden kurulur.
+  Elle yazmak `stock_status` gibi alanları uydurmak demektir ve test
+  gerçek veriyi değil kendi varsayımını doğrular.
 
 #### Faz 0–1.5'te öğrenilen — kalıcı kurallar
 
