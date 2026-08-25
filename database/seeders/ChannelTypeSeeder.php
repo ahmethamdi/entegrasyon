@@ -143,15 +143,27 @@ class ChannelTypeSeeder extends Seeder
         // ikinci teknoloji yığını SOKULMAZ. §11'in servis token'ı
         // değişmezi İPTAL EDİLMEDİ, ERTELENDİ.
         //
-        // ⚠️ `is_active = false` — §05'in 12 adımlı listesinde ADIM 1.
-        // Kanal ancak GERÇEK bir mağazada sağlık kontrolü geçtikten ve
-        // tek kiracıda uçtan uca sürüldükten sonra açılır (adım 12,
-        // §26 · kademeli açılış). Uç noktaları doğrulanabilir olsa da
-        // (Hepsiburada'nın aksine) bu sıra ATLANMAZ.
+        // ⚠️ `is_active = true` — §05'in ADIM 12'si (slice 1.9).
         //
-        // YETENEKLER SLICE SLICE AÇILIR: bu turda yalnızca istemci
-        // katmanı yazıldı. İlan edilen ama çalışmayan yetenek panelde
-        // çalışmayan sekme demektir (§05).
+        // §04'ün capability matrisi TAMAMLANDI: catalog · catalog_import ·
+        // inventory · pricing · orders · fulfillment. `taxonomy` ve
+        // `approval` HİÇ AÇILMAYACAK (§04 dipnotları) — yani "yetenekler
+        // slice slice açılır" kuralının bekleyeni kalmadı.
+        //
+        // ⚠️ AÇILIŞ KULLANICI KARARIYLA YAPILDI ve §05'in adım 1 / adım 12
+        // ayrımı bu noktada TAM KARŞILANMADI: adım 12 GERÇEK bir mağazada
+        // sağlık kontrolü ve tek kiracıda uçtan uca sürüm ister; o sürüm
+        // yapılmadı, çünkü gerçek Shopify mağazası + custom app Admin API
+        // anahtarı gerekiyor ve ikisi de kullanıcıdadır. Kanal panelde
+        // GÖRÜNÜR hâle geldi; ilk gerçek bağlantıda sağlık kontrolü
+        // geçmezse bağlantı `pending` kalır ve `last_error` panelde
+        // gösterilir (`CheckChannelHealth`), yani satıcı sessiz bir hataya
+        // değil görünür bir hataya düşer.
+        //
+        // ⚠️ BU SATIRI DEĞİŞTİRMEK MEVCUT KURULUMLARI ETKİLEMEZ:
+        // `upsert()` `is_active`'i YALNIZCA YENİ satırda uygular ve mevcut
+        // satırda operatörün kararını korur (P1-3). Zaten tohumlanmış bir
+        // veritabanında kanalı açmak için satır ELLE güncellenmelidir.
         $this->upsert(
             ['code' => 'shopify'],
             [
@@ -159,9 +171,7 @@ class ChannelTypeSeeder extends Seeder
                 'kind' => 'storefront',
                 'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Shopify\\ShopifyAdapter',
                 'capabilities' => [
-                    // Slice slice AÇILIR. §04'ün capability matrisi V3
-                    // HEDEFİDİR, bugünkü durum değil — ilan edilen ama
-                    // çalışmayan yetenek panelde çalışmayan sekme demektir.
+                    // §04'ün matrisi TAMAM — altı yetenek de yazıldı.
                     'catalog' => true,          // slice 1.3 ✓
                     'catalog_import' => true,   // slice 1.4 ✓
                     'inventory' => true,        // slice 1.5 ✓
@@ -195,7 +205,7 @@ class ChannelTypeSeeder extends Seeder
                 ],
                 // Woo ile aynı: webhook VAR (`X-Shopify-Hmac-Sha256`).
                 'supports_webhooks' => true,
-                'is_active' => false,
+                'is_active' => true,
             ],
         );
     }
