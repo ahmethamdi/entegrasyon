@@ -11,6 +11,7 @@ use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -18,6 +19,7 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
@@ -101,7 +103,7 @@ use Throwable;
  * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
  * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
 {
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';
@@ -1254,6 +1256,169 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
     public function acknowledgeOrder(Order $order): AdapterResult
     {
         return AdapterResult::success(['acknowledged' => true]);
+    }
+
+    // ---------------------------------------------------------------- kargo
+
+    /**
+     * Kargo bildirimini kanala gönderir — slice 1.8.
+     *
+     * V3.0 · §04 (capability matrisi) · §06.6 · v2.2 §7.
+     *
+     * ─────────────────────────────────────────────────────────────────
+     * ⚠️ HEDEF `fulfillmentOrder`'DIR, SİPARİŞ DEĞİL
+     * ─────────────────────────────────────────────────────────────────
+     * Shopify'ın modern kargo modelinde sipariş, kargolanabilir parçalara
+     * (fulfillment order) bölünür — çok konumlu mağazada her konum kendi
+     * parçasını taşır. `fulfillmentCreateV2` bu parçaları ister; sipariş
+     * gid'i verilseydi Shopify `userErrors` döner ve o hata `VALIDATION`
+     * yani KALICIDIR: kargo bildirimi "düzeltilemez" damgasıyla ölürdü.
+     *
+     * İKİ ÇAĞRI GEREKİR ve bu Shopify'ın modelinin sonucudur: parçalar
+     * ÖNCE okunur, sonra kargolanır. Tek çağrıya indirilemez.
+     *
+     * ⚠️ KARGOLANACAK PARÇA YOKSA İSTEK ATILMAZ ve bu HATA DEĞİLDİR.
+     * Sipariş zaten tamamen kargolanmışsa liste boş döner; mutation yine
+     * de çağrılsaydı `userErrors` alır ve KALICI hata yazılırdı — oysa
+     * yapılacak bir şey yoktur. "Yazılmamış yetenek sessizce başarılı
+     * dönmez" kuralı burada İHLAL EDİLMEZ: yetenek YAZILMIŞTIR ve
+     * yapılacak iş GERÇEKTEN yoktur; sonuç bunu ADIYLA söyler.
+     */
+    public function pushFulfillment(Fulfillment $fulfillment): AdapterResult
+    {
+        $externalOrderId = $fulfillment->order?->external_id;
+
+        if ($externalOrderId === null || $externalOrderId === '') {
+            // Kimlik yoksa istek HİÇ atılmaz: boş gid ile giden mutation
+            // `userErrors` döner ve o hata KALICIDIR.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Kargo bildirimi için siparişin Shopify kimliği yok.',
+            );
+        }
+
+        $fulfillmentOrderIds = $this->openFulfillmentOrderIds($externalOrderId);
+
+        if ($fulfillmentOrderIds === []) {
+            return AdapterResult::success(['already_fulfilled' => true]);
+        }
+
+        $data = $this->gql(
+            <<<'GQL'
+            mutation CreateFulfillment($fulfillment: FulfillmentV2Input!) {
+              fulfillmentCreateV2(fulfillment: $fulfillment) {
+                fulfillment { id status }
+                userErrors { field message code }
+              }
+            }
+            GQL,
+            variables: ['fulfillment' => array_filter([
+                'lineItemsByFulfillmentOrder' => array_map(
+                    static fn (string $id): array => ['fulfillmentOrderId' => $id],
+                    $fulfillmentOrderIds,
+                ),
+                // Takip bilgisi satıcının müşteriye vereceği veridir.
+                // Shopify tanıdığı firma adlarında takip BAĞLANTISINI
+                // kendisi kurar; `company` serbest metindir.
+                'trackingInfo' => $this->trackingInfo($fulfillment),
+                // Müşteriye bildirim gönderme kararı SATICINIYDI ve
+                // Shopify panelinden yönetilir; burada zorlanmaz.
+            ], static fn (mixed $v): bool => $v !== null)],
+            operation: 'fulfillmentCreateV2',
+            userErrorPath: 'fulfillmentCreateV2',
+        );
+
+        $created = $data['fulfillmentCreateV2']['fulfillment'] ?? null;
+
+        return AdapterResult::success(array_filter([
+            'external_id' => is_array($created) && isset($created['id'])
+                ? (string) $created['id']
+                : null,
+            'status' => is_array($created) && isset($created['status'])
+                ? (string) $created['status']
+                : null,
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Kargo firması listesi — BOŞ ve bu bir eksiklik DEĞİLDİR.
+     *
+     * Shopify sabit bir firma listesi DAYATMAZ: `trackingInfo.company`
+     * serbest metindir ve tanıdığı adlarda takip bağlantısını kendisi
+     * kurar. Uydurma bir liste dönmek satıcıya olmayan bir kısıt
+     * gösterirdi (Woo'daki kararın aynısı).
+     *
+     * @return array<string, string>
+     */
+    public function fetchCarriers(): array
+    {
+        return [];
+    }
+
+    /**
+     * Siparişin HENÜZ KARGOLANMAMIŞ parçaları.
+     *
+     * ⚠️ `status: OPEN` FİLTRESİ ZORUNLUDUR. Kapanmış (`CLOSED`) veya iptal
+     * edilmiş parça yeniden kargolanmaya çalışılsaydı Shopify `userErrors`
+     * döner ve o hata KALICIDIR — üstelik siparişin GERÇEKTEN kargolanacak
+     * parçası varken de tüm çağrı düşerdi.
+     *
+     * @return list<string>
+     */
+    private function openFulfillmentOrderIds(string $externalOrderId): array
+    {
+        $data = $this->gql(
+            <<<'GQL'
+            query FulfillmentOrders($id: ID!) {
+              order(id: $id) {
+                fulfillmentOrders(first: 50, query: "status:open") {
+                  nodes { id status }
+                }
+              }
+            }
+            GQL,
+            variables: ['id' => $externalOrderId],
+            operation: 'order',
+        );
+
+        $ids = [];
+
+        foreach ((array) ($data['order']['fulfillmentOrders']['nodes'] ?? []) as $node) {
+            if (! is_array($node) || ! isset($node['id'])) {
+                continue;
+            }
+
+            // Sunucu filtresine EK OLARAK burada da elenir: `query`
+            // dizesi Shopify tarafında yorumlanır ve sözdizimi değişirse
+            // sessizce TÜM parçaları döndürürdü.
+            $status = mb_strtoupper((string) ($node['status'] ?? ''));
+
+            if ($status !== '' && $status !== 'OPEN' && $status !== 'IN_PROGRESS') {
+                continue;
+            }
+
+            $ids[] = (string) $node['id'];
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Takip bilgisi — hiçbiri yoksa alan HİÇ GÖNDERİLMEZ.
+     *
+     * Boş dizelerle gönderilseydi Shopify'da takip numarası olarak BOŞ bir
+     * kayıt oluşur ve müşteriye "kargo takip: —" gösterilirdi.
+     *
+     * @return array<string, string>|null
+     */
+    private function trackingInfo(Fulfillment $fulfillment): ?array
+    {
+        $info = array_filter([
+            'number' => $fulfillment->tracking_number,
+            'company' => $fulfillment->carrier,
+        ], static fn (mixed $v): bool => is_string($v) && $v !== '');
+
+        return $info === [] ? null : $info;
     }
 
     // ------------------------------------------------------ ürün içe aktarma

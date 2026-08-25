@@ -38,17 +38,20 @@ use Illuminate\Support\Facades\DB;
  *   `delivered` olayı `shipped_at` taşımaz; boş değer yazılsaydı kargoya
  *   veriliş anı KAYBOLURDU.
  *
- * DÜRÜST SINIR — BU YOL BUGÜN KANALDAN TETİKLENMİYOR:
- *   Hiçbir normalizer `fulfilled` tipi ÜRETMİYOR: Woo kargoyu ayrı bir
- *   webhook olarak göndermiyor ve Trendyol'da kargo §14 gereği KAPSAM
- *   DIŞI (`SupportsFulfillment` uygulanmaz). Sınıf `OrderEventRouter`'a
- *   bağlıdır ve doğrudan çağrıldığında doğru çalışır — testleri bunu
- *   doğrular — ama router dalını ve paket bazlı çıpayı sınayan bir
- *   davranış testi YAZILAMAZ, çünkü o olayı üreten bir kaynak yok.
- *   Mutasyon bu iki noktada hayatta kalır ve KALMALIDIR; sahte test
- *   yazmak, var olmayan bir akışı varmış gibi gösterirdi. Kanal kargo
- *   bildirimi göndermeye başladığında ilk iş normalizer'a `fulfilled`
- *   tipini ve `payload['fulfillment']` bloğunu eklemektir.
+ * SINIR KAPANDI — V3.0 · SLICE 1.8 (Shopify):
+ *   Bu başlık uzun süre "hiçbir normalizer `fulfilled` tipi ÜRETMİYOR,
+ *   bu yüzden router dalını ve paket bazlı çıpayı sınayan bir davranış
+ *   testi YAZILAMAZ; mutasyon o iki noktada hayatta kalır ve KALMALIDIR"
+ *   diyordu. Woo kargoyu ayrı webhook olarak göndermiyor ve Trendyol'da
+ *   kargo §14 gereği kapsam dışı.
+ *
+ *   `ShopifyOrderNormalizer` artık `fulfillments/create` ve
+ *   `fulfillments/update` konularını `fulfilled` tipine çeviriyor ve
+ *   `payload['fulfillment']` bloğunu yazıyor — yani o kaynak VAR ve
+ *   `ShopifyFulfillmentTest` router dalını, paket bazlı çıpayı ve
+ *   "kargo stok hareketi üretmez" kuralını GERÇEK yoldan doğruluyor.
+ *   Eski başlığın talimatı buydu ve uygulandı; mutasyon artık bu iki
+ *   noktada HAYATTA KALMAMALIDIR.
  */
 final class UpdateFulfillment
 {

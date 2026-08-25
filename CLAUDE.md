@@ -380,12 +380,18 @@ dışına çıkış.
 - **BAYAT TEKRAR YENİ DURUMU EZMEZ.** Idempotency kapısının asıl değeri
   budur: yoklama örtüşmesi eski olayı tur tur yeniden görür ve kapı
   olmasaydı araya giren `Delivered` her turda `Shipped`'a geri ezilirdi.
-- **DÜRÜST SINIR — `fulfilled` TİPİNİ HİÇBİR NORMALIZER ÜRETMİYOR.** Woo
-  kargoyu ayrı webhook göndermiyor, Trendyol'da kargo §14 gereği KAPSAM
-  DIŞI. Router'ın FULFILLED dalı ve paket bazlı çıpa bu yüzden davranışla
-  sınanamaz; mutasyon orada hayatta kalır ve KALMALIDIR. Kanal kargo
-  bildirimi göndermeye başlarsa ilk iş normalizer'a `fulfilled` tipini ve
-  `payload['fulfillment']` bloğunu eklemektir.
+- **SINIR KAPANDI (V3.0 · slice 1.8).** Uzun süre "`fulfilled` tipini
+  hiçbir normalizer üretmiyor, router'ın FULFILLED dalı davranışla
+  sınanamaz, mutasyon orada hayatta KALMALIDIR" kuralı geçerliydi (Woo
+  kargoyu ayrı webhook göndermiyor, Trendyol'da kargo §14 gereği kapsam
+  dışı). **`ShopifyOrderNormalizer` artık `fulfillments/create|update`
+  konularını üretiyor** ve `payload['fulfillment']` bloğunu yazıyor;
+  `ShopifyFulfillmentTest` router dalını ve paket bazlı çıpayı GERÇEK
+  yoldan doğruluyor. Mutasyon artık orada hayatta KALMAMALIDIR.
+- **KARGO GÖVDESİNİN KÖKÜ FARKLIDIR** — `fulfillments/*` webhook'unda
+  `id` PAKETİN kimliğidir ve sipariş `order_id`'dedir (iade gövdesindeki
+  tuzağın aynısı). `id` okunursa router siparişi bulamaz ve takip
+  numarası SESSİZCE kaybolur. Gerçek çalıştırmada bulundu.
 
 ## Sipariş yoklaması kuralları (§13 · Faz 2)
 

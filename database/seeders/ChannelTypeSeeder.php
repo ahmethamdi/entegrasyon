@@ -172,7 +172,7 @@ class ChannelTypeSeeder extends Seeder
                     'taxonomy' => false,
                     // Onay süreci YOKTUR: ürün yayınlanır yayınlanmaz canlı.
                     'approval' => false,
-                    'fulfillment' => false,
+                    'fulfillment' => true,      // slice 1.8 ✓
                 ],
                 'rate_limit_profile' => [
                     // MALİYET TABANLI — istek sayısı değil SORGU MALİYETİ

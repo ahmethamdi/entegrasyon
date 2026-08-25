@@ -68,12 +68,17 @@ final class ShopifyOrderNormalizer
         $topic = mb_strtolower(trim((string) ($message->event_type ?? '')));
         $type = self::TOPIC_TO_TYPE[$topic] ?? 'updated';
 
-        // İADE GÖVDESİNİN KÖKÜ FARKLIDIR: `id` iadenin kendi kimliğidir ve
-        // sipariş kimliği `order_id`'dedir. `id` okunsaydı iade HİÇ VAR
-        // OLMAYAN bir siparişe bağlanır, eşleşme başarısız olur ve stok
-        // geri eklenmezdi.
-        $externalOrderId = $type === 'returned'
-            ? ($payload['order_id'] ?? null)
+        // ⚠️ İADE VE KARGO GÖVDELERİNİN KÖKÜ FARKLIDIR: `id` o nesnenin
+        // KENDİ kimliğidir (iadenin / paketin) ve sipariş kimliği
+        // `order_id`'dedir. `id` okunsaydı olay HİÇ VAR OLMAYAN bir
+        // siparişe bağlanır, `OrderEventRouter::resolveOrder()` onu bulamaz
+        // ve yalnızca "eşleşmeyen sipariş" uyarısı yazılırdı — iadede stok
+        // geri eklenmez, kargoda takip numarası SESSİZCE kaybolurdu.
+        //
+        // Kargo tarafı GERÇEK ÇALIŞTIRMADA bulundu (slice 1.8): normalizer
+        // `fulfillments/create` gövdesinde paket kimliğini döndürüyordu.
+        $externalOrderId = ($type === 'returned' || $type === 'fulfilled')
+            ? ($payload['order_id'] ?? $payload['id'] ?? null)
             : ($payload['id'] ?? null);
 
         if ($externalOrderId === null) {
@@ -104,7 +109,17 @@ final class ShopifyOrderNormalizer
      */
     private static function toCanonicalPayload(array $payload, string $type): array
     {
-        return [
+        // ⚠️ KARGO BLOĞU ROUTER'IN SÖZLEŞMESİDİR (slice 1.8).
+        // `OrderEventRouter::handleFulfilled()` paket alanlarını YALNIZCA
+        // `payload['fulfillment']` altından okur; blok yazılmasaydı
+        // `FulfillmentEvent` boş kimlik, boş kargo firması ve boş takip
+        // numarasıyla kurulur — satır yazılır ama İÇİ BOŞ olurdu ve satıcı
+        // "kargolandı" görüp takip edemezdi.
+        $fulfillment = $type === 'fulfilled'
+            ? ['fulfillment' => self::fulfillmentBlock($payload)]
+            : [];
+
+        return [...$fulfillment, ...[
             'type' => $type,
             'external_number' => isset($payload['order_number'])
                 ? (string) $payload['order_number']
@@ -134,7 +149,59 @@ final class ShopifyOrderNormalizer
                     ? (string) $payload['customer']['id']
                     : null,
             ]),
-        ];
+        ]];
+    }
+
+    /**
+     * Kargo paketinin kanonik bloğu.
+     *
+     * ⚠️ TAKİP NUMARASI TEKİLDİR. Shopify hem `tracking_number` hem
+     * `tracking_numbers` (ÇOĞUL DİZİ) gönderir; kanonik model tek numara
+     * taşır ve dizinin İLKİ alınır. Dizi olduğu gibi yazılsaydı kolon
+     * `["TR123"]` metnini taşır ve satıcı onu takip sitesine
+     * yapıştırdığında hiçbir şey bulamazdı.
+     *
+     * ⚠️ PAKET KİMLİĞİ ÇOK PAKETLİ SİPARİŞİN ÇIPASIDIR. Tekillik
+     * `(order_id, external_id)` üzerindedir; kimlik taşınmasaydı ikinci
+     * paket birincinin satırını EZER ve satıcı yarısı teslim olmuş
+     * siparişi "tamamen teslim" sanırdı.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function fulfillmentBlock(array $payload): array
+    {
+        $tracking = $payload['tracking_number'] ?? null;
+
+        if ($tracking === null || $tracking === '') {
+            $numbers = $payload['tracking_numbers'] ?? null;
+
+            $tracking = is_array($numbers) && $numbers !== []
+                ? ($numbers[0] ?? null)
+                : null;
+        }
+
+        return array_filter([
+            // KİMLİKSİZ BİLDİRİM DE KAYDEDİLİR: kanal kimlik vermeyebilir
+            // ve bildirimi düşürmek kargo bilgisini tamamen kaybettirirdi
+            // (`UpdateFulfillment` kuralı). Tekillik kısıtı NULL'ları
+            // kapsamaz, bu yüzden satır yazılabilir.
+            'external_id' => isset($payload['id']) ? (string) $payload['id'] : null,
+            'carrier' => self::nonEmpty($payload['tracking_company'] ?? null),
+            'tracking_number' => $tracking === null ? null : (string) $tracking,
+            'status' => self::nonEmpty($payload['shipment_status'] ?? ($payload['status'] ?? null)),
+        ], static fn (mixed $v): bool => $v !== null);
+    }
+
+    private static function nonEmpty(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed !== '' ? $trimmed : null;
     }
 
     /**
