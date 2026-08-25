@@ -160,6 +160,101 @@ final class ChannelConnectionScreenTest extends TestCase
         $this->assertNotContains('trendyol', $codes, 'Pasif kanal tipi sunulmamalı.');
     }
 
+    // ──────────────────────────────── panelden bağlanabilirlik kapısı
+
+    /**
+     * ⚠️ PANELDEN BAĞLANAMAYAN KANAL BUNU AÇIKÇA SÖYLER.
+     *
+     * Bağlama formu TEK bir kimlik biçimi biliyor: Woo/Trendyol'un
+     * `consumer_key`/`consumer_secret` çifti. Etsy OAuth2+PKCE ister
+     * (`keystring` + `shop_id`), Shopify tek bir Admin API token'ı —
+     * ikisi de bu formdan GİRİLEMEZ.
+     *
+     * Kanal listede görünüp form yanlış alanları sorsaydı satıcı Etsy
+     * panelinde HİÇ VAR OLMAYAN bir `ck_` anahtarını arardı; bulamayınca
+     * rastgele bir değer girer, sağlık kontrolü 401 alır ve sebep
+     * "anahtarın yanlış" gibi görünürdü — oysa anahtar yanlış değil,
+     * o kanalda ÖYLE BİR ANAHTAR YOKTUR. "Aktif ama çalışmayan
+     * bağlantı en pahalı hata biçimidir" kuralının form tarafındaki
+     * karşılığı budur.
+     */
+    #[Test]
+    public function the_form_marks_channels_that_cannot_be_connected_from_the_panel(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+
+        $this->activate('etsy', 'Etsy');
+        $this->activate('shopify', 'Shopify');
+
+        $response = $this->actingAs($user)->get('/channels/create');
+
+        $types = collect($response->viewData('page')['props']['channelTypes'])
+            ->keyBy('code');
+
+        // Woo bu formla GERÇEKTEN bağlanır.
+        $this->assertTrue($types['woocommerce']['connectable']);
+
+        // Etsy ve Shopify BAĞLANAMAZ ve sebebi GÖRÜNÜR.
+        $this->assertFalse($types['etsy']['connectable']);
+        $this->assertFalse($types['shopify']['connectable']);
+
+        $this->assertNotSame(
+            '',
+            (string) $types['etsy']['unavailable_reason'],
+            'Sebep boş — satıcı neden bağlanamadığını göremez.',
+        );
+    }
+
+    /**
+     * ⚠️ KAPI SUNUCUDA DA VAR — PANEL TEK SAVUNMA DEĞİLDİR.
+     *
+     * Yalnızca formda gizlenseydi doğrudan POST atan bir istek
+     * (ya da form dallandırılırken yapılan bir hata) Etsy bağlantısını
+     * Woo anahtarlarıyla kasaya YAZARDI. O satır `pending` kalır ama
+     * kasada anlamsız bir sır durur ve satıcı bağlantıyı "kurulmuş"
+     * sanır.
+     */
+    #[Test]
+    public function connecting_an_unsupported_channel_is_rejected_server_side(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+
+        $this->activate('etsy', 'Etsy');
+
+        $response = $this->actingAs($user)->post('/channels', [
+            'channel_type_code' => 'etsy',
+            'label' => 'Etsy Mağazam',
+            'store_url' => 'magaza.etsy.com',
+            'consumer_key' => 'ck_uydurma',
+            'consumer_secret' => 'cs_uydurma',
+        ]);
+
+        $response->assertSessionHasErrors('channel_type_code');
+
+        $this->assertSame(
+            0,
+            $this->asTenant($tenant, fn (): int => ChannelConnection::query()
+                ->where('channel_type_code', 'etsy')
+                ->count()),
+            'Desteklenmeyen kanal için bağlantı satırı YAZILDI.',
+        );
+    }
+
+    /** Kanal tipini aktifleştirir — kapı testlerinin ön koşulu. */
+    private function activate(string $code, string $name): void
+    {
+        $this->asSystem(fn () => ChannelType::query()->updateOrCreate(
+            ['code' => $code],
+            [
+                'name' => $name,
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\'
+                    .ucfirst($code).'\\'.ucfirst($code).'Adapter',
+                'is_active' => true,
+            ],
+        ));
+    }
+
     // ─────────────────────────────────────────────────── gönderim
 
     /** Geçerli form bağlantıyı kurar ve listeye yönlendirir. */

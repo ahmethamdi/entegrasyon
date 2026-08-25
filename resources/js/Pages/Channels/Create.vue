@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
@@ -7,13 +8,29 @@ const props = defineProps({
     channelTypes: { type: Array, default: () => [] },
 });
 
+// Varsayılan seçim BAĞLANABİLİR bir kanaldır. İlk sıradaki alınsaydı
+// (alfabetik olarak Etsy) ekran açılır açılmaz "bağlanamazsın" derdi ve
+// satıcı hiçbir şey yapamadan çıkardı.
+const firstConnectable = props.channelTypes.find((type) => type.connectable);
+
 const form = useForm({
-    channel_type_code: props.channelTypes[0]?.code ?? '',
+    channel_type_code: (firstConnectable ?? props.channelTypes[0])?.code ?? '',
     label: '',
     store_url: '',
     consumer_key: '',
     consumer_secret: '',
 });
+
+const selected = computed(
+    () => props.channelTypes.find((type) => type.code === form.channel_type_code) ?? null,
+);
+
+// ⚠️ "AÇIK" İLE "BAĞLANABİLİR" AYRI ŞEYLERDİR. Kanal listede görünür ama
+// bu form onun kimlik biçimini soramıyorsa (Etsy OAuth, Shopify tek
+// token) satıcı OLMAYAN bir anahtarı arar; bulamayınca rastgele bir
+// değer girer, sağlık kontrolü 401 alır ve sebep "anahtarın yanlış"
+// gibi görünür — oysa o kanalda böyle bir anahtar HİÇ YOKTUR.
+const connectable = computed(() => selected.value?.connectable !== false);
 
 function submit() {
     // Sırlar formda kalmaz: gönderim bitince temizlenir.
@@ -91,7 +108,25 @@ function submit() {
                 </p>
             </div>
 
-            <div class="rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <!--
+                Bağlanamayan kanal: sebep AÇIKÇA yazılır ve anahtar
+                alanları HİÇ gösterilmez. Gösterilseydi satıcı o kanalda
+                var olmayan bir anahtarı arar ve rastgele bir değerle
+                bağlanmayı denerdi.
+            -->
+            <div
+                v-if="!connectable"
+                class="rounded-lg border border-amber-300 bg-amber-50 p-4"
+            >
+                <p class="text-sm font-medium text-amber-900">
+                    {{ selected?.name }} panelden bağlanamıyor
+                </p>
+                <p class="mt-1 text-sm text-amber-800">
+                    {{ selected?.unavailable_reason }}
+                </p>
+            </div>
+
+            <div v-else class="rounded-lg border border-stone-200 bg-stone-50 p-4">
                 <p class="text-sm font-medium text-stone-900">WooCommerce API anahtarı</p>
                 <p class="mt-1 text-xs text-stone-600">
                     WooCommerce yönetiminde <span class="font-mono">Ayarlar → Gelişmiş → REST API</span>
@@ -140,9 +175,14 @@ function submit() {
             </div>
 
             <div class="flex items-center gap-3">
+                <!--
+                    Bağlanamayan kanalda düğme KİLİTLİDİR. Etkin kalsaydı
+                    istek sunucuya gider, oradaki kapı onu alan hatasına
+                    çevirirdi — çalışan ama anlamsız bir tur.
+                -->
                 <button
                     type="submit"
-                    :disabled="form.processing"
+                    :disabled="form.processing || !connectable"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ form.processing ? 'Bağlanıyor…' : 'Bağla ve doğrula' }}

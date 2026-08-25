@@ -13,6 +13,7 @@ use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\PanelConnectSupport;
 use App\Domain\Channels\Support\StoreUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -88,6 +89,18 @@ final class ChannelConnectionController extends Controller
             'consumer_key' => ['required', 'string', 'max:255'],
             'consumer_secret' => ['required', 'string', 'max:255'],
         ]);
+
+        // ⚠️ KAPI SUNUCUDA DA VAR — PANEL TEK SAVUNMA DEĞİLDİR.
+        //
+        // Yalnızca formda gizlenseydi doğrudan POST atan bir istek Etsy
+        // bağlantısını Woo anahtarlarıyla kasaya YAZARDI: satır
+        // `pending` kalır ama kasada anlamsız bir sır durur ve satıcı
+        // bağlantıyı "kurulmuş" sanardı.
+        $reason = PanelConnectSupport::reasonFor($validated['channel_type_code']);
+
+        if ($reason !== null) {
+            throw ValidationException::withMessages(['channel_type_code' => $reason]);
+        }
 
         // Plan kotası (§13 · Faz 4) — YALNIZCA GERÇEKTEN YENİ mağazada.
         //
@@ -240,6 +253,13 @@ final class ChannelConnectionController extends Controller
                 'code' => $type->code,
                 'name' => $type->name,
                 'kind' => $type->kind,
+                // ⚠️ "AÇIK" İLE "BAĞLANABİLİR" AYRI ŞEYLERDİR. Kanal
+                // listede görünür ama form onun kimlik biçimini
+                // soramıyorsa satıcı OLMAYAN bir anahtarı arar ve
+                // bulamayınca rastgele bir değer girer; sağlık kontrolü
+                // 401 alır ve sebep "anahtarın yanlış" gibi görünür.
+                'connectable' => PanelConnectSupport::isConnectable($type->code),
+                'unavailable_reason' => PanelConnectSupport::reasonFor($type->code),
             ])
             ->all();
     }
