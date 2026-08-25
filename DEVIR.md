@@ -1,8 +1,23 @@
-# Devir Notu — 25 Ağustos 2026 (V3.0 · **FAZ 1 KAPANDI** · Shopify)
+# Devir Notu — 25 Ağustos 2026 (V3.0 · Faz 1 KAPANDI · **Faz 3 Etsy sürüyor**)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `8c852ae`.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `35b0209`.
 
-**1071 test yeşil** (3855 assertion), Pint temiz (407 dosya).
+**1126 test yeşil** (3968 assertion), Pint temiz (415 dosya).
+
+## ⚠️ BU TURDA BULUNAN GERÇEK HATA — hız sınırı HİÇ UYGULANMIYORDU
+
+Etsy'nin gerçek çalıştırmasında çıktı, **testler görmüyordu**. Seeder
+`'requests' => 120` yazıyor, `RateLimitProfile::fromArray()` ise
+`'requests_per_second'` okuyor — ad uyuşmadığı için **beş kanalın beşi
+de sessizce 5 istek/sn**'ye düşüyordu (Woo'nun 120'si, Shopify'ın 50'si
+hiç uygulanmıyordu).
+
+Sessizdi çünkü `burst_capacity` adı DOĞRUYDU (profil "kısmen çalışıyor"
+göründü), tüm davranış testleri profili ELLE ve doğru adla kuruyordu, ve
+sonucu yanlış veri değil YAVAŞLIKTI — hiçbir alarm çalmaz.
+
+Düzeltildi (`35b0209`) ve `SeededRateLimitContractTest` tohumlanmış
+satırı okuyarak koruyor.
 
 ---
 
@@ -100,15 +115,39 @@ DOKUNMASIDIR (`order_events` satırı). Test düzeltildi, kural değil.
 Diğer dört mutasyon (kapı kaldır · kanal kodu yok say · revoke atla ·
 `pending` yaz) testler tarafından öldürüldü.
 
-## SIRADAKİ İŞ
+## FAZ 3 · ETSY SÜRÜYOR (56 sa)
 
-**Faz 1 bitti.** Seçenekler:
+Hepsiburada (Faz 2) uç nokta doğrulaması BLOKE olduğu için atlandı —
+kullanıcı kararı: "dökümantasyonu beraber yazalım" (24 Ağustos).
 
-1. **Shopify'ı gerçek mağazada sürmek** (yukarıdaki uyarı bölümü) —
-   kanal AÇIK olduğu için bu artık en yüksek öncelikli iş.
-2. **Hepsiburada (38 sa)** — ⚠️ uç nokta doğrulaması hâlâ BLOKE;
-   kullanıcı "dökümantasyonu beraber yazalım" dedi (24 Ağustos).
-3. Etsy 56 · eBay 64 · Hardening 30.
+| Slice | İş | Durum | Commit |
+|---|---|---|---|
+| 3.1 | OAuth2 + PKCE + callback (10 sa) | ✅ KAPALI | `6dcaf52` |
+| **3.2** | **Token yenileme entegrasyonu (4 sa)** | ⏭️ **SIRADAKİ** | — |
+| 3.3 | Taksonomi (8 sa) | — | — |
+| 3.4 | Katalog — listing/product/offering (10 sa) | — | — |
+| 3.5 | **Stok — oku-birleştir-yaz (8 sa)** | — | — |
+| 3.6 | Fiyat (4 sa) | — | — |
+| 3.7 | Sipariş yoklama (8 sa) | — | — |
+| 3.8 | İptal + mutabakat + production (4 sa) | — | — |
+
+**Slice 3.1'de yazılanlar:** `EtsyEndpoints` · `EtsyAuth` (saf PKCE) ·
+`EtsyAdapter` (kimlik/sağlık/hata/hız/token yenileme) ·
+`EtsyOAuthController` + iki rota · seeder satırı (`is_active = false`).
+
+### Etsy'nin EN TEHLİKELİ maddesi — slice 3.5'te gelecek
+
+§11.3: envanter PUT'u **TÜM ENVANTERİ EZER.** Kısmi güncelleme YOKTUR;
+gövde o ilanın BÜTÜN `products` + `offerings` dizisini taşımak
+zorundadır. Gönderilmeyen varyantlar **KANALDAN SİLİNİR** — sessiz,
+geri alınamaz ve satıcı ancak siparişler kesilince fark eder. Zorunlu
+akış **oku-birleştir-yaz**tır.
+
+### Sonraki fazlar
+
+eBay 64 · Hardening 30 · Hepsiburada 38 (bloke).
+Ayrıca: **Shopify'ı gerçek mağazada sürmek** (yukarıdaki uyarı) —
+kanal AÇIK ama hiç doğrulanmadı.
 
 ## Faz 1'de öğrenilenler — 1.6–1.8 (KALICI, CLAUDE.md'de de var)
 

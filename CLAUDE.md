@@ -372,6 +372,75 @@ memory'deki "Repo Durumu" dosyasına bak.
   dönseydi operasyon tamamlandı sanılır, `synced_version` ilerler ve kanalda
   hiçbir şey değişmemişken satır "senkron" görünürdü.
 
+## Etsy kuralları (beşinci kanal · Faz 3 · `6dcaf52`)
+
+Faz 2 (Hepsiburada) uç nokta doğrulaması BLOKE olduğu için atlandı;
+kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1 KAPALI**, 3.2 sırada.
+
+- **HIZ SINIRI PROFİLİNİN ANAHTAR ADI SÖZLEŞMEDİR** (`35b0209`).
+  `RateLimitProfile::fromArray()` TAM OLARAK `requests_per_second`
+  okur; seeder `requests` yazdığı için **beş kanalın beşi de sessizce
+  5 istek/sn**'ye düşüyordu. Sessizdi çünkü `burst_capacity` adı
+  DOĞRUYDU (profil kısmen çalışıyor göründü), tüm davranış testleri
+  profili ELLE ve doğru adla kuruyordu ve sonucu yanlış veri değil
+  YAVAŞLIKTI. **Tohumlanan biçimi okuyan bir test olmalıdır** —
+  elle kurulmuş dizi, kaçırılan şeyi yeniden kaçırır.
+- **`window_seconds` HİÇ OKUNMAZ.** Kova saniyelik yenilenir; Woo §21'de
+  "istek/dk"dır ve dönüşüm SEEDER'da yapılır (120/dk = 2/sn). 120
+  yazılsaydı Woo saniyede 120 isteğe izin verilir ve satıcının KENDİ
+  sunucusu çökerdi.
+- **PKCE MANTIĞI SAF BİR SINIFTA YAŞAR** (`EtsyAuth`): oturuma, kasaya,
+  ağa dokunmaz. Kriptografik kararlar veritabanı kurmadan sınanabilir
+  (`CsvProductParser`'ın ayrıştırma/yazma ayrımı). Challenge **RFC
+  7636'nın KENDİ örneğiyle** sınanır — kendi kodumuzla üretilmiş bir
+  beklenti aynı hatayı iki tarafta birden yapardı.
+- **`state` DOĞRULAMASINDA BOŞ DEĞER DAİMA REDDEDİLİR** (P0-10).
+  `hash_equals` yetmez: oturumda `state` yoksa `'' === ''` ile geçilirdi
+  ve doğrulama TAMAMEN devre dışı kalırdı — kapının hiç olmamasından
+  farksız ama VAR SANILAN bir hâl. İddia "yönlendirildi" DEĞİL
+  **"kimlik bilgisi kasaya YAZILMADI"** olmalıdır; yönlendirme iddiası
+  takas gerçekleşse bile yeşil kalırdı.
+- **`code_verifier` KALICI DEPOYA YAZILMAZ** ve yetkilendirme adresine
+  SIZMAZ. Sızsaydı PKCE anlamsızlaşırdı: o adres tarayıcı geçmişine,
+  sunucu günlüklerine ve Referer başlığına düşer.
+- **OAUTH CALLBACK ROTASI `web` GRUBUNDADIR** — webhook rotalarının
+  AKSİNE. Oturum ZORUNLUDUR çünkü `state` ve `code_verifier` oradan
+  okunur. Webhook muafiyetinin bedelini HMAC öder; burada ödeyen şey
+  OTURUMUN KENDİSİDİR. Yönlendirme POST'tur: GET olsaydı tarayıcı ön
+  yüklemesi el sıkışmayı habersiz başlatır ve satıcının gerçek
+  denemesindeki `state`'i EZERDİ.
+- **İKİ AYRI KİMLİK BAŞLIĞI VARDIR** (§11.2): `Bearer` SATICININ
+  kimliğidir ve yenilenir, `x-api-key` UYGULAMANIN kimliğidir ve
+  yenilenmez. Karıştırılırsa yenileme çalışır ama istek yine 401 alır.
+- **REFRESH TOKEN TEK KULLANIMLIKTIR.** Etsy her yenilemede YENİ bir
+  refresh token döner ve eskisini iptal eder; yanıttaki değer yoksa
+  **eskisi KORUNUR** — körlemesine üzerine yazmak bağlantıyı sonraki
+  turda öldürürdü. Yenileme payı (900 sn) tarama sıklığından (15 dk)
+  KÜÇÜK OLAMAZ: küçük olsaydı token iki tur arasında hem "henüz aday
+  değil" hem "artık ölmüş" olabilirdi.
+- **ETSY'NİN VERİ MODELİ ÜÇ SEVİYELİ ve ADLAR TERSTİR** (§11.1):
+  Etsy'nin "Listing"i bizim ÜRÜNÜMÜZ, "Product"ı bizim VARYANTIMIZ.
+  `external_id` = `product_id` (`listing_id` DEĞİL — bizde listing satırı
+  varyant başınadır ve `UNIQUE(connection, external_id)` ikinciyi
+  reddederdi); `external_parent_id` = `listing_id`. Dönüşüm MAPPER'da,
+  çekirdek model DEĞİŞMEZ.
+- **ENVANTER PUT'U TÜM ENVANTERİ EZER** (§11.3 · slice 3.5'te gelecek).
+  Kısmi güncelleme YOKTUR; gönderilmeyen varyantlar KANALDAN SİLİNİR —
+  sessiz, geri alınamaz. Zorunlu akış **oku-birleştir-yaz**.
+- **WEBHOOK YOKTUR** (§11.4): `verifyWebhookSignature` daima `false`
+  (Trendyol kararının aynısı) ve `supports_webhooks = false` —
+  `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
+  GELMEZDİ. **İADE İÇİN AYRI UÇ NOKTA DA YOKTUR**: yoklama iadeyi
+  `updated` görür ve stok hareketi ÜRETMEZ. `returned` sayılsaydı
+  satılmış stok geri eklenir ve bakiye bozulurdu.
+- **ONAY SÜRECİ YOKTUR** (§11.5) — `SupportsApprovalWorkflow`
+  UYGULANMAZ; panelde hiç dolmayacak bir sekme açardı.
+- **GÜNLÜK KOTA GERÇEK BİR ÖLÇEK SINIRIDIR**: 10.000 istek/gün, hesap
+  başına. Envanter yazma ilan başına ayrı çağrı gerektirdiği için
+  5.000+ ürünlü mağazalarda AŞILIR ve bu §21'de açıkça kayıtlıdır.
+  `ChannelRateLimiter` günlük kova TUTMAZ — kova saniyeliktir ve
+  esnetilseydi tek bir yoğun tur bütün günü kilitlerdi.
+
 ## Hepsiburada kuralları (üçüncü kanal · `356a662`)
 
 **DOKÜMAN BU KANALI KAPSAM DIŞI BIRAKIYOR** (§16: "iki kanal kusursuz
