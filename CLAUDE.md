@@ -13,16 +13,44 @@ Kod ile doküman çeliştiğinde **doküman esastır**. Yeni mimari turu yapılm
 yalnızca kod incelemesinde çıkan somut bulgular patchlenebilir. Yeni teknoloji
 veya paradigma (Kafka, mikroservis, CQRS, event sourcing, Kubernetes) önerilmez.
 
-### ⏳ V3.0 — YAZILDI, ONAY BEKLİYOR (24 Ağustos 2026)
+### ✅ V3.0 — ONAYLANDI, UYGULAMA SÜRÜYOR (25 Ağustos 2026)
 
 **Kaynak:** `docs/ENTEGRASYON-V3.0.md` · **PDF:**
-`~/Desktop/Entegrasyon-Mimari-v3.0.pdf` (46 sayfa) · commit `cc44dac`
+`~/Desktop/Entegrasyon-Mimari-v3.0.pdf` (47 sayfa) · commit `cdb14f4`
 
 Kapsam: **Shopify · Hepsiburada · Etsy · eBay** → altı kanal. 240 saat.
 
-> **ONAY GELMEDEN V3'ÜN HİÇBİR MADDESİ UYGULANMAZ** — ne migration, ne
-> adapter, ne arayüz. Kullanıcı PDF'i inceliyor. Ayrıntı ve "değişiklik
-> isterse ne yapılacak" DEVIR.md'nin EN ÜSTÜNDE.
+Kullanıcı PDF'i onayladı; **kod yazımı başladı**. Doküman implementation
+referansıdır ve **kod ile çelişirse doküman esastır**.
+
+**FAZ 0 KAPANDI** (`4b1600f` · 12 sa): `listings.channel_metadata`
+migration · `SupportsTokenRefresh` + `TokenRefresher` ·
+`credentials:refresh` komutu + 15 dk zamanlama · `ChannelTypeSeeder`
+`is_active` düzeltmesi. **943 test yeşil.**
+
+**SIRADAKİ: Faz 1 · Shopify (52 sa)** — §27'de dokuz slice.
+
+#### Faz 0'da öğrenilen — kalıcı kurallar
+
+- **Laravel'de `skipLocked()` METODU YOKTUR.** `FOR UPDATE SKIP LOCKED`
+  için `->lock('for update skip locked')` yazılır. `lockForUpdate()`
+  KULLANILAMAZ: düz `FOR UPDATE` ikinci turu BEKLETİR ve ardından AYNI
+  satırı ikinci kez yeniler — refresh token TEK KULLANIMLIK olduğu için
+  kanal ilkini iptal eder ve bağlantı ölür. Mutasyonla doğrulandı: test
+  asılı kaldı.
+- **Token yenileme İSTEK ANINDA DEĞİL TARAMAYLA** (P0-5). İki koruma
+  katmanı gerekir: `withoutOverlapping` (aynı komut) + `FOR UPDATE SKIP
+  LOCKED` (çok sunuculu kurulum).
+- **Adapter kasaya YAZMAZ** — `refreshCredentials()` `RefreshedCredentials`
+  döner, `CredentialVault::store()` çağrısını ÇEKİRDEK yapar. v2.2'nin
+  "adapter yan etkisizdir" kuralı.
+- **`channel_metadata` SIR TAŞIMAZ** (P0-9) — kolon şifresizdir ve panele
+  Inertia prop'u olarak gider. Token/secret `channel_credentials`'ta.
+  KİMLİK ≠ SIR. Kaynak taramasıyla korunur.
+- **Mutasyon turu asılı transaction bırakabilir** ve sonraki tam test
+  koşusu `DROP TABLE`'da bloke olur (bu turda yaşandı, 600 sn timeout).
+  Teşhis: `pg_stat_activity WHERE state <> 'idle'`. Temizlik:
+  `pg_terminate_backend`. DB kullanıcısı **`entegrasyon`**, `postgres` değil.
 
 **Doküman değişirse İKİ DOSYA BİRDEN:** önce `docs/ENTEGRASYON-V3.0.md`
 (tek gerçek kaynak), sonra `docs/pdf/build-v3.sh` ile PDF yeniden
