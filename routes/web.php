@@ -9,6 +9,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EtsyOAuthController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\MetricsController;
@@ -54,6 +55,24 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     Route::post('/channels', [ChannelConnectionController::class, 'store'])->name('channels.store');
     Route::post('/channels/{connection}/health', [ChannelConnectionController::class, 'health'])
         ->name('channels.health');
+
+    // ETSY OAUTH 2 + PKCE (V3.0 · §11.2 · §19 · P0-10) — projede İLK
+    // OAuth akışı ve BİLİNÇLİ olarak `web` grubundadır: webhook
+    // rotalarının aksine OTURUM ZORUNLUDUR, çünkü `state` ve
+    // `code_verifier` oradan okunur ve kullanıcı kimliği bilinmelidir.
+    //
+    // Yönlendirme POST'tur: yan etkisi vardır (oturuma tek kullanımlık
+    // sır yazar) ve GET olsaydı tarayıcı ön yüklemesi el sıkışmayı
+    // habersiz başlatır, satıcının gerçek denemesindeki `state`'i
+    // EZERDİ — sağlık kontrolünün POST olma gerekçesinin aynısı.
+    Route::post('/channels/{connection}/etsy/authorize', [EtsyOAuthController::class, 'redirect'])
+        ->name('channels.etsy.authorize');
+
+    // Callback GET'tir çünkü Etsy satıcının TARAYICISINI buraya yollar;
+    // biçimi kanal belirler, biz değil. `state` doğrulaması CSRF'in
+    // yerini tutar (P0-10).
+    Route::get('/channels/etsy/callback', [EtsyOAuthController::class, 'callback'])
+        ->name('channels.etsy.callback');
 
     // Ürün yönetimi (§13 · faz 1.2 · "panelde ürün oluşturma, düzenleme").
     // Açılış stoğu ledger üzerinden girer; içerik düzenlemesi stoğa dokunmaz.

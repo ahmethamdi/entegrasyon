@@ -29,6 +29,17 @@ final class PayloadRedactor
         'authorization', 'api_key', 'apikey', 'api_secret', 'secret',
         'access_token', 'refresh_token', 'token', 'password', 'signature',
         'x-shopify-hmac-sha256', 'x-wc-webhook-signature',
+        // V3.0 · §19 — yeni kanalların kimlik başlıkları ve OAuth sırları.
+        //
+        // `x-api-key` Etsy'nin UYGULAMA anahtarını taşır: `settings`'te
+        // kimlik olarak durur ama BAŞLIK olarak günlüğe düşerse üçüncü
+        // taraf günlük toplayıcıya gider.
+        //
+        // `code_verifier` PKCE'nin tek kullanımlık sırrıdır ve asla
+        // kalıcı bir yere yazılmaz; yine de bir istek gövdesi olarak
+        // `api_calls`'a düşebilir ve orada maskelenmelidir.
+        'x-shopify-access-token', 'x-hb-signature',
+        'x-api-key', 'code_verifier',
         // kişisel veri
         'email', 'phone', 'address', 'address1', 'address2',
         'customer_name', 'first_name', 'last_name',

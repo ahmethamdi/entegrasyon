@@ -113,5 +113,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'consumer_key', 'consumer_secret',
             'api_key', 'api_secret',
             'access_token', 'refresh_token', 'token', 'secret',
+            // V3.0 · §19 — Etsy OAuth. `code_verifier` PKCE'nin tek
+            // kullanımlık sırrıdır ve `etsy_keystring` uygulamanın
+            // kimliğidir; ikisi de bir doğrulama hatasında oturuma flash
+            // edilirse `SESSION_DRIVER=database` altında ŞİFRESİZ bir
+            // tabloya düşer.
+            'code_verifier', 'etsy_keystring', 'keystring',
         ]);
     })->create();

@@ -208,6 +208,72 @@ class ChannelTypeSeeder extends Seeder
                 'is_active' => true,
             ],
         );
+
+        // BEŞİNCİ KANAL — el yapımı/vintage pazarı. V3.0 · Faz 3 · §11.
+        //
+        // ⚠️ `is_active = false` — §05'in 12 adımlı listesinde ADIM 1.
+        // Slice 3.1 yalnızca bağlantı/kimlik/sağlık katmanını yazdı;
+        // katalog, stok, fiyat ve sipariş HENÜZ YOK. Kanal açılsaydı
+        // satıcı bağlanır, ürün göndermeye çalışır ve hiçbir yetenek
+        // bulunmadığı için hepsi sessizce hiçbir şey yapmazdı.
+        //
+        // ⚠️ ETSY'NİN VERİ MODELİ ÜÇ SEVİYELİDİR ve ADLAR TERSTİR (§11.1):
+        // Etsy'nin "Listing"i bizim ÜRÜNÜMÜZ, Etsy'nin "Product"ı bizim
+        // VARYANTIMIZDIR. Dönüşüm MAPPER'da yapılır, çekirdek model
+        // DEĞİŞMEZ — Etsy'nin variation modelini Core'a zorlamak, altı
+        // kanalın beşinde anlamsız bir seviye açardı.
+        $this->upsert(
+            ['code' => 'etsy'],
+            [
+                'name' => 'Etsy',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Etsy\\EtsyAdapter',
+                'capabilities' => [
+                    // SLICE SLICE AÇILIR — §04'ün matrisi V3 HEDEFİDİR,
+                    // bugünkü durum DEĞİL. İlan edilen ama çalışmayan
+                    // yetenek panelde çalışmayan sekme demektir (§05).
+                    'catalog' => false,         // slice 3.4
+                    'catalog_import' => false,  // slice 3.4
+                    'inventory' => false,       // slice 3.5
+                    'pricing' => false,         // slice 3.6
+                    'orders' => false,          // slice 3.7
+                    'taxonomy' => false,        // slice 3.3
+                    // ⚠️ ONAY SÜRECİ YOKTUR (§11.5) — Etsy'de ilan
+                    // yayınlanır yayınlanmaz canlıdır. Açılsaydı panelde
+                    // HİÇ DOLMAYACAK bir sekme belirirdi.
+                    'approval' => false,
+                    // ⚠️ İADE İÇİN AYRI UÇ NOKTA YOK (§11.4 · dürüst
+                    // sınır): satıcı iadeyi Etsy panelinden işler,
+                    // yoklama bunu `updated` görür ve stok hareketi
+                    // ÜRETMEZ. `returned` sayılsaydı satılmış stok geri
+                    // eklenir ve bakiye bozulurdu.
+                    'fulfillment' => false,     // slice 3.7
+                ],
+                'rate_limit_profile' => [
+                    // 10 istek/sn (§21). ASIL SINIR GÜNLÜK KOTADIR:
+                    // 10.000 istek/gün, HESAP BAŞINA. Envanter yazma ilan
+                    // başına ayrı çağrı gerektirdiği için (§11.3) bu
+                    // gerçek bir TAVANDIR ve 5.000+ ürünlü mağazalarda
+                    // AŞILIR — §21'de açıkça kayıtlı bir ölçek sınırı.
+                    'strategy' => 'token_bucket',
+                    'requests' => 10,
+                    'window_seconds' => 1,
+                    'burst_capacity' => 10,
+                    // ⚠️ İLAN BAŞINA **1** (§11.3): envanter uç noktası
+                    // tek ilanı adresler ve o ilanın TÜM varyantlarını
+                    // tek gövdede ister. Performans sorunu değil,
+                    // KANALIN ŞEKLİ.
+                    'max_inventory_batch' => 1,
+                    'max_price_batch' => 1,
+                ],
+                // ⚠️ WEBHOOK YOKTUR (§11.4) — sipariş YOKLAMAYLA gelir
+                // (Trendyol kalıbı). Bayrak `true` olsaydı yoklama turu
+                // `supports_webhooks` kapısında bu kanalı ATLAR ve
+                // siparişler HİÇ GELMEZDİ.
+                'supports_webhooks' => false,
+                'is_active' => false,
+            ],
+        );
     }
 
     /**
