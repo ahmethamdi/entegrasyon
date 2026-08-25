@@ -1,10 +1,51 @@
 # Devir Notu — 25 Ağustos 2026 (V3.0 · Faz 1 KAPANDI · **Faz 3 Etsy sürüyor**)
 
-Kod tarafında yarım iş YOK; çalışma ağacı temiz. Son commit `2c522ed`.
+Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1181 test yeşil** (4087 assertion), Pint temiz (422 dosya).
+**1208 test yeşil** (4154 assertion), Pint temiz (424 dosya).
 
-**Faz 3 · Etsy: 40/56 saat.** Slice 3.1–3.5 KAPALI, sıradaki **3.6 fiyat**.
+**Faz 3 · Etsy: 44/56 saat.** Slice 3.1–3.6 KAPALI, sıradaki
+**3.7 sipariş yoklaması** (8 sa).
+
+## Slice 3.6 · fiyat — NE YAPILDI
+
+Fiyat Etsy'de AYRI bir uç nokta DEĞİL: offering nesnesinin içinde,
+miktarla YAN YANA yaşar. Bu yüzden 3.6 yeni bir yol açmadı —
+`writeInventory()` gövdesini stokla PAYLAŞTI ve birleştiriciye ikinci
+bir harita (`priceByProductId`) eklendi.
+
+**Tuzak 3.5'in AYNASIYDI ve DAHA AĞIRDI.** Orada bir stok turu sessizce
+fiyatı sıfırlıyordu; burada bir fiyat turu stoğu sıfırlar ve ürün
+SATIŞA KAPANIR. Yanlış fiyattan satış devam eder, sıfır stokta satış
+DURUR. Mutasyon (`quantity`'yi gövdeden düşür) **beş testi birden**
+kırdı.
+
+**Trendyol'un kuralı burada TERS ÇALIŞIR.** Orada "fiyat yükü stok alanı
+TAŞIMAZ" katı bir kuraldı çünkü uç nokta kısmi güncellemeyi destekler ve
+alanı göndermemek onu KORUMAKTIR. Etsy'de kısmi güncelleme yoktur:
+alanı göndermemek onu SİLMEKTİR. Aynı cümle iki kanalda ters sonuç
+verir.
+
+**"Yazıldı" ≠ "çağrılıyor" — İKİ YÖN DE SÜRÜLDÜ.** Adapter gövdesini
+doğrudan çağıran testler yeteneğin doğru çalıştığını kanıtlar, akıştan
+çağrıldığını kanıtlamaz. Bu yüzden:
+- **giden yön** gerçek `PushPrices` kuyruk işiyle sürülür
+  (`EtsyPricingTest::the_real_queue_job_pushes_a_price_to_etsy`)
+- **gelen yön** gerçek `ReconcileActiveConnections` sweep'iyle
+  (`EtsyPriceReconciliationTest`)
+
+`SupportsPricing` arayüzünü kaldıran mutasyon **beş testi** kırdı;
+yalnızca doğrudan çağıran testler olsaydı üçü hayatta kalırdı.
+
+⚠️ **FİYAT MUTABAKATI `recently_sold` ADAYI ÜRETMEZ** — stok testinden
+kopyalanan kurulum burada kanala HİÇ istek attırmaz. Satış fiyatı
+değiştirmez ve o sorgu fiyat turunda hiç koşmaz (§9); aday `stale_sync`
+yolundan gelir (`domain = 'price'`, `is_dirty`, bayat
+`last_requested_at`).
+
+Yedi mutasyonun yedisi de öldürüldü: miktarı düşür · ham fiyat nesnesi
+gönder · SKU ile eşle · fiyatsız varyanta `"0"` yaz · parti boyutunu
+100 yap · `fetchPrices` boş dön · `SupportsPricing`'i kaldır.
 
 ## ⚠️ BU TURDA BULUNAN GERÇEK HATA — hız sınırı HİÇ UYGULANMIYORDU
 
@@ -142,8 +183,8 @@ kullanıcı kararı: "dökümantasyonu beraber yazalım" (24 Ağustos).
 | 3.3 | Taksonomi (8 sa) | ✅ KAPALI | `312445f` |
 | 3.4 | Katalog — listing/product/offering (10 sa) | ✅ KAPALI | `606d999` |
 | 3.5 | **Stok — oku-birleştir-yaz (8 sa)** | ✅ KAPALI | `2c522ed` |
-| **3.6** | **Fiyat (4 sa)** | ⏭️ **SIRADAKİ** | — |
-| 3.7 | Sipariş yoklama (8 sa) | — | — |
+| 3.6 | **Fiyat (4 sa)** | ✅ KAPALI | bu tur |
+| **3.7** | **Sipariş yoklama (8 sa)** | ⏭️ **SIRADAKİ** | — |
 | 3.8 | İptal + mutabakat + production (4 sa) | — | — |
 
 **Yazılan dosyalar:** `EtsyEndpoints` · `EtsyAuth` (saf PKCE) ·
@@ -151,18 +192,34 @@ kullanıcı kararı: "dökümantasyonu beraber yazalım" (24 Ağustos).
 `Taxonomy/EtsyTaxonomyClient` · `EtsyOAuthController` + iki rota.
 Kanal `is_active = false` (§05 · adım 1) — sipariş yolu HENÜZ YOK.
 
-### Slice 3.6 · fiyat — İKİ ŞEYİ BİLEREK BAŞLA
+**Uygulanan arayüzler:** `ChannelAdapter` · `SupportsCatalog` ·
+`SupportsInventory` · `SupportsPricing` · `SupportsTaxonomy` ·
+`SupportsTokenRefresh`. `SupportsOrders` 3.7'de gelir.
+`SupportsApprovalWorkflow` HİÇ uygulanmayacak (§11.5 — Etsy'de onay
+süreci yoktur, panelde hiç dolmayacak bir sekme açardı).
 
-**1 · Fiyat de ENVANTER uç noktasında yaşar** (§11.3). Yani 3.6 yeni bir
-uç nokta DEĞİL, `EtsyInventoryMerger`'ın fiyat tarafıdır ve AYNI
-oku-birleştir-yaz akışını kullanır. Birleştirici fiyatı ZATEN koruyor
-(`priceValue()`); eksik olan, fiyatı DEĞİŞTİREN yol ve `SupportsPricing`.
+### Slice 3.7 · sipariş yoklaması — ÜÇ ŞEYİ BİLEREK BAŞLA
 
-**2 · Fiyat okumada NESNE, yazmada DÜZ SAYI.** Okuma
-`{amount: 1990, divisor: 100}` verir, yazma `19.90` bekler. Ham `amount`
-gönderilirse 19.90 TL kanalda **1990 TL** olur. Dönüşüm
-`EtsyProductMapper::money()` ve `EtsyInventoryMerger::priceValue()`
-içinde ZATEN var — yeniden yazma, çağır.
+**1 · WEBHOOK YOKTUR** (§11.4). Sipariş YOKLAMAYLA gelir — Trendyol
+kalıbı birebir. `verifyWebhookSignature()` zaten daima `false` ve
+`supports_webhooks = false`; `true` olsaydı yoklama turu bu kanalı
+ATLAR ve siparişler HİÇ GELMEZDİ.
+
+**2 · OLAY KİMLİĞİ `{receipt_id}:{status}`** (§11.4) — yalnızca
+`receipt_id`'ye bağlansaydı aynı siparişin sonraki İPTALİ birincil
+tekillik indeksine takılır ve `insertOrIgnore` tarafından SESSİZCE
+YUTULURDU; stok geri eklenmez, bakiye kalıcı eksik kalırdı.
+
+**3 · İADE İÇİN AYRI UÇ NOKTA YOKTUR ve bu DÜRÜST bir sınırdır.**
+Satıcı iadeyi Etsy panelinden işler, `receipt` durumu değişir ve
+yoklama bunu `updated` görür — stok hareketi ÜRETMEZ. `returned`
+sayılsaydı satılmış stok geri eklenir ve bakiye bozulurdu.
+
+Eşleme (§11.4): `receipt_id` → `orders.external_id` · `transaction_id`
+→ `order_lines.external_line_id` · `transactions[].sku` →
+`order_lines.sku`. Pencere 5 dk GERİYE bakar, imleç turun BAŞLAMA
+anına yazılır ve BAŞARISIZ TURDA İLERLEMEZ. Yoklamada
+`signature_valid = true` ve bu eksiklik değildir.
 
 ### Slice 3.5'in kalıcı dersi — mutasyonla kanıtlandı
 
@@ -173,6 +230,10 @@ varyantımızı gönder" mutasyonu **YEDİ testi birden** kırmızıya çevirdi.
 Beklenmeyen tuzak: Etsy'nin offering nesnesi **fiyatı da taşıyor** —
 gövdede eksik bırakılsa kanal fiyatı SIFIRLAR, yani bir STOK turu
 sessizce bir FİYAT sıfırlaması yapardı.
+
+Slice 3.6 bu tuzağın **ters yönünü** kapattı: bir FİYAT turu da sessizce
+bir STOK sıfırlaması yapabilirdi ve o daha ağırdır. Kural artık ÇİFT
+YÖNLÜ ve `EtsyInventoryMerger::rebuildProduct()` içinde tek yerde yaşıyor.
 
 ### Sonraki fazlar
 

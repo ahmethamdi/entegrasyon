@@ -13,6 +13,7 @@ use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -23,8 +24,10 @@ use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
+use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -38,17 +41,18 @@ use Throwable;
  * V3.0 · §11 · §20 · §21 · v2.2 §7.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 3.1 · 3.2 · 3.3 · 3.4 · 3.5
+ * KAPSAM — SLICE 3.1 · 3.2 · 3.3 · 3.4 · 3.5 · 3.6
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata sınıflandırma,
  * hız sınırı profili, **token yenileme** (`SupportsTokenRefresh`),
- * **taksonomi** (`SupportsTaxonomy`), **katalog** (`SupportsCatalog`) ve
- * **stok** (`SupportsInventory` — oku-birleştir-yaz).
+ * **taksonomi** (`SupportsTaxonomy`), **katalog** (`SupportsCatalog`),
+ * **stok** ve **fiyat** (`SupportsInventory` + `SupportsPricing` —
+ * ikisi de AYNI oku-birleştir-yaz akışını paylaşır, §11.3).
  *
- * HENÜZ YAZILMADI (sonraki slice'lar): fiyat (3.6) · sipariş yoklaması
- * (3.7). O yetenek arayüzleri BU SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek panelde
- * çalışmayan sekme demektir (§05) ve "yazılmamış yetenek SESSİZCE
- * BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
+ * HENÜZ YAZILMADI (sonraki slice): sipariş yoklaması (3.7). O yetenek
+ * arayüzü BU SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek
+ * panelde çalışmayan sekme demektir (§05) ve "yazılmamış yetenek
+ * SESSİZCE BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
  *
  * ─────────────────────────────────────────────────────────────────────
  * ⚠️ İKİ AYRI KİMLİK BAŞLIĞI VARDIR (§11.2)
@@ -75,7 +79,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInventory, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInventory, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     /**
      * Uygulama anahtarının `settings` içindeki yeri.
@@ -113,6 +117,12 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
      * gövdede ister. `InventoryBatchBuilder` operasyonları yine
      * birleştirir; adapter `external_parent_id`'ye göre gruplar ve her
      * grup için AYRI çağrı yapar.
+     *
+     * ⚠️ FİYAT PARTİSİ DE AYNI SABİTİ KULLANIR ve bu tesadüf değildir:
+     * Etsy'de fiyat AYRI bir uç noktada değil, aynı envanter gövdesinin
+     * içindedir. İki ayrı sabit tanımlansaydı biri değiştiğinde ötekinin
+     * sessizce eski kalması an meselesi olurdu — oysa ikisini de
+     * belirleyen tek gerçek AYNI uç noktadır.
      */
     private const MAX_INVENTORY_BATCH = 1;
 
@@ -619,7 +629,13 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
         $pushed = 0;
 
         foreach ($byListing as $listingId => $items) {
-            $this->writeInventory((string) $listingId, $items);
+            $quantityBySku = [];
+
+            foreach ($items as $item) {
+                $quantityBySku[(string) $item['sku']] = (int) $item['quantity'];
+            }
+
+            $this->writeInventory((string) $listingId, quantityBySku: $quantityBySku);
             $pushed += count($items);
         }
 
@@ -634,10 +650,21 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
     /**
      * Tek ilanın envanterini OKU-BİRLEŞTİR-YAZ ile günceller.
      *
-     * @param  list<array<string, mixed>>  $items
+     * ⚠️ STOK VE FİYAT BU TEK AKIŞI PAYLAŞIR ve bu BİLİNÇLİDİR.
+     * Etsy'de ikisi AYNI uç noktada ve AYNI offering nesnesinde yaşar
+     * (§11.3); iki ayrı kopya yazılsaydı "önce oku, boşsa yazma"
+     * emniyeti İKİ yerde yaşar ve biri değiştiğinde ötekinin sessizce
+     * eski kalması an meselesi olurdu. Değişen tek şey, birleştiriciye
+     * hangi haritanın verildiğidir.
+     *
+     * @param  array<string, int>  $quantityBySku  Stok turunda dolu
+     * @param  array<string, string>  $priceByProductId  Fiyat turunda dolu
      */
-    private function writeInventory(string $listingId, array $items): void
-    {
+    private function writeInventory(
+        string $listingId,
+        array $quantityBySku = [],
+        array $priceByProductId = [],
+    ): void {
         // ① OKU — mevcut TÜM envanter.
         $response = $this->client->get(
             EtsyEndpoints::url(EtsyEndpoints::LISTING_INVENTORY, ['listing_id' => $listingId]),
@@ -663,14 +690,9 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
             );
         }
 
-        // ② BİRLEŞTİR — yalnızca bizim kalemlerimizin miktarı değişir.
-        $quantityBySku = [];
-
-        foreach ($items as $item) {
-            $quantityBySku[(string) $item['sku']] = (int) $item['quantity'];
-        }
-
-        $merged = EtsyInventoryMerger::merge($products, $quantityBySku);
+        // ② BİRLEŞTİR — yalnızca bizim kalemlerimiz değişir; kardeş
+        // varyantların HEM miktarı HEM fiyatı kanaldaki hâliyle korunur.
+        $merged = EtsyInventoryMerger::merge($products, $quantityBySku, $priceByProductId);
 
         // ③ YAZ — TAM gövde.
         $write = $this->client->request(
@@ -785,6 +807,197 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
         $listingIds = array_map(
             static fn (array $item): string => (string) $item['listing_id'],
             $batch->toArray(),
+        );
+
+        return TenantContext::runAsSystem(function () use ($listingIds): array {
+            $map = [];
+
+            foreach (Listing::query()->whereIn('id', $listingIds)->get() as $listing) {
+                $parentId = $listing->external_parent_id;
+
+                if (is_string($parentId) && $parentId !== '') {
+                    $map[(string) $listing->id] = $parentId;
+                }
+            }
+
+            return $map;
+        });
+    }
+
+    // --------------------------------------------------------------- fiyat
+
+    /**
+     * Fiyat yazar — STOKLA AYNI UÇ NOKTA, AYNI OKU-BİRLEŞTİR-YAZ (§11.3).
+     *
+     * ═════════════════════════════════════════════════════════════════
+     * ⚠️ FİYAT TURU SESSİZCE BİR STOK SIFIRLAMASI YAPABİLİR
+     * ═════════════════════════════════════════════════════════════════
+     * Etsy'de fiyat AYRI bir uç noktada değil, offering nesnesinin
+     * içindedir — miktarla YAN YANA. `PUT .../inventory` tüm envanteri
+     * ezdiği için gövdede eksik bırakılan `quantity` kanalda SIFIRLANIR
+     * ve ürün SATIŞA KAPANIR.
+     *
+     * Slice 3.5'in tuzağının AYNASIDIR: orada bir stok turu fiyatı
+     * sıfırlıyordu, burada bir fiyat turu stoğu sıfırlar. İkincisi daha
+     * ağırdır — yanlış fiyattan satış devam eder, sıfır stokta satış
+     * DURUR.
+     *
+     * ⚠️ TRENDYOL'UN "FİYAT YÜKÜ STOK ALANI TAŞIMAZ" KURALI BURADA
+     * GEÇERSİZDİR ve bu kanal farkının ta kendisidir. Orada tek uç nokta
+     * KISMİ güncellemeyi destekler, bu yüzden alanı GÖNDERMEMEK onu
+     * korumanın yoludur. Etsy'de kısmi güncelleme YOKTUR: alanı
+     * göndermemek onu SİLMEKTİR. Aynı cümle iki kanalda ters sonuç
+     * verir — kopyalanmaz.
+     *
+     * ⚠️ EŞLEŞME `external_id` (= `product_id`) İLEDİR, SKU İLE DEĞİL.
+     * `PricePushBatch` kalemi `sku` TAŞIMAZ; SKU ile eşlenseydi kalemin
+     * taşımadığı bir alan uydurulmak zorunda kalınırdı. Stok tarafı SKU
+     * ile eşlenir çünkü `InventoryPushItem` `product_id` bilmez.
+     *
+     * ⚠️ `compare_at_price` GÖNDERİLMEZ. Etsy'nin offering nesnesinde
+     * üstü çizili fiyat alanı YOKTUR; kalem onu taşısa bile burada
+     * bırakılır. Uydurma bir alan `VALIDATION` döndürür ve o hata
+     * KALICIDIR.
+     */
+    public function pushPrices(PricePushBatch $batch): AdapterResult
+    {
+        if ($batch->isEmpty()) {
+            // Boş yük için çağrı yapılmaz; kota boşa harcanmaz.
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $parents = $this->parentListingIdsForPrices($batch);
+
+        // Kalemler İLAN BAŞINA gruplanır — stoktakiyle aynı gerekçe:
+        // gruplanmasaydı ikinci çağrı birincinin yazdığını OKUMADAN
+        // ezerdi.
+        $byListing = [];
+        $missing = [];
+
+        foreach ($batch->items as $item) {
+            $parentId = $parents[(string) $item['listing_id']] ?? null;
+
+            if ($parentId === null) {
+                $missing[] = (string) $item['external_id'];
+
+                continue;
+            }
+
+            $byListing[$parentId][(string) $item['external_id']] = (string) $item['price'];
+        }
+
+        if ($byListing === []) {
+            // ⚠️ SESSİZCE BAŞARILI DÖNÜLMEZ (v2.2 · §7): dönülseydi
+            // operasyon tamamlandı sanılır, `synced_version` ilerler ve
+            // satır kanalda hiçbir şey değişmemişken "senkron" görünürdü.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Etsy fiyat yükündeki hiçbir kalemin ilan kimliği yok: '
+                .implode(', ', $missing),
+            );
+        }
+
+        $pushed = 0;
+
+        foreach ($byListing as $listingId => $priceByProductId) {
+            $this->writeInventory((string) $listingId, priceByProductId: $priceByProductId);
+            $pushed += count($priceByProductId);
+        }
+
+        return AdapterResult::success(array_filter([
+            'pushed' => $pushed,
+            // Kimliği çözülemeyen kalemler SESSİZCE yutulmaz.
+            'skipped_external_ids' => $missing === [] ? null : $missing,
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Uzak fiyat durumunu okur — mutabakat ve §9 çakışma tespiti için.
+     *
+     * ⚠️ İLAN BAŞINA TEK ÇAĞRI, VARYANT BAŞINA DEĞİL —
+     * `fetchInventory()` ile aynı gerekçe: Etsy'nin GÜNLÜK kotası (§21)
+     * mutabakat turlarıyla dolardı.
+     *
+     * ⚠️ FİYAT İLAN SEVİYESİNDEN DEĞİL, OFFERING'DEN OKUNUR. İlan
+     * gövdesindeki `price` çok varyantlı üründe yalnızca EN DÜŞÜK
+     * varyantın fiyatıdır; oradan okunsaydı pahalı varyantlar her tur
+     * SAHTE çakışma raporlar ve satıcı aynı kararı sonsuza kadar
+     * verirdi (§9).
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchPrices(array $listings): RemotePriceSnapshot
+    {
+        $prices = [];
+        $seen = [];
+
+        foreach ($listings as $listing) {
+            $parentId = $listing->external_parent_id;
+            $externalId = $listing->external_id;
+
+            if (! is_string($parentId) || $parentId === ''
+                || ! is_string($externalId) || $externalId === '') {
+                continue;
+            }
+
+            // AYNI İLAN İKİNCİ KEZ OKUNMAZ.
+            if (! isset($seen[$parentId])) {
+                $seen[$parentId] = $this->readInventoryProducts($parentId);
+            }
+
+            foreach ($seen[$parentId] as $product) {
+                if ((string) ($product['product_id'] ?? '') !== $externalId) {
+                    continue;
+                }
+
+                $price = EtsyInventoryMerger::priceOf($product);
+
+                // ⚠️ FİYATI OLMAYAN VARYANT ATLANIR, `"0"` YAZILMAZ:
+                // mutabakat "kanalda 0 TL" sanır ve satıcıyı var olmayan
+                // bir fiyat için karar vermeye zorlardı.
+                if ($price !== null) {
+                    $prices[$externalId] = $price;
+                }
+
+                break;
+            }
+        }
+
+        return new RemotePriceSnapshot(
+            pricesByExternalId: $prices,
+            observedAt: new DateTimeImmutable,
+        );
+    }
+
+    /**
+     * ⚠️ FİYAT PARTİSİ DE İLAN BAŞINA 1'DİR — stokla AYNI gerekçe.
+     *
+     * Uç nokta tek ilanı adresler ve o ilanın TÜM varyantlarını tek
+     * gövdede ister (§11.3). `PriceBatchBuilder` operasyonları yine
+     * birleştirir; adapter `external_parent_id`'ye göre gruplar.
+     */
+    public function maxPriceBatchSize(): int
+    {
+        return self::MAX_INVENTORY_BATCH;
+    }
+
+    /**
+     * Fiyat yükündeki listing'lerin İLAN kimlikleri — TEK sorguda.
+     *
+     * `parentListingIdsFor()` ile aynı iş; ayrı durmasının sebebi iki
+     * yükün ŞEKLİNİN farklı olmasıdır (`InventoryPushBatch` nesne
+     * kalemleri, `PricePushBatch` dizi kalemleri taşır).
+     *
+     * ⚠️ OKUMA AÇIKÇA SİSTEM BAĞLAMINDA — mutabakat taraması
+     * `runAsSystem()` altında koşar ve bağlam YOKTUR (`97a7eb7`).
+     *
+     * @return array<string, string> listing id → Etsy listing_id
+     */
+    private function parentListingIdsForPrices(PricePushBatch $batch): array
+    {
+        $listingIds = array_map(
+            static fn (array $item): string => (string) $item['listing_id'],
+            $batch->items,
         );
 
         return TenantContext::runAsSystem(function () use ($listingIds): array {

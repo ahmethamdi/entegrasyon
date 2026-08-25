@@ -375,7 +375,8 @@ memory'deki "Repo Durumu" dosyasına bak.
 ## Etsy kuralları (beşinci kanal · Faz 3 · `6dcaf52`)
 
 Faz 2 (Hepsiburada) uç nokta doğrulaması BLOKE olduğu için atlandı;
-kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1 KAPALI**, 3.2 sırada.
+kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1–3.6 KAPALI**, 3.7
+(sipariş yoklaması) sırada.
 
 - **HIZ SINIRI PROFİLİNİN ANAHTAR ADI SÖZLEŞMEDİR** (`35b0209`).
   `RateLimitProfile::fromArray()` TAM OLARAK `requests_per_second`
@@ -439,6 +440,47 @@ kullanıcı kararıyla Etsy'ye geçildi. **Slice 3.1 KAPALI**, 3.2 sırada.
 - **FİYAT OKUMADA NESNE, YAZMADA DÜZ SAYI.** Okuma
   `{amount: 1990, divisor: 100}` verir, yazma `19.90` bekler. Ham
   `amount` gönderilseydi 19.90 TL kanalda **1990 TL** olurdu.
+- **FİYAT AYRI UÇ NOKTA DEĞİLDİR — SLICE 3.6 STOK TURUNUN AYNASIDIR**
+  (`SupportsPricing` ✓). `pushPrices` da OKU-BİRLEŞTİR-YAZ yapar ve
+  `writeInventory()` gövdesini stokla PAYLAŞIR; iki kopya yazılsaydı
+  "boş okumada yazma" emniyeti İKİ yerde yaşar ve biri sessizce eski
+  kalırdı. Değişen tek şey birleştiriciye hangi haritanın verildiğidir.
+- **FİYAT TURUNDA MİKTAR KORUNUR — 3.5'in TERSİ ve DAHA AĞIRI.**
+  Slice 3.5'te tehlike "stok turu sessizce fiyatı sıfırlar"dı; burada
+  fiyat turu stoğu sıfırlar ve ürün SATIŞA KAPANIR. Yanlış fiyattan
+  satış devam eder, sıfır stokta satış DURUR. Mutasyon (`quantity`
+  gövdeden düşür) BEŞ testi birden kırdı.
+- **TRENDYOL'UN "FİYAT YÜKÜ STOK ALANI TAŞIMAZ" KURALI ETSY'DE
+  GEÇERSİZDİR.** Orada uç nokta KISMİ güncellemeyi destekler, bu yüzden
+  alanı GÖNDERMEMEK onu korumanın yoludur. Etsy'de kısmi güncelleme
+  YOKTUR: alanı göndermemek onu SİLMEKTİR. **Aynı cümle iki kanalda ters
+  sonuç verir — kopyalanmaz** (Shopify'ın `compareAtPrice` kuralının
+  kardeşi).
+- **FİYAT `product_id` İLE EŞLENİR, STOK `sku` İLE — ve bu keyfi DEĞİL
+  TAŞINAN VERİDEN gelir.** `InventoryPushItem` `sku` taşır ve
+  `product_id` BİLMEZ; `PricePushBatch` kalemi `external_id`
+  (= `product_id`) taşır ve `sku` BİLMEZ. SKU ile eşlenseydi kalemin
+  taşımadığı bir alan uydurulurdu; üstelik kanalda SKU BOŞ olabilir ve
+  boş dize iki varyantı birden eşlerdi.
+- **FİYAT MUTABAKATTA İLAN SEVİYESİNDEN OKUNMAZ, OFFERING'DEN OKUNUR.**
+  İlan gövdesindeki `price` çok varyantlı üründe yalnızca EN DÜŞÜK
+  varyantın fiyatıdır; oradan okunsaydı pahalı varyantlar her tur SAHTE
+  çakışma raporlar ve satıcı aynı kararı sonsuza kadar verirdi (§9).
+- **`maxPriceBatchSize()` DE 1'DİR ve AYNI SABİTİ KULLANIR.** İki ayrı
+  sabit tanımlansaydı biri değiştiğinde ötekinin sessizce eski kalması
+  an meselesi olurdu; ikisini de belirleyen tek gerçek AYNI uç noktadır.
+- **"YAZILDI" ≠ "ÇAĞRILIYOR" — İKİ YÖN DE SÜRÜLÜR.** Adapter gövdesini
+  doğrudan çağıran test yeteneğin DOĞRU çalıştığını kanıtlar, akıştan
+  çağrıldığını KANITLAMAZ. Giden yön gerçek `PushPrices` işiyle, gelen
+  yön gerçek `ReconcileActiveConnections` sweep'iyle sürülür.
+  `SupportsPricing` arayüzünü kaldıran mutasyon BEŞ testi birden kırdı;
+  yalnızca doğrudan çağıran testler olsaydı ÜÇÜ hayatta kalırdı.
+- **FİYAT MUTABAKATI `recently_sold` ADAYI ÜRETMEZ.** Satış fiyatı
+  DEĞİŞTİRMEZ ve o sorgu fiyat turunda HİÇ koşmaz (§9). Stok testindeki
+  "bir fazla IMPORT edip bir SALE yaz" hilesi burada aday BULDURMAZ;
+  fiyat adayı `stale_sync` yolundan gelir (`domain = 'price'`,
+  `is_dirty`, bayat `last_requested_at`). Kopyalansaydı test "taranıyor"
+  derken kanala hiç istek gitmezdi.
 - **OKUMA-ÖZEL KİMLİKLER YAZMA GÖVDESİNE KONMAZ** (`product_id`,
   `offering_id`) — konsaydı Etsy `VALIDATION` döner ve o hata KALICIDIR.
 - **OKUMA BAŞARISIZSA YAZMA HAKKI DA YOKTUR.** Boş envanter okunduysa

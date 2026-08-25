@@ -8,6 +8,7 @@ use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
+use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -323,11 +324,12 @@ final class EtsyAdapterTest extends TestCase
     {
         $adapter = $this->adapter();
 
-        // YAZILDI — slice 3.1 · 3.3 · 3.4 · 3.5
+        // YAZILDI — slice 3.1 · 3.3 · 3.4 · 3.5 · 3.6
         $this->assertInstanceOf(SupportsTokenRefresh::class, $adapter);
         $this->assertInstanceOf(SupportsTaxonomy::class, $adapter);
         $this->assertInstanceOf(SupportsCatalog::class, $adapter);
         $this->assertInstanceOf(SupportsInventory::class, $adapter);
+        $this->assertInstanceOf(SupportsPricing::class, $adapter);
 
         // HENÜZ YAZILMADI — 3.7
         $this->assertNotInstanceOf(SupportsOrders::class, $adapter);

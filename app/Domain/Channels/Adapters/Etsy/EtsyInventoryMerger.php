@@ -34,28 +34,41 @@ namespace App\Domain\Channels\Adapters\Etsy;
 final class EtsyInventoryMerger
 {
     /**
-     * Mevcut envanteri alır, YALNIZCA verilen SKU'ların miktarını
-     * değiştirir ve TAM gövdeyi döner.
+     * Mevcut envanteri alır, YALNIZCA verilen kalemleri değiştirir ve TAM
+     * gövdeyi döner.
      *
      * ⚠️ DÖNEN DİZİ GİRDİYLE AYNI SAYIDA `product` TAŞIR — HER ZAMAN.
      * Eksik bir eleman, o varyantın kanaldan silinmesi demektir.
      *
-     * ⚠️ EŞLEŞMEYEN SKU'YA DOKUNULMAZ, ATILMAZ. Bizim yükümüzde olmayan
-     * varyant kanalda ne ise O KALIR; miktarını sıfırlamak veya
-     * çıkarmak, satıcının bizden habersiz eklediği varyantı yok etmek
-     * olurdu.
+     * ⚠️ EŞLEŞMEYEN KALEME DOKUNULMAZ, ATILMAZ. Bizim yükümüzde olmayan
+     * varyant kanalda ne ise O KALIR; değerini sıfırlamak veya çıkarmak,
+     * satıcının bizden habersiz eklediği varyantı yok etmek olurdu.
      *
-     * ⚠️ FİYAT DE KORUNUR. Etsy'nin offering nesnesi fiyatı da taşır ve
-     * gövdede eksik bırakılırsa kanal onu sıfırlar; stok turu SESSİZCE
-     * bir fiyat sıfırlaması yapardı (§9'un "sessizce ezmek EN SIK
-     * ŞİKAYET" kuralının en ağır biçimi).
+     * ⚠️ MİKTAR VE FİYAT BİRBİRİNİ KORUR — ÇİFT YÖNLÜ.
+     * Etsy'nin offering nesnesi İKİSİNİ BİRDEN taşır ve gövdede eksik
+     * bırakılan alanı kanal SIFIRLAR:
+     *   · STOK turunda fiyat eksik kalsaydı → sessiz bir FİYAT sıfırlaması
+     *     (§9'un "sessizce ezmek EN SIK ŞİKAYET" kuralının en ağır biçimi)
+     *   · FİYAT turunda miktar eksik kalsaydı → sessiz bir STOK sıfırlaması
+     *     ve ürün satışa KAPANIR — daha da ağırdır
+     *
+     * ⚠️ İKİ ANAHTAR BİLİNÇLİ OLARAK FARKLIDIR ve bu keyfi DEĞİL,
+     * TAŞINAN VERİDEN gelir. `InventoryPushItem` `sku` taşır ve
+     * `product_id` BİLMEZ; `PricePushBatch` kalemi `external_id`
+     * (= `product_id`) taşır ve `sku` BİLMEZ. Fiyat SKU ile eşlenseydi
+     * kalemin taşımadığı bir alan uydurulmak zorunda kalınırdı; üstelik
+     * kanalda SKU BOŞ olabilir ve boş dize iki varyantı birden eşlerdi.
      *
      * @param  list<array<string, mixed>>  $products  Kanaldan OKUNAN tam envanter
      * @param  array<string, int>  $quantityBySku  Yalnızca DEĞİŞECEK miktarlar
+     * @param  array<string, string>  $priceByProductId  Yalnızca DEĞİŞECEK fiyatlar
      * @return list<array<string, mixed>>
      */
-    public static function merge(array $products, array $quantityBySku): array
-    {
+    public static function merge(
+        array $products,
+        array $quantityBySku,
+        array $priceByProductId = [],
+    ): array {
         $merged = [];
 
         foreach ($products as $product) {
@@ -64,9 +77,13 @@ final class EtsyInventoryMerger
             }
 
             $sku = (string) ($product['sku'] ?? '');
-            $newQuantity = $quantityBySku[$sku] ?? null;
+            $productId = (string) ($product['product_id'] ?? '');
 
-            $merged[] = self::rebuildProduct($product, $newQuantity);
+            $merged[] = self::rebuildProduct(
+                $product,
+                $quantityBySku[$sku] ?? null,
+                $productId === '' ? null : ($priceByProductId[$productId] ?? null),
+            );
         }
 
         return $merged;
@@ -83,8 +100,11 @@ final class EtsyInventoryMerger
      * @param  array<string, mixed>  $product
      * @return array<string, mixed>
      */
-    private static function rebuildProduct(array $product, ?int $newQuantity): array
-    {
+    private static function rebuildProduct(
+        array $product,
+        ?int $newQuantity,
+        ?string $newPrice = null,
+    ): array {
         /** @var list<array<string, mixed>> $offerings */
         $offerings = $product['offerings'] ?? [];
 
@@ -96,13 +116,21 @@ final class EtsyInventoryMerger
             }
 
             $rebuilt[] = array_filter([
-                // MİKTAR — yalnızca bizim kalemimizse değişir.
+                // ⚠️ MİKTAR — yalnızca bizim STOK kalemimizse değişir,
+                // aksi hâlde KANALDAKİ değer korunur. Fiyat turunda
+                // `$newQuantity` daima null'dır ve korunan bu daldır:
+                // sıfırlansaydı bir fiyat güncellemesi ürünü satışa
+                // KAPATIRDI.
                 'quantity' => $newQuantity ?? (int) ($offering['quantity'] ?? 0),
 
-                // ⚠️ FİYAT KORUNUR. Etsy yazma gövdesinde fiyatı DÜZ
-                // SAYI bekler (okuma nesne döner); dönüşüm burada
-                // yapılır. Eksik bırakılsaydı kanal fiyatı sıfırlardı.
-                'price' => self::priceValue($offering),
+                // ⚠️ FİYAT — yalnızca bizim FİYAT kalemimizse değişir,
+                // aksi hâlde KANALDAKİ değer korunur. Etsy yazma
+                // gövdesinde fiyatı DÜZ SAYI bekler (okuma nesne döner);
+                // dönüşüm burada yapılır. Eksik bırakılsaydı kanal
+                // fiyatı sıfırlardı.
+                'price' => $newPrice !== null
+                    ? round((float) $newPrice, 2)
+                    : self::priceValue($offering),
 
                 // `is_enabled` varyantın satışa açık olup olmadığıdır ve
                 // SATICININ kararıdır — korunur.
@@ -117,6 +145,45 @@ final class EtsyInventoryMerger
             'property_values' => $product['property_values'] ?? null,
             'offerings' => $rebuilt,
         ], static fn (mixed $v): bool => $v !== null);
+    }
+
+    /**
+     * Bir `product`'ın gözlenen FİYATI — mutabakatın ve §9 çakışma
+     * tespitinin girdisi.
+     *
+     * ⚠️ STRING DÖNER, float DEĞİL. Para float taşınmaz (§7): yuvarlama
+     * kuruş kayması üretir ve `RemotePriceSnapshot` sözleşmesi string'tir.
+     * Biçim `number_format(..., 2)` ile SABİTTİR — `"19.9"` ile `"19.90"`
+     * metin olarak farklıdır ve her tur sahte çakışma üretirdi.
+     *
+     * ⚠️ FİYATI OLMAYAN OFFERING SIFIR OKUNMAZ, NULL DÖNER. `"0"`
+     * yazılsaydı mutabakat "kanalda 0 TL" sanır ve `PRICE_CONFLICT`
+     * açardı — satıcı VAR OLMAYAN bir fiyat için karar vermeye
+     * zorlanırdı. Doğru sınıflandırma `REMOTE_MISSING`'dir (§10).
+     *
+     * ⚠️ İLK OFFERING OKUNUR — `quantityOf()` ile aynı gerekçe: bizim
+     * modelimizde bir varyant TEK fiyat taşır.
+     *
+     * @param  array<string, mixed>  $product
+     */
+    public static function priceOf(array $product): ?string
+    {
+        /** @var list<array<string, mixed>> $offerings */
+        $offerings = $product['offerings'] ?? [];
+
+        foreach ($offerings as $offering) {
+            if (! is_array($offering)) {
+                continue;
+            }
+
+            $price = self::priceValue($offering);
+
+            if ($price !== null) {
+                return number_format((float) $price, 2, '.', '');
+            }
+        }
+
+        return null;
     }
 
     /**
