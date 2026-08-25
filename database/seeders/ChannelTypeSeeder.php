@@ -261,8 +261,13 @@ class ChannelTypeSeeder extends Seeder
                     // SLICE SLICE AÇILIR — §04'ün matrisi V3 HEDEFİDİR,
                     // bugünkü durum DEĞİL. İlan edilen ama çalışmayan
                     // yetenek panelde çalışmayan sekme demektir (§05).
-                    'catalog' => false,         // slice 3.4
-                    'catalog_import' => false,  // slice 3.4
+                    'catalog' => true,          // slice 3.4 ✓
+                    // ⚠️ İÇE AKTARMA AYRI BİR YETENEKTİR ve HENÜZ YOK:
+                    // `SupportsCatalogImport` "kanalda ne var ki bende
+                    // YOK" sorusunu sorar; `SupportsCatalog`'un okuma
+                    // metotları YEREL kayıttan başlar. İkisi karıştırılsa
+                    // panel çalışmayan bir sekme gösterirdi.
+                    'catalog_import' => false,
                     'inventory' => false,       // slice 3.5
                     'pricing' => false,         // slice 3.6
                     'orders' => false,          // slice 3.7

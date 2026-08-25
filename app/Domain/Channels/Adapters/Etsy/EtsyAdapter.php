@@ -4,18 +4,24 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Etsy;
 
+use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Adapters\Etsy\Taxonomy\EtsyTaxonomyClient;
+use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
+use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\CategoryTreeSnapshot;
+use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\RemoteListing;
 use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -29,14 +35,14 @@ use Throwable;
  * V3.0 · §11 · §20 · §21 · v2.2 §7.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 3.1 · 3.2 · 3.3
+ * KAPSAM — SLICE 3.1 · 3.2 · 3.3 · 3.4
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata sınıflandırma,
- * hız sınırı profili, **token yenileme** (`SupportsTokenRefresh`) ve
- * **taksonomi** (`SupportsTaxonomy`).
+ * hız sınırı profili, **token yenileme** (`SupportsTokenRefresh`),
+ * **taksonomi** (`SupportsTaxonomy`) ve **katalog** (`SupportsCatalog`).
  *
- * HENÜZ YAZILMADI (sonraki slice'lar): katalog (3.4) · stok (3.5) ·
- * fiyat (3.6) · sipariş yoklaması (3.7). O yetenek arayüzleri BU
+ * HENÜZ YAZILMADI (sonraki slice'lar): stok (3.5) · fiyat (3.6) ·
+ * sipariş yoklaması (3.7). O yetenek arayüzleri BU
  * SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek panelde
  * çalışmayan sekme demektir (§05) ve "yazılmamış yetenek SESSİZCE
  * BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
@@ -66,7 +72,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsTaxonomy, SupportsTokenRefresh
 {
     /**
      * Uygulama anahtarının `settings` içindeki yeri.
@@ -106,6 +112,19 @@ final class EtsyAdapter implements ChannelAdapter, SupportsTaxonomy, SupportsTok
      * grup için AYRI çağrı yapar.
      */
     private const MAX_INVENTORY_BATCH = 1;
+
+    /**
+     * SKU araması — sayfa boyutu ve ÜST SINIR.
+     *
+     * ⚠️ ETSY SKU İLE ARAMA UÇ NOKTASI SUNMAZ; mağazanın ilanları sayfa
+     * sayfa taranır. Üst sınır EMNİYETTİR: `results` sonsuza kadar dolu
+     * dönen bozuk bir kanal turu HİÇ bitmezdi. Sınıra takılan arama
+     * `null` döner ve `PushListing` yeni ilan açar — kopya riski vardır
+     * ama SONSUZ DÖNGÜ kesin bir arızadır.
+     */
+    private const SEARCH_PAGE_SIZE = 100;
+
+    private const MAX_SEARCH_PAGES = 20;
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -263,6 +282,263 @@ final class EtsyAdapter implements ChannelAdapter, SupportsTaxonomy, SupportsTok
     public function extractEventType(array $headers): string
     {
         return 'unknown';
+    }
+
+    // ------------------------------------------------------------- katalog
+
+    /**
+     * Yeni ilan açar — İKİ ADIM, ve bu KAÇINILMAZDIR (§11.1 · §11.3).
+     *
+     * ⚠️ ETSY İÇERİK VE ENVANTERİ AYRI UÇ NOKTALARDA TUTAR. İlan gövdesi
+     * fiyat ve stok TAŞIMAZ; ikisi de `listings/{id}/inventory` altında
+     * yaşar. Tek çağrıda birleştirilemez — Shopify'ın `productSet`'i gibi
+     * bir "hepsi bir arada" mutation'ı Etsy'de YOKTUR.
+     *
+     * ⚠️ ARA BAŞARISIZLIK KABUKLU İLAN BIRAKIR ve bu DÜRÜST bir sınırdır:
+     * ilan yaratıldı ama envanteri yazılamadıysa kanalda TASLAK bir ilan
+     * kalır. `state => draft` ile açılmasının sebebi tam budur — taslak
+     * ilan YAYINDA DEĞİLDİR ve satıcı stoksuz ürün satmaz. Sonraki tur
+     * `external_parent_id`'yi görür ve UPDATE yoluna girer; kopya ilan
+     * AÇILMAZ.
+     *
+     * Bu slice ENVANTER YAZMAZ (o slice 3.5'tir ve oku-birleştir-yaz
+     * gerektirir). Kimlik üçlüsünden `offering_id` ancak envanter
+     * yazıldıktan sonra dolar; o güne kadar `external_id` de boş kalabilir
+     * ve `PushListing` bunu VALIDATION hatası olarak görür — sessizce
+     * başarı DÖNÜLMEZ.
+     */
+    public function createListing(ListingPayload $payload): AdapterResult
+    {
+        $response = $this->client->post(
+            EtsyEndpoints::url(EtsyEndpoints::SHOP_LISTINGS, ['shop_id' => $this->requireShopId()]),
+            EtsyProductMapper::toListingBody($payload),
+            headers: $this->apiKeyHeader(),
+        );
+
+        $response->throw();
+
+        /** @var array<string, mixed> $body */
+        $body = $response->json() ?? [];
+
+        if (! isset($body['listing_id'])) {
+            // Yanıt 200 ama ilan kimliği YOK: sözleşme ihlali. Başarı
+            // dönülseydi `synced_version` ilerler ve satır kanalda
+            // karşılığı olmadan "senkron" görünürdü.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Etsy yanıtı ilan kimliği (listing_id) taşımıyor.',
+            );
+        }
+
+        return AdapterResult::success(EtsyProductMapper::toIdentityResult(
+            $body,
+            $payload->listing->variant?->sku,
+        ));
+    }
+
+    /**
+     * Var olan ilanı GÜNCELLER.
+     *
+     * ⚠️ HEDEF `listing_id`'DİR (`external_parent_id`), `product_id`
+     * DEĞİL. İçerik İLAN seviyesindedir; `external_id` (product_id) tek
+     * başına ilan uç noktasına verilemez — istek var olmayan bir ilana
+     * gider ve 404 alınır.
+     */
+    public function updateListing(ListingPayload $payload): AdapterResult
+    {
+        $listingId = $payload->listing->external_parent_id;
+
+        if ($listingId === null || $listingId === '') {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Güncellenecek Etsy ilanı bilinmiyor (external_parent_id boş).',
+            );
+        }
+
+        $response = $this->client->request(
+            'PATCH',
+            EtsyEndpoints::url(EtsyEndpoints::LISTING, ['listing_id' => $listingId]),
+            body: EtsyProductMapper::toListingBody($payload),
+            headers: $this->apiKeyHeader(),
+        );
+
+        $response->throw();
+
+        /** @var array<string, mixed> $body */
+        $body = $response->json() ?? [];
+
+        return AdapterResult::success(EtsyProductMapper::toIdentityResult(
+            $body,
+            $payload->listing->variant?->sku,
+        ));
+    }
+
+    /**
+     * İlanı YAYINDAN ÇEKER — SİLMEZ.
+     *
+     * ⚠️ `state => inactive`, silme DEĞİL. Silme GERİ ALINAMAZ ve
+     * kanaldaki yorumları, favorileri, arama sıralamasını ve SEO
+     * geçmişini de götürür (v2.2 · `delist` kuralı). Etsy'de bu özellikle
+     * ağırdır: bir ilanın "favori" sayısı satıcının en değerli sinyalidir.
+     */
+    public function delist(Listing $listing): AdapterResult
+    {
+        $listingId = $listing->external_parent_id;
+
+        if ($listingId === null || $listingId === '') {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Yayından çekilecek Etsy ilanı bilinmiyor (external_parent_id boş).',
+            );
+        }
+
+        $response = $this->client->request(
+            'PATCH',
+            EtsyEndpoints::url(EtsyEndpoints::LISTING, ['listing_id' => $listingId]),
+            body: ['state' => 'inactive'],
+            headers: $this->apiKeyHeader(),
+        );
+
+        $response->throw();
+
+        return AdapterResult::success();
+    }
+
+    /**
+     * Kanalda ZATEN var olan ilanı SKU ile bulur.
+     *
+     * ⚠️ BU ADIM ATLANIRSA KOPYA İLAN AÇILIR ve geri alınamaz: yorumlar,
+     * favoriler ve arama sıralaması ilk ilanda kalır (v2.2 · ürün
+     * aktarımı kuralı).
+     *
+     * ⚠️ ETSY SKU İLE ARAMA UÇ NOKTASI SUNMAZ. Mağazanın ilanları
+     * sayfa sayfa taranır ve envanterindeki `products[].sku` eşleştirilir.
+     * Bu PAHALIDIR ama alternatifi kopya ilandır; sayfa üst sınırı
+     * emniyettir (bozuk bir kanal turu sonsuza kadar sürdürmemelidir).
+     */
+    public function findExistingListing(Variant $variant): ?RemoteListing
+    {
+        $sku = (string) $variant->sku;
+
+        if ($sku === '') {
+            return null;
+        }
+
+        $offset = 0;
+
+        for ($page = 0; $page < self::MAX_SEARCH_PAGES; $page++) {
+            $response = $this->client->get(
+                EtsyEndpoints::url(EtsyEndpoints::SHOP_LISTINGS, ['shop_id' => $this->requireShopId()]),
+                query: ['limit' => self::SEARCH_PAGE_SIZE, 'offset' => $offset, 'includes' => 'Inventory'],
+                headers: $this->apiKeyHeader(),
+            );
+
+            $response->throw();
+
+            /** @var array<string, mixed> $body */
+            $body = $response->json() ?? [];
+
+            /** @var list<array<string, mixed>> $results */
+            $results = $body['results'] ?? [];
+
+            if ($results === []) {
+                return null;
+            }
+
+            foreach ($results as $listing) {
+                if (! is_array($listing)) {
+                    continue;
+                }
+
+                $identity = EtsyProductMapper::toIdentityResult($listing, $sku);
+
+                // SKU EŞLEŞMEDİYSE `external_id` DOLMAZ — mapper ilk
+                // elemana DÜŞMEZ. Burada da o sözleşmeye güvenilir.
+                if (isset($identity['external_id'])) {
+                    return $this->toRemoteListing($listing, $identity);
+                }
+            }
+
+            $offset += self::SEARCH_PAGE_SIZE;
+        }
+
+        return null;
+    }
+
+    /**
+     * Uzak durumu okur — mutabakat ve çakışma tespiti için.
+     */
+    public function fetchListing(Listing $listing): ?RemoteListing
+    {
+        $listingId = $listing->external_parent_id;
+
+        if ($listingId === null || $listingId === '') {
+            return null;
+        }
+
+        $response = $this->client->get(
+            EtsyEndpoints::url(EtsyEndpoints::LISTING, ['listing_id' => $listingId]),
+            query: ['includes' => 'Inventory'],
+            headers: $this->apiKeyHeader(),
+        );
+
+        // ⚠️ 404 "İLAN SİLİNMİŞ" DEMEKTİR ve İSTİSNA DEĞİLDİR: mutabakat
+        // bunu `REMOTE_MISSING` olarak görmeli, tur çökmemelidir.
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        /** @var array<string, mixed> $body */
+        $body = $response->json() ?? [];
+
+        if (! isset($body['listing_id'])) {
+            return null;
+        }
+
+        return $this->toRemoteListing(
+            $body,
+            EtsyProductMapper::toIdentityResult($body, $listing->variant?->sku),
+        );
+    }
+
+    /**
+     * Etsy ilanı → `RemoteListing`.
+     *
+     * @param  array<string, mixed>  $listing
+     * @param  array<string, mixed>  $identity
+     */
+    private function toRemoteListing(array $listing, array $identity): RemoteListing
+    {
+        $price = is_array($listing['price'] ?? null)
+            ? EtsyProductMapper::money($listing['price'])
+            : null;
+
+        return new RemoteListing(
+            externalId: (string) ($identity['external_id'] ?? $listing['listing_id']),
+            title: isset($listing['title']) ? (string) $listing['title'] : null,
+            quantity: isset($listing['quantity']) ? (int) $listing['quantity'] : null,
+            price: $price,
+            status: isset($listing['state']) ? (string) $listing['state'] : null,
+            url: isset($listing['url']) ? (string) $listing['url'] : null,
+            raw: $listing,
+            observedAt: new DateTimeImmutable,
+        );
+    }
+
+    private function requireShopId(): string
+    {
+        $shopId = $this->shopId();
+
+        if ($shopId === null) {
+            throw new RuntimeException(
+                'Etsy mağaza kimliği (shop_id) tanımsız — istek yol üzerinde '.
+                'doldurulmamış yer tutucuyla giderdi.'
+            );
+        }
+
+        return $shopId;
     }
 
     // ---------------------------------------------------------- taksonomi
