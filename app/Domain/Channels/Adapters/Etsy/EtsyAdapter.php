@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Etsy;
 
+use App\Domain\Channels\Adapters\Etsy\Taxonomy\EtsyTaxonomyClient;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -26,16 +29,17 @@ use Throwable;
  * V3.0 · §11 · §20 · §21 · v2.2 §7.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 3.1 (bağlantı + kimlik + sağlık)
+ * KAPSAM — SLICE 3.1 · 3.2 · 3.3
  * ─────────────────────────────────────────────────────────────────────
  * Yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata sınıflandırma,
- * hız sınırı profili, **token yenileme** (`SupportsTokenRefresh`).
+ * hız sınırı profili, **token yenileme** (`SupportsTokenRefresh`) ve
+ * **taksonomi** (`SupportsTaxonomy`).
  *
- * HENÜZ YAZILMADI (sonraki slice'lar): taksonomi (3.3) · katalog (3.4) ·
- * stok (3.5) · fiyat (3.6) · sipariş yoklaması (3.7). O yetenek
- * arayüzleri BU SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek
- * panelde çalışmayan sekme demektir (§05) ve "yazılmamış yetenek
- * SESSİZCE BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
+ * HENÜZ YAZILMADI (sonraki slice'lar): katalog (3.4) · stok (3.5) ·
+ * fiyat (3.6) · sipariş yoklaması (3.7). O yetenek arayüzleri BU
+ * SINIFTA UYGULANMAZ — ilan edilen ama çalışmayan yetenek panelde
+ * çalışmayan sekme demektir (§05) ve "yazılmamış yetenek SESSİZCE
+ * BAŞARILI DÖNMEZ" kuralı (v2.2 · §7).
  *
  * ─────────────────────────────────────────────────────────────────────
  * ⚠️ İKİ AYRI KİMLİK BAŞLIĞI VARDIR (§11.2)
@@ -62,7 +66,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, SupportsTaxonomy, SupportsTokenRefresh
 {
     /**
      * Uygulama anahtarının `settings` içindeki yeri.
@@ -259,6 +263,54 @@ final class EtsyAdapter implements ChannelAdapter, SupportsTokenRefresh
     public function extractEventType(array $headers): string
     {
         return 'unknown';
+    }
+
+    // ---------------------------------------------------------- taksonomi
+
+    /**
+     * Kategori ağacı — KANALIN GERÇEĞİ, kiracısız saklanır (§11.5).
+     *
+     * Uç nokta satıcıya özgü DEĞİLDİR (`shops/{shop_id}` öneki yok) ve bu,
+     * ağacın neden kiracısız saklandığının API tarafındaki karşılığıdır.
+     * Yine de çağrı KİMLİKLİDİR: Etsy anonim istek kabul etmez.
+     */
+    public function fetchCategoryTree(): CategoryTreeSnapshot
+    {
+        return $this->taxonomy()->fetchTree();
+    }
+
+    /**
+     * Yaprak kategorinin öznitelikleri.
+     *
+     * ⚠️ YALNIZCA YAPRAK İÇİN ÇAĞRILIR — `SyncTaxonomy` bunu garanti eder.
+     * Ara kategoriye ürün açılamaz; öznitelik istemek boşuna istek ve
+     * boşuna KOTADIR (§21: 10.000 istek/gün, hesap başına).
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchCategoryAttributes(string $categoryId): array
+    {
+        return $this->taxonomy()->fetchAttributes($categoryId);
+    }
+
+    /**
+     * Ağacın SÜRÜMÜ — içerikten türer.
+     *
+     * ⚠️ AĞACI ÇEKER. Etsy bir sürüm numarası yayımlamaz ve parmak izi
+     * ancak ağacın kendisinden hesaplanabilir. `SyncTaxonomy` bu metodu
+     * ağacı zaten çektikten SONRA çağırmaz — sürümü snapshot'tan okur;
+     * burası arayüz sözleşmesini karşılar ve tek başına çağrılırsa
+     * DOĞRU cevabı verir (uydurma bir sabit dönseydi sürüm ağaçla
+     * ayrışır ve eşleştirmeler yanlış sürüme bağlanırdı).
+     */
+    public function taxonomyVersion(): string
+    {
+        return $this->fetchCategoryTree()->version;
+    }
+
+    private function taxonomy(): EtsyTaxonomyClient
+    {
+        return new EtsyTaxonomyClient($this->client, $this->apiKeyHeader());
     }
 
     // ------------------------------------------------------- token yenileme

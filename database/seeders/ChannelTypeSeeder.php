@@ -266,7 +266,7 @@ class ChannelTypeSeeder extends Seeder
                     'inventory' => false,       // slice 3.5
                     'pricing' => false,         // slice 3.6
                     'orders' => false,          // slice 3.7
-                    'taxonomy' => false,        // slice 3.3
+                    'taxonomy' => true,         // slice 3.3 ✓
                     // ⚠️ ONAY SÜRECİ YOKTUR (§11.5) — Etsy'de ilan
                     // yayınlanır yayınlanmaz canlıdır. Açılsaydı panelde
                     // HİÇ DOLMAYACAK bir sekme belirirdi.
