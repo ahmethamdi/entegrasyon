@@ -49,7 +49,11 @@ final class ConnectChannel
     ) {}
 
     /**
-     * @param  array<string, mixed>  $secrets
+     * @param  array<string, mixed>  $secrets  Kasaya yazılır (ŞİFRELİ)
+     * @param  array<string, mixed>  $settings  Kimlik alanları — `settings`
+     *                                          kolonuna BİRLEŞTİRİLİR (ŞİFRESİZ)
+     * @param  bool  $checkHealth  OAuth kanallarında `false`: kimlik henüz
+     *                             GELMEDİ ve kontrol kimliksiz gider
      *
      * @throws AccountAlreadyConnectedException Mağaza başka kiracıya bağlıysa
      */
@@ -58,6 +62,8 @@ final class ConnectChannel
         string $label,
         string $storeUrl,
         array $secrets,
+        array $settings = [],
+        bool $checkHealth = true,
     ): ChannelConnection {
         $url = StoreUrl::parse($storeUrl);
 
@@ -68,6 +74,7 @@ final class ConnectChannel
             $label,
             $url,
             $secrets,
+            $settings,
         ): ChannelConnection {
             // Aynı kiracı aynı mağazayı yeniden bağlarsa YENİ SATIR AÇILMAZ:
             // anahtar yenileme akışı budur. Yeni satır açılsaydı
@@ -85,8 +92,21 @@ final class ConnectChannel
             $connection->fill([
                 'tenant_id' => TenantContext::idOrFail(),
                 'label' => $label,
-                // Mevcut ayarlar korunur; yalnızca taban adres güncellenir.
-                'settings' => [...$connection->settings ?? [], 'base_url' => $url->baseUrl],
+                // ⚠️ MEVCUT AYARLAR KORUNUR, EZİLMEZ (`PushListing::
+                // adoptRemoteIdentity` kuralının aynısı). Ezseydi
+                // Shopify'ı yeniden bağlayan satıcı `location_gid`'ini,
+                // Etsy'yi yeniden bağlayan `shop_id`'sini kaybeder ve
+                // bağlantı bir daha ASLA sağlıklı olmazdı — üstelik
+                // sebebi görünmeden.
+                //
+                // Kimlik alanları taban adresten SONRA yazılır: kanal
+                // başına tanımlı bir alan `base_url` adını taşısaydı
+                // kanalın kendi gerçeği kazanmalıdır.
+                'settings' => [
+                    ...$connection->settings ?? [],
+                    'base_url' => $url->baseUrl,
+                    ...$settings,
+                ],
             ]);
 
             // Sağlık kontrolü henüz çalışmadı: durum beklemede.
@@ -97,8 +117,18 @@ final class ConnectChannel
 
             $connection->save();
 
-            // Kimlik bilgisi kasaya yazılır — çağrıyı yapabilmek için zorunlu.
-            $this->vault->store($connection, $secrets);
+            // ⚠️ BOŞ `secrets` KASAYA YAZILMAZ — OAuth kanallarının hâli.
+            //
+            // Etsy formdan hiç anahtar İSTEMEZ: token'ları
+            // `EtsyOAuthController::callback()` yazar. Boş bir kayıt
+            // açılsaydı kasada hiçbir zaman geçerli olmayan ÖLÜ bir sır
+            // dururdu ve `activeCredential()` onu bulup "kimlik var"
+            // derdi — istek kimliksiz gider, kanal 401 döner ve
+            // `AUTHENTICATION` KALICI sayılır (`97a7eb7` hata biçimi).
+            if ($secrets !== []) {
+                // Kimlik bilgisi kasaya yazılır — çağrıyı yapabilmek için zorunlu.
+                $this->vault->store($connection, $secrets);
+            }
 
             // DENETİM KAYDI (§11) — İKİ AYRI OLAY.
             //
@@ -129,6 +159,18 @@ final class ConnectChannel
 
             return $connection;
         });
+
+        // ⚠️ OAUTH KANALINDA SAĞLIK KONTROLÜ ÇALIŞTIRILMAZ — HENÜZ.
+        //
+        // Kimlik bilgisi bu noktada YOKTUR: satıcı daha kanalın
+        // yetkilendirme ekranına bile gitmedi. Koşsaydı istek kimliksiz
+        // gider, kanal 401 döner ve `last_error` "anahtarın yanlış"
+        // derdi — satıcı henüz hiçbir anahtar VERMEMİŞKEN bağlantısını
+        // bozuk sanardı. Kontrolü callback yapar (`EtsyOAuthController`),
+        // token kasaya yazıldıktan HEMEN sonra.
+        if (! $checkHealth) {
+            return $connection;
+        }
 
         // Sağlık kontrolü commit'ten SONRA: ağ çağrısı transaction tutmaz.
         return $this->checkHealth->run($connection);

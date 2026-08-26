@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
@@ -9,33 +9,93 @@ const props = defineProps({
 });
 
 // Varsayılan seçim BAĞLANABİLİR bir kanaldır. İlk sıradaki alınsaydı
-// (alfabetik olarak Etsy) ekran açılır açılmaz "bağlanamazsın" derdi ve
-// satıcı hiçbir şey yapamadan çıkardı.
+// ekran, tanımı olmayan bir kanalla açılıp "bağlanamazsın" diyebilirdi.
 const firstConnectable = props.channelTypes.find((type) => type.connectable);
+
+// ⚠️ HER KANALIN HER ALANI BAŞTAN TANIMLANIR — SONRADAN EKLENMEZ.
+//
+// `useForm` yalnızca KURULURKEN verilen anahtarları izler; sonradan
+// `form[ad] = ''` ile eklenen bir alan ekranda görünür ve yazılabilir
+// ama gönderimde SUNUCUYA HİÇ GİTMEZ. İlk yazımda böyleydi ve sonuç
+// sessizdi: satıcı `shop_id` alanını doldurur, gönderir ve "shop id
+// alanı zorunludur" hatası alırdı — GERÇEK TARAYICI ÇALIŞTIRMASINDA
+// bulundu, testler göremedi çünkü hepsi yükü doğrudan POST ediyor ve
+// Vue formunu HİÇ sürmüyor.
+const everyFieldName = [
+    ...new Set(
+        props.channelTypes.flatMap((type) => [
+            ...(type.secretFields ?? []),
+            ...(type.identityFields ?? []),
+        ].map((field) => field.name)),
+    ),
+];
 
 const form = useForm({
     channel_type_code: (firstConnectable ?? props.channelTypes[0])?.code ?? '',
     label: '',
     store_url: '',
-    consumer_key: '',
-    consumer_secret: '',
+    ...Object.fromEntries(everyFieldName.map((name) => [name, ''])),
 });
 
 const selected = computed(
     () => props.channelTypes.find((type) => type.code === form.channel_type_code) ?? null,
 );
 
-// ⚠️ "AÇIK" İLE "BAĞLANABİLİR" AYRI ŞEYLERDİR. Kanal listede görünür ama
-// bu form onun kimlik biçimini soramıyorsa (Etsy OAuth, Shopify tek
-// token) satıcı OLMAYAN bir anahtarı arar; bulamayınca rastgele bir
-// değer girer, sağlık kontrolü 401 alır ve sebep "anahtarın yanlış"
-// gibi görünür — oysa o kanalda böyle bir anahtar HİÇ YOKTUR.
 const connectable = computed(() => selected.value?.connectable !== false);
 
+// ⚠️ ALANLAR SUNUCUDAN GELİR — burada `if (code === 'shopify')` YOKTUR.
+// Yazılsaydı bu blok sunucudaki doğrulamadan AYRI yaşar ve biri
+// değiştiğinde form alanı sorar ama doğrulama reddederdi (ya da tersi).
+const secretFields = computed(() => selected.value?.secretFields ?? []);
+const identityFields = computed(() => selected.value?.identityFields ?? []);
+const allFields = computed(() => [...secretFields.value, ...identityFields.value]);
+
+// ⚠️ OAUTH KANALI ANAHTAR SORMAZ ve düğmenin metni de bunu SÖYLER.
+// "Bağla ve doğrula" deseydi satıcı işin bittiğini sanır, oysa asıl
+// onay adımı henüz BAŞLAMAMIŞTIR.
+const usesOauth = computed(() => selected.value?.oauth === true);
+
+// Kanal değişince ESKİ KANALIN ALANLARI BOŞALTILIR.
+//
+// ⚠️ Boşaltılmasaydı Woo'yu deneyip Shopify'a geçen satıcının `ck_...`
+// değeri formda KALIRDI ve kullanıcının hiç görmediği bir alanda
+// taşınmaya devam ederdi. Anahtar SİLİNMEZ, yalnızca DEĞERİ boşaltılır:
+// silinen bir anahtarı `useForm` bir daha izlemez ve o alan gönderimde
+// sunucuya hiç gitmez.
+watch(
+    () => form.channel_type_code,
+    () => {
+        everyFieldName.forEach((name) => {
+            form[name] = '';
+        });
+
+        form.clearErrors();
+    },
+);
+
 function submit() {
-    // Sırlar formda kalmaz: gönderim bitince temizlenir.
-    form.post('/channels', {
-        onFinish: () => form.reset('consumer_key', 'consumer_secret'),
+    // ⚠️ YALNIZCA SEÇİLİ KANALIN ALANLARI GÖNDERİLİR.
+    //
+    // Form her kanalın alanını taşır (yukarıdaki kural); hepsi
+    // gönderilseydi sunucudaki doğrulama Shopify isteğinde boş bir
+    // `consumer_key` görür ve tanımadığı alanlar istekte gereksizce
+    // dolaşırdı. Süzme GÖNDERİM ANINDA yapılır, alan tanımından.
+    const allowed = [
+        'channel_type_code',
+        'label',
+        'store_url',
+        ...allFields.value.map((field) => field.name),
+    ];
+
+    form.transform((data) => Object.fromEntries(
+        Object.entries(data).filter(([key]) => allowed.includes(key)),
+    )).post('/channels', {
+        onFinish: () => {
+            // Sırlar formda kalmaz: gönderim bitince temizlenir.
+            secretFields.value.forEach((field) => {
+                form[field.name] = '';
+            });
+        },
     });
 }
 </script>
@@ -109,10 +169,9 @@ function submit() {
             </div>
 
             <!--
-                Bağlanamayan kanal: sebep AÇIKÇA yazılır ve anahtar
-                alanları HİÇ gösterilmez. Gösterilseydi satıcı o kanalda
-                var olmayan bir anahtarı arar ve rastgele bir değerle
-                bağlanmayı denerdi.
+                Tanımı olmayan kanal: sebep AÇIKÇA yazılır ve hiçbir alan
+                gösterilmez. Bu, kanalın `is_active = true` yapılıp form
+                tanımının unutulduğu hâldir.
             -->
             <div
                 v-if="!connectable"
@@ -122,70 +181,70 @@ function submit() {
                     {{ selected?.name }} panelden bağlanamıyor
                 </p>
                 <p class="mt-1 text-sm text-amber-800">
-                    {{ selected?.unavailable_reason }}
+                    Bu kanalın kimlik biçimi panelde tanımlı değil.
                 </p>
             </div>
 
-            <div v-else class="rounded-lg border border-stone-200 bg-stone-50 p-4">
-                <p class="text-sm font-medium text-stone-900">WooCommerce API anahtarı</p>
-                <p class="mt-1 text-xs text-stone-600">
-                    WooCommerce yönetiminde <span class="font-mono">Ayarlar → Gelişmiş → REST API</span>
-                    altından <span class="font-mono">Okuma/Yazma</span> izinli bir anahtar üret.
+            <div v-else-if="allFields.length" class="rounded-lg border border-stone-200 bg-stone-50 p-4">
+                <p class="text-sm font-medium text-stone-900">
+                    {{ selected?.name }} kimlik bilgileri
+                </p>
+                <p v-if="selected?.help" class="mt-1 text-xs text-stone-600">
+                    {{ selected.help }}
                 </p>
 
                 <div class="mt-4 space-y-4">
-                    <div>
-                        <label for="consumer_key" class="block text-sm font-medium text-stone-700">
-                            Consumer key
+                    <div v-for="field in allFields" :key="field.name">
+                        <label :for="field.name" class="block text-sm font-medium text-stone-700">
+                            {{ field.label }}
                         </label>
                         <input
-                            id="consumer_key"
-                            v-model="form.consumer_key"
-                            type="text"
+                            :id="field.name"
+                            v-model="form[field.name]"
+                            :type="field.masked ? 'password' : 'text'"
+                            :placeholder="field.placeholder ?? ''"
                             required
                             autocomplete="off"
                             spellcheck="false"
-                            placeholder="ck_..."
                             class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
                         >
-                        <p v-if="form.errors.consumer_key" class="mt-1 text-sm text-red-700">
-                            {{ form.errors.consumer_key }}
+                        <p v-if="field.hint" class="mt-1 text-xs text-stone-500">
+                            {{ field.hint }}
                         </p>
-                    </div>
-
-                    <div>
-                        <label for="consumer_secret" class="block text-sm font-medium text-stone-700">
-                            Consumer secret
-                        </label>
-                        <input
-                            id="consumer_secret"
-                            v-model="form.consumer_secret"
-                            type="password"
-                            required
-                            autocomplete="off"
-                            spellcheck="false"
-                            placeholder="cs_..."
-                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
-                        >
-                        <p v-if="form.errors.consumer_secret" class="mt-1 text-sm text-red-700">
-                            {{ form.errors.consumer_secret }}
+                        <p v-if="form.errors[field.name]" class="mt-1 text-sm text-red-700">
+                            {{ form.errors[field.name] }}
                         </p>
                     </div>
                 </div>
             </div>
 
+            <!--
+                OAuth kanalında satıcıya SIRADAKİ ADIM söylenir. Bu kutu
+                olmasaydı satıcı "Etsy'ye bağlan" düğmesine basar ve
+                kendini beklemediği bir Etsy sayfasında bulurdu.
+            -->
+            <div
+                v-if="connectable && usesOauth"
+                class="rounded-lg border border-sky-200 bg-sky-50 p-4"
+            >
+                <p class="text-sm text-sky-900">
+                    Kaydettikten sonra {{ selected?.name }} sitesine yönlendirileceksin ve
+                    izni orada vereceksin. Bağlantı ancak izin verildikten sonra çalışır.
+                </p>
+            </div>
+
             <div class="flex items-center gap-3">
-                <!--
-                    Bağlanamayan kanalda düğme KİLİTLİDİR. Etkin kalsaydı
-                    istek sunucuya gider, oradaki kapı onu alan hatasına
-                    çevirirdi — çalışan ama anlamsız bir tur.
-                -->
                 <button
                     type="submit"
                     :disabled="form.processing || !connectable"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    {{ form.processing ? 'Bağlanıyor…' : 'Bağla ve doğrula' }}
+                    <template v-if="form.processing">
+                        {{ usesOauth ? 'Yönlendiriliyor…' : 'Bağlanıyor…' }}
+                    </template>
+                    <template v-else>
+                        {{ usesOauth ? `${selected?.name} ile bağlan` : 'Bağla ve doğrula' }}
+                    </template>
                 </button>
 
                 <Link href="/channels" class="text-sm text-stone-600 underline">

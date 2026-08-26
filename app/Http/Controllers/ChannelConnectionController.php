@@ -13,7 +13,7 @@ use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Registry\AdapterRegistry;
-use App\Domain\Channels\Support\PanelConnectSupport;
+use App\Domain\Channels\Support\ChannelConnectForm;
 use App\Domain\Channels\Support\StoreUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,6 +22,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
@@ -77,30 +78,52 @@ final class ChannelConnectionController extends Controller
      * SESSİZ BAŞARI YOK: sağlık kontrolü geçmezse kullanıcı uyarılır.
      * Bağlantı kaydedilir ama `pending` kalır ve senkron çalışmaz.
      */
-    public function store(Request $request, ConnectChannel $connect): RedirectResponse
+    public function store(Request $request, ConnectChannel $connect): Response|RedirectResponse
     {
-        $validated = $request->validate([
+        // ⚠️ KANAL ÖNCE OKUNUR ama DOĞRULAMA TEK TURDUR.
+        //
+        // Kural kümesi kanala GÖRE değişir, bu yüzden kod önce ham
+        // istekten okunur. Ama iki ayrı `validate()` çağrısı YAPILMAZ:
+        // ilki başarısız olunca ikincisi HİÇ koşmaz ve boş bir formu
+        // gönderen satıcı hataların YALNIZCA YARISINI görürdü —
+        // eksikleri doldurup yeniden gönderir, bu kez ÖTEKİ yarıyı
+        // alırdı. `missing_fields_fail_validation` tam olarak bunu
+        // korur.
+        //
+        // Ham kod tanımsızsa alan kuralı üretilemez; o durumda yalnızca
+        // taban kurallar koşar ve `channel_type_code` zaten reddedilir.
+        $code = (string) $request->input('channel_type_code');
+
+        $rules = [
             'channel_type_code' => [
                 'required', 'string',
                 Rule::exists('channel_types', 'code')->where('is_active', true),
+                // ⚠️ KAPI SUNUCUDA DA VAR — PANEL TEK SAVUNMA DEĞİLDİR.
+                //
+                // Kanal `is_active = true` yapılıp form tanımı
+                // unutulursa doğrudan POST atan bir istek onu BOŞ
+                // kimlikle kasaya yazdırırdı: satır `pending` kalır,
+                // satıcı bağlantıyı "kurulmuş" sanar ve her çağrı 401
+                // alır — anahtar yanlış değil, HİÇ SORULMAMIŞTIR.
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (is_string($value) && $value !== '' && ! ChannelConnectForm::isDefined($value)) {
+                        $fail('Bu kanalın kimlik biçimi panelde tanımlı değil; şu an bağlanamıyor.');
+                    }
+                },
             ],
             'label' => ['required', 'string', 'max:120'],
             'store_url' => ['required', 'string', 'max:255'],
-            'consumer_key' => ['required', 'string', 'max:255'],
-            'consumer_secret' => ['required', 'string', 'max:255'],
-        ]);
 
-        // ⚠️ KAPI SUNUCUDA DA VAR — PANEL TEK SAVUNMA DEĞİLDİR.
-        //
-        // Yalnızca formda gizlenseydi doğrudan POST atan bir istek Etsy
-        // bağlantısını Woo anahtarlarıyla kasaya YAZARDI: satır
-        // `pending` kalır ama kasada anlamsız bir sır durur ve satıcı
-        // bağlantıyı "kurulmuş" sanardı.
-        $reason = PanelConnectSupport::reasonFor($validated['channel_type_code']);
+            // ⚠️ ALAN KURALLARI TANIMDAN TÜRETİLİR — ELLE YAZILMAZ.
+            // Elle yazılsaydı form ile doğrulama ayrışır: alan sorulur
+            // ama reddedilir, ya da hiç sorulmayan bir alan zorunlu
+            // tutulur.
+            ...ChannelConnectForm::isDefined($code)
+                ? ChannelConnectForm::validationRules($code)
+                : [],
+        ];
 
-        if ($reason !== null) {
-            throw ValidationException::withMessages(['channel_type_code' => $reason]);
-        }
+        $fields = $request->validate($rules);
 
         // Plan kotası (§13 · Faz 4) — YALNIZCA GERÇEKTEN YENİ mağazada.
         //
@@ -109,7 +132,7 @@ final class ChannelConnectionController extends Controller
         // Ayrım yapılmasaydı kotası dolu bir satıcı süresi dolmuş
         // anahtarını güncelleyemez ve kanalı KALICI olarak ölürdü —
         // üstelik tam da ödeme yapmasını istediğimiz anda.
-        if ($this->wouldAddNewConnection($validated['channel_type_code'], $validated['store_url'])) {
+        if ($this->wouldAddNewConnection($code, $fields['store_url'])) {
             try {
                 app(EnforceQuota::class)->check(QuotaMetric::CHANNELS);
             } catch (QuotaExceededException $e) {
@@ -117,15 +140,28 @@ final class ChannelConnectionController extends Controller
             }
         }
 
+        // ⚠️ SIR İLE KİMLİK BURADA AYRIŞIR ve AYRI KOLONLARA GİDER.
+        //
+        // Sırlar ŞİFRELİ kasaya, kimlik alanları ŞİFRESİZ `settings`
+        // kolonuna. Karışsalardı ya token panele Inertia prop'u olarak
+        // giderdi (kasa şifrelemesi anlamsızlaşır) ya da adapter
+        // `settings` içinde aradığı `location_gid`/`shop_id` değerini
+        // BULAMAZ ve bağlantı sonsuza kadar `pending` kalırdı.
+        $secrets = $this->pick($fields, ChannelConnectForm::secretFields($code));
+        $settings = $this->pick($fields, ChannelConnectForm::identityFields($code));
+
+        // OAuth kanalında sağlık kontrolü HENÜZ çalıştırılmaz: kimlik
+        // bilgisi yoktur ve kontrol kimliksiz gider.
+        $usesOauth = ChannelConnectForm::usesOauth($code);
+
         try {
             $connection = $connect->run(
-                channelTypeCode: $validated['channel_type_code'],
-                label: $validated['label'],
-                storeUrl: $validated['store_url'],
-                secrets: [
-                    'consumer_key' => $validated['consumer_key'],
-                    'consumer_secret' => $validated['consumer_secret'],
-                ],
+                channelTypeCode: $code,
+                label: $fields['label'],
+                storeUrl: $fields['store_url'],
+                secrets: $secrets,
+                settings: $settings,
+                checkHealth: ! $usesOauth,
             );
         } catch (AccountAlreadyConnectedException $e) {
             // Kısıt ihlalini alan hatasına çevir: kullanıcı 500 değil açıklama görür.
@@ -141,6 +177,32 @@ final class ChannelConnectionController extends Controller
             }
 
             throw $e;
+        }
+
+        // ⚠️ OAUTH KANALINDA AKIŞ BURADA BİTMEZ — SATICI KANALA GİDER.
+        //
+        // `/channels`'a dönülseydi bağlantı `pending` görünür, satıcı
+        // "kaydedildi ama cevap vermedi" uyarısını okur ve anahtarlarını
+        // kontrol etmeye çalışırdı — oysa henüz hiçbir anahtar VERMEDİ ve
+        // yapması gereken tek şey Etsy'de izni onaylamaktır.
+        // ⚠️ YETKİLENDİRME ROTASINA `redirect()->route()` YAPILMAZ.
+        //
+        // O rota POST'tur ve BİLİNÇLİ olarak öyledir (yan etkisi vardır:
+        // oturuma tek kullanımlık sır yazar; GET olsaydı tarayıcı ön
+        // yüklemesi el sıkışmayı habersiz başlatır ve satıcının gerçek
+        // denemesindeki `state`'i EZERDİ). Yönlendirme ise tarayıcıya
+        // GET yaptırır: istek hiçbir rotaya UYMAZ, Laravel geri bounce
+        // eder ve satıcı hatasız biçimde forma döner — bağlantı
+        // kurulmuş olmasına rağmen HİÇBİR ŞEY OLMAMIŞ görünür.
+        //
+        // GERÇEK TARAYICI ÇALIŞTIRMASINDA bulundu. Testler göremedi:
+        // `assertRedirect` yalnızca ADRESİ karşılaştırır, yönlendirmeyi
+        // İZLEMEZ — "yazıldı ≠ çağrılıyor" kuralının bir biçimi.
+        //
+        // El sıkışmayı bu yüzden AYNI istekte başlatırız; satıcı tek
+        // adımda Etsy'ye gider.
+        if ($usesOauth) {
+            return $this->startOauthHandshake($request, $code, $connection);
         }
 
         return redirect('/channels')->with(
@@ -169,6 +231,76 @@ final class ChannelConnectionController extends Controller
     }
 
     // ─────────────────────────────────────────────────── yardımcılar
+
+    /**
+     * Doğrulanmış değerlerden alan tanımının istediklerini seçer.
+     *
+     * Doğrudan `$fields` gönderilseydi bir alan yanlış kolona düşerdi:
+     * sır `settings`'e, kimlik kasaya. Seçim TANIMDAN yapılır, istekten
+     * değil.
+     *
+     * ⚠️ EKSİK ALAN `null` OLARAK TAŞINMAZ — ATLANIR.
+     *
+     * Bugün her tanımlı alan `required` olduğu için buraya eksik bir ad
+     * GELEMEZ ve iki davranış AYNI sonucu verir; mutasyon turu bunu
+     * gösterdi (fark hiçbir testte görünmedi). Ayrım yine de AÇIKÇA
+     * yazılır çünkü eşitlik bir TESADÜFE dayanıyor: bir alan yarın
+     * isteğe bağlı yapılırsa `?? null` sessizce NULL bir sırrı kasaya
+     * yazar ve `access_token = null` ile giden her istek 401 alır —
+     * `AUTHENTICATION` KALICI sayılır ve satır "anahtarın yanlış"
+     * diyerek ölür, oysa anahtar HİÇ VERİLMEMİŞTİR (`97a7eb7` hata
+     * biçimi). Kasadaki NULL, kimliğin YOKLUĞUNDAN daha kötüdür:
+     * `ConnectChannel` boş `secrets`'ı hiç yazmaz, ama içi NULL dolu
+     * bir dizi "kimlik var" gibi görünür.
+     *
+     * @param  array<string, mixed>  $values
+     * @param  array<int, array<string, mixed>>  $definitions
+     * @return array<string, mixed>
+     */
+    private function pick(array $values, array $definitions): array
+    {
+        $picked = [];
+
+        foreach ($definitions as $field) {
+            $name = $field['name'];
+
+            // Yalnızca GERÇEKTEN gelen değer taşınır.
+            if (isset($values[$name])) {
+                $picked[$name] = $values[$name];
+            }
+        }
+
+        return $picked;
+    }
+
+    /**
+     * El sıkışmayı başlatır ve satıcıyı kanalın onay ekranına yollar.
+     *
+     * ⚠️ İŞ AYNI CONTROLLER'DA TEKRARLANMAZ, SAHİBİNE DEVREDİLİR.
+     * PKCE sırlarının üretimi, oturuma yazılması ve yetkilendirme
+     * adresinin kurulması `EtsyOAuthController::redirect()` içinde
+     * yaşar; kopyalansaydı iki yer ayrışır ve biri `state`'i oturuma
+     * yazmayı unuttuğunda P0-10'un koruduğu doğrulama SESSİZCE devre
+     * dışı kalırdı.
+     *
+     * ⚠️ KANAL ADI UYDURULMAZ. Bugün OAuth kullanan tek kanal Etsy'dir;
+     * ikincisi eklendiğinde bu eşleme büyür ve tanımsız kanal AÇIKÇA
+     * reddedilir — sessizce `/channels`'a dönseydi satıcı bağlantısını
+     * kurulmuş sanar ve hiç yetkilendirmezdi.
+     */
+    private function startOauthHandshake(
+        Request $request,
+        string $channelTypeCode,
+        ChannelConnection $connection,
+    ): Response|RedirectResponse {
+        return match ($channelTypeCode) {
+            'etsy' => app(EtsyOAuthController::class)->redirect($request, $connection->id),
+            default => throw new \LogicException(
+                "`{$channelTypeCode}` OAuth kullandığını bildiriyor ama "
+                .'yetkilendirme akışı tanımlı değil.'
+            ),
+        };
+    }
 
     /**
      * Sağlık sonucuna göre flash mesajı.
@@ -253,13 +385,16 @@ final class ChannelConnectionController extends Controller
                 'code' => $type->code,
                 'name' => $type->name,
                 'kind' => $type->kind,
-                // ⚠️ "AÇIK" İLE "BAĞLANABİLİR" AYRI ŞEYLERDİR. Kanal
-                // listede görünür ama form onun kimlik biçimini
-                // soramıyorsa satıcı OLMAYAN bir anahtarı arar ve
-                // bulamayınca rastgele bir değer girer; sağlık kontrolü
-                // 401 alır ve sebep "anahtarın yanlış" gibi görünür.
-                'connectable' => PanelConnectSupport::isConnectable($type->code),
-                'unavailable_reason' => PanelConnectSupport::reasonFor($type->code),
+                // ⚠️ ALAN TANIMI EKRANA GİDER — Vue'da `if (code ===
+                // '...')` YAZILMAZ. Yazılsaydı o blok sunucudaki
+                // doğrulamadan AYRI yaşar ve biri değiştiğinde form
+                // alanı sorar ama doğrulama reddederdi (ya da tersi).
+                //
+                // `connectable` ARTIK BİR TANIMIN VARLIĞIDIR: kanal
+                // `is_active = true` yapılıp form tanımı unutulursa
+                // satıcı sebebi görür — `PanelConnectSupport`'un dürüst
+                // uyarısının KALICI hâli.
+                ...ChannelConnectForm::present($type->code),
             ])
             ->all();
     }

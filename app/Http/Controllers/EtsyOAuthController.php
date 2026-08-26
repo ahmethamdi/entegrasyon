@@ -17,6 +17,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
@@ -68,7 +70,7 @@ final class EtsyOAuthController extends Controller
      * geçerli olmayacak ölü bir sır birikirdi; `settings`'e yazılsaydı
      * ŞİFRESİZ bir kolona düşer ve panele Inertia prop'u olarak giderdi.
      */
-    public function redirect(Request $request, string $connectionId): RedirectResponse
+    public function redirect(Request $request, string $connectionId): Response|RedirectResponse
     {
         $connection = $this->findConnection($connectionId);
 
@@ -84,12 +86,34 @@ final class EtsyOAuthController extends Controller
         $request->session()->put(self::SESSION_VERIFIER, $handshake['code_verifier']);
         $request->session()->put(self::SESSION_CONNECTION, $connection->id);
 
-        return redirect()->away(EtsyAuth::authorizeUrl(
+        $target = EtsyAuth::authorizeUrl(
             keystring: $this->keystring($connection),
             redirectUri: route('channels.etsy.callback'),
             state: $handshake['state'],
             codeVerifier: $handshake['code_verifier'],
-        ));
+        );
+
+        // ⚠️ INERTIA İSTEĞİ DIŞ ADRESE 302 İLE GÖNDERİLEMEZ.
+        //
+        // Panel formu bu akışı bir Inertia XHR'ı olarak başlatır ve XHR
+        // bir 302'yi ŞEFFAF olarak izler: tarayıcı Etsy'nin HTML'ini
+        // alır, Inertia onu bir sayfa yanıtı sanmaz ve ekranda HAM JSON
+        // (ya da boş sayfa) kalır — satıcı Etsy'yi HİÇ GÖRMEZ.
+        // Inertia'nın bunun için ayrı bir sözleşmesi vardır: 409 +
+        // `X-Inertia-Location`, istemci onu TAM SAYFA gezinmesine
+        // çevirir.
+        //
+        // GERÇEK TARAYICI ÇALIŞTIRMASINDA bulundu — testler göremez,
+        // çünkü `assertRedirect` bir XHR'ın yönlendirmeyi nasıl
+        // izlediğini modellemez.
+        //
+        // Rota DOĞRUDAN da çağrılabilir (Inertia başlığı olmayan düz bir
+        // POST); o hâlde normal 302 doğru cevaptır ve korunur.
+        if ($request->header('X-Inertia')) {
+            return Inertia::location($target);
+        }
+
+        return redirect()->away($target);
     }
 
     /**
