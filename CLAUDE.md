@@ -372,6 +372,70 @@ memory'deki "Repo Durumu" dosyasına bak.
   dönseydi operasyon tamamlandı sanılır, `synced_version` ilerler ve kanalda
   hiçbir şey değişmemişken satır "senkron" görünürdü.
 
+## Bağlanma formu kuralları (A maddesi · `fef3e62`)
+
+Dokümanın §13 listesinde YOKTUR — kullanıcı onaylı panel maddesi.
+`PanelConnectSupport` KALDIRILDI (kendi başlığındaki talimat).
+
+- **KİMLİK BİÇİMİ KANALIN GERÇEĞİDİR ve `ChannelConnectForm` TEK
+  KAYNAKTIR.** Controller ondan doğrulama kuralı ÜRETİR, Vue ondan alan
+  ÇİZER; `if ($code === 'shopify')` YAZILMAZ (yeteneklerin `instanceof`
+  ile okunması kuralının form karşılığı). İkiye bölünseydi biri
+  güncellenir öteki eski kalırdı: form alanı sorar ama doğrulama
+  reddeder — ya da form sormaz, kasaya BOŞ kimlik yazılır ve istek
+  SESSİZCE kimliksiz gider (`97a7eb7`).
+- **İKİ TÜR ALAN VARDIR ve AYRI KOLONLARA GİDER.** SIR →
+  `channel_credentials` (şifreli kasa) · KİMLİK →
+  `channel_connections.settings` (ŞİFRESİZ jsonb, panele Inertia prop'u
+  olarak GİDER). §19 · madde 4: KİMLİK ≠ SIR. Yön karışırsa ya token
+  tarayıcıda görünür ya da adapter `settings` içinde aradığı
+  `location_gid`/`shop_id`'yi BULAMAZ ve bağlantı sonsuza kadar
+  `pending` kalır.
+- **SAĞLIK KONTROLÜNÜN İSTEDİĞİ HER KİMLİK ALANI FORMDA SORULMALIDIR.**
+  `location_gid` ve `shop_id` AYLARDIR hiçbir kod yolundan
+  yazılmıyordu, yalnızca testlerde elle tohumlanıyordu — Shopify 52/52
+  saat "bitmiş" sayılırken panelden bağlanan hiçbir bağlantı `active`
+  OLAMAZDI. **Yeni kanal eklerken "sağlık kontrolü hangi `settings`
+  alanlarını okuyor" sorusu formun İLK İŞİDİR.**
+- **OAUTH KANALINDA SAĞLIK KONTROLÜ ÇALIŞTIRILMAZ ve KASAYA YAZILMAZ.**
+  Kimlik o noktada YOKTUR (satıcı henüz kanala gitmedi); koşsaydı istek
+  kimliksiz gider, 401 alınır ve `last_error` "anahtarın yanlış" derdi —
+  satıcı hiçbir anahtar VERMEMİŞKEN bağlantısını bozuk sanardı. Boş
+  `secrets` kasaya yazılsaydı `activeCredential()` onu bulup "kimlik
+  var" derdi.
+- **`settings` BİRLEŞTİRİLİR, EZİLMEZ** (`PushListing::
+  adoptRemoteIdentity` kuralının aynısı). Ezilseydi yeniden bağlanan
+  satıcı `location_gid`/`shop_id`'sini kaybeder ve bağlantı bir daha
+  ASLA sağlıklı olmazdı.
+- **DOĞRULAMA TEK TURDUR.** Kural kümesi kanala göre değişse de iki
+  ayrı `validate()` çağrısı YAPILMAZ: ilki başarısız olunca ikincisi HİÇ
+  koşmaz ve boş formu gönderen satıcı hataların YALNIZCA YARISINI görür,
+  düzeltip yeniden gönderir ve bu kez ÖTEKİ yarıyı alır.
+
+### Tarayıcıda bulunan üç hata — testler ÜÇÜNÜ DE göremiyordu
+
+- **`useForm` YALNIZCA KURULURKEN VERİLEN ANAHTARLARI İZLER.**
+  Sonradan `form[ad] = ''` ile eklenen alan ekranda görünür ve
+  yazılabilir ama gönderimde **SUNUCUYA HİÇ GİTMEZ**: satıcı `shop_id`
+  alanını doldurur ve "shop id alanı zorunludur" hatası alır. Her
+  kanalın her alanı BAŞTAN tanımlanır; gönderimde `transform()` ile
+  yalnızca seçili kanalınkiler süzülür. Anahtar SİLİNMEZ, DEĞERİ
+  boşaltılır — silinen anahtarı `useForm` bir daha izlemez.
+  **Testler göremez: hepsi yükü DOĞRUDAN POST eder, Vue formunu HİÇ
+  sürmez.**
+- **POST ROTASINA `redirect()->route()` YAPILAMAZ.** Tarayıcı
+  yönlendirmeyi GET olarak izler, istek hiçbir rotaya UYMAZ ve satıcı
+  hatasız biçimde forma döner — bağlantı kurulmuşken HİÇBİR ŞEY OLMAMIŞ
+  görünür. `assertRedirect` yalnızca ADRESİ karşılaştırır,
+  yönlendirmeyi İZLEMEZ. İş, rotayı yeniden yazmak değil, sahibinin
+  metodunu AYNI istekte ÇAĞIRMAKTIR (kopyalanırsa `state` yazımı iki
+  yerde yaşar ve biri unutulunca P0-10 sessizce devre dışı kalır).
+- **INERTIA XHR'I DIŞ ADRESE 302 İLE GÖNDERİLEMEZ.** XHR 302'yi ŞEFFAF
+  izler; tarayıcı dış sitenin HTML'ini alır, Inertia onu sayfa yanıtı
+  saymaz ve ekranda HAM JSON kalır — satıcı hedef siteyi HİÇ GÖRMEZ.
+  Sözleşme **409 + `X-Inertia-Location`** (`Inertia::location()`).
+  Inertia başlığı olmayan düz POST için normal 302 KORUNUR.
+
 ## Etsy kuralları (beşinci kanal · Faz 3 · `6dcaf52`)
 
 Faz 2 (Hepsiburada) uç nokta doğrulaması BLOKE olduğu için atlandı;
@@ -2183,11 +2247,15 @@ production'a hazır olan" tablosundaki **tüm "TAM" satırları artık
 gerçekten TAM.** Kalıcı kurallar yukarıda "Fiyat çakışması kuralları"
 başlığında. **BU MADDEYİ YENİDEN AÇMA.**
 
-**SIRADAKİ İŞ — 26 AĞUSTOS'TA KULLANICI SEÇECEK.** Üç seçenek var ve
-ayrıntısı DEVIR.md'nin EN ÜSTÜNDE:
-**A)** bağlanma formunu kanal başına dallandır (~4 sa · **ÖNERİLEN** —
-Etsy + Shopify panelde GÖRÜNÜYOR ama BAĞLANAMIYOR) ·
-**B)** §25'in üç metriği + token rozeti (~6 sa · Faz 1'de de atlanmış) ·
+**A MADDESİ KAPANDI** (26 Ağustos · `fef3e62`) — bağlanma formu kanal
+başına dallandırıldı; Etsy ve Shopify panelden GERÇEKTEN bağlanıyor
+(tarayıcıda doğrulandı). Kalıcı kurallar aşağıda "Bağlanma formu
+kuralları" başlığında. **YENİDEN AÇMA.**
+
+**SIRADAKİ İŞ — 27 AĞUSTOS'TA KULLANICI SEÇECEK.** İki seçenek kaldı:
+**B)** §25'in üç metriği + token rozeti (~6 sa · **ÖNERİLEN** — Etsy
+artık bağlanabildiği için refresh token'ın 90 günde ölmesi GERÇEK bir
+risk ve bugün bunu gösteren hiçbir şey yok) ·
 **C)** Faz 4 · eBay (64 sa).
 
 **HEPSİBURADA DOKÜMANTASYONU HÂLÂ BEKLİYOR** (kullanıcı ile BİRLİKTE,

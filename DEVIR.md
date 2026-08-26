@@ -1,44 +1,98 @@
-# Devir Notu — 25 Ağustos 2026 (V3.0 · **Faz 1 + Faz 3 KAPANDI**)
+# Devir Notu — 26 Ağustos 2026 (V3.0 · **A MADDESİ KAPANDI**)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1234 test yeşil** (4259 assertion), Pint temiz (426 dosya).
-Son commit `602fb32`. **Hiçbir şey push EDİLMEDİ** — dört commit
-yerelde bekliyor (`8869464` · `bccf77d` · `f0fb07a` · `602fb32`).
+**1253 test yeşil** (4324 assertion), Pint temiz (427 dosya).
+Son commit `fef3e62`. **Hiçbir şey push EDİLMEDİ** — altı commit
+yerelde bekliyor (`8869464` · `bccf77d` · `f0fb07a` · `602fb32` ·
+`2ce813b` · `fef3e62`).
 
 ---
 
-# 🌅 YARIN İLK İŞ — 26 Ağustos
+# 🌅 YARIN İLK İŞ — 27 Ağustos
 
-**Kullanıcı 25 Ağustos akşamı yorulup bıraktı.** Bu turda Faz 3
-(Etsy) kapandı. Yarın ÜÇ seçenek var ve **kullanıcı henüz seçmedi**:
+26 Ağustos'ta **A maddesi (bağlanma formunun kanal başına
+dallandırılması) BİTTİ** (`fef3e62`). Kalan iki seçenek:
 
 | # | İş | Süre | Neden şimdi |
 |---|---|---|---|
-| **A** | **Bağlanma formunu dallandır** | ~4 sa | **ÖNERİLEN.** Etsy + Shopify panelde GÖRÜNÜYOR ama BAĞLANAMIYOR; iki kanal da kullanılamaz durumda duruyor |
-| B | §25'in üç metriği + token rozeti | ~6 sa | Doküman istiyor, Faz 1'de de atlanmış; Shopify'ı da ilgilendirir |
-| C | Faz 4 · eBay | 64 sa | Yeni kanal; ama önceki ikisi yarım dururken başlamak riskli |
+| **B** | §25'in üç metriği + token rozeti | ~6 sa | **ÖNERİLEN.** Doküman istiyor, Faz 1'de de atlanmış; Etsy'nin refresh token'ı 90 günde ölür ve bugün bunu gösteren HİÇBİR ŞEY yok |
+| C | Faz 4 · eBay | 64 sa | Yeni kanal (altıncı) |
 
-**A'nın gerekçesi:** kullanıcı 25 Ağustos'ta "kanallardan bağlansın
-bütün platformlar" dedi ve kanalları AÇTIRDI. Bugün panelde
-görünüyorlar ama form OAuth/tek-token akışını bilmediği için
-bağlanamıyorlar — dürüst uyarı koyuldu (`f0fb07a`) ama bu GEÇİCİ bir
-çözüm. A bittiğinde kullanıcının o günkü isteği GERÇEKTEN karşılanmış
-olur.
+**B'nin gerekçesi güçlendi:** Etsy artık panelden GERÇEKTEN
+bağlanabiliyor, yani ilk gerçek OAuth bağlantısı kurulmak üzere. O
+token yenilenmezse bağlantı sessizce ölür ve satıcı bunu ancak
+siparişler kesilince fark eder. `channel_credentials.expires_at` ve
+`channel_credentials_expiring_idx` ŞEMADA HAZIR.
 
-**A'nın iki parçası:**
-- **A1 · Shopify** (~1.5 sa): form Shopify seçilince TEK `access_token`
-  alanı + `webhook_secret` sorar. Shopify'ın kodu 52/52 BİTMİŞ, tek
-  eksiği buydu.
-- **A2 · Etsy** (~2.5 sa): form `keystring` alır ve "Etsy'ye bağlan"
-  düğmesi `EtsyOAuthController`'a YÖNLENDİRİR; `shop_id` callback'te
-  dolar. **OAuth rotaları ZATEN YAZILI** (slice 3.1) — eksik olan
-  yalnızca panelin o akışa yönlendirmesi.
-- Bitince `PanelConnectSupport` satırları TEKER TEKER silinir; liste
-  boşalınca sınıf da kaldırılır (sınıf başlığında yazılı).
+---
 
-⚠️ **A bir PANEL maddesidir ve dokümanın §13 listesinde YOKTUR.**
-Kullanıcı onayladı (25 Ağustos, "C → 3.8 → A1+A2" kararı).
+# ✅ A MADDESİ — BİTTİ (26 Ağustos · `fef3e62`)
+
+Etsy ve Shopify artık panelden **gerçekten bağlanıyor**. Tarayıcıda
+uçtan uca doğrulandı.
+
+**`ChannelConnectForm` — kanal başına alan tanımı, TEK KAYNAK.**
+Controller ondan doğrulama kuralı üretir, Vue ondan alan çizer;
+`if ($code === 'shopify')` YAZILMAZ. İki tür alan AYRI kolonlara gider:
+**SIR** → şifreli kasa · **KİMLİK** → `settings` (§19 · madde 4).
+
+| Kanal | Kasa (sır) | `settings` (kimlik) | Akış |
+|---|---|---|---|
+| woocommerce | consumer_key + consumer_secret | — | doğrudan |
+| trendyol | api_key + api_secret | — | doğrudan |
+| hepsiburada | api_key + api_secret | — | doğrudan (kanal KAPALI) |
+| **shopify** | access_token + webhook_secret | **location_gid** | doğrudan |
+| **etsy** | **YOK** (OAuth yazar) | **etsy_keystring + shop_id** | **Etsy'ye yönlendirir** |
+
+`PanelConnectSupport` **KALDIRILDI** — kendi başlığındaki talimat
+buydu: liste boşalınca sınıf da gider.
+
+### ⚠️ BU TURDA BULUNAN GERÇEK HATA — iki kimlik alanı HİÇ yazılmıyordu
+
+`location_gid` ve `shop_id` bugüne kadar **hiçbir kod yolundan
+yazılmıyordu**, yalnızca testlerde elle tohumlanıyordu. Oysa iki
+kanalın da sağlık kontrolü onlarsız **SAĞLIKSIZ** döner. Yani Shopify
+52/52 saat yazılmış olmasına rağmen **panelden bağlanan hiçbir
+bağlantı `active` olamazdı** — kanal "bitti" sayılıyordu.
+
+### ⚠️ TARAYICIDA ÜÇ HATA ÇIKTI — üçünü de testler göremiyordu
+
+Gerçek çalıştırma kuralı bu turda da üç kez haklı çıktı:
+
+1. **`useForm` yalnızca KURULURKEN verilen anahtarları izler.**
+   Sonradan `form[ad] = ''` ile eklenen alan ekranda yazılabilir ama
+   **sunucuya HİÇ GİTMEZ**: satıcı `shop_id`'yi doldurur ve "shop id
+   alanı zorunludur" hatası alırdı. Testler göremedi çünkü hepsi yükü
+   DOĞRUDAN POST ediyor, Vue formunu hiç sürmüyor. Çözüm: her kanalın
+   her alanı BAŞTAN tanımlanır, gönderimde `transform()` ile süzülür.
+2. **POST rotasına `redirect()->route()` YAPILAMAZ.** Tarayıcı
+   yönlendirmeyi GET olarak izler, istek hiçbir rotaya uymaz ve satıcı
+   hatasız biçimde forma döner — bağlantı kurulmuşken HİÇBİR ŞEY
+   OLMAMIŞ görünür. `assertRedirect` yalnızca ADRESİ karşılaştırır,
+   yönlendirmeyi İZLEMEZ.
+3. **Inertia XHR'ı dış adrese 302 ile gönderilemez.** Sözleşme
+   **409 + `X-Inertia-Location`**'dır (`Inertia::location()`); yoksa
+   ekranda HAM JSON kalır ve satıcı Etsy'yi HİÇ GÖRMEZ.
+
+Ayrıca iki `validate()` çağrısı **tek tura** indirildi: ilki
+başarısız olunca ikincisi hiç koşmuyor ve boş formu gönderen satıcı
+hataların **yalnızca yarısını** görüyordu.
+
+### Mutasyon turu — 7 mutasyondan 6'sı öldü
+
+Hayatta kalan: `pick()` içindeki `isset` yerine `?? null`. **Bugün
+gerçekten eşdeğerler** çünkü tanımlı her alan `required`; fark hiçbir
+dürüst testte görünmez. Kod tarafında AÇIKÇA yazıldı (yarın bir alan
+isteğe bağlı yapılırsa `?? null` kasaya NULL bir sır yazar), test
+UYDURULMADI.
+
+### Yerel doğrulama için yapılan geçici değişiklik
+
+Demo kiracısına `pro` planlı bir **aktif abonelik satırı** eklendi —
+kota `tenants.plan_code`'dan DEĞİL `subscriptions` tablosundan okunur
+ve demo kiracının aboneliği yoktu (`free` = 1 kanal). Bu bir hata
+değil, belgelenmiş davranış; yalnızca yerel veritabanını etkiler.
 
 ## 🔑 Yerel ortam — yarın lazım olacak
 
@@ -103,10 +157,10 @@ Shopify'la aynı durum. Kullanıcının açık kararıyla açıldı (25 Ağustos
 "kanallardan bağlansın bütün platformlar"). Geri alma: `UPDATE
 channel_types SET is_active = false WHERE code = 'etsy';`
 
-⚠️ **PANELDEN BAĞLANAMAZ** — bağlama formu OAuth akışını bilmiyor ve
-bunu AÇIKÇA söylüyor (`PanelConnectSupport`, commit `f0fb07a`).
-Bağlanma formunun kanal başına dallandırılması AYRI bir madde
-(aşağıda).
+✅ **PANELDEN ARTIK BAĞLANIYOR** (`fef3e62` · 26 Ağustos). Form Etsy
+seçilince `keystring` + `shop_id` sorar ve satıcıyı Etsy'nin
+yetkilendirme ekranına yönlendirir. Tarayıcıda doğrulandı; eksik olan
+tek şey GERÇEK bir Etsy hesabıyla sürülmesi (anahtar kullanıcıda).
 
 ## 📌 AÇIK MADDELER — Faz 3 dışı, kullanıcı onaylı
 
@@ -119,11 +173,9 @@ atlanmış** — yani Shopify'ı da ilgilendiriyor, Etsy'ye özgü değil.
 `channel_credentials_expiring_idx` kısmi indeksi zaten var.
 Kullanıcı kararıyla Faz 3'ten AYRILDI (slice 3.8 dokümanda 4 saat).
 
-**2 · BAĞLANMA FORMU KANAL BAŞINA DALLANDIRILMALI** (~4 sa).
-A1: Shopify (tek Admin API token'ı, ~1.5 sa) · A2: Etsy (OAuth
-yönlendirmesi; rotalar `EtsyOAuthController`'da ZATEN yazılı, ~2.5 sa).
-Bitince `PanelConnectSupport` satırları teker teker silinir; liste
-boşalınca sınıf da kaldırılır.
+**2 · ~~BAĞLANMA FORMU KANAL BAŞINA DALLANDIRILMALI~~ — BİTTİ**
+(26 Ağustos · `fef3e62`). Ayrıntı yukarıda "A MADDESİ" bölümünde.
+**YENİDEN AÇMA.**
 
 **3 · `SupportsFulfillment` ETSY'DE UYGULANMADI.** §11.4 ondan söz
 ediyor ama §27'nin slice tablosunda satırı YOK. `EtsyAdapterTest`
