@@ -3,9 +3,10 @@
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
 **1281 test yeşil** (4372 assertion), Pint temiz (432 dosya).
-Son commit `f76d425`. **Hiçbir şey push EDİLMEDİ** — yedi commit
-yerelde bekliyor (`8869464` · `bccf77d` · `f0fb07a` · `602fb32` ·
-`2ce813b` · `fef3e62` · `f76d425`).
+Son commit `fb126d9`. **HER ŞEY PUSH EDİLDİ** — `origin/main` da
+`fb126d9`'da (`git ls-remote` ile doğrulandı, 28 Ağustos). Bu notun
+ilk hâli "yedi commit yerelde bekliyor" diyordu; o satır push'tan
+ÖNCE yazılmış ve sonrasında güncellenmemişti.
 
 ---
 
@@ -24,8 +25,15 @@ yerelde bekliyor (`8869464` · `bccf77d` · `f0fb07a` · `602fb32` ·
 | — | Etsy/Shopify gerçek hesapla sürüm | ? | §26 adım 3-5, anahtarlar KULLANICIDA |
 | — | Faz 5 tampon | 28 sa | — |
 
-**Push kararı da bekliyor** — yedi commit yerelde duruyor ve kullanıcı
-henüz push istemedi.
+**Push maddesi KAPANDI** (28 Ağustos) — yerelde bekleyen commit yok.
+`git log --oneline origin/main..HEAD` boş.
+
+> **DEVİR NOTUNUN PUSH İDDİASI TEK BAŞINA GÜVENİLMEZ.** Not push'tan
+> önce yazılırsa sonraki tur "yedi commit bekliyor" diye okur ve
+> olmayan bir iş yapmaya çalışır. Ayrıca `git log origin/main..HEAD`
+> yerel `origin/main` **referansına** bakar ve o referans bayat
+> olabilir; gerçek cevap `git fetch` ardından ya da doğrudan
+> `git ls-remote origin main` ile alınır.
 
 ---
 
