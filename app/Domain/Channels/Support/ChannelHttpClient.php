@@ -83,6 +83,7 @@ final class ChannelHttpClient
      * @param  array<string, mixed>  $query
      * @param  string|null  $attemptId  Hangi denemeye ait — FK yok, indeks var
      * @param  array<string, string>  $headers  Adapter'a özgü başlıklar
+     * @param  bool  $asForm  Gövde form-encoded gitsin (OAuth token uç noktaları)
      *
      * @throws ConnectionException Ağ hatası çağırana yükseltilir
      */
@@ -93,6 +94,7 @@ final class ChannelHttpClient
         array $query = [],
         ?string $attemptId = null,
         array $headers = [],
+        bool $asForm = false,
     ): Response {
         $method = strtoupper($method);
         $url = $this->urlFor($endpoint);
@@ -100,9 +102,15 @@ final class ChannelHttpClient
         $startedAt = hrtime(true);
 
         try {
-            $response = $this->pendingRequest($headers)->send($method, $url, array_filter([
+            // GÖVDE ANAHTARI BİÇİME GÖRE DEĞİŞİR: Guzzle `json` ile `form_params`
+            // arasında AYRIM yapar ve yanlış anahtar gövdeyi SESSİZCE yanlış
+            // kodlar — OAuth uç noktası `grant_type` alanını hiç görmez ve
+            // "invalid_request" döner; sebebi de gövdede görünmez.
+            $bodyKey = $asForm ? 'form_params' : 'json';
+
+            $response = $this->pendingRequest($headers, $asForm)->send($method, $url, array_filter([
                 'query' => $query,
-                'json' => $body,
+                $bodyKey => $body,
             ], static fn (mixed $v): bool => $v !== null && $v !== []));
         } catch (ConnectionException $e) {
             // Yanıt HİÇ gelmedi. Kayıt yine de yazılır: sonuç belirsizdir
@@ -145,10 +153,23 @@ final class ChannelHttpClient
     /**
      * @param  array<string, mixed>  $body
      * @param  array<string, string>  $headers
+     * @param  bool  $asForm  OAuth token uç noktaları için form-encoded gövde
      */
-    public function post(string $endpoint, array $body, ?string $attemptId = null, array $headers = []): Response
-    {
-        return $this->request('POST', $endpoint, body: $body, attemptId: $attemptId, headers: $headers);
+    public function post(
+        string $endpoint,
+        array $body,
+        ?string $attemptId = null,
+        array $headers = [],
+        bool $asForm = false,
+    ): Response {
+        return $this->request(
+            'POST',
+            $endpoint,
+            body: $body,
+            attemptId: $attemptId,
+            headers: $headers,
+            asForm: $asForm,
+        );
     }
 
     /**
@@ -164,14 +185,27 @@ final class ChannelHttpClient
 
     /**
      * @param  array<string, string>  $headers  Adapter'ın eklediği başlıklar
+     * @param  bool  $asForm  Gövde form-encoded gitsin
      */
-    private function pendingRequest(array $headers = []): PendingRequest
+    private function pendingRequest(array $headers = [], bool $asForm = false): PendingRequest
     {
         $secrets = $this->secrets();
 
         $request = Http::timeout(self::DEFAULT_TIMEOUT_SECONDS)
-            ->acceptJson()
-            ->asJson();
+            ->acceptJson();
+
+        // BİÇİM ADAPTER'DAN GELİR ve varsayılan JSON'dur.
+        //
+        // OAuth 2 token uç noktaları (RFC 6749 · §4.1.3) gövdeyi
+        // `application/x-www-form-urlencoded` BEKLER ve JSON gönderilirse
+        // alanları HİÇ okumaz: istek `invalid_request` ile döner ve sebebi
+        // gövdede görünmez. eBay bunu KATI uygular; Etsy'nin uç noktası
+        // JSON'u da kabul ettiği için bu fark beşinci kanalda görünmemişti.
+        //
+        // `if ($channel === 'ebay')` YAZILMAZ — biçimi ADAPTER bilir ve
+        // söyler, istemci yalnızca uygular (`User-Agent` başlığı kararının
+        // aynısı).
+        $request = $asForm ? $request->asForm() : $request->asJson();
 
         // ADAPTER BAŞLIKLARI — istemci HANGİ KANAL olduğunu BİLMEZ.
         //
@@ -185,6 +219,26 @@ final class ChannelHttpClient
         // DEĞİŞMEZ.
         if ($headers !== []) {
             $request = $request->withHeaders($headers);
+        }
+
+        // ⚠️ ADAPTER KENDİ `Authorization`'INI VERDİYSE KASA ONU EZMEZ.
+        //
+        // Aşağıdaki iki dal `Authorization` başlığını YAZAR ve Laravel'de
+        // sonra yazan öncekini EZER. Bu kapı olmasaydı, kasasında
+        // `access_token` bulunan bir bağlantının token YENİLEME isteği
+        // sessizce `Bearer {ölü token}` ile giderdi — oysa o istek tam da
+        // ölü token'ı tazelemek için atılıyor ve OAuth uç noktası
+        // `Basic {client_id:client_secret}` bekliyor.
+        //
+        // Sonuç en pahalı hata biçimi olurdu: yenileme 401 alır, bağlantı
+        // "anahtarın yanlış" damgasıyla ölür ve satıcı anahtarı defalarca
+        // yeniden girer — hiçbiri işe yaramaz, çünkü anahtar doğrudur ve
+        // yalnızca YANLIŞ BİÇİMDE gönderilmiştir (`97a7eb7`'nin kardeşi).
+        //
+        // Kural GENELDİR: Amazon SP-API'nin LWA token isteği de aynı şekli
+        // taşır ve aynı kapıdan geçer.
+        if ($this->hasAuthorizationHeader($headers)) {
+            return $request;
         }
 
         // Basic auth: anahtar çifti kasadan gelir ve hiçbir yerde loglanmaz.
@@ -208,6 +262,29 @@ final class ChannelHttpClient
         }
 
         return $request;
+    }
+
+    /**
+     * Adapter kendi `Authorization` başlığını verdi mi?
+     *
+     * ⚠️ KARŞILAŞTIRMA HARF DUYARSIZDIR. HTTP başlık adları RFC 9110 · §5.1
+     * gereği harf duyarsızdır ve vekil sunucular onları yeniden yazar; tam
+     * eşleşme aransaydı `authorization` yazan bir adapter kapıya TAKILMAZ,
+     * kasa başlığı EZER ve istek yanlış kimlikle giderdi — kapının hiç
+     * olmamasından farksız ama var sanılan bir hâl. Aynı gerekçe
+     * Hepsiburada'nın webhook başlığı okumasında da yazılı.
+     *
+     * @param  array<string, string>  $headers
+     */
+    private function hasAuthorizationHeader(array $headers): bool
+    {
+        foreach (array_keys($headers) as $name) {
+            if (strcasecmp($name, 'Authorization') === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

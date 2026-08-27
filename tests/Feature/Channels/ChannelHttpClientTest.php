@@ -340,6 +340,171 @@ final class ChannelHttpClientTest extends TestCase
         ));
     }
 
+    // ────────────────────────────────── OAuth token isteği (V3.0 · §13.3)
+
+    /**
+     * ⚠️ ADAPTER'IN VERDİĞİ `Authorization` KASA TARAFINDAN EZİLMEZ.
+     *
+     * Bu, eBay'in token YENİLEME isteğinin var olma koşuludur. Kasada
+     * `access_token` bulunduğu için istemci normalde `withToken()` çağırır
+     * ve `Authorization: Bearer ...` yazar; ama yenileme isteği tam da o
+     * ölü token'ı tazelemek için atılıyor ve OAuth uç noktası
+     * `Basic {client_id:client_secret}` bekliyor.
+     *
+     * Kapı olmasaydı yenileme sessizce Bearer ile gider, 401 alır ve
+     * bağlantı "anahtarın yanlış" damgasıyla ölürdü — satıcı anahtarı
+     * defalarca yeniden girer, hiçbiri işe yaramazdı çünkü anahtar
+     * DOĞRUDUR ve yalnızca yanlış BİÇİMDE gönderilmiştir.
+     */
+    #[Test]
+    public function an_adapter_supplied_authorization_header_is_not_overwritten_by_the_vault(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        $this->asTenant($tenant, fn () => app(CredentialVault::class)->store(
+            $connection,
+            ['access_token' => 'olu-token'],
+        ));
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->asTenant($tenant, fn () => $this->clientFor($connection)->post(
+            endpoint: 'identity/v1/oauth2/token',
+            body: ['grant_type' => 'refresh_token'],
+            headers: ['Authorization' => 'Basic '.base64_encode('app:secret')],
+            asForm: true,
+        ));
+
+        // ⚠️ İDDİA DEĞER SAYISINA BAKAR, TEK BİR DEĞERİN VARLIĞINA DEĞİL.
+        //
+        // `hasHeader('Authorization', 'Basic ...')` TEK BAŞINA yetmez:
+        // kasa kendi değerini AYNI anahtarın yanına eklediğinde o iddia
+        // YİNE yeşil kalır ve istek iki kimlikle gider (mutasyonla
+        // bulundu — ayrıntı bir alttaki testin başlığında).
+        Http::assertSent(static function ($request): bool {
+            $values = [];
+
+            foreach ($request->headers() as $name => $sent) {
+                if (strcasecmp($name, 'Authorization') === 0) {
+                    $values = [...$values, ...$sent];
+                }
+            }
+
+            return $values === ['Basic '.base64_encode('app:secret')];
+        });
+    }
+
+    /**
+     * ⚠️ KARŞILAŞTIRMA HARF DUYARSIZDIR (RFC 9110 · §5.1).
+     *
+     * Tam eşleşme aransaydı `authorization` yazan bir adapter kapıya
+     * TAKILMAZ ve kasa KENDİ başlığını EKLERDİ.
+     *
+     * ⚠️ İDDİA "BEARER DEĞERİ GÖNDERİLMEDİ" DEĞİL, "İKİNCİ BİR BAŞLIK
+     * HİÇ YOK"TUR — ve bu ayrım MUTASYONLA bulundu. İlk yazımda iddia
+     * `! hasHeader('Authorization', 'Bearer ...')` idi ve `strcasecmp`'i
+     * `===` yapan mutasyon HAYATTA KALDI.
+     *
+     * Sebep — ÖLÇÜLDÜ, varsayılmadı: Laravel başlık anahtarlarını
+     * NORMALİZE ETMEZ ve `withToken()` küçük harfli `authorization`'ı
+     * EZMEZ; değerini AYNI anahtarın YANINA ekler. Giden istekte
+     * `authorization` tek anahtardır ama İKİ DEĞER taşır:
+     * `["Basic kucuk-harf", "Bearer olu-token"]`. HTTP'de bu, virgülle
+     * birleşmiş TEK bir başlık olarak gider — sunucu ya reddeder ya
+     * birini seçer ve davranış öngörülemez olur.
+     *
+     * İlk iddia (`! hasHeader(..., 'Bearer ...')`) bunu göremedi çünkü
+     * eşleşme TAM DEĞERE bakıyor ve iki değerli başlıkta o karşılaştırma
+     * `false` dönüyordu. İkinci iddia (anahtar SAYISI) de göremedi çünkü
+     * anahtar zaten TEKTİ. Ölçülmesi gereken şey DEĞER SAYISIDIR.
+     */
+    #[Test]
+    public function the_authorization_guard_is_case_insensitive(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        $this->asTenant($tenant, fn () => app(CredentialVault::class)->store(
+            $connection,
+            ['access_token' => 'olu-token'],
+        ));
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->asTenant($tenant, fn () => $this->clientFor($connection)->post(
+            endpoint: 'identity/v1/oauth2/token',
+            body: ['grant_type' => 'refresh_token'],
+            headers: ['authorization' => 'Basic kucuk-harf'],
+        ));
+
+        Http::assertSent(static function ($request): bool {
+            $values = [];
+
+            foreach ($request->headers() as $name => $sent) {
+                if (strcasecmp($name, 'Authorization') === 0) {
+                    $values = [...$values, ...$sent];
+                }
+            }
+
+            return $values === ['Basic kucuk-harf'];
+        });
+    }
+
+    /**
+     * ⚠️ `asForm` GÖVDEYİ FORM-ENCODED GÖNDERİR.
+     *
+     * OAuth 2 token uç noktaları (RFC 6749 · §4.1.3) gövdeyi
+     * `application/x-www-form-urlencoded` BEKLER. JSON gönderilseydi eBay
+     * alanları HİÇ okumaz, `invalid_request` döner ve sebebi gövdede
+     * görünmezdi.
+     *
+     * Etsy'nin uç noktası JSON'u da kabul ettiği için bu fark beşinci
+     * kanalda hiç görünmemişti — "aynı kural iki kanalda ters sonuç
+     * verebilir" kuralının taşıma katmanındaki biçimi.
+     */
+    #[Test]
+    public function the_as_form_flag_sends_a_form_encoded_body(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->asTenant($tenant, fn () => $this->clientFor($connection)->post(
+            endpoint: 'identity/v1/oauth2/token',
+            body: ['grant_type' => 'refresh_token', 'refresh_token' => 'r-123'],
+            asForm: true,
+        ));
+
+        Http::assertSent(static function ($request): bool {
+            return str_contains((string) $request->header('Content-Type')[0], 'application/x-www-form-urlencoded')
+                && $request->body() === 'grant_type=refresh_token&refresh_token=r-123';
+        });
+    }
+
+    /**
+     * VARSAYILAN JSON'DUR ve bu DEĞİŞMEDİ.
+     *
+     * Bayrak eklenirken varsayılan yanlışlıkla form'a kaysaydı BEŞ kanalın
+     * TÜM çağrıları sessizce bozulurdu — kanal alanları okuyamaz ve her
+     * senkron `VALIDATION` alırdı.
+     */
+    #[Test]
+    public function the_default_body_format_is_still_json(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->asTenant($tenant, fn () => $this->clientFor($connection)->post(
+            endpoint: 'products',
+            body: ['stock_quantity' => 9],
+        ));
+
+        Http::assertSent(static function ($request): bool {
+            return str_contains((string) $request->header('Content-Type')[0], 'application/json')
+                && $request->body() === '{"stock_quantity":9}';
+        });
+    }
+
     private function clientFor(ChannelConnection $connection): ChannelHttpClient
     {
         return new ChannelHttpClient(
