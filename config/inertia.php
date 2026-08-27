@@ -73,7 +73,18 @@ return [
 
         'paths' => [
 
-            resource_path('js/pages'),
+            // ⚠️ BÜYÜK `P` — DİZİNİN GERÇEK ADI `js/Pages`.
+            //
+            // Paketin varsayılanı `js/pages` (küçük) ve bu projede o ad
+            // YANLIŞTIR. Yerelde yıllarca fark edilmedi çünkü **macOS
+            // dosya sistemi HARF DUYARSIZDIR** ve yolu yine bulur; CI'ın
+            // Linux'u harf duyarlıdır ve `assertInertia(...)->component()`
+            // "Inertia page component file does not exist" ile DÜŞER.
+            //
+            // Yani bu satır bir "sadece CI'da kırılan" hata sınıfıdır:
+            // testler yerelde YEŞİL, uzakta KIRMIZI. Yeni bir panel
+            // ekranı testi eklendiğinde ancak CI'da görünürdü.
+            resource_path('js/Pages'),
 
         ],
 
