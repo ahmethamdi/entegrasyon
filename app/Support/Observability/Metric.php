@@ -71,6 +71,23 @@ enum Metric: string
     /** Son bir saatteki 429 sayısı (§11 · saatte > 100). */
     case RATE_LIMIT_HITS = 'rate_limit_hits';
 
+    // ──────────────────────────── V3.0 · §25 · token ve kota (üç yeni)
+    //
+    // ⚠️ BUNLAR YENİ BİR ARIZA BİÇİMİNİ ÖLÇER. Yukarıdaki on üç metrik
+    // bir şeyin YAVAŞ veya BOZUK olduğunu görür; token ölümünde hiçbir
+    // şey yavaşlamaz ve hata oranı yükselmez — bağlantı bir gün
+    // SESSİZCE çalışmayı bırakır ve satıcı bunu ancak siparişler
+    // kesilince fark eder.
+
+    /** Yakında dolacak (veya dolmuş) aktif token sayısı (§25 · > 0). */
+    case TOKEN_EXPIRING_SOON = 'token_expiring_soon';
+
+    /** Son 24 saatteki başarısız token yenileme çağrısı (§25 · > 3). */
+    case TOKEN_REFRESH_FAILURES = 'token_refresh_failures';
+
+    /** Kanalın günlük istek kotasının kullanılan yüzdesi (§25 · > %80). */
+    case CHANNEL_DAILY_QUOTA_USED = 'channel_daily_quota_used';
+
     /**
      * Uyarı eşiği — bu değer AŞILIRSA metrik kırmızıdır.
      *
@@ -94,6 +111,46 @@ enum Metric: string
             self::DEAD_OPERATIONS => 10,
             self::API_LATENCY_P95 => 5_000,              // 5 sn, ms cinsinden
             self::RATE_LIMIT_HITS => 100,
+
+            // §25 tablosu birebir.
+            self::TOKEN_EXPIRING_SOON => 0,              // tek bir tane bile fazla
+            self::TOKEN_REFRESH_FAILURES => 3,           // günde 3
+            self::CHANNEL_DAILY_QUOTA_USED => 80,        // %80
+        };
+    }
+
+    /**
+     * Bu metriğin uyarısı KİME gider.
+     *
+     * ⚠️ ALICI KAPSAMDAN TÜRETİLMEZ — metriğin KENDİ özelliğidir (§25).
+     *
+     * v2.2'ye kadar kural basitti: kiracı kapsamlı uyarı satıcıya,
+     * gerisi yöneticiye. İşliyordu çünkü bağlantı kapsamlı iki metrik
+     * de (api gecikmesi, 429) ALTYAPI sorunuydu.
+     *
+     * Token metrikleri bu eşitliği KIRAR: kapsamları bağlantıdır ama
+     * yeniden yetkilendirmeyi YALNIZCA SATICI yapabilir. Kural
+     * `DispatchAlerts` içinde bir `if` olarak yazılsaydı metrikten
+     * UZAKTA yaşar ve yeni bir token metriği eklendiğinde oraya
+     * eklenmesi unutulurdu — eşiğin panelde yeniden tanımlanmasıyla
+     * aynı hata biçimi.
+     */
+    public function alertAudience(): AlertAudience
+    {
+        return match ($this) {
+            // Yapılacak iş SATICININ: fazla satışı düzeltmek, ölü işi
+            // yeniden denemek, kanalı yeniden yetkilendirmek.
+            self::OVERSOLD_UNITS,
+            self::OVERSOLD_VARIANTS,
+            self::DEAD_OPERATIONS,
+            self::TOKEN_EXPIRING_SOON,
+            self::TOKEN_REFRESH_FAILURES => AlertAudience::TENANT,
+
+            // Gerisi ALTYAPI sorunudur. Kota da buradadır: aşımda
+            // yapılacak şey stok itme sıklığını düşürmek ve gruplamayı
+            // gözden geçirmektir (§21 · P2) — satıcının elinde düğme
+            // YOKTUR.
+            default => AlertAudience::ADMIN,
         };
     }
 
@@ -131,7 +188,15 @@ enum Metric: string
             self::DEAD_OPERATIONS => MetricScopeKind::TENANT,
 
             self::API_LATENCY_P95,
-            self::RATE_LIMIT_HITS => MetricScopeKind::CONNECTION,
+            self::RATE_LIMIT_HITS,
+
+            // §25: üçü de BAĞLANTI başınadır. Sistem geneli toplansaydı
+            // tek bir ölmek üzere olan token yüz bağlantılık kurulumda
+            // gürültüde kaybolur ve "hangi bağlantı" sorusu cevapsız
+            // kalırdı — oysa eylem tam olarak o bağlantıya özgüdür.
+            self::TOKEN_EXPIRING_SOON,
+            self::TOKEN_REFRESH_FAILURES,
+            self::CHANNEL_DAILY_QUOTA_USED => MetricScopeKind::CONNECTION,
 
             default => MetricScopeKind::SYSTEM,
         };
@@ -148,7 +213,12 @@ enum Metric: string
             self::INBOX_PROCESSING_LAG => MetricUnit::SECONDS,
 
             self::SYNC_ERROR_RATE,
-            self::DRIFT_RATE => MetricUnit::PERCENT,
+            self::DRIFT_RATE,
+
+            // Kota YÜZDEDİR, sayım değil: ham "7.842" satıcıya hiçbir
+            // şey söylemez — tavanı bilmeden o sayı iyi mi kötü mü
+            // belli olmaz.
+            self::CHANNEL_DAILY_QUOTA_USED => MetricUnit::PERCENT,
 
             default => MetricUnit::COUNT,
         };
@@ -171,6 +241,9 @@ enum Metric: string
             self::DEAD_OPERATIONS => 'Başarısız işlem',
             self::API_LATENCY_P95 => 'Kanal yanıt süresi (p95)',
             self::RATE_LIMIT_HITS => 'Hız sınırı isabeti',
+            self::TOKEN_EXPIRING_SOON => 'Süresi dolan yetki',
+            self::TOKEN_REFRESH_FAILURES => 'Yetki yenileme hatası',
+            self::CHANNEL_DAILY_QUOTA_USED => 'Günlük kota kullanımı',
         };
     }
 }

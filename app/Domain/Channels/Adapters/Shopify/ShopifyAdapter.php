@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Adapters\Shopify;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
@@ -105,6 +106,8 @@ use Throwable;
  */
 final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
 {
+    use DeclaresRequestQuota;
+
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';
 

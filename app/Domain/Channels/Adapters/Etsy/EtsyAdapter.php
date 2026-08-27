@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Adapters\Etsy\Taxonomy\EtsyTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
@@ -92,6 +93,8 @@ use Throwable;
  */
 final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
+    use DeclaresRequestQuota;
+
     /**
      * Etsy receipt durumu → kanonik olay tipi (§11.4).
      *
@@ -1466,6 +1469,40 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
     public function refreshLeadSeconds(): int
     {
         return 900;
+    }
+
+    // ──────────────────────────────────────────────── kota ve ölçüm (§25)
+
+    /**
+     * Günlük istek tavanı — 10.000, HESAP başına (§21).
+     *
+     * ⚠️ BU GERÇEK BİR TAVANDIR, teorik bir sayı değil. Envanter yazma
+     * ilan başına ayrı çağrı gerektirdiği için (§11.3) 5.000+ ürünlü
+     * mağazalarda AŞILIR ve §21 bunu açıkça hesaplayarak kaydeder:
+     * 1.000 ürün · günde 3 değişim ≈ 3.900 istek (sığar); 5.000 ürün
+     * ≈ 15.000 istek (AŞAR).
+     *
+     * `ChannelRateLimiter` bu sayıyı GÖRMEZ ve görmemelidir: kova
+     * SANİYELİKTİR ve günlük kotayı temsil edemez. Burada yalnızca
+     * ÖLÇÜLÜR (§25) — tavana dayanıldığında yapılacak iş stok itme
+     * sıklığını düşürmektir (§21 · P2) ve o bir insan kararıdır.
+     */
+    public function dailyRequestQuota(): ?int
+    {
+        return 10_000;
+    }
+
+    /**
+     * Token yenileme uç noktası — `token_refresh_failures` bunu süzer.
+     *
+     * Etsy'de token alma ve YENİLEME aynı uç noktadır (§11.2), bu yüzden
+     * tek bir parça ikisini de tanır. Yenileme hatası ile ilk
+     * yetkilendirme hatası ayırt edilmez ve bu DOĞRUDUR: ikisi de
+     * "satıcı yeniden yetkilendirmeli" demektir.
+     */
+    public function tokenEndpointFragment(): ?string
+    {
+        return EtsyEndpoints::TOKEN;
     }
 
     // ────────────────────────────────────────────────────────── yardımcılar

@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace App\Support\Observability;
 
+use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Saatlik metrik anlık görüntüsü — §11'in on üç metriği.
@@ -56,6 +60,20 @@ use Illuminate\Support\Facades\DB;
  */
 final class CaptureMetrics
 {
+    /**
+     * Kanal kodu → bağlantı kimlikleri; tur başına BİR kez okunur.
+     *
+     * @var array<string, list<string>>|null
+     */
+    private ?array $connectionsByChannel = null;
+
+    /**
+     * Kanal kodu → kota olguları; adapter kanal başına BİR kez kurulur.
+     *
+     * @var array<string, array{daily_quota: ?int, token_fragment: ?string}>
+     */
+    private array $quotaFacts = [];
+
     /** §11 · gecikme ve hata oranı penceresi. */
     private const HOUR_WINDOW = '1 hour';
 
@@ -74,6 +92,15 @@ final class CaptureMetrics
      * tersi olurdu.
      */
     private const RECOVERY_CANDIDATE_MINUTES = 2;
+
+    /**
+     * §25 · token ömrü penceresi — panel rozetiyle AYNI eşik.
+     *
+     * 14 gün §25'in rozet tablosundan gelir ("🟡 14 gün içinde
+     * dolacak"). Rozet ile metrik ayrışsaydı panel sarı yanarken uyarı
+     * gitmez (ya da tersi) olurdu; ikisi de bu sabiti okur.
+     */
+    public const TOKEN_EXPIRY_WINDOW_DAYS = 14;
 
     /**
      * Tek tur: on üç metriği ölçer ve `metric_snapshots`'a yazar.
@@ -377,6 +404,235 @@ final class CaptureMetrics
                 $this->push($rows, Metric::RATE_LIMIT_HITS, (float) $row->rate_limited, $scope);
             }
         }
+
+        $this->collectTokenMetrics($rows);
+        $this->collectQuotaMetrics($rows);
+    }
+
+    /**
+     * §25 · token ömrü ve yenileme hatası — BAĞLANTI başına.
+     *
+     * ⚠️ BU METRİKLER YENİ BİR ARIZA BİÇİMİNİ ÖLÇER. Diğerleri bir
+     * şeyin YAVAŞ veya BOZUK olduğunu görür; token ölümünde hiçbir şey
+     * yavaşlamaz ve hata oranı yükselmez — bağlantı bir gün SESSİZCE
+     * çalışmayı bırakır ve satıcı ancak siparişler kesilince fark eder.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function collectTokenMetrics(array &$rows): void
+    {
+        // ── token_expiring_soon ──────────────────────────────────────
+        //
+        // ⚠️ `expires_at IS NULL` ÖLÇÜLMEZ: Woo/Trendyol kalıcı anahtar
+        // taşır ve Shopify'ın offline token'ı SÜRESİZDİR. NULL "hemen
+        // doluyor" sayılsaydı o bağlantılar her turda kırmızı yanar ve
+        // satıcı hiç bitmeyen bir uyarıyı kapatmaya çalışırdı — uyarıya
+        // olan güven biter.
+        //
+        // ⚠️ `IS NOT NULL` SATIRI BUGÜN DAVRANIŞ DEĞİŞTİRMEZ ve bu
+        // BİLİNÇLİ olarak duruyor. PostgreSQL'de `NULL < zaman` sonucu
+        // NULL'dur ve `WHERE` onu zaten eler; mutasyon turu bunu
+        // gösterdi (satırı silmek hiçbir testi kırmadı). Yine de
+        // KALDIRILMAZ: eşitlik PostgreSQL'in üç değerli mantığının bir
+        // YAN ETKİSİDİR, yazılı bir karar değil. Sorgu bir gün
+        // `COALESCE(expires_at, 'infinity')` ya da bir OR dalıyla
+        // yeniden yazılırsa o yan etki SESSİZCE kaybolur ve süresiz
+        // anahtar taşıyan HER bağlantı kırmızı yanar. Niyet burada
+        // AÇIKÇA yazılıdır.
+        //
+        // ⚠️ ÜST SINIR VAR, ALT SINIR YOK: süresi ZATEN DOLMUŞ token da
+        // sayılır. "Geçti" diye atlansaydı metrik tam da EN KÖTÜ anda
+        // susardı — token öldükten sonra bağlantı çalışmıyordur ve uyarı
+        // asıl O ZAMAN gerekir.
+        //
+        // ⚠️ `revoked_at IS NULL` — iptal edilmiş kimlik bilgisi
+        // ölçülmez; kaldırılmış bir uygulamanın ölü token'ı
+        // (`app/uninstalled`) sonsuza kadar uyarı üretirdi.
+        $expiring = DB::select(<<<'SQL'
+            SELECT channel_connection_id, count(*) AS adet
+              FROM channel_credentials
+             WHERE revoked_at IS NULL
+               AND expires_at IS NOT NULL
+               AND expires_at < clock_timestamp() + ?::interval
+             GROUP BY channel_connection_id
+        SQL, [self::TOKEN_EXPIRY_WINDOW_DAYS.' days']);
+
+        foreach ($expiring as $row) {
+            // SIFIR SATIRI YAZILMAZ — sorgu zaten yalnızca eşiği aşanları
+            // döndürür (`GROUP BY` boş grup üretmez). Sağlıklı her
+            // bağlantı saatlik bir "0" yazsaydı tablo bağlantı sayısı ×
+            // 24 satırla dolar ve gerçek sinyal kaybolurdu.
+            $this->push(
+                $rows,
+                Metric::TOKEN_EXPIRING_SOON,
+                (float) $row->adet,
+                MetricScope::connection($row->channel_connection_id),
+            );
+        }
+
+        // ── token_refresh_failures ───────────────────────────────────
+        //
+        // ⚠️ SAYI `api_calls`'TAN TÜRETİLİR, AYRI SAYAÇ KOLONU TUTULMAZ.
+        // Yenileme çağrıları zaten `ChannelHttpClient` üzerinden gidiyor
+        // ve her çağrı bir satır yazıyor. Ayrı bir sayaç kolonu, yazan
+        // HER yolun onu da güncellemesini zorunlu kılar ve biri
+        // unutulunca iki gerçek kaynağı SESSİZCE ayrışır (§10'un
+        // `DriftHistory` kararının aynısı).
+        //
+        // ⚠️ UÇ NOKTA DESENİ ADAPTER'DAN GELİR. `api_calls` kanala giden
+        // HER çağrıyı taşır; süzülmeseydi başarısız bir stok itmesi
+        // "token yenilenemedi" sayılır, satıcıya yeniden yetkilendirme
+        // yaptırılır ve gerçek sorun (yanlış SKU, kapalı ürün) hiç
+        // görünmezdi.
+        foreach ($this->connectionsByChannel() as $channelCode => $connectionIds) {
+            $fragment = $this->quotaFactsFor($channelCode)['token_fragment'];
+
+            // Token yenilemesi OLMAYAN kanalda yenileme hatası da olamaz
+            // (Woo/Trendyol kalıcı anahtar taşır).
+            if ($fragment === null) {
+                continue;
+            }
+
+            $failures = DB::select(<<<'SQL'
+                SELECT channel_connection_id, count(*) AS adet
+                  FROM api_calls
+                 WHERE channel_connection_id = ANY(?::uuid[])
+                   AND called_at > clock_timestamp() - ?::interval
+                   AND status_code >= 400
+                   AND position(? in endpoint) > 0
+                 GROUP BY channel_connection_id
+            SQL, [
+                '{'.implode(',', $connectionIds).'}',
+                self::DAY_WINDOW,
+                $fragment,
+            ]);
+
+            foreach ($failures as $row) {
+                $this->push(
+                    $rows,
+                    Metric::TOKEN_REFRESH_FAILURES,
+                    (float) $row->adet,
+                    MetricScope::connection($row->channel_connection_id),
+                );
+            }
+        }
+    }
+
+    /**
+     * §25 · günlük kota kullanımı — YÜZDE.
+     *
+     * ⚠️ TAVANI OLMAYAN KANAL ÖLÇÜLMEZ ve SIFIR DA YAZILMAZ (§25'in açık
+     * kuralı). Woo satıcının KENDİ sunucusudur ve günlük bir tavanı
+     * yoktur; uydurma bir tavana bölünseydi anlamsız bir yüzde çıkar ve
+     * satıcı var olmayan bir sınıra göre karar verirdi.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     */
+    private function collectQuotaMetrics(array &$rows): void
+    {
+        foreach ($this->connectionsByChannel() as $channelCode => $connectionIds) {
+            $quota = $this->quotaFactsFor($channelCode)['daily_quota'];
+
+            if ($quota === null || $quota <= 0) {
+                continue;
+            }
+
+            // Pencere GÜNLÜKTÜR çünkü kotanın kendisi günlüktür (§21).
+            $used = DB::select(<<<'SQL'
+                SELECT channel_connection_id, count(*) AS adet
+                  FROM api_calls
+                 WHERE channel_connection_id = ANY(?::uuid[])
+                   AND called_at > clock_timestamp() - ?::interval
+                 GROUP BY channel_connection_id
+            SQL, ['{'.implode(',', $connectionIds).'}', self::DAY_WINDOW]);
+
+            foreach ($used as $row) {
+                $this->push(
+                    $rows,
+                    Metric::CHANNEL_DAILY_QUOTA_USED,
+                    ((float) $row->adet / $quota) * 100,
+                    MetricScope::connection($row->channel_connection_id),
+                );
+            }
+        }
+    }
+
+    // ─────────────────────────────────────────────── kanal olguları (§25)
+
+    /**
+     * Kanal kodu → o kanalın aktif bağlantı kimlikleri.
+     *
+     * Bağlantılar KANALA GÖRE gruplanır çünkü kota tavanı ve token uç
+     * noktası KANALIN olgusudur, bağlantının değil. Bağlantı başına
+     * adapter kurulsaydı yüz bağlantılık kurulumda yüz adapter
+     * örneklenir ve her biri aynı iki sabiti döndürürdü.
+     *
+     * @return array<string, list<string>>
+     */
+    private function connectionsByChannel(): array
+    {
+        if ($this->connectionsByChannel !== null) {
+            return $this->connectionsByChannel;
+        }
+
+        $rows = DB::table('channel_connections')
+            ->select('id', 'channel_type_code')
+            ->get();
+
+        $grouped = [];
+
+        foreach ($rows as $row) {
+            $grouped[(string) $row->channel_type_code][] = (string) $row->id;
+        }
+
+        return $this->connectionsByChannel = $grouped;
+    }
+
+    /**
+     * Kanalın kota olguları — adapter'dan okunur, ÇEKİRDEĞE GÖMÜLMEZ.
+     *
+     * ⚠️ `if ($channel === 'etsy') return 10_000;` YAZILMAZ. Yazılsaydı
+     * her yeni kanal bu satırı uzatırdı ve biri eklemeyi unutunca kanal
+     * SESSİZCE ölçülmez olurdu — yeteneklerin `instanceof` ile okunması
+     * kuralının kota karşılığı.
+     *
+     * ⚠️ ADAPTER KURULAMAZSA TUR DÜŞMEZ. Bozuk bir `adapter_class` tüm
+     * metrik turunu düşürseydi on üç sağlam metrik de yazılmazdı; kanal
+     * "olgusu yok" sayılır ve ölçülmez (`capabilitiesOrEmpty` kuralının
+     * aynısı).
+     *
+     * @return array{daily_quota: ?int, token_fragment: ?string}
+     */
+    private function quotaFactsFor(string $channelCode): array
+    {
+        if (isset($this->quotaFacts[$channelCode])) {
+            return $this->quotaFacts[$channelCode];
+        }
+
+        $facts = ['daily_quota' => null, 'token_fragment' => null];
+
+        try {
+            $connection = ChannelConnection::query()
+                ->with('channelType:code,name,adapter_class')
+                ->where('channel_type_code', $channelCode)
+                ->first();
+
+            if ($connection !== null) {
+                $adapter = app(AdapterRegistry::class)->for($connection);
+
+                $facts = [
+                    'daily_quota' => $adapter->dailyRequestQuota(),
+                    'token_fragment' => $adapter->tokenEndpointFragment(),
+                ];
+            }
+        } catch (Throwable $e) {
+            Log::warning('metrics.quota_facts_unavailable', [
+                'channel' => $channelCode,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $this->quotaFacts[$channelCode] = $facts;
     }
 
     // ─────────────────────────────────────────────────────── yardımcı

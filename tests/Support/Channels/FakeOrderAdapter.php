@@ -6,6 +6,7 @@ namespace Tests\Support\Channels;
 
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsOrders;
@@ -30,6 +31,8 @@ use Throwable;
  */
 final class FakeOrderAdapter implements ChannelAdapter, SupportsOrders
 {
+    use DeclaresRequestQuota;
+
     /** Testler imza sonucunu buradan kontrol eder. */
     public static bool $signatureValid = true;
 

@@ -175,25 +175,65 @@ final class DispatchAlerts
     // ---------------------------------------------------------------- alıcı
 
     /**
-     * Uyarıyı kim alır.
+     * Uyarıyı kim alır — KARAR METRİĞİN KENDİSİNDE.
      *
-     * KİRACI kapsamlı uyarı o kiracının SAHİPLERİNE gider; sistem ve
-     * BAĞLANTI kapsamlı uyarı YÖNETİCİYE. Bağlantı uyarısı da yöneticiye
-     * gider çünkü api gecikmesi ve 429 satıcının düzeltebileceği şeyler
-     * değildir — altyapı sorunudur.
+     * ⚠️ ALICI ARTIK KAPSAMDAN TÜRETİLMİYOR (V3.0 · §25).
+     *
+     * v2.2'ye kadar kural basitti: kiracı kapsamlı uyarı satıcıya,
+     * gerisi yöneticiye. İşliyordu çünkü bağlantı kapsamlı iki metrik de
+     * (api gecikmesi, 429) ALTYAPI sorunuydu ve satıcının elinde düğme
+     * yoktu.
+     *
+     * §25'in token metrikleri bu eşitliği KIRAR: kapsamları bağlantıdır
+     * ama yeniden yetkilendirmeyi YALNIZCA SATICI yapabilir. Karar
+     * burada bir `if ($metric === TOKEN_...)` olarak yazılsaydı kural
+     * metrikten UZAKTA yaşar ve yeni bir token metriği eklendiğinde
+     * oraya eklenmesi UNUTULURDU — eşiğin panelde yeniden tanımlanması
+     * hatasının aynı biçimi.
+     *
+     * ⚠️ KİRACI ALICILI BAĞLANTI UYARISINDA KİRACI KAPSAMDAN GELMEZ:
+     * `connection:{id}` kapsamı kiracıyı TAŞIMAZ ve bağlantıdan
+     * çözülmelidir. Çözülmeseydi token uyarısı alıcısız kalır, `skipped`
+     * sayılır ve satıcı bağlantısının öldüğünü HİÇ öğrenemezdi.
      *
      * @param  array{metric: Metric, scope: string, tenantId: ?string}  $breach
      * @return list<string>
      */
     private function recipientsFor(array $breach): array
     {
-        if ($breach['tenantId'] !== null) {
-            return $this->tenantOwnerEmails($breach['tenantId']);
+        if ($breach['metric']->alertAudience() === AlertAudience::TENANT) {
+            $tenantId = $breach['tenantId']
+                ?? $this->tenantIdOfConnectionScope($breach['scope']);
+
+            return $tenantId === null ? [] : $this->tenantOwnerEmails($tenantId);
         }
 
         $admin = config('entegrasyon.alerts.admin_email');
 
         return is_string($admin) && trim($admin) !== '' ? [trim($admin)] : [];
+    }
+
+    /**
+     * `connection:{id}` kapsamının sahibi kiracı.
+     *
+     * `DB::table()` global scope'a TABİ DEĞİLDİR ve burada bu DOĞRUDUR:
+     * tarama `runAsSystem()` altında koşar ve TÜM kiracıların
+     * bağlantılarını görmek zorundadır. Kapsamlı bir sorgu bağlam
+     * olmadığı için istisna fırlatırdı.
+     */
+    private function tenantIdOfConnectionScope(string $scope): ?string
+    {
+        $connectionId = MetricScope::connectionIdOf($scope);
+
+        if ($connectionId === null) {
+            return null;
+        }
+
+        $tenantId = DB::table('channel_connections')
+            ->where('id', $connectionId)
+            ->value('tenant_id');
+
+        return $tenantId === null ? null : (string) $tenantId;
     }
 
     /**

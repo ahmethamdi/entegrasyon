@@ -6,6 +6,7 @@ namespace Tests\Support\Channels;
 
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsInventory;
@@ -33,6 +34,8 @@ use Throwable;
  */
 final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInventory, SupportsPricing
 {
+    use DeclaresRequestQuota;
+
     /**
      * Kanal tipi kodu → yanıt planı.
      *

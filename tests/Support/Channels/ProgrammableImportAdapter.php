@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Support\Channels;
 
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
@@ -27,6 +28,8 @@ use Throwable;
  */
 final class ProgrammableImportAdapter implements ChannelAdapter, SupportsCatalogImport
 {
+    use DeclaresRequestQuota;
+
     /** Kanal kodu → imleç → o sayfada dönecek ürünler. */
     private static array $pages = [];
 

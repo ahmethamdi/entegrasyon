@@ -15,6 +15,7 @@ use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelConnectForm;
 use App\Domain\Channels\Support\StoreUrl;
+use App\Domain\Channels\Support\TokenStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -56,6 +57,12 @@ final class ChannelConnectionController extends Controller
                 // yetenekleri çözer. Yalnızca code,name seçilirse registry
                 // "adapter sınıfı tanımlı değil" der ve yetenekler boş kalır.
                 ->with('channelType:code,name,adapter_class')
+                // §25 · token rozeti. AKTİF kimlik bilgisi eager-load
+                // edilir; N+1 olmasın diye ilişki üzerinden okunur ve
+                // YALNIZCA `expires_at` seçilir — şifreli gövde panele
+                // HİÇ gitmemelidir (§19 · madde 3). `id` seçilmek
+                // zorundadır, yoksa Eloquent ilişkiyi eşleyemez.
+                ->with('activeCredential:id,channel_connection_id,expires_at')
                 ->orderBy('channel_type_code')
                 ->orderBy('label')
                 ->get()
@@ -330,6 +337,9 @@ final class ChannelConnectionController extends Controller
      */
     private function presentConnection(ChannelConnection $connection): array
     {
+        $expiresAt = $connection->activeCredential?->expires_at;
+        $tokenStatus = TokenStatus::forExpiry($expiresAt);
+
         return [
             'id' => $connection->id,
             'label' => $connection->label,
@@ -343,6 +353,22 @@ final class ChannelConnectionController extends Controller
             'lastError' => $connection->last_error,
             'connectedAt' => $connection->connected_at?->toIso8601String(),
             'capabilities' => $this->capabilitiesOrEmpty($connection),
+
+            // §25 · TOKEN ROZETİ — `status`'tan AYRI bir sorudur.
+            //
+            // `status` kanalın SON cevabını taşır; token ömrü bugün
+            // çalışan bir bağlantıda bile yarın dolabilir ve o an hiçbir
+            // kolon değişmez. İkisi tek alanda birleştirilseydi ya
+            // çalışan bağlantı "bozuk" gösterilir ya da ölmek üzere olan
+            // token HİÇ görünmezdi.
+            //
+            // ⚠️ YALNIZCA DURUM VE TARİH GİDER — kimlik bilgisinin
+            // kendisi ASLA (§19 · madde 3): `channel_credentials`
+            // şifreli kasadır ve bu dizi Inertia prop'u olarak
+            // TARAYICIYA ulaşır.
+            'tokenStatus' => $tokenStatus?->value,
+            'tokenStatusLabel' => $tokenStatus?->label(),
+            'tokenExpiresAt' => $expiresAt?->toIso8601String(),
         ];
     }
 

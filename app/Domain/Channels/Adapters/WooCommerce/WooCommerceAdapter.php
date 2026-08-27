@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Adapters\WooCommerce;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
@@ -71,6 +72,8 @@ use Throwable;
  */
 final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
 {
+    use DeclaresRequestQuota;
+
     public function __construct(
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,

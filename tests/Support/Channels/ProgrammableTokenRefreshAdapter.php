@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Support\Channels;
 
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
@@ -30,6 +31,8 @@ use Throwable;
  */
 final class ProgrammableTokenRefreshAdapter implements ChannelAdapter, SupportsTokenRefresh
 {
+    use DeclaresRequestQuota;
+
     /** Kaç kez GERÇEKTEN yenileme çağrısı yapıldı — P0-5'in sayacı. */
     private static int $refreshCalls = 0;
 

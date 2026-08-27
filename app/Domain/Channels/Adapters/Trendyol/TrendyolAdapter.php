@@ -9,6 +9,7 @@ use App\Domain\Channels\Adapters\Trendyol\Catalog\ListingMapper;
 use App\Domain\Channels\Adapters\Trendyol\Taxonomy\TaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
@@ -87,6 +88,8 @@ use Throwable;
  */
 final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
+    use DeclaresRequestQuota;
+
     /** Trendyol sınırı dakika penceresinde bildirir. */
     private const RATE_LIMIT_WINDOW_SECONDS = 60;
 

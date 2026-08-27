@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Adapters\Hepsiburada;
 
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsInventory;
@@ -99,6 +100,8 @@ use Throwable;
  */
 final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, SupportsOrders, SupportsPricing
 {
+    use DeclaresRequestQuota;
+
     /** Satıcı kimliğinin `settings` içindeki yeri. */
     public const MERCHANT_ID_KEY = 'merchant_id';
 

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Observability;
 
+use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
+use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
@@ -453,10 +456,139 @@ final class DispatchAlertsTest extends TestCase
 
     // ---------------------------------------------------------------- yardımcı
 
+    // ═══════════════════════════════ §25 · token uyarısı SATICIYA gider
+
+    /**
+     * ⚠️ BAĞLANTI KAPSAMLI TOKEN UYARISI SATICININ GELEN KUTUSUNA DÜŞER.
+     *
+     * Bu testin varlık sebebi bir MUTASYONLA bulundu: bağlantı→kiracı
+     * çözümü kaldırıldığında hiçbir test kırılmadı. Oysa o çözüm
+     * olmadan `connection:{id}` kapsamı kiracıyı TAŞIMAZ, alıcı listesi
+     * BOŞ kalır, uyarı `skipped` sayılır ve satıcı bağlantısının
+     * öldüğünü HİÇ ÖĞRENEMEZ — §25'in tam olarak önlemek için yazıldığı
+     * sessiz ölüm.
+     *
+     * İDDİA "ALICI BULUNDU" DEĞİL, POSTANIN SATICIYA GİTTİĞİDİR:
+     * yalnızca sayıya bakan bir test, e-posta yanlış kişiye gitse bile
+     * yeşil kalırdı.
+     */
+    #[Test]
+    public function a_token_alert_reaches_the_seller(): void
+    {
+        [$tenant, $user] = $this->makeTenant('Token');
+
+        $connectionId = $this->connectionFor($tenant);
+
+        $this->snapshot(
+            Metric::TOKEN_EXPIRING_SOON,
+            1,
+            MetricScope::connection($connectionId),
+        );
+
+        $result = $this->dispatch();
+
+        $this->assertSame(1, $result['sent']);
+
+        Mail::assertSent(
+            MetricAlertMail::class,
+            fn (MetricAlertMail $mail): bool => $mail->hasTo($user->email),
+        );
+    }
+
+    /**
+     * ⚠️ KOTA UYARISI AYNI KAPSAMDA AMA YÖNETİCİYE GİDER.
+     *
+     * İkisi de `connection:{id}` kapsamlıdır; ayıran şey KAPSAM DEĞİL
+     * `Metric::alertAudience()`'tır. Bu test o ayrımın gerçekten
+     * uygulandığını sürer — kapsamdan türetilmeye geri dönülseydi kota
+     * uyarısı satıcıya gider ve satıcı yapamayacağı bir iş için
+     * uyarılırdı.
+     */
+    #[Test]
+    public function a_quota_alert_reaches_the_admin_not_the_seller(): void
+    {
+        [$tenant, $user] = $this->makeTenant('Kota');
+
+        config(['entegrasyon.alerts.admin_email' => 'yonetici@ornek.test']);
+
+        $connectionId = $this->connectionFor($tenant);
+
+        $this->snapshot(
+            Metric::CHANNEL_DAILY_QUOTA_USED,
+            95,
+            MetricScope::connection($connectionId),
+        );
+
+        $this->assertSame(1, $this->dispatch()['sent']);
+
+        Mail::assertSent(
+            MetricAlertMail::class,
+            fn (MetricAlertMail $mail): bool => $mail->hasTo('yonetici@ornek.test')
+                && ! $mail->hasTo($user->email),
+        );
+    }
+
+    /**
+     * ⚠️ TOKEN UYARISI HANGİ MAĞAZA OLDUĞUNU SÖYLER.
+     *
+     * "Bir kanal bağlantısı" cümlesi, bağlantı uyarıları YALNIZCA
+     * yöneticiye giderken yeterliydi — o kimliği panelden bulabilir.
+     * §25 ile bu uyarılar SATICIYA gidiyor ve üç mağazası olan bir
+     * satıcı hangisini yeniden yetkilendireceğini o cümleden
+     * ÇIKARAMAZ: uyarı okunur ama eylem üretmez.
+     */
+    #[Test]
+    public function a_token_alert_names_the_connection(): void
+    {
+        [$tenant] = $this->makeTenant('Ad');
+
+        $connectionId = $this->connectionFor($tenant, label: 'Etsy Ana Mağaza');
+
+        $this->snapshot(
+            Metric::TOKEN_EXPIRING_SOON,
+            1,
+            MetricScope::connection($connectionId),
+        );
+
+        $this->dispatch();
+
+        Mail::assertSent(MetricAlertMail::class, function (MetricAlertMail $mail): bool {
+            $rendered = $mail->render();
+
+            return str_contains($rendered, 'Etsy Ana Mağaza')
+                // ⚠️ TAVSİYE EKRAN DEĞİL EYLEM SÖYLER: varsayılan metin
+                // satıcıyı salt okunur bir ekrana gönderir ve orada
+                // yapabileceği bir şey YOKTUR.
+                && str_contains($rendered, 'yeniden');
+        });
+    }
+
     /** @return array{sent: int, suppressed: int, skipped: int} */
     private function dispatch(): array
     {
         return app(DispatchAlerts::class)->run();
+    }
+
+    /** Kiracıya ait bir kanal bağlantısı; kimliğini döner. */
+    private function connectionFor(Tenant $tenant, string $label = 'Etsy Mağazam'): string
+    {
+        $this->asSystem(fn () => ChannelType::query()->firstOrCreate(
+            ['code' => 'etsy'],
+            [
+                'name' => 'Etsy',
+                'kind' => 'marketplace',
+                'adapter_class' => EtsyAdapter::class,
+                'supports_webhooks' => false,
+                'is_active' => true,
+            ],
+        ));
+
+        return $this->asTenant($tenant, fn (): string => ChannelConnection::factory()->create([
+            'channel_type_code' => 'etsy',
+            'external_account_id' => 'etsy-'.uniqid(),
+            'label' => $label,
+            'status' => 'active',
+        ])->id);
     }
 
     private function snapshot(Metric $metric, float $value, ?string $scope = null, mixed $at = null): void

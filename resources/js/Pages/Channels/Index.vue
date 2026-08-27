@@ -35,6 +35,37 @@ function healthClass(health) {
     return 'bg-stone-50 text-stone-600 border-stone-200';
 }
 
+/*
+ * §25 · token rozeti renkleri.
+ *
+ * Palet SİSTEMİN kendi paletidir (emerald başarı · amber uyarı · red
+ * hata); marka turuncusu KULLANILMAZ çünkü bu panelde renkli yüzey her
+ * zaman "durum" demektir ve marka tonu durum sanılırdı.
+ *
+ * `expired` KIRMIZIDIR çünkü satıcının BİR ŞEY YAPMASI gerekir ve
+ * kendiliğinden düzelmez; `expiring` amber çünkü bu bir uyarıdır, henüz
+ * arıza değil.
+ */
+function tokenClass(status) {
+    if (status === 'expired') return 'bg-red-50 text-red-800 border-red-200';
+    if (status === 'expiring') return 'bg-amber-50 text-amber-900 border-amber-300';
+    return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+}
+
+/*
+ * Rozetin üstüne gelince TAM TARİH görünür.
+ *
+ * Rozet yalnızca "yakında dolacak" der; "ne zaman" sorusu satıcının
+ * planlama sorusudur ve rozete sığmaz. Tarih PROP'TAN gelir ve
+ * `toIso8601String()` ile gönderilir — ham kolon metni gönderilseydi
+ * tarayıcı onu YEREL saat sanardı (onay ekranında ölçülen tuzak).
+ */
+function tokenTitle(connection) {
+    if (!connection.tokenExpiresAt) return '';
+
+    return `Yetki bitiş: ${formatDate(connection.tokenExpiresAt)}`;
+}
+
 /** Yetenekler tip sisteminden gelir; kanal adı kontrol edilmez. */
 const capabilityLabels = {
     catalog: 'Ürün',
@@ -137,6 +168,27 @@ function formatDate(iso) {
                                 :class="healthClass(connection.health)"
                             >
                                 {{ healthLabels[connection.health] ?? connection.health }}
+                            </span>
+
+                            <!--
+                                §25 · TOKEN ROZETİ — sağlıktan AYRI bir
+                                soru. `health` kanalın SON cevabını
+                                taşır; bugün cevap veren bir bağlantının
+                                token'ı yarın ölebilir ve o an sağlık
+                                rozeti DEĞİŞMEZ.
+
+                                Süresiz anahtar taşıyan kanalda (Woo,
+                                Trendyol, Shopify) rozet HİÇ ÇİZİLMEZ:
+                                "geçerli" demek satıcıya orada izlenecek
+                                bir ömür olduğunu düşündürürdü.
+                            -->
+                            <span
+                                v-if="connection.tokenStatus"
+                                class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+                                :class="tokenClass(connection.tokenStatus)"
+                                :title="tokenTitle(connection)"
+                            >
+                                {{ connection.tokenStatusLabel }}
                             </span>
                         </div>
 

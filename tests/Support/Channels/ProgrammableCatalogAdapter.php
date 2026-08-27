@@ -7,6 +7,7 @@ namespace Tests\Support\Channels;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
@@ -32,6 +33,8 @@ use Throwable;
  */
 final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalog
 {
+    use DeclaresRequestQuota;
+
     /** @var array<string, array{throw: ?Throwable, class: ?ErrorClass}> */
     private static array $plan = [];
 

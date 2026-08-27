@@ -76,4 +76,17 @@ interface ChannelAdapter
 
     /** @param array<string, array<int, string|null>> $headers */
     public function extractEventType(array $headers): string;
+
+    /**
+     * Günlük istek tavanı — YOKSA `null` (§25 · §21).
+     *
+     * Varsayılan gövde `DeclaresRequestQuota` trait'indedir ve "yok"
+     * der; tavanı olan kanal (Etsy) onu geçersiz kılar. Zorunlu soyut
+     * bir metot yapılsaydı on bir uygulayıcının hepsi aynı `return
+     * null;` gövdesini kopyalamak zorunda kalırdı.
+     */
+    public function dailyRequestQuota(): ?int;
+
+    /** Token yenileme uç noktasının yol parçası — YOKSA `null` (§25). */
+    public function tokenEndpointFragment(): ?string;
 }
