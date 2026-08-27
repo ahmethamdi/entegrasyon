@@ -499,6 +499,101 @@ Dokümanın §13 listesinde YOKTUR — kullanıcı onaylı panel maddesi.
   Sözleşme **409 + `X-Inertia-Location`** (`Inertia::location()`).
   Inertia başlığı olmayan düz POST için normal 302 KORUNUR.
 
+## eBay kuralları (altıncı kanal · Faz 4 · slice 4.1 · `89bb53c`)
+
+**SLICE 4.1 KAPANDI (8/64 sa)** — OAuth2 + token yenileme + adapter
+iskeleti. Kanal `is_active = false` ve panelde GÖRÜNMEZ; açılma kararı
+slice 4.9'da, gerçek mağaza doğrulamasından SONRA.
+
+- **eBay OAUTH'U ETSY'DEN ALTI NOKTADA AYRILIR ve KOPYALANAMAZ.**
+  Yüzeyde benzer olması tam da tehlikeli kılan şey — projenin "aynı
+  kural iki kanalda ters sonuç verebilir" kuralının OAuth karşılığı.
+  (1) **PKCE YOKTUR** ve kanal `code_challenge`'ı KABUL ETMEZ; eksiklik
+  değildir, PKCE istemci sırrını saklayamayan istemciler içindir ve
+  eBay sunucu akışında `client_secret` zaten gizlidir. (2) İstemci
+  kimliği **`Authorization: Basic`** başlığındadır, gövdede DEĞİL.
+  (3) Scope'lar **tam URL** biçimindedir (`listings_r` gibi kısa ad
+  yazılsaydı istek reddedilirdi). (4) **Yenilemede scope GÖNDERİLİR** —
+  gönderilmezse bazı hesaplarda token DAR scope ile döner ve sonraki
+  çağrılar 403 alır; sebebi "yetki yok" görünür, oysa yetki VARDI.
+  (5) `redirect_uri` ham adres değil eBay'de kayıtlı **"RuName"**dir.
+  (6) **Refresh token 18 ay SABİT ömürlüdür ve yenileme onu TAZELEMEZ**
+  (Etsy'de her yenileme ömrü SIFIRLAR) — bağlantı hiçbir hata vermeden
+  çalışırken bir sabah ölür. §20 **30 gün kala uyar** diyor.
+- **`state` PKCE'DEN BAĞIMSIZDIR ve ZORUNLU KALIR** (P0-10). Boş değer
+  DAİMA reddedilir; `'' === ''` ile geçilseydi doğrulama tamamen devre
+  dışı kalırdı — kapının hiç olmamasından farksız ama VAR SANILAN bir
+  hâl.
+- **`ChannelHttpClient::BASIC_AUTH_KEY_PAIRS` KULLANILMAZ.** O mekanizma
+  HER isteğe Basic auth ekler; eBay'de Basic auth YALNIZCA token uç
+  noktasına gider ve diğer çağrılar `Bearer` taşır. Karıştırılsaydı ya
+  token isteği kimliksiz gider ya da her API çağrısı istemci sırrını
+  gereksizce taşırdı.
+- **`25xxx` İŞ KURALI HATALARI HTTP DURUMUNDAN BAĞIMSIZ KALICIDIR**
+  (§21). eBay bu aileyi 500 ile de döndürebilir; yalnızca duruma
+  bakılsaydı `25002` (duplicate offer) GEÇİCİ sayılır, iş sonsuza kadar
+  yeniden denenir ve her tur aynı hatayı alırdı. Düzelten şey
+  `channel_metadata`'daki `offer_id`'yi okuyup **kaldığı yerden devam
+  etmektir** (§13.2 · `SupportsOfferLifecycle`'ın varlık sebebi).
+  Aralık **kapalıdır** (25000–25999 dahil) ve İKİ UCU da testle sürülür.
+- **SAĞLIK KONTROLÜ POLİTİKA ÜÇLÜSÜNÜ ŞART KOŞAR** (§17):
+  `fulfillment_policy_id` · `payment_policy_id` · `return_policy_id` +
+  `merchant_location_key` + `marketplace_id`. Eksik politika offer
+  yaratmada `VALIDATION` üretir ve o KALICIDIR; sağlıklı sayılsaydı
+  bağlantı `active` olur, satıcı ürün göndermeye başlar ve **HER ürün
+  kalıcı hatayla ölürdü**. Eksik alan **ADIYLA** söylenir, sayıyla
+  değil. **Yapılandırma eksikken kanala istek HİÇ ATILMAZ** — kanalın
+  200'ü bizdeki eksikliği düzeltmez.
+- **SANDBOX AYRI ANA BİLGİSAYARDIR ve VARSAYILAN ÜRETİMDİR.** Varsayılan
+  sandbox olsaydı satıcının gerçek mağazası yerine boş bir test hesabına
+  yazılır ve "senkron başarılı" görünürken hiçbir şey değişmezdi.
+- **SİPARİŞ WEBHOOK'U YOKTUR** (§13.6). eBay Notification API SUNAR ama
+  o hesap kapanma ve politika ihlali bildirir; sipariş için DEĞİLDİR.
+  `verifyWebhookSignature` daima `false` (Trendyol ve Etsy kararının
+  aynısı) ve `supports_webhooks = false` — `true` olsaydı yoklama turu
+  bu kanalı ATLAR ve siparişler HİÇ GELMEZDİ.
+- **REFRESH PAYI 900 SN** — Etsy ile AYNI SAYI, farklı bolluk (Etsy 1
+  saatlik token için üç deneme, eBay 2 saatlik için yedi). Payı
+  büyütmek CAZİP ama yanlış olurdu: erken yenileme refresh token'ı
+  gereğinden sık kullanmak demektir.
+
+### Çekirdek istemciye eklenen iki genel yetenek (`0950a19`)
+
+Kullanıcı onaylı karar. Alternatif — adapter'ın kendi `Http` çağrısını
+yapması — §25'in `token_refresh_failures` metriğini **KÖR ederdi**: o
+metrik `api_calls`'tan türetiliyor ve istemciyi atlayan çağrı oraya
+YAZILMIYOR.
+
+- **`asForm` — GÖVDE BİÇİMİ ADAPTER'DAN GELİR.** OAuth 2 token uç
+  noktaları (RFC 6749 · §4.1.3) gövdeyi form-encoded BEKLER; JSON
+  gönderilseydi eBay alanları HİÇ okumaz, `invalid_request` döner ve
+  sebebi gövdede görünmezdi. **Etsy'nin uç noktası JSON'u da kabul
+  ettiği için bu fark beşinci kanalda HİÇ GÖRÜNMEMİŞTİ.** Varsayılan
+  JSON'dur ve TESTLE korunur: kaysaydı BEŞ kanalın tüm çağrıları
+  sessizce bozulurdu.
+- **ADAPTER'IN `Authorization`'INI KASA EZMEZ.** Kasada `access_token`
+  bulunan bağlantının token YENİLEME isteği aksi hâlde `Bearer {ölü
+  token}` ile giderdi — oysa o istek tam da ölü token'ı tazelemek için
+  atılıyor. Karşılaştırma **harf duyarsızdır** (RFC 9110 · §5.1).
+- **BAŞLIK ÇAKIŞMASI "EZME" DEĞİL "EKLEME"DİR — ÖLÇÜLDÜ.** Laravel
+  başlık anahtarlarını NORMALİZE ETMEZ ve `withToken()` küçük harfli
+  `authorization`'ı EZMEZ; değerini **aynı anahtarın YANINA ekler**.
+  Giden istekte anahtar TEKTİR ama İKİ DEĞER taşır ve HTTP'de bu
+  virgülle birleşmiş tek başlık olarak gider — sunucu ya reddeder ya
+  birini seçer. **İddia DEĞER SAYISINA bakmalıdır**; tam değere veya
+  anahtar sayısına bakan iki ayrı test de mutasyonu KAÇIRDI.
+
+### Slice 4.1'de öğrenilen test kuralları
+
+- **SINIR TESTİ TEK YÖNDEN SÜRÜLÜRSE ÖTEKİ YÖN ÖLÇÜLMEMİŞ OLUR.**
+  "Aralık dışı" testi yalnızca ALT sınırın dışını (`2000`) ölçüyordu ve
+  üst sınırı `25999` → `99999` yapan mutasyon HAYATTA KALDI. Aralık
+  testinde **iki uç + iki dış** ayrı ayrı sürülür.
+- **`Http::fake()` TUZAĞI YİNE ISIRDI** — bu dosyada YAZILI olmasına
+  rağmen. Durum eşlemesi tek testte toplanmıştı; ikinci `fake()`
+  çağrısı ilkinin YERİNE GEÇMEDİĞİ için 401 beklenirken 429 ölçüldü.
+  **Her durum kendi testine ayrılır** (veya `Http::sequence()`).
+
 ## Etsy kuralları (beşinci kanal · Faz 3 · `6dcaf52`)
 
 Faz 2 (Hepsiburada) uç nokta doğrulaması BLOKE olduğu için atlandı;
@@ -2321,12 +2416,26 @@ kuralları" başlığında. **YENİDEN AÇMA.**
 kurallar aşağıda "Token ve kota metrikleri kuralları" başlığında.
 **YENİDEN AÇMA.**
 
-**SIRADAKİ İŞ — 28 AĞUSTOS'TA KULLANICI SEÇECEK.** Dokümanın §25'i
-artık TAMAMEN uygulanmış durumda. Kalan: **C)** Faz 4 · eBay (64 sa,
-tek oturumda bitmez) · Hepsiburada dokümantasyonu (**birlikte**) ·
+**SIRADAKİ İŞ — FAZ 4 · eBay SÜRÜYOR** (28 Ağustos, kullanıcı kararı).
+**Slice 4.1 KAPANDI (8/64 sa · `89bb53c`)**; sıradaki **slice 4.2 —
+bağlantı + politika/konum seçimi (6 sa)**. Kalan slice'lar: 4.3
+`SupportsOfferLifecycle` + `PushOfferListing` (10) · 4.4 üç adımlı
+yayın zinciri (12) · 4.5 taksonomi (8) · 4.6 stok+fiyat (8) · 4.7
+sipariş yoklama (6) · 4.8 iade+kargo (4) · 4.9 mutabakat + kanalı
+AÇMA (2).
+
+**SLICE 4.2'NİN İLK İŞİ** A maddesinin kuralıdır: *"sağlık kontrolünün
+istediği HER kimlik alanı formda sorulmalıdır."* eBay'de o **beş
+alandır** ve `EbayAdapter::healthCheck()` beşini de ŞART KOŞUYOR;
+formda sorulmazsa panelden bağlanan hiçbir bağlantı `active` OLAMAZ
+(Shopify'da tam olarak bu yaşandı). Ayrıca `ChannelTypeSeeder`'a
+`ebay` satırı eklenecek (`is_active = false`, `supports_webhooks =
+false`) ve `capabilities` kolonu GERÇEK uygulamayı izlemelidir.
+
+Bekleyen diğer maddeler: Hepsiburada dokümantasyonu (**birlikte**) ·
 Stripe'ı uçtan uca sürmek · proje ismi (~0.5 sa) · Etsy/Shopify'ı
 gerçek hesapla sürmek (§26 adım 3-5, anahtarlar kullanıcıda) ·
-Faz 5 tampon (28 sa). **Yedi commit yerelde bekliyor, push edilmedi.**
+Faz 5 tampon (28 sa).
 
 **HEPSİBURADA DOKÜMANTASYONU HÂLÂ BEKLİYOR** (kullanıcı ile BİRLİKTE,
 24 Ağustos kararı: "dökümantasyonu beraber yazalım"). Uç noktalar

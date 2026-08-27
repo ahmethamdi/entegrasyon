@@ -1,39 +1,139 @@
-# Devir Notu — 27 Ağustos 2026 (V3.0 · **A + B KAPANDI**)
+# Devir Notu — 28 Ağustos 2026 (V3.0 · **eBay BAŞLADI · slice 4.1 KAPANDI**)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1281 test yeşil** (4372 assertion), Pint temiz (432 dosya).
-Son commit `fb126d9`. **HER ŞEY PUSH EDİLDİ** — `origin/main` da
-`fb126d9`'da (`git ls-remote` ile doğrulandı, 28 Ağustos). Bu notun
-ilk hâli "yedi commit yerelde bekliyor" diyordu; o satır push'tan
-ÖNCE yazılmış ve sonrasında güncellenmemişti.
+**1342 test yeşil** (4468 assertion), Pint temiz.
+Son commit `89bb53c`.
+
+> **PUSH DURUMUNU `git ls-remote origin main` İLE DOĞRULA.** Bu notun
+> push iddiası tek başına GÜVENİLMEZ: not push'tan önce yazılırsa
+> sonraki tur olmayan bir iş yapmaya çalışır (27 Ağustos'ta tam olarak
+> bu oldu — "yedi commit bekliyor" yazıyordu, hepsi zaten uzaktaydı).
+> `git log origin/main..HEAD` de yeterli DEĞİLDİR: o, yerel
+> `origin/main` **referansına** bakar ve referans bayat olabilir.
 
 ---
 
-# 🌅 YARIN İLK İŞ — 28 Ağustos
+# 🌅 YARIN İLK İŞ — 29 Ağustos
 
-26 Ağustos'ta **A** (bağlanma formu · `fef3e62`), 27 Ağustos'ta
-**B** (§25 token metrikleri + rozet · `f76d425`) bitti.
-**Dokümanın §25'i artık TAMAMEN uygulanmış durumda.**
+**eBay'e başlandı** (28 Ağustos, kullanıcı kararı). **Slice 4.1
+KAPANDI (8/64 sa)**; kalan sekiz slice aşağıda.
+
+| Slice | İş | Saat | Durum |
+|---|---|---|---|
+| 4.1 | OAuth2 + token yenileme | 8 | ✅ `89bb53c` |
+| **4.2** | **Bağlantı + politika/konum seçimi** | **6** | **SIRADA** |
+| 4.3 | `SupportsOfferLifecycle` + `PushOfferListing` | 10 | — |
+| 4.4 | Inventory item + offer + publish zinciri | 12 | — |
+| 4.5 | Taksonomi (kategori + aspects) | 8 | — |
+| 4.6 | Stok + fiyat (bulk, kısmi başarı) | 8 | — |
+| 4.7 | Sipariş yoklama | 6 | — |
+| 4.8 | İade + kargo | 4 | — |
+| 4.9 | Mutabakat + production (kanalı AÇMA) | 2 | — |
+
+**Slice 4.2'nin ilk işi** A maddesinin kuralıdır: *"sağlık kontrolünün
+istediği HER kimlik alanı formda sorulmalıdır."* eBay'de o **beş
+alandır** (`merchant_location_key` · `marketplace_id` + politika
+üçlüsü) ve `EbayAdapter::healthCheck()` beşini de ŞART KOŞUYOR —
+formda sorulmazsa panelden bağlanan hiçbir bağlantı `active` OLAMAZ
+(Shopify'da tam olarak bu yaşandı: 52/52 saat "bitmiş" sayılırken
+`location_gid` hiçbir kod yolundan yazılmıyordu).
+
+Ayrıca 4.2'de `ChannelTypeSeeder`'a `ebay` satırı eklenecek —
+`is_active = false` ve `supports_webhooks = false` ile. Seeder'daki
+`capabilities` kolonu GERÇEK uygulamayı izlemek zorundadır
+(`ChannelTypeSeederTest` bunu `instanceof` ile karşılaştırıyor).
+
+### Bekleyen diğer maddeler (değişmedi)
 
 | # | İş | Süre | Not |
 |---|---|---|---|
-| **C** | Faz 4 · eBay | 64 sa | Altıncı kanal; tek oturumda BİTMEZ |
 | — | Hepsiburada dokümantasyonu | ? | **BİRLİKTE** yazılacak (24 Ağustos kararı) |
 | — | Stripe'ı uçtan uca sürmek | ~2 sa | Anahtarlar TEST moduna çevrilince |
 | — | Proje ismi | ~0.5 sa | 8 dosyalık iş |
 | — | Etsy/Shopify gerçek hesapla sürüm | ? | §26 adım 3-5, anahtarlar KULLANICIDA |
-| — | Faz 5 tampon | 28 sa | — |
+| — | Faz 5 tampon | 28 sa | Faz 4 bitince |
 
-**Push maddesi KAPANDI** (28 Ağustos) — yerelde bekleyen commit yok.
-`git log --oneline origin/main..HEAD` boş.
+---
 
-> **DEVİR NOTUNUN PUSH İDDİASI TEK BAŞINA GÜVENİLMEZ.** Not push'tan
-> önce yazılırsa sonraki tur "yedi commit bekliyor" diye okur ve
-> olmayan bir iş yapmaya çalışır. Ayrıca `git log origin/main..HEAD`
-> yerel `origin/main` **referansına** bakar ve o referans bayat
-> olabilir; gerçek cevap `git fetch` ardından ya da doğrudan
-> `git ls-remote origin main` ile alınır.
+# ✅ SLICE 4.1 — BİTTİ (28 Ağustos · `5f833eb` + `0950a19` + `89bb53c`)
+
+Yazılan: `EbayAuth` · `EbayEndpoints` · `EbayAdapter` (kimlik/başlık,
+sağlık, hata sınıflandırma, hız sınırı, `SupportsTokenRefresh`, §25
+kota bildirimi) + `ChannelHttpClient`'a **iki genel yetenek**.
+
+### ⚠️ eBay OAUTH'U ETSY'DEN ALTI NOKTADA AYRILIR — KOPYALANAMAZ
+
+Projenin "aynı kural iki kanalda ters sonuç verebilir" kuralının OAuth
+karşılığı. Yüzeyde benzer olması tam da tehlikeli kılan şey.
+
+| Konu | Etsy (§11.2) | **eBay (§13.3)** |
+|---|---|---|
+| PKCE | ZORUNLU (S256) | **YOK** — kanal kabul ETMEZ |
+| İstemci kimliği | `x-api-key` + gövdede `client_id` | **`Authorization: Basic`** |
+| Scope biçimi | `listings_r` | **tam URL** |
+| Yenilemede scope | gönderilmez | **gönderilir** (yoksa 403) |
+| `redirect_uri` | ham adres | **"RuName"** (eBay'de kayıtlı) |
+| Refresh ömrü | 90 gün, yenileme SIFIRLAR | **18 ay SABİT — tazelenmez** |
+
+Sonuncusu en sinsisi: bağlantı hiçbir hata vermeden çalışırken 18 ay
+sonra ölür. §20 bunun için **30 gün kala uyar** diyor (henüz
+yazılmadı — 4.2 veya sonrası).
+
+**`state` PKCE'den BAĞIMSIZDIR ve ZORUNLU kalır** (P0-10).
+
+### ⚠️ ÇEKİRDEK İSTEMCİYE İKİ GENEL YETENEK EKLENDİ (`0950a19`)
+
+Kullanıcı onaylı karar. Alternatif — adapter'ın kendi `Http` çağrısını
+yapması — §25'in `token_refresh_failures` metriğini KÖR ederdi: o
+metrik `api_calls`'tan türetiliyor ve istemciyi atlayan çağrı oraya
+YAZILMIYOR.
+
+1. **`asForm`** — OAuth 2 token uç noktaları (RFC 6749 · §4.1.3) gövdeyi
+   form-encoded BEKLER. JSON gönderilseydi eBay alanları HİÇ okumaz,
+   `invalid_request` döner ve sebebi gövdede görünmezdi. **Etsy'nin uç
+   noktası JSON'u da kabul ettiği için bu fark beşinci kanalda HİÇ
+   görünmemişti.** Varsayılan JSON'dur ve testle korunur: kaysaydı BEŞ
+   kanalın tüm çağrıları sessizce bozulurdu.
+2. **Adapter'ın `Authorization`'ını kasa EZMEZ.** Kasada `access_token`
+   bulunan bağlantının token YENİLEME isteği aksi hâlde `Bearer {ölü
+   token}` ile giderdi — oysa o istek tam da ölü token'ı tazelemek için
+   atılıyor. Karşılaştırma harf duyarsızdır (RFC 9110 · §5.1).
+
+### ⚠️ `25xxx` İŞ KURALI HATALARI HTTP DURUMUNDAN BAĞIMSIZ KALICIDIR
+
+eBay bu aileyi 500 ile de döndürebilir. Yalnızca duruma bakılsaydı
+`25002` (duplicate offer) GEÇİCİ sayılır, iş sonsuza kadar yeniden
+denenir ve her tur aynı hatayı alırdı. Düzelten şey
+`channel_metadata`'daki `offer_id`'yi okuyup **kaldığı yerden devam
+etmektir** (§13.2 · Delta 1'in varlık sebebi).
+
+### ⚠️ SAĞLIK KONTROLÜ POLİTİKA ÜÇLÜSÜNÜ ŞART KOŞAR (§17)
+
+Eksik politika offer yaratmada `VALIDATION` üretir ve o KALICIDIR.
+Sağlıklı sayılsaydı bağlantı `active` olur, satıcı ürün göndermeye
+başlar ve **HER ürün kalıcı hatayla ölürdü**. Eksik alan ADIYLA
+söylenir; yapılandırma eksikken kanala istek HİÇ atılmaz.
+
+### Mutasyon turu — 20 mutasyon, ÜÇÜ gerçek test boşluğu buldu
+
+Üçünde de düzeltilen şey TESTTİ, kural değil.
+
+1. **`strcasecmp` mutasyonu İKİ KEZ hayatta kaldı.** Sebep ÖLÇÜLDÜ:
+   Laravel başlık anahtarlarını normalize ETMEZ ve `withToken()`
+   küçük harfli `authorization`'ı EZMEZ — değerini **aynı anahtarın
+   yanına EKLER**. Giden istekte anahtar TEKTİR ama İKİ DEĞER taşır
+   ve HTTP'de bu virgülle birleşmiş tek başlık olarak gider; sunucu ya
+   reddeder ya birini seçer. İlk iddia tam DEĞERE, ikincisi ANAHTAR
+   sayısına bakıyordu; doğru ölçüm **DEĞER SAYISIDIR**.
+2. **Sınır testi tek yönden sürülmüştü.** "Aralık dışı" testi yalnızca
+   ALT sınırın dışını (`2000`) ölçüyordu; üst sınırı `25999` → `99999`
+   yapan mutasyon hayatta kaldı. **Sınır testi tek yönden sürülürse
+   öteki yön ÖLÇÜLMEMİŞ olur.** Üç test eklendi (26000 · 25000 · 25999).
+3. **`Http::fake()` tuzağı yine ısırdı** — CLAUDE.md'de YAZILI olmasına
+   rağmen. Durum eşlemesi tek testte toplanmıştı; ikinci `fake()`
+   çağrısı ilkinin YERİNE GEÇMEDİĞİ için 401 beklenirken 429 ölçüldü.
+   Her durum kendi testine ayrıldı.
 
 ---
 
