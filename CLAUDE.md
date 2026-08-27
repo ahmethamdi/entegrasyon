@@ -372,6 +372,69 @@ memory'deki "Repo Durumu" dosyasına bak.
   dönseydi operasyon tamamlandı sanılır, `synced_version` ilerler ve kanalda
   hiçbir şey değişmemişken satır "senkron" görünürdü.
 
+## Token ve kota metrikleri kuralları (§25 · B maddesi · `f76d425`)
+
+- **ÜÇ METRİK YENİ BİR ARIZA BİÇİMİNİ ÖLÇER.** Mevcut on üç metrik bir
+  şeyin YAVAŞ veya BOZUK olduğunu görür; token ölümünde hiçbir şey
+  yavaşlamaz ve hata oranı yükselmez — bağlantı bir gün SESSİZCE
+  çalışmayı bırakır ve satıcı ancak siparişler kesilince fark eder.
+- **ALICI ARTIK KAPSAMDAN TÜRETİLMEZ** (`Metric::alertAudience()`).
+  v2.2'de kural "kiracı kapsamlı → satıcı, gerisi → yönetici"ydi ve
+  işliyordu çünkü bağlantı kapsamlı iki metrik de (api gecikmesi, 429)
+  ALTYAPI sorunuydu. §25'in token metrikleri bunu KIRAR: kapsamları
+  bağlantıdır ama yeniden yetkilendirmeyi **YALNIZCA SATICI** yapabilir.
+  Kural `DispatchAlerts` içinde bir `if` olarak yazılsaydı metrikten
+  UZAKTA yaşar ve yeni bir token metriği eklendiğinde oraya eklenmesi
+  UNUTULURDU. **Kota YÖNETİCİDE kalır** — satıcının elinde düğme yoktur
+  (§21 · P2).
+- **BAĞLANTI KAPSAMINDA KİRACI ÇÖZÜLMEK ZORUNDADIR.**
+  `connection:{id}` kapsamı kiracıyı TAŞIMAZ; çözülmezse token uyarısı
+  ALICISIZ kalır, `skipped` sayılır ve satıcı bağlantısının öldüğünü HİÇ
+  öğrenemez — §25'in önlemek için yazıldığı sessiz ölümün ta kendisi.
+  **Mutasyonla bulundu**, hiçbir test bu yolu sürmüyordu.
+- **YENİLEME HATASI SAYACI AYRI KOLONDA TUTULMAZ, `api_calls`'TAN
+  TÜRETİLİR** (kullanıcı kararı). Yenileme çağrıları zaten
+  `ChannelHttpClient` üzerinden gidiyor. Ayrı sayaç, yazan HER yolun onu
+  da güncellemesini zorunlu kılar ve biri unutulunca iki gerçek kaynağı
+  SESSİZCE ayrışır (§10 · `DriftHistory` kararının aynısı).
+- **UÇ NOKTA DESENİ VE GÜNLÜK TAVAN ADAPTER'DAN GELİR**
+  (`DeclaresRequestQuota`). `if ($channel === 'etsy') return 10_000;`
+  yazılsaydı her yeni kanal o satırı uzatırdı ve biri eklemeyi unutunca
+  kanal SESSİZCE ölçülmez olurdu — yeteneklerin `instanceof` ile
+  okunması kuralının kota karşılığı.
+- **UÇ NOKTA SÜZGECİ OLMADAN HER 4xx "TOKEN HATASI" SAYILIR.**
+  `api_calls` kanala giden HER çağrıyı taşır; süzülmezse başarısız bir
+  stok itmesi "token yenilenemedi" sayılır, satıcıya yeniden
+  yetkilendirme yaptırılır ve gerçek sorun HİÇ görünmez.
+- **KOTASI OLMAYAN KANAL ÖLÇÜLMEZ, SIFIR DA YAZILMAZ** (§25'in açık
+  kuralı). Woo satıcının KENDİ sunucusudur; uydurma bir tavana
+  bölünseydi anlamsız bir yüzde çıkar ve satıcı var olmayan bir sınıra
+  göre karar verirdi.
+- **SÜRESİZ TOKEN (`expires_at IS NULL`) ÖLÇÜLMEZ ve ROZET TAŞIMAZ.**
+  Woo/Trendyol kalıcı anahtar taşır, Shopify'ın offline token'ı
+  SÜRESİZDİR. "🟢 Geçerli" yazılsaydı satıcı orada izlenecek bir ömür
+  olduğunu sanır ve rozetin kaybolmasını beklerdi; NULL "hemen doluyor"
+  sayılsaydı o bağlantılar her turda kırmızı yanardı. **Yokluk, yanlış
+  bir güvenceden iyidir.**
+- **SÜRESİ ZATEN DOLMUŞ TOKEN DA SAYILIR** — "geçti" diye atlansaydı
+  metrik tam da EN KÖTÜ anda susardı.
+- **ROZET PENCERESİ `CaptureMetrics::TOKEN_EXPIRY_WINDOW_DAYS`'TEN
+  OKUNUR**, `TokenStatus` içinde yeniden yazılmaz. Ayrışsalardı panel
+  sarı yanarken metrik susardı.
+- **`status` İLE TOKEN ÖMRÜ AYRI SORULARDIR.** `status` kanalın SON
+  cevabını taşır; bugün çalışan bir bağlantının token'ı yarın ölebilir
+  ve o an hiçbir kolon değişmez. Tek alanda birleştirilseydi ya çalışan
+  bağlantı "bozuk" gösterilir ya da ölmek üzere olan token HİÇ
+  görünmezdi.
+- **BAĞLANTI UYARISI MAĞAZAYI ADIYLA SÖYLER.** Jenerik "Bir kanal
+  bağlantısı" metni, uyarılar YALNIZCA yöneticiye giderken yeterliydi;
+  §25 ile satıcıya gidiyorlar ve üç mağazası olan bir satıcı hangisini
+  yetkilendireceğini o cümleden ÇIKARAMAZ — uyarı okunur ama eylem
+  üretmez. **UUID değil ETİKET gösterilir.**
+- **TAVSİYE EKRAN DEĞİL EYLEM SÖYLER.** Varsayılan metin ("sistem
+  sağlığı ekranından ayrıntıları görebilirsiniz") satıcıyı SALT OKUNUR
+  bir ekrana gönderir ve orada yapabileceği bir şey yoktur.
+
 ## Bağlanma formu kuralları (A maddesi · `fef3e62`)
 
 Dokümanın §13 listesinde YOKTUR — kullanıcı onaylı panel maddesi.
@@ -2252,11 +2315,18 @@ başına dallandırıldı; Etsy ve Shopify panelden GERÇEKTEN bağlanıyor
 (tarayıcıda doğrulandı). Kalıcı kurallar aşağıda "Bağlanma formu
 kuralları" başlığında. **YENİDEN AÇMA.**
 
-**SIRADAKİ İŞ — 27 AĞUSTOS'TA KULLANICI SEÇECEK.** İki seçenek kaldı:
-**B)** §25'in üç metriği + token rozeti (~6 sa · **ÖNERİLEN** — Etsy
-artık bağlanabildiği için refresh token'ın 90 günde ölmesi GERÇEK bir
-risk ve bugün bunu gösteren hiçbir şey yok) ·
-**C)** Faz 4 · eBay (64 sa).
+**B MADDESİ KAPANDI** (27 Ağustos · `f76d425`) — §25'in üç metriği,
+`Metric::alertAudience()` ve `/channels` token rozeti yazıldı; gerçek
+`metrics:capture` + `alerts:dispatch` turlarıyla doğrulandı. Kalıcı
+kurallar aşağıda "Token ve kota metrikleri kuralları" başlığında.
+**YENİDEN AÇMA.**
+
+**SIRADAKİ İŞ — 28 AĞUSTOS'TA KULLANICI SEÇECEK.** Dokümanın §25'i
+artık TAMAMEN uygulanmış durumda. Kalan: **C)** Faz 4 · eBay (64 sa,
+tek oturumda bitmez) · Hepsiburada dokümantasyonu (**birlikte**) ·
+Stripe'ı uçtan uca sürmek · proje ismi (~0.5 sa) · Etsy/Shopify'ı
+gerçek hesapla sürmek (§26 adım 3-5, anahtarlar kullanıcıda) ·
+Faz 5 tampon (28 sa). **Yedi commit yerelde bekliyor, push edilmedi.**
 
 **HEPSİBURADA DOKÜMANTASYONU HÂLÂ BEKLİYOR** (kullanıcı ile BİRLİKTE,
 24 Ağustos kararı: "dökümantasyonu beraber yazalım"). Uç noktalar

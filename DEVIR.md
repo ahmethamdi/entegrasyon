@@ -1,29 +1,77 @@
-# Devir Notu — 26 Ağustos 2026 (V3.0 · **A MADDESİ KAPANDI**)
+# Devir Notu — 27 Ağustos 2026 (V3.0 · **A + B KAPANDI**)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1253 test yeşil** (4324 assertion), Pint temiz (427 dosya).
-Son commit `fef3e62`. **Hiçbir şey push EDİLMEDİ** — altı commit
+**1281 test yeşil** (4372 assertion), Pint temiz (432 dosya).
+Son commit `f76d425`. **Hiçbir şey push EDİLMEDİ** — yedi commit
 yerelde bekliyor (`8869464` · `bccf77d` · `f0fb07a` · `602fb32` ·
-`2ce813b` · `fef3e62`).
+`2ce813b` · `fef3e62` · `f76d425`).
 
 ---
 
-# 🌅 YARIN İLK İŞ — 27 Ağustos
+# 🌅 YARIN İLK İŞ — 28 Ağustos
 
-26 Ağustos'ta **A maddesi (bağlanma formunun kanal başına
-dallandırılması) BİTTİ** (`fef3e62`). Kalan iki seçenek:
+26 Ağustos'ta **A** (bağlanma formu · `fef3e62`), 27 Ağustos'ta
+**B** (§25 token metrikleri + rozet · `f76d425`) bitti.
+**Dokümanın §25'i artık TAMAMEN uygulanmış durumda.**
 
-| # | İş | Süre | Neden şimdi |
+| # | İş | Süre | Not |
 |---|---|---|---|
-| **B** | §25'in üç metriği + token rozeti | ~6 sa | **ÖNERİLEN.** Doküman istiyor, Faz 1'de de atlanmış; Etsy'nin refresh token'ı 90 günde ölür ve bugün bunu gösteren HİÇBİR ŞEY yok |
-| C | Faz 4 · eBay | 64 sa | Yeni kanal (altıncı) |
+| **C** | Faz 4 · eBay | 64 sa | Altıncı kanal; tek oturumda BİTMEZ |
+| — | Hepsiburada dokümantasyonu | ? | **BİRLİKTE** yazılacak (24 Ağustos kararı) |
+| — | Stripe'ı uçtan uca sürmek | ~2 sa | Anahtarlar TEST moduna çevrilince |
+| — | Proje ismi | ~0.5 sa | 8 dosyalık iş |
+| — | Etsy/Shopify gerçek hesapla sürüm | ? | §26 adım 3-5, anahtarlar KULLANICIDA |
+| — | Faz 5 tampon | 28 sa | — |
 
-**B'nin gerekçesi güçlendi:** Etsy artık panelden GERÇEKTEN
-bağlanabiliyor, yani ilk gerçek OAuth bağlantısı kurulmak üzere. O
-token yenilenmezse bağlantı sessizce ölür ve satıcı bunu ancak
-siparişler kesilince fark eder. `channel_credentials.expires_at` ve
-`channel_credentials_expiring_idx` ŞEMADA HAZIR.
+**Push kararı da bekliyor** — yedi commit yerelde duruyor ve kullanıcı
+henüz push istemedi.
+
+---
+
+# ✅ B MADDESİ — BİTTİ (27 Ağustos · `f76d425`)
+
+§25'in üç metriği de yazıldı, `/channels` token rozeti eklendi.
+
+| Metrik | Kapsam | Eşik | Kaynak |
+|---|---|---|---|
+| `token_expiring_soon` | bağlantı | > 0 | `channel_credentials.expires_at` (14 gün) |
+| `token_refresh_failures` | bağlantı | > 3/gün | `api_calls` (TÜRETİLİR) |
+| `channel_daily_quota_used` | bağlantı | > %80 | `api_calls` / adapter tavanı |
+
+**`alertAudience()` — ALICI ARTIK KAPSAMDAN TÜRETİLMİYOR.** v2.2'de
+kural "kiracı kapsamlı → satıcı, gerisi → yönetici"ydi. §25'in token
+metrikleri bunu KIRAR: kapsamları bağlantıdır ama yeniden
+yetkilendirmeyi YALNIZCA SATICI yapabilir. Kota yöneticide kalır.
+
+**Sayaç kolonu AÇILMADI** (kullanıcı kararı): yenileme hataları
+`api_calls`'tan türetilir. Uç nokta deseni ve günlük tavan
+ADAPTER'DAN gelir (`DeclaresRequestQuota` trait'i) — çekirdeğe
+gömülseydi her yeni kanal o satırı uzatırdı.
+
+**Gerçek çalıştırmayla doğrulandı:** `metrics:capture` üçünü de yazdı
+(85.05% · 5 · 1); `alerts:dispatch` altı uyarı gönderdi ve **ikisi
+demo@ (satıcı), dördü yonetici@** adresine gitti — §25 istisnası uçtan
+uca çalışıyor. Rozet ve sağlık ekranı tarayıcıda doğrulandı.
+
+**Uyarı e-postası artık mağazayı ADIYLA söylüyor** ("Etsy Ölçüm Testi
+bağlantısı") ve EYLEM tavsiye ediyor. Jenerik "Bir kanal bağlantısı"
+metni yalnızca yöneticiye giderken yeterliydi.
+
+### Mutasyon turu — 9'dan 8'i öldü
+
+Hayatta kalan: token sorgusundaki `expires_at IS NOT NULL`.
+PostgreSQL'de `NULL < zaman` sonucu NULL'dur ve `WHERE` onu zaten
+eler — satır BUGÜN davranış değiştirmiyor. **Kaldırılmadı:** eşitlik
+üç değerli mantığın YAN ETKİSİDİR, yazılı bir karar değil; sorgu bir
+gün `COALESCE` ile yeniden yazılırsa süresiz anahtar taşıyan HER
+bağlantı kırmızı yanardı. Gerekçe kodda yazılı.
+
+**Mutasyon 9 GERÇEK bir boşluk buldu:** bağlantı→kiracı çözümü hiçbir
+testte sürülmüyordu. O çözüm olmadan token uyarısı ALICISIZ kalır,
+`skipped` sayılır ve satıcı bağlantısının öldüğünü HİÇ öğrenemezdi —
+§25'in önlemek için yazıldığı sessiz ölümün ta kendisi. İki uçtan uca
+test eklendi.
 
 ---
 
@@ -164,14 +212,10 @@ tek şey GERÇEK bir Etsy hesabıyla sürülmesi (anahtar kullanıcıda).
 
 ## 📌 AÇIK MADDELER — Faz 3 dışı, kullanıcı onaylı
 
-**1 · §25'İN ÜÇ METRİĞİ HİÇ YAZILMADI** (~6 sa). Doküman
-`token_expiring_soon` · `token_refresh_failures` ·
-`channel_daily_quota_used` metriklerini, `/channels`'a token durumu
-rozetini ve `Metric::alertAudience()`'ı istiyor. **Faz 1'de de
-atlanmış** — yani Shopify'ı da ilgilendiriyor, Etsy'ye özgü değil.
-Şema HAZIR: `channel_credentials.expires_at` ve
-`channel_credentials_expiring_idx` kısmi indeksi zaten var.
-Kullanıcı kararıyla Faz 3'ten AYRILDI (slice 3.8 dokümanda 4 saat).
+**1 · ~~§25'İN ÜÇ METRİĞİ HİÇ YAZILMADI~~ — BİTTİ**
+(27 Ağustos · `f76d425`). Üç metrik, `Metric::alertAudience()` ve
+`/channels` token rozeti yazıldı. Ayrıntı yukarıda "B MADDESİ"
+bölümünde. **YENİDEN AÇMA.**
 
 **2 · ~~BAĞLANMA FORMU KANAL BAŞINA DALLANDIRILMALI~~ — BİTTİ**
 (26 Ağustos · `fef3e62`). Ayrıntı yukarıda "A MADDESİ" bölümünde.
