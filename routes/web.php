@@ -9,6 +9,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EbayOAuthController;
 use App\Http\Controllers\EtsyOAuthController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
@@ -73,6 +74,21 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
     // yerini tutar (P0-10).
     Route::get('/channels/etsy/callback', [EtsyOAuthController::class, 'callback'])
         ->name('channels.etsy.callback');
+
+    // eBay OAUTH 2 (V3.0 · §13.3 · §24 · P0-10) — projedeki İKİNCİ OAuth
+    // akışı. İskelet Etsy ile aynıdır ve AYNI gerekçelerle `web`
+    // grubundadır; içerik ise dört noktada ayrılır (PKCE YOK · istemci
+    // kimliği Basic BAŞLIKTA · gövde form-encoded · `client_id` kasada).
+    //
+    // ⚠️ CALLBACK ADRESİ eBay'E BU HÂLİYLE VERİLMEZ: kanal `redirect_uri`
+    // yerine "RuName" bekler (§13.3) ve gerçek adres eBay panelinde onun
+    // altında saklanır. Yani bu rota eBay'in ÇÖZDÜĞÜ hedeftir, gönderdiğimiz
+    // değer değildir.
+    Route::post('/channels/{connection}/ebay/authorize', [EbayOAuthController::class, 'redirect'])
+        ->name('channels.ebay.authorize');
+
+    Route::get('/channels/ebay/callback', [EbayOAuthController::class, 'callback'])
+        ->name('channels.ebay.callback');
 
     // Ürün yönetimi (§13 · faz 1.2 · "panelde ürün oluşturma, düzenleme").
     // Açılış stoğu ledger üzerinden girer; içerik düzenlemesi stoğa dokunmaz.

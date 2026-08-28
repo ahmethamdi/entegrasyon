@@ -93,6 +93,21 @@ final class EbayAdapter implements ChannelAdapter, SupportsTokenRefresh
 
     public const MARKETPLACE_ID_KEY = 'marketplace_id';
 
+    /**
+     * eBay'in "RuName"i — `redirect_uri` yerine geçen takma ad (§13.3).
+     *
+     * ⚠️ SABİT YAZILAMAZ: RuName satıcının KENDİ eBay uygulamasına
+     * aittir ve gerçek callback adresi eBay panelinde onun altında
+     * saklanır. Kodda sabitlenseydi yalnızca TEK bir geliştirici hesabı
+     * çalışır, ikinci satıcı `invalid_request` alırdı.
+     *
+     * ⚠️ SAĞLIK KONTROLÜ BUNU ARAMAZ ve bu BİLİNÇLİDİR: RuName yalnızca
+     * OAuth el sıkışmasında kullanılır, API çağrılarında değil. Sağlık
+     * kontrolüne konsaydı zaten yetkilendirilmiş bir bağlantı, artık
+     * kullanılmayan bir alan yüzünden SAĞLIKSIZ görünürdü.
+     */
+    public const RU_NAME_KEY = 'ru_name';
+
     public const SANDBOX_KEY = 'use_sandbox';
 
     /**

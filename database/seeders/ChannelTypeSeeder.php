@@ -324,6 +324,80 @@ class ChannelTypeSeeder extends Seeder
                 'is_active' => false,
             ],
         );
+
+        // ─────────────────────────────────────────────────────── eBay
+        //
+        // ALTINCI KANAL (§13 · Faz 4). Slice 4.1 ✓ (OAuth + token
+        // yenileme), slice 4.2 SÜRÜYOR (bağlantı + politika seçimi).
+        //
+        // ⚠️ eBay'İN YAYIN MODELİ ÜÇ ADIMLIDIR (§13.1) ve bu, V3'ün tek
+        // çekirdek arayüz eklemesinin sebebidir: inventory item → offer
+        // → published listing. Ara başarısızlık kurtarılamaz olduğu için
+        // `SupportsCatalog` YETMEZ ve `SupportsOfferLifecycle` gerekir
+        // (slice 4.3) — o yüzden `catalog` bugün KAPALIDIR.
+        $this->upsert(
+            ['code' => 'ebay'],
+            [
+                'name' => 'eBay',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Ebay\\EbayAdapter',
+                'capabilities' => [
+                    // ⚠️ HEPSİ KAPALI ve bu DOĞRUDUR — slice 4.1'de
+                    // yazılan TEK şey kimlik/sağlık/token katmanıdır.
+                    //
+                    // Bayrak `true` + arayüz YOK = panelde ÇALIŞMAYAN
+                    // sekme (§05). Ters yön daha sinsidir ve projede ÜÇ
+                    // KEZ yaşandı (Etsy `pricing`/`orders`, WooCommerce
+                    // `catalog_import`): arayüz VAR ama bayrak `false`
+                    // ise satıcı çalışan özelliği HİÇ GÖREMEZ.
+                    // `ChannelTypeSeederTest` ikisini `instanceof` ile
+                    // karşılaştırır — YENİ SLICE YETENEK AÇTIĞINDA BU
+                    // SATIRLAR DA GÜNCELLENİR.
+                    'catalog' => false,          // slice 4.3–4.4
+                    'catalog_import' => false,   // kapsam DIŞI
+                    'inventory' => false,        // slice 4.6
+                    'pricing' => false,          // slice 4.6
+                    'orders' => false,           // slice 4.7
+                    'taxonomy' => false,         // slice 4.5
+                    // ⚠️ ONAY SÜRECİ YOKTUR — eBay'de ilan yayınlanır
+                    // yayınlanmaz canlıdır (Etsy ile aynı). Açılsaydı
+                    // panelde HİÇ DOLMAYACAK bir sekme belirirdi.
+                    'approval' => false,
+                    'fulfillment' => false,      // slice 4.8
+                ],
+                'rate_limit_profile' => [
+                    // ⚠️ eBay'İN ASIL SINIRI GÜNLÜKTÜR (~5.000/gün/uç
+                    // nokta, §21) ve `ChannelRateLimiter` günlük kova
+                    // TUTMAZ — kova saniyeliktir ve esnetilseydi tek bir
+                    // yoğun tur bütün günü kilitlerdi (Etsy kararının
+                    // aynısı). Saniyelik profil yalnızca ani yığılmayı
+                    // yumuşatır; günlük tavanı `dailyRequestQuota()`
+                    // ÖLÇER (§25).
+                    // ⚠️ ANAHTAR ADI `requests_per_second` (sözleşme —
+                    // `requests` yazılsaydı profil sessizce 5/sn'ye
+                    // düşerdi, `35b0209`).
+                    'strategy' => 'token_bucket',
+                    'requests_per_second' => 5,
+                    'window_seconds' => 1,
+                    'burst_capacity' => 5,
+                    // ⚠️ 25 — eBay'in KATI sınırı (§13.4). Stok ve fiyat
+                    // AYNI çağrıda gider (Hepsiburada gibi, Trendyol'un
+                    // tersi) ve tek uç nokta ikisini de taşır, bu yüzden
+                    // iki sayı da AYNIDIR.
+                    'max_inventory_batch' => 25,
+                    'max_price_batch' => 25,
+                ],
+                // ⚠️ SİPARİŞ WEBHOOK'U YOKTUR (§13.6). eBay Notification
+                // API SUNAR ama o hesap kapanma ve politika ihlali
+                // bildirir — sipariş için DEĞİLDİR. `true` olsaydı
+                // yoklama turu bu kanalı `supports_webhooks` kapısında
+                // ATLAR ve siparişler HİÇ GELMEZDİ.
+                'supports_webhooks' => false,
+                // ⚠️ KANAL KAPALI DOĞAR (§05 · adım 1). Açılma kararı
+                // slice 4.9'da, GERÇEK MAĞAZA doğrulamasından SONRA.
+                'is_active' => false,
+            ],
+        );
     }
 
     /**

@@ -161,6 +161,17 @@ final class ChannelTypeSeederTest extends TestCase
      * Koruma yalnızca VAR OLAN satır içindir. Yaratılışta `is_active`
      * yazılmasaydı kolon varsayılanına düşerdi ve §05'in "kanal KAPALI
      * doğar" kuralı kolon varsayılanının insafına kalırdı.
+     *
+     * ⚠️ LİSTE AÇIKÇA YAZILIR ve kanal eklendikçe BÜYÜR — mutasyonla
+     * bulundu. Test yalnızca `hepsiburada`'yı kontrol ediyordu ve eBay'i
+     * `is_active = true` yapan mutasyon HAYATTA KALDI: yarım yazılmış
+     * bir kanal panelde görünür, satıcı ona bağlanmaya çalışır ve
+     * gönderdiği her ürün ölürdü.
+     *
+     * "Bugün kapalı olan her kanal kapalı kalsın" gibi TÜRETİLMİŞ bir
+     * iddia YAZILMAZ: o, seeder ne yazarsa onu doğrular ve hiçbir şey
+     * ölçmez (kendi kendini kanıtlayan test). Açık/kapalı bir KARARDIR
+     * ve testte de karar olarak durmalıdır.
      */
     #[Test]
     public function newly_seeded_channels_are_born_closed(): void
@@ -168,10 +179,18 @@ final class ChannelTypeSeederTest extends TestCase
         $this->seed(ChannelTypeSeeder::class);
 
         // §05 · adım 1 — doğrulanmamış kanal panelde GÖRÜNMEZ.
-        $this->assertFalse(
-            (bool) ChannelType::query()->where('code', 'hepsiburada')->value('is_active'),
-            'Hepsiburada kapalı doğmalıydı — uç noktaları DOĞRULANMADI.',
-        );
+        $closed = [
+            'hepsiburada' => 'uç noktaları DOĞRULANMADI',
+            'ebay' => 'slice 4.2 sürüyor; açılma kararı 4.9\'da, GERÇEK '
+                .'MAĞAZA doğrulamasından SONRA',
+        ];
+
+        foreach ($closed as $code => $reason) {
+            $this->assertFalse(
+                (bool) ChannelType::query()->where('code', $code)->value('is_active'),
+                "`{$code}` kapalı doğmalıydı — {$reason}.",
+            );
+        }
     }
 
     /**

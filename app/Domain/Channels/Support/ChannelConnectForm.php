@@ -227,6 +227,23 @@ final class ChannelConnectForm
             ],
             'identity' => [
                 [
+                    'name' => EbayAdapter::RU_NAME_KEY,
+                    'label' => 'Yönlendirme adı (RuName)',
+                    'placeholder' => 'Ad_Soyad-AppName-PRD-abc123-def456',
+                    // ⚠️ eBay'DE `redirect_uri` HAM ADRES DEĞİL BİR
+                    // TAKMA ADDIR (§13.3). Gerçek callback adresi eBay
+                    // panelinde bu adın altında saklanır; ham adres
+                    // gönderilseydi `invalid_request` alınırdı.
+                    //
+                    // Sabit yazılamaz: RuName satıcının KENDİ eBay
+                    // uygulamasına aittir ve kodda sabitlenseydi yalnızca
+                    // TEK bir geliştirici hesabı çalışırdı.
+                    'hint' => 'eBay geliştirici hesabında User Tokens → '
+                        .'Get a Token from eBay via Your Application '
+                        .'altındaki RuName değeri. Bu bir adres değil, '
+                        .'eBay\'in adres yerine kullandığı takma addır.',
+                ],
+                [
                     'name' => EbayAdapter::MARKETPLACE_ID_KEY,
                     'label' => 'Pazar yeri (marketplace)',
                     'placeholder' => 'EBAY_DE',

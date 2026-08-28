@@ -290,10 +290,16 @@ final class ChannelConnectionController extends Controller
      * yazmayı unuttuğunda P0-10'un koruduğu doğrulama SESSİZCE devre
      * dışı kalırdı.
      *
-     * ⚠️ KANAL ADI UYDURULMAZ. Bugün OAuth kullanan tek kanal Etsy'dir;
-     * ikincisi eklendiğinde bu eşleme büyür ve tanımsız kanal AÇIKÇA
-     * reddedilir — sessizce `/channels`'a dönseydi satıcı bağlantısını
-     * kurulmuş sanar ve hiç yetkilendirmezdi.
+     * ⚠️ KANAL ADI UYDURULMAZ. Eşleme kanal eklendikçe BÜYÜR ve tanımsız
+     * kanal AÇIKÇA reddedilir — sessizce `/channels`'a dönseydi satıcı
+     * bağlantısını kurulmuş sanar ve hiç yetkilendirmezdi.
+     *
+     * ⚠️ İKİ AKIŞ AYRI CONTROLLER'DADIR ve BİRLEŞTİRİLMEZ. Yüzeyde
+     * benzerler ama eBay'de PKCE YOKTUR, istemci kimliği `Authorization:
+     * Basic` başlığındadır, gövde form-encoded gider ve `client_id`
+     * kasadadır (§13.3). Ortak bir "OAuth controller"a sıkıştırılsalardı
+     * o sınıf kanal adına bakan dallarla dolar ve tam olarak bu projenin
+     * yasakladığı biçime dönerdi.
      */
     private function startOauthHandshake(
         Request $request,
@@ -302,6 +308,7 @@ final class ChannelConnectionController extends Controller
     ): Response|RedirectResponse {
         return match ($channelTypeCode) {
             'etsy' => app(EtsyOAuthController::class)->redirect($request, $connection->id),
+            'ebay' => app(EbayOAuthController::class)->redirect($request, $connection->id),
             default => throw new \LogicException(
                 "`{$channelTypeCode}` OAuth kullandığını bildiriyor ama "
                 .'yetkilendirme akışı tanımlı değil.'
