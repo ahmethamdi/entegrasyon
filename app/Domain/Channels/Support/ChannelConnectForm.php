@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Support;
 
+use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use InvalidArgumentException;
@@ -190,6 +191,96 @@ final class ChannelConnectForm
             'help' => 'Kaydettikten sonra Etsy\'nin yetkilendirme ekranına '
                 .'yönlendirileceksin. Anahtar girmene gerek yok — izni '
                 .'Etsy üzerinden vereceksin.',
+        ],
+
+        'ebay' => [
+            // ⚠️ ETSY'DEN AYRILIR: OAUTH AMA SIR DE SORULUR.
+            //
+            // Etsy'de keystring `settings`'te durur çünkü TEK BAŞINA bir
+            // kimliktir (`x-api-key` başlığı) ve sır yoktur. eBay'de
+            // `client_id` ile `client_secret` AYRILMAZ bir Basic auth
+            // ÇİFTİ oluşturur (§13.3); ikisi farklı kolonlara bölünseydi
+            // biri güncellenip öteki eski kalabilir ve token yenileme
+            // SESSİZCE kimliksiz giderdi.
+            //
+            // Bu yüzden ÇİFT KASADADIR ve `oauth` yine `true`'dur:
+            // access/refresh token'ları satıcı DEĞİL, OAuth turu yazar.
+            'secrets' => [
+                [
+                    'name' => 'client_id',
+                    'label' => 'Uygulama kimliği (App ID / Client ID)',
+                    'placeholder' => '',
+                    'hint' => 'eBay geliştirici hesabında Application Keys '
+                        .'altındaki App ID. Bu bir parola değildir ama '
+                        .'Cert ID ile birlikte tek bir kimlik çifti '
+                        .'oluşturur ve ikisi birlikte saklanır.',
+                ],
+                [
+                    'name' => 'client_secret',
+                    'label' => 'Uygulama sırrı (Cert ID / Client Secret)',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'Aynı sayfadaki Cert ID. Token yenileme bu '
+                        .'çiftle yapılır; yanlışsa bağlantı iki saat sonra '
+                        .'sessizce ölür.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => EbayAdapter::MARKETPLACE_ID_KEY,
+                    'label' => 'Pazar yeri (marketplace)',
+                    'placeholder' => 'EBAY_DE',
+                    // ⚠️ KATEGORİ AĞACI MARKETPLACE BAŞINADIR (§13.5).
+                    // Yanlış pazar yeri seçilirse ABD ağacıyla
+                    // eşleştirilen bir kategori Almanya'ya gönderilir ve
+                    // `VALIDATION` alınır — o hata KALICIDIR.
+                    'hint' => 'İlanların yayınlanacağı eBay pazarı '
+                        .'(EBAY_DE, EBAY_US, EBAY_GB…). Kategori ağacı '
+                        .'pazara göre DEĞİŞİR; yanlış pazar seçilirse '
+                        .'ürünler kalıcı doğrulama hatası alır. Birden çok '
+                        .'pazarda satıyorsan her biri için ayrı bağlantı '
+                        .'açman gerekir.',
+                ],
+                [
+                    'name' => EbayAdapter::MERCHANT_LOCATION_KEY,
+                    'label' => 'Stok konumu (merchant location key)',
+                    'placeholder' => 'WAREHOUSE-1',
+                    'hint' => 'eBay Seller Hub → Account → Business '
+                        .'policies altında tanımladığın konumun anahtarı. '
+                        .'Offer yaratmada ZORUNLUDUR.',
+                ],
+                [
+                    'name' => EbayAdapter::FULFILLMENT_POLICY_KEY,
+                    'label' => 'Kargo politikası kimliği',
+                    'placeholder' => '',
+                    // ⚠️ ÜÇLÜ EKSİKSE OFFER `VALIDATION` ALIR ve o hata
+                    // KALICIDIR — listing "düzeltilemez" damgasıyla ölür.
+                    // Bu yüzden sağlık kontrolü üçünü de ŞART KOŞAR ve
+                    // formda sorulmasalardı panelden bağlanan hiçbir
+                    // bağlantı `active` OLAMAZDI (Shopify'ın
+                    // `location_gid` hatasının aynısı).
+                    'hint' => 'Seller Hub → Account → Business policies '
+                        .'altındaki kargo politikasının kimliği. Üç '
+                        .'politika da offer yaratmada zorunludur; eksikse '
+                        .'gönderilen her ürün kalıcı hatayla ölür.',
+                ],
+                [
+                    'name' => EbayAdapter::PAYMENT_POLICY_KEY,
+                    'label' => 'Ödeme politikası kimliği',
+                    'placeholder' => '',
+                    'hint' => 'Aynı sayfadaki ödeme politikasının kimliği.',
+                ],
+                [
+                    'name' => EbayAdapter::RETURN_POLICY_KEY,
+                    'label' => 'İade politikası kimliği',
+                    'placeholder' => '',
+                    'hint' => 'Aynı sayfadaki iade politikasının kimliği.',
+                ],
+            ],
+            'oauth' => true,
+            'help' => 'Uygulama kimliğini ve sırrını girdikten sonra '
+                .'eBay\'in yetkilendirme ekranına yönlendirileceksin. '
+                .'Mağaza erişimini orada onaylayacaksın.',
         ],
     ];
 

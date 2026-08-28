@@ -82,12 +82,18 @@ final class EbayAdapter implements ChannelAdapter, SupportsTokenRefresh
      * ⚠️ HEPSİ YAPILANDIRMADIR, SIR DEĞİL — `settings` şifrelenmemiş
      * jsonb'dir ve panele Inertia prop'u olarak GİDER (§19 · madde 4:
      * KİMLİK ≠ SIR). Sır olan `client_secret` ve token'lar kasadadır.
+     *
+     * ⚠️ SABİTLER `public` — `ChannelConnectForm` onları OKUR ve yeniden
+     * YAZMAZ. Yeniden adlandırma ikisini BİRLİKTE taşır; iki yerde
+     * yazılsalardı form bir adı sorar, adapter başka bir adı arar ve
+     * bağlantı sonsuza kadar `pending` kalırdı (`ShopifyAdapter::
+     * LOCATION_KEY` kararının aynısı).
      */
-    private const MERCHANT_LOCATION_KEY = 'merchant_location_key';
+    public const MERCHANT_LOCATION_KEY = 'merchant_location_key';
 
-    private const MARKETPLACE_ID_KEY = 'marketplace_id';
+    public const MARKETPLACE_ID_KEY = 'marketplace_id';
 
-    private const SANDBOX_KEY = 'use_sandbox';
+    public const SANDBOX_KEY = 'use_sandbox';
 
     /**
      * Offer için ZORUNLU politika üçlüsü (§17).
@@ -96,10 +102,16 @@ final class EbayAdapter implements ChannelAdapter, SupportsTokenRefresh
      * "düzeltilemez" damgasıyla ölür. Bu yüzden sağlık kontrolü üçünün
      * varlığını ŞART KOŞAR ve bağlantı onlarsız `active` OLMAZ.
      */
-    private const POLICY_KEYS = [
-        'fulfillment_policy_id',
-        'payment_policy_id',
-        'return_policy_id',
+    public const FULFILLMENT_POLICY_KEY = 'fulfillment_policy_id';
+
+    public const PAYMENT_POLICY_KEY = 'payment_policy_id';
+
+    public const RETURN_POLICY_KEY = 'return_policy_id';
+
+    public const POLICY_KEYS = [
+        self::FULFILLMENT_POLICY_KEY,
+        self::PAYMENT_POLICY_KEY,
+        self::RETURN_POLICY_KEY,
     ];
 
     public function __construct(

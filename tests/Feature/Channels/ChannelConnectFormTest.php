@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Channels;
 
+use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -102,6 +103,117 @@ final class ChannelConnectFormTest extends TestCase
             [EtsyAdapter::KEYSTRING_KEY, EtsyAdapter::SHOP_ID_KEY],
             array_column(ChannelConnectForm::identityFields('etsy'), 'name'),
         );
+    }
+
+    // ────────────────────────────────────────── eBay (slice 4.2 · §13 · §17)
+
+    /**
+     * ⚠️ BU TESTİN KORUDUĞU KURAL A MADDESİNİN DERSİDİR: *"sağlık
+     * kontrolünün istediği HER kimlik alanı formda SORULMALIDIR."*
+     *
+     * Shopify'da tam olarak bu kaçırıldı: `location_gid` AYLARCA hiçbir
+     * kod yolundan yazılmıyordu, yalnızca testlerde elle tohumlanıyordu.
+     * Kanal 52/52 saat "bitmiş" sayılırken **panelden bağlanan hiçbir
+     * bağlantı `active` OLAMAZDI.**
+     *
+     * eBay'de aynı tuzak BEŞ KAT daha geniş: `EbayAdapter::healthCheck()`
+     * beş alan birden ŞART KOŞUYOR ve biri eksikse bağlantı `pending`
+     * kalır. Liste burada ELLE yazılmaz — adapter'ın sabitlerinden
+     * OKUNUR, yani yeniden adlandırma ikisini BİRLİKTE taşır.
+     */
+    #[Test]
+    public function the_ebay_form_asks_for_every_setting_the_health_check_demands(): void
+    {
+        $asked = array_column(ChannelConnectForm::identityFields('ebay'), 'name');
+
+        foreach ([
+            EbayAdapter::MARKETPLACE_ID_KEY,
+            EbayAdapter::MERCHANT_LOCATION_KEY,
+            ...EbayAdapter::POLICY_KEYS,
+        ] as $required) {
+            $this->assertContains(
+                $required,
+                $asked,
+                "Sağlık kontrolü `{$required}` istiyor ama form onu SORMUYOR — "
+                .'panelden bağlanan hiçbir eBay bağlantısı `active` olamazdı '
+                .'(Shopify `location_gid` hatasının aynısı).',
+            );
+        }
+    }
+
+    /**
+     * ⚠️ ETSY'DEN AYRILIR: eBay OAUTH AMA SIR DA SORAR.
+     *
+     * Etsy'de keystring `settings`'te durur çünkü TEK BAŞINA bir
+     * kimliktir ve sır yoktur. eBay'de `client_id` ile `client_secret`
+     * AYRILMAZ bir Basic auth ÇİFTİ oluşturur (§13.3); farklı kolonlara
+     * bölünseydi biri güncellenip öteki eski kalabilir ve token yenileme
+     * SESSİZCE kimliksiz giderdi.
+     */
+    #[Test]
+    public function ebay_asks_for_the_client_credential_pair_as_secrets(): void
+    {
+        $this->assertSame(
+            ['client_id', 'client_secret'],
+            array_column(ChannelConnectForm::secretFields('ebay'), 'name'),
+        );
+    }
+
+    /**
+     * ⚠️ TOKEN'LAR FORMDAN İSTENMEZ — OAuth turu yazar.
+     *
+     * `access_token` alanı olsaydı satıcı eBay panelinde OLMAYAN bir
+     * değeri arar, rastgele bir şey girer ve o ölü sır OAuth turuna
+     * kadar kasada dururdu.
+     */
+    #[Test]
+    public function ebay_never_asks_for_a_token(): void
+    {
+        $names = array_column(ChannelConnectForm::secretFields('ebay'), 'name');
+
+        $this->assertNotContains('access_token', $names);
+        $this->assertNotContains('refresh_token', $names);
+        $this->assertTrue(ChannelConnectForm::usesOauth('ebay'));
+    }
+
+    /**
+     * ⚠️ İSTEMCİ SIRRI `settings`'E DÜŞMEZ.
+     *
+     * `settings` ŞİFRESİZ jsonb'dir ve panele Inertia prop'u olarak
+     * GİDER (§19 · madde 4). `client_secret` oraya düşseydi tarayıcıda
+     * görünür ve kasa şifrelemesinin tüm anlamı kaybolurdu.
+     */
+    #[Test]
+    public function the_ebay_client_secret_is_never_an_identity_field(): void
+    {
+        $identity = array_column(ChannelConnectForm::identityFields('ebay'), 'name');
+
+        $this->assertNotContains('client_secret', $identity);
+        $this->assertNotContains('client_id', $identity);
+    }
+
+    /**
+     * ⚠️ HER ZORUNLU ALAN DOĞRULAMA KURALI ÜRETİR.
+     *
+     * Kural üretilmeseydi form alanı sorar ama boş gönderim kabul
+     * edilir; kasaya/`settings`'e boş değer yazılır ve bağlantı sonsuza
+     * kadar `pending` kalırdı.
+     */
+    #[Test]
+    public function every_ebay_field_produces_a_validation_rule(): void
+    {
+        $rules = ChannelConnectForm::validationRules('ebay');
+
+        foreach ([
+            'client_id',
+            'client_secret',
+            EbayAdapter::MARKETPLACE_ID_KEY,
+            EbayAdapter::MERCHANT_LOCATION_KEY,
+            ...EbayAdapter::POLICY_KEYS,
+        ] as $field) {
+            $this->assertArrayHasKey($field, $rules, "`{$field}` doğrulanmıyor.");
+            $this->assertContains('required', $rules[$field]);
+        }
     }
 
     /**
