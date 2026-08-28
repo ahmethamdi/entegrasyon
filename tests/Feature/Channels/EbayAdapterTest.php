@@ -11,6 +11,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
@@ -579,6 +580,11 @@ final class EbayAdapterTest extends TestCase
         $adapter = $this->adapter();
 
         foreach ([
+            // ⚠️ `SupportsCatalog` BU LİSTEDEN HİÇ ÇIKMAYACAK ve bu bir
+            // eksiklik DEĞİLDİR. O arayüz yayını TEK ÇAĞRI varsayar;
+            // eBay'de yayın ÜÇ ADIMDIR ve ara kimlik saklanmazsa
+            // idempotency kaybolur (§03 · Delta 1). Yerini
+            // `SupportsOfferLifecycle` aldı.
             SupportsCatalog::class,
             SupportsCatalogImport::class,
             SupportsInventory::class,
@@ -591,7 +597,7 @@ final class EbayAdapterTest extends TestCase
             $this->assertNotInstanceOf(
                 $capability,
                 $adapter,
-                "`{$capability}` ilan edilmiş ama slice 4.1'de gövdesi YOK — "
+                "`{$capability}` ilan edilmiş ama gövdesi YOK — "
                 .'panelde çalışmayan bir sekme açardı (§05).',
             );
         }
@@ -602,6 +608,13 @@ final class EbayAdapterTest extends TestCase
     public function token_refresh_is_declared(): void
     {
         $this->assertInstanceOf(SupportsTokenRefresh::class, $this->adapter());
+    }
+
+    /** Slice 4.4 — üç adımlı yayın zinciri artık UYGULANMIŞTIR. */
+    #[Test]
+    public function the_offer_lifecycle_capability_is_declared(): void
+    {
+        $this->assertInstanceOf(SupportsOfferLifecycle::class, $this->adapter());
     }
 
     // ──────────────────────────────────────────────────────── yardımcılar

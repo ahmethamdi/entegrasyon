@@ -279,13 +279,29 @@ final class ProductChannelController extends Controller
     /**
      * Bağlantı ürün göndermeyi destekliyor mu — `instanceof` ile.
      *
+     * ⚠️ İKİ ANAHTAR DA OKUNUR ve bu bir "veya" DEĞİL, İKİ AYRI YOLDUR.
+     * `catalog` TEK çağrılık yayındır (`PushListing`), `offer_lifecycle`
+     * ÜÇ ADIMLI ve ara kimlikli olandır (`PushOfferListing`, §03 · Delta
+     * 1). Hangi işin atılacağına `ContentPushDispatcher` karar verir;
+     * BURADAKİ soru yalnızca "bu kanala ürün gönderilebilir mi".
+     *
+     * ⚠️ YALNIZCA `catalog` OKUNSAYDI eBay bu ekranda HİÇ GÖRÜNMEZDİ:
+     * zincir çalışır, testler yeşil olur ve satıcı çalışan özelliği hiç
+     * göremezdi. Projede bu hata biçimi ÜÇ KEZ yaşandı (Etsy
+     * `pricing`/`orders`, Woo `catalog_import`) ve her seferinde
+     * davranış testleri yeşildi — çünkü hepsi yeteneği `instanceof` ile
+     * okuyordu, ekranı süren kimse yoktu.
+     *
      * Bozuk bir adapter sınıfı ekranı 500'e düşürmemeli; kanal listelenmez
      * ama sebep günlüğe yazılır (sessizce yutulmaz).
      */
     private function supportsCatalog(ChannelConnection $connection): bool
     {
         try {
-            return $this->registry->capabilitiesFor($connection)['catalog'] ?? false;
+            $capabilities = $this->registry->capabilitiesFor($connection);
+
+            return ($capabilities['catalog'] ?? false)
+                || ($capabilities['offer_lifecycle'] ?? false);
         } catch (Throwable $e) {
             Log::warning('products.channel_capabilities_unavailable', [
                 'connection' => $connection->id,

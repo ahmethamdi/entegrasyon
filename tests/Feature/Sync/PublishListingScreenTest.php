@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\Channels\ProgrammableCatalogAdapter;
 use Tests\Support\Channels\ProgrammableInventoryAdapter;
+use Tests\Support\Channels\ProgrammableOfferAdapter;
 use Tests\TestCase;
 
 /**
@@ -245,6 +246,54 @@ final class PublishListingScreenTest extends TestCase
             $response->viewData('page')['props']['channels'],
             'Katalog yeteneği olmayan bağlantı gönderme listesinde görünmemeli.',
         );
+    }
+
+    /**
+     * ⚠️ ÇOK ADIMLI YAYIN KANALI DA GÖNDERME LİSTESİNDE GÖRÜNÜR
+     * (§03 · Delta 1).
+     *
+     * `SupportsCatalog` ile `SupportsOfferLifecycle` AYNI SORUYU
+     * sormaz ama ikisi de "bu kanala ürün gönderilebilir" der; hangi
+     * işin atılacağına `ContentPushDispatcher` karar verir.
+     *
+     * ⚠️ EKRAN YALNIZCA `catalog` OKUSAYDI eBay BU LİSTEDE HİÇ
+     * GÖRÜNMEZDİ: zincir çalışır, adapter testleri yeşil kalır ve
+     * satıcı çalışan özelliği HİÇ göremezdi. Projede bu hata biçimi
+     * ÜÇ KEZ yaşandı (Etsy `pricing`/`orders`, Woo `catalog_import`)
+     * ve her seferinde davranış testleri yeşildi — çünkü hepsi
+     * yeteneği `instanceof` ile okuyordu, EKRANI SÜREN kimse yoktu.
+     *
+     * MUTASYONLA BULUNDU: gate'ten `offer_lifecycle` okumasını silen
+     * mutasyon, bu test yazılmadan önce HAYATTA KALMIŞTI.
+     *
+     * ⚠️ KANAL ADI SORULMAZ — sahte adapter `SupportsOfferLifecycle`
+     * uygular ve `SupportsCatalog` UYGULAMAZ; iddia yeteneğe bağlıdır,
+     * eBay'e değil.
+     */
+    #[Test]
+    public function connection_with_only_the_offer_lifecycle_capability_is_offered(): void
+    {
+        [$tenant, $user, $product] = $this->makeContext();
+
+        $connection = $this->connection(
+            $tenant,
+            'coadimli',
+            label: 'Çok Adımlı Mağaza',
+            adapter: ProgrammableOfferAdapter::class,
+        );
+
+        $channels = $this->actingAs($user)
+            ->get("/products/{$product->id}/channels")
+            ->viewData('page')['props']['channels'];
+
+        $this->assertCount(
+            1,
+            $channels,
+            'Çok adımlı yayın kanalı gönderme listesinde GÖRÜNMEDİ — satıcı '
+            .'çalışan zinciri panelden hiç kullanamazdı (§05).',
+        );
+
+        $this->assertSame($connection->id, $channels[0]['connectionId']);
     }
 
     /**

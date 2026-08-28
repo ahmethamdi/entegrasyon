@@ -353,7 +353,21 @@ class ChannelTypeSeeder extends Seeder
                     // `ChannelTypeSeederTest` ikisini `instanceof` ile
                     // karşılaştırır — YENİ SLICE YETENEK AÇTIĞINDA BU
                     // SATIRLAR DA GÜNCELLENİR.
-                    'catalog' => false,          // slice 4.3–4.4
+                    // ⚠️ `catalog` KALICI OLARAK `false` ve bu bir
+                    // eksiklik DEĞİLDİR. `SupportsCatalog` yayını TEK
+                    // ÇAĞRI varsayar; eBay'de yayın ÜÇ ADIMDIR ve o
+                    // arayüz HİÇ UYGULANMAYACAK (§03 · Delta 1).
+                    // `true` yazılsaydı `ChannelTypeSeederTest`
+                    // KIRILIRDI — bayrak⇄arayüz eşleşmesi o testin
+                    // koruduğu tek şeydir.
+                    'catalog' => false,
+                    // ⚠️ ÜRÜN GÖNDERME YETENEĞİ BU ANAHTARDAN GÖRÜNÜR
+                    // (slice 4.4 ✓). Açılmasaydı zincir çalışır ama
+                    // `ProductChannelController` eBay'i ELER ve satıcı
+                    // çalışan özelliği panelde HİÇ GÖREMEZDİ — Etsy
+                    // `pricing`/`orders` ve Woo `catalog_import`
+                    // hatasının aynısı.
+                    'offer_lifecycle' => true,
                     'catalog_import' => false,   // kapsam DIŞI
                     'inventory' => false,        // slice 4.6
                     'pricing' => false,          // slice 4.6

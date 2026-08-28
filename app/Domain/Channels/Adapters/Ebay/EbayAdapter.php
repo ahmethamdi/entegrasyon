@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Ebay;
 
+use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
+use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\ListingPayload;
 use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -27,14 +31,24 @@ use Throwable;
  * V3.0 · §13 · §20 · §21 · v2.2 §7.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 4.1
+ * KAPSAM — SLICE 4.1 + 4.4
  * ─────────────────────────────────────────────────────────────────────
- * Yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata sınıflandırma,
- * hız sınırı profili ve **token yenileme** (`SupportsTokenRefresh`).
+ * 4.1'de yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata
+ * sınıflandırma, hız sınırı profili ve **token yenileme**
+ * (`SupportsTokenRefresh`).
  *
- * HENÜZ YAZILMAYANLAR ve slice'ları: `SupportsOfferLifecycle` (4.3–4.4),
- * `SupportsTaxonomy` (4.5), `SupportsInventory` + `SupportsPricing`
- * (4.6), `SupportsOrders` (4.7), `SupportsFulfillment` (4.8).
+ * 4.4'te yazılan: **üç adımlı yayın zinciri** (`SupportsOfferLifecycle`)
+ * — `upsertInventoryItem` → `upsertOffer` → `publishOffer`, artı
+ * `withdrawOffer`. Gövde dönüşümü `EbayProductMapper`'dadır.
+ *
+ * HENÜZ YAZILMAYANLAR ve slice'ları: `SupportsTaxonomy` (4.5),
+ * `SupportsInventory` + `SupportsPricing` (4.6), `SupportsOrders` (4.7),
+ * `SupportsFulfillment` (4.8).
+ *
+ * ⚠️ `SupportsCatalog` HİÇ UYGULANMAYACAK ve bu bir eksiklik DEĞİLDİR.
+ * O arayüz yayını TEK ÇAĞRI varsayar; eBay'de yayın ÜÇ ADIMDIR ve ara
+ * kimlik saklanmazsa idempotency kaybolur (§13.2 · Delta 1'in varlık
+ * sebebi). Panel yeteneği `offer_lifecycle` anahtarından okur.
  *
  * ⚠️ YETENEK ARAYÜZÜ YAZILMADAN İLAN EDİLMEZ (§05). Uygulanmamış bir
  * arayüz panelde ÇALIŞMAYAN bir sekme açar; `EbayAdapterTest` bunu
@@ -69,7 +83,7 @@ use Throwable;
  * okur; `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
  * GELMEZDİ.
  */
-final class EbayAdapter implements ChannelAdapter, SupportsTokenRefresh
+final class EbayAdapter implements ChannelAdapter, SupportsOfferLifecycle, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -346,6 +360,238 @@ final class EbayAdapter implements ChannelAdapter, SupportsTokenRefresh
         return 'unknown';
     }
 
+    // ------------------------------------------------ §13.1 · yayın zinciri
+
+    /**
+     * ① SKU'yu envantere yazar — İDEMPOTENT (`PUT`), kimlik DÖNMEZ.
+     *
+     * V3.0 · §13.1 · slice 4.4.
+     *
+     * ⚠️ UZAK KİMLİK YOKTUR — kimlik SKU'NUN KENDİSİDİR. Bu yüzden
+     * `AdapterResult` BOŞ veriyle döner ve `PushOfferListing::persist()`
+     * satıra HİÇ dokunmaz (koşulsuz `save()` her turda gereksiz bir
+     * UPDATE atardı).
+     *
+     * ⚠️ MEVCUT MİKTAR ÖNCE OKUNUR ve GÖVDEYE GERİ YAZILIR — Etsy'nin
+     * "oku-birleştir-yaz" kuralının eBay karşılığı. eBay'in PUT'u TAM
+     * DEĞİŞTİRME yapar: `availability` bloğu gönderilmezse kanaldaki
+     * miktar SIFIRLANIR ve ürün SATIŞA KAPANIR — bir İÇERİK turu
+     * sessizce bir STOK sıfırlaması yapardı (§9'un "sessizce ezmek EN
+     * SIK ŞİKAYET" kuralının en ağır biçimi).
+     *
+     * ⚠️ OKUMA 404 DÖNERSE İSTİSNA FIRLATILMAZ — "kalem henüz yok"
+     * demektir ve zincirin ilk turunda bu NORMALDİR. Fırlatılsaydı hiçbir
+     * ürün ilk kez yayınlanamazdı. Korunacak bir miktar da yoktur ve blok
+     * yazılmaz (0 YAZILMAZ — sınıf notu).
+     *
+     * ⚠️ OKUMA BAŞKA BİR HATA VERİRSE YAZMA HAKKI DA YOKTUR (Etsy'deki
+     * kuralın aynısı): 500 alınmışken miktar "bilinmiyor" sayılıp blok
+     * atılsaydı, kanalda 40 adet duran ürün bir içerik turuyla sıfıra
+     * düşerdi. İstisna yükselir ve `PushOfferListing` onu sınıflandırır.
+     */
+    public function upsertInventoryItem(Listing $listing, ListingPayload $payload): AdapterResult
+    {
+        $sku = $this->skuOf($listing);
+        $this->loadVariant($payload->listing);
+
+        $body = EbayProductMapper::toInventoryItemBody(
+            $payload,
+            knownQuantity: $this->currentInventoryQuantity($sku),
+        );
+
+        $this->client->put(
+            EbayEndpoints::url(
+                EbayEndpoints::INVENTORY_ITEM,
+                ['sku' => $sku],
+                sandbox: $this->useSandbox(),
+            ),
+            $body,
+            headers: $this->contentLanguageHeader(),
+        )->throw();
+
+        // Kimlik YOK — satıra yazılacak bir şey de yok.
+        return AdapterResult::success();
+    }
+
+    /**
+     * ② Offer yaratır veya günceller; `offer_id` DÖNER.
+     *
+     * V3.0 · §13.1 · §13.2 · slice 4.4.
+     *
+     * ⚠️ DÖNEN KİMLİK ZİNCİRİN KURTARMA ÇIPASIDIR ve `channel_metadata`
+     * içinde YAŞAR. Yazılmazsa sonraki tur `POST /offer`'ı İKİNCİ KEZ
+     * çağırır, eBay `25002` (duplicate offer) döner ve o hata KALICIDIR
+     * — listing "düzeltilemez" damgasıyla ölür (§13.2).
+     *
+     * ⚠️ KİMLİK `channel_metadata`'DAN OKUNUR, `external_id`'DEN DEĞİL.
+     * `external_id` = `listing_id`'dir ve offer'ı adreslemez; onunla
+     * `PUT /offer/{id}` çağrılsaydı istek var olmayan bir kaynağa gider
+     * ve 404 alınırdı (§13.1 · "ikisi FARKLI kimliklerdir").
+     *
+     * ⚠️ GÜNCELLEMEDE `sku` GÖVDEDE KALIR ve bu ZARARSIZ DEĞİL
+     * ZORUNLUDUR: eBay'in `PUT /offer` gövdesi de tam değiştirme yapar ve
+     * alan düşürülseydi offer envanter kalemiyle bağını kaybederdi.
+     *
+     * ⚠️ YARATMADA DÖNEN GÖVDE `offerId` TAŞIMIYORSA İSTİSNA FIRLATILIR.
+     * Sessizce boş dönülseydi `PushOfferListing` üçüncü adıma geçer,
+     * `publishOffer` kimliksiz kalır ve satır "yayınlandı" görünürken
+     * kanalda hiçbir şey olmazdı.
+     */
+    public function upsertOffer(Listing $listing, ListingPayload $payload): AdapterResult
+    {
+        $this->loadVariant($payload->listing);
+
+        $body = EbayProductMapper::toOfferBody($payload, $this->connection);
+        $existingOfferId = $this->offerIdOf($listing);
+
+        if ($existingOfferId !== null) {
+            $this->client->put(
+                EbayEndpoints::url(
+                    EbayEndpoints::OFFER_ITEM,
+                    ['offerId' => $existingOfferId],
+                    sandbox: $this->useSandbox(),
+                ),
+                $body,
+                headers: $this->contentLanguageHeader(),
+            )->throw();
+
+            // Kimlik DEĞİŞMEDİ ama yine de döndürülür: `persist()`
+            // birleştirme yapar ve satırda zaten duran değeri yeniden
+            // yazmak zararsızdır. Döndürülmeseydi metadata'sı elle
+            // silinmiş bir satır bir daha ASLA kurtarılamazdı.
+            return AdapterResult::success([
+                'channel_metadata' => ['offer_id' => $existingOfferId],
+            ]);
+        }
+
+        $response = $this->client->post(
+            EbayEndpoints::url(EbayEndpoints::OFFER, sandbox: $this->useSandbox()),
+            $body,
+            headers: $this->contentLanguageHeader(),
+        );
+
+        $response->throw();
+
+        $offerId = $response->json('offerId');
+
+        if (! is_string($offerId) && ! is_int($offerId)) {
+            throw new RuntimeException(
+                'eBay offer yanıtı `offerId` taşımıyor — kurtarma çıpası '
+                .'yazılamaz ve sonraki tur `25002` duplicate alırdı.'
+            );
+        }
+
+        $offerId = (string) $offerId;
+
+        if ($offerId === '') {
+            throw new RuntimeException('eBay offer yanıtındaki `offerId` boş.');
+        }
+
+        return AdapterResult::success([
+            'channel_metadata' => ['offer_id' => $offerId],
+        ]);
+    }
+
+    /**
+     * ③ Offer'ı yayına alır; `listing_id` DÖNER → `external_id`.
+     *
+     * V3.0 · §13.1 · slice 4.4.
+     *
+     * ⚠️ `offer_id` YOKSA İSTEK HİÇ ATILMAZ. Yer tutucu doldurulmadan
+     * çağrılsaydı `EbayEndpoints::url()` zaten istisna fırlatırdı, ama
+     * mesaj "doldurulmamış yer tutucu" derdi; buradaki kontrol sebebi
+     * ADIYLA söyler — zincirin ikinci adımı hiç koşmamıştır.
+     *
+     * ⚠️ DÖNEN `listingId` `external_id` OLUR, `offer_id` DEĞİL.
+     * `external_id` satıcının kanalda GÖRDÜĞÜ ilandır; panel onu link
+     * olarak gösterir ve mutabakat onunla sorgular (§13.1).
+     */
+    public function publishOffer(Listing $listing): AdapterResult
+    {
+        $offerId = $this->offerIdOf($listing);
+
+        if ($offerId === null) {
+            throw new RuntimeException(
+                'eBay offer kimliği yok — yayın adımı çağrılamaz. Zincirin '
+                .'ikinci adımı (`upsertOffer`) hiç koşmamış demektir.'
+            );
+        }
+
+        $response = $this->client->post(
+            EbayEndpoints::url(
+                EbayEndpoints::OFFER_PUBLISH,
+                ['offerId' => $offerId],
+                sandbox: $this->useSandbox(),
+            ),
+            body: [],
+            headers: $this->contentLanguageHeader(),
+        );
+
+        $response->throw();
+
+        $listingId = $response->json('listingId');
+
+        if (! is_string($listingId) && ! is_int($listingId)) {
+            throw new RuntimeException(
+                'eBay yayın yanıtı `listingId` taşımıyor — satır kimliksiz '
+                .'kalır ve mutabakat onu sorgulayamazdı.'
+            );
+        }
+
+        $listingId = (string) $listingId;
+
+        if ($listingId === '') {
+            throw new RuntimeException('eBay yayın yanıtındaki `listingId` boş.');
+        }
+
+        return AdapterResult::success([
+            'external_id' => $listingId,
+            // Satıcının panelde tıklayacağı adres. Yayınlanan ilan
+            // HERKESE AÇIKTIR ve storefront adresi doğru olandır
+            // (Shopify'da admin adresi seçilmişti çünkü orada satıcı
+            // ürünü DÜZENLEMEK için tıklar; burada ilan zaten canlıdır).
+            'external_url' => 'https://www.ebay.com/itm/'.rawurlencode($listingId),
+        ]);
+    }
+
+    /**
+     * Yayından kaldırır — SİLMEZ (v2.2 · `delist` kuralı).
+     *
+     * ⚠️ `DELETE /offer/{id}` KULLANILMAZ ve bu kural İKİ katmanlıdır:
+     * silme geri alınamaz, `offer_id`'yi de götürür ve o kimlik
+     * kaybedilirse listing'e bir daha stok gönderilemez — yeniden
+     * yaratmak `25002` verir. Ayrıca silme kanaldaki satış geçmişini ve
+     * sıralamayı da götürür (Etsy'de favorileri götürmesiyle aynı).
+     *
+     * ⚠️ `offer_id` YOKSA ÇAĞRI ATILMAZ ve BU BİR HATA DEĞİLDİR: hiç
+     * yayınlanmamış bir satırı yayından kaldırmak zaten NO-OP'tur.
+     * İstisna fırlatılsaydı taslak bir listing'i delist etmek kalıcı
+     * hataya düşerdi.
+     *
+     * ⚠️ `offer_id` SİLİNMEZ ve `AdapterResult` onu KORUR. Metadata'dan
+     * düşürülseydi satıcı ürünü yeniden yayına aldığında zincir baştan
+     * başlar ve `25002` alırdı.
+     */
+    public function withdrawOffer(Listing $listing): AdapterResult
+    {
+        $offerId = $this->offerIdOf($listing);
+
+        if ($offerId === null) {
+            return AdapterResult::success();
+        }
+
+        $this->client->post(
+            EbayEndpoints::url(
+                EbayEndpoints::OFFER_WITHDRAW,
+                ['offerId' => $offerId],
+                sandbox: $this->useSandbox(),
+            ),
+            body: [],
+        )->throw();
+
+        return AdapterResult::success();
+    }
+
     // ------------------------------------------------------- token yenileme
 
     /**
@@ -577,6 +823,141 @@ final class EbayAdapter implements ChannelAdapter, SupportsTokenRefresh
         return TenantContext::runAsSystem(
             fn (): array => app(CredentialVault::class)->read($this->connection)
         );
+    }
+
+    /**
+     * Listing'in SKU'su — zincirin İLK adımının adresidir.
+     *
+     * ⚠️ VARYANT YOKSA İSTEK HİÇ ATILMAZ. Boş SKU ile giden PUT literal
+     * `/inventory_item/` adresine gider ve 404 alınır; sebebi hiçbir
+     * yerde görünmezdi (`EbayEndpoints`'in "doldurulmamış yer tutucu"
+     * kuralıyla aynı gerekçe).
+     */
+    private function skuOf(Listing $listing): string
+    {
+        $this->loadVariant($listing);
+
+        $sku = $listing->variant?->sku;
+
+        if (! is_string($sku) || $sku === '') {
+            throw new RuntimeException(
+                "Listing {$listing->id} için SKU yok — eBay envanter kalemi "
+                .'SKU ile adreslenir ve istek adressiz gidemez.'
+            );
+        }
+
+        return $sku;
+    }
+
+    /**
+     * Varyant ilişkisini SİSTEM BAĞLAMINDA yükler.
+     *
+     * ⚠️ ADAPTER İKİ FARKLI BAĞLAMDAN ÇAĞRILIR. Kuyruk işi kendi kiracı
+     * bağlamını kurar ama mutabakat taraması `runAsSystem()` altında
+     * koşar ve bağlam YOKTUR; sarılmasaydı o turda
+     * `MissingTenantContextException` fırlar ve yayın zinciri mutabakat
+     * yolunda ÇÖKERDİ (slice 1.5'te aynı tuzak yaşanmıştı, `97a7eb7`).
+     *
+     * ⚠️ YÜKLEME ADAPTER SINIRINDA YAPILIR, MAPPER'DA DEĞİL. Mapper SAF
+     * kalmalıdır (`EtsyAuth`/`CsvProductParser` kalıbı): bağlama,
+     * kasaya, ağa dokunmaz ve veritabanı kurmadan sınanabilir. İçeride
+     * `runAsSystem()` çağırsaydı o saflık kaybolur ve aynı sarmalayıcı
+     * her mapper metodunda tekrarlanırdı.
+     *
+     * Ham sorgu KULLANILMAZ: `DB::table()` kiracı filtresini ELLE
+     * yazdırır ve o filtre projede BEŞ KEZ unutuldu. Buradaki listing
+     * zaten elimizdedir ve kiracısını kendisi taşır.
+     */
+    private function loadVariant(Listing $listing): void
+    {
+        TenantContext::runAsSystem(static fn () => $listing->loadMissing('variant'));
+    }
+
+    /**
+     * `channel_metadata->>'offer_id'` — zincirin KURTARMA ÇIPASI (§13.2).
+     *
+     * ⚠️ `external_id` İLE KARIŞTIRILMAZ: o `listing_id`'dir ve offer'ı
+     * ADRESLEMEZ. Onunla `PUT /offer/{id}` çağrılsaydı istek var olmayan
+     * bir kaynağa gider ve 404 alınırdı (§13.1).
+     */
+    private function offerIdOf(Listing $listing): ?string
+    {
+        $metadata = $listing->channel_metadata;
+
+        if (! is_array($metadata)) {
+            return null;
+        }
+
+        $offerId = $metadata['offer_id'] ?? null;
+
+        if (is_int($offerId)) {
+            return (string) $offerId;
+        }
+
+        return is_string($offerId) && $offerId !== '' ? $offerId : null;
+    }
+
+    /**
+     * Kanaldaki MEVCUT miktar — "oku-birleştir-yaz"ın okuma adımı.
+     *
+     * ⚠️ eBay'İN `PUT /inventory_item` TAM DEĞİŞTİRME YAPAR ve
+     * `availability` bloğu gönderilmezse kanaldaki miktar SIFIRLANIR.
+     * Bir İÇERİK turu sessizce bir STOK sıfırlaması yapardı ve ürün
+     * satışa kapanırdı (Etsy'nin envanter PUT'uyla AYNI tuzak, §11.3).
+     *
+     * ⚠️ 404 "KALEM HENÜZ YOK" DEMEKTİR ve NORMALDİR — zincirin ilk
+     * turunda her ürün için gelir. İstisna fırlatılsaydı hiçbir ürün ilk
+     * kez yayınlanamazdı. Korunacak miktar da yoktur; `null` döner ve
+     * çağıran bloğu HİÇ yazmaz (0 YAZILMAZ — 0 satışa kapatırdı).
+     *
+     * ⚠️ DİĞER HATALARDA İSTİSNA YÜKSELİR: okuma başarısızsa yazma hakkı
+     * da yoktur (Etsy'deki kuralın aynısı). 500 alınmışken miktar
+     * "bilinmiyor" sayılsaydı, kanalda 40 adet duran ürün bir içerik
+     * turuyla sıfıra düşerdi.
+     */
+    private function currentInventoryQuantity(string $sku): ?int
+    {
+        $response = $this->client->get(
+            EbayEndpoints::url(
+                EbayEndpoints::INVENTORY_ITEM,
+                ['sku' => $sku],
+                sandbox: $this->useSandbox(),
+            ),
+        );
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        $quantity = $response->json('availability.shipToLocationAvailability.quantity');
+
+        return is_int($quantity) || (is_string($quantity) && ctype_digit($quantity))
+            ? (int) $quantity
+            : null;
+    }
+
+    /**
+     * eBay'in ZORUNLU dil başlığı — envanter ve offer yazmada.
+     *
+     * ⚠️ EKSİKSE İSTEK `VALIDATION` ALIR ve o hata KALICIDIR. Bu,
+     * Hepsiburada'nın "`User-Agent` kimlik doğrulamanın parçasıdır"
+     * kuralının eBay karşılığıdır: gövde ve kimlik DOĞRUYKEN istek yine
+     * reddedilir ve sebep "başlık" olarak hiçbir yerde görünmez.
+     *
+     * ⚠️ DEĞER MARKETPLACE'TEN TÜRETİLİR, SABİT YAZILMAZ. `en-US`
+     * sabitlenseydi `EBAY_DE`'ye gönderilen her ilan yanlış dil
+     * etiketiyle giderdi.
+     */
+    private function contentLanguageHeader(): array
+    {
+        $settings = $this->connection->settings;
+        $marketplace = is_array($settings)
+            ? (string) ($settings[self::MARKETPLACE_ID_KEY] ?? '')
+            : '';
+
+        return ['Content-Language' => EbayMarketplace::contentLanguageFor($marketplace)];
     }
 
     /**

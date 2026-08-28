@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
@@ -100,6 +101,22 @@ final class AdapterRegistry
             // destekleyebilir. Tek anahtara bağlansaydı panel, içe aktarmayı
             // desteklemeyen kanalda da düğmeyi gösterirdi.
             'catalog_import' => $adapter instanceof SupportsCatalogImport,
+            // ⚠️ `catalog`'tan AYRI ANAHTAR — ikisi AYNI SORUYU sormaz.
+            //
+            // İkisi de "ürün gönderilebilir mi" der ama YOLU farklıdır:
+            // `catalog` TEK çağrılık yayındır (`PushListing`),
+            // `offer_lifecycle` ÜÇ ADIMLI ve ARA KİMLİKLİ olandır
+            // (`PushOfferListing`) — §03 · Delta 1. `catalog`'a
+            // bağlansaydı `ChannelTypeSeederTest`'in
+            // bayrak⇄arayüz karşılaştırması KIRILIRDI: eBay
+            // `SupportsCatalog` UYGULAMAZ ve o testin koruduğu tek şey
+            // tam olarak bu eşleşmedir.
+            //
+            // Ayrı anahtar OLMASAYDI ters yön yaşanırdı ve o daha
+            // sinsidir: arayüz VAR, bayrak `false` → satıcı çalışan
+            // özelliği HİÇ GÖREMEZ. Projede ÜÇ KEZ oldu (Etsy
+            // `pricing`/`orders`, Woo `catalog_import`).
+            'offer_lifecycle' => $adapter instanceof SupportsOfferLifecycle,
             'inventory' => $adapter instanceof SupportsInventory,
             'pricing' => $adapter instanceof SupportsPricing,
             'orders' => $adapter instanceof SupportsOrders,

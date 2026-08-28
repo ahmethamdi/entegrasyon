@@ -9,6 +9,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
@@ -73,6 +74,12 @@ final class ChannelTypeSeederTest extends TestCase
         $interfaces = [
             'catalog' => SupportsCatalog::class,
             'catalog_import' => SupportsCatalogImport::class,
+            // ⚠️ `catalog`'TAN AYRI ANAHTAR (§03 · Delta 1). eBay
+            // `SupportsCatalog` UYGULAMAZ — yayını TEK ÇAĞRI varsayan o
+            // arayüz üç adımlı zinciri taşıyamaz. `catalog` bayrağı
+            // açılsaydı bu test KIRILIRDI; anahtar açılmasaydı satıcı
+            // çalışan zinciri panelde HİÇ GÖREMEZDİ.
+            'offer_lifecycle' => SupportsOfferLifecycle::class,
             'inventory' => SupportsInventory::class,
             'pricing' => SupportsPricing::class,
             'orders' => SupportsOrders::class,
