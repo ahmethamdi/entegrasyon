@@ -8,9 +8,9 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
-use App\Domain\Sync\Jobs\PushListing;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
+use App\Domain\Sync\Support\ContentPushDispatcher;
 use App\Domain\Sync\Support\PrerequisiteGate;
 use App\Domain\Sync\Support\PrerequisiteResult;
 use Illuminate\Support\Facades\DB;
@@ -55,6 +55,7 @@ final class PublishListing
     public function __construct(
         private readonly OpenSyncOperation $openSyncOperation,
         private readonly PrerequisiteGate $gate,
+        private readonly ContentPushDispatcher $dispatcher,
     ) {}
 
     /**
@@ -109,8 +110,14 @@ final class PublishListing
         // İşler transaction KAPANDIKTAN sonra atılır.
         // Kiracı kimliği yükte taşınır: worker'da bağlam YOKTUR ve işin
         // kendisi kurmak zorundadır (§11 · P0).
+        //
+        // ⚠️ HANGİ İŞ ATILACAĞI BURADA KARARLAŞMAZ. Çok adımlı yayın
+        // kullanan kanal (§03 · Delta 1) farklı bir iş ister ve o karar
+        // `ContentPushDispatcher` içinde TEK KAYNAKTIR — kopyalansaydı
+        // yeniden deneme yolu ile bu yol ayrışır ve eBay listing'i
+        // `/failures` ekranından denendiğinde sessizce ATLANIRDI.
         foreach ($pending as $operationId) {
-            PushListing::dispatch($operationId, $tenantId)->onQueue('listing:default');
+            $this->dispatcher->dispatch($operationId, $tenantId, $connection);
         }
 
         return $pending;

@@ -9,9 +9,9 @@ use App\Domain\Sync\Actions\OpenSyncOperation;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Jobs\PushInventory;
-use App\Domain\Sync\Jobs\PushListing;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\ContentPushDispatcher;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -42,6 +42,7 @@ final class ListingResyncRequestedConsumer
 {
     public function __construct(
         private readonly OpenSyncOperation $openSyncOperation,
+        private readonly ContentPushDispatcher $contentDispatcher,
     ) {}
 
     public function handle(OutboxEvent $event): void
@@ -101,8 +102,17 @@ final class ListingResyncRequestedConsumer
     private function dispatchFor(SyncOperation $operation, SyncDomain $domain, string $tenantId): void
     {
         match ($domain) {
-            SyncDomain::CONTENT => PushListing::dispatch($operation->id, $tenantId)
-                ->onQueue('listing:default'),
+            // ⚠️ İÇERİK İŞİ DOĞRUDAN SEÇİLMEZ. Çok adımlı yayın kullanan
+            // kanal (§03 · Delta 1) farklı bir iş ister; `PushListing`
+            // sabit yazılsaydı eBay listing'i `/failures` ekranından
+            // yeniden denendiğinde o iş `SupportsCatalog` bulamaz,
+            // operasyonu `channel_lacks_catalog_capability` diye ATLAR
+            // ve satır "denendi" görünürken kanala HİÇ gitmezdi.
+            SyncDomain::CONTENT => $this->contentDispatcher->dispatch(
+                $operation->id,
+                $tenantId,
+                $operation->connection,
+            ),
 
             SyncDomain::INVENTORY => PushInventory::dispatch($operation->id, $tenantId)
                 ->onQueue('inventory:high'),

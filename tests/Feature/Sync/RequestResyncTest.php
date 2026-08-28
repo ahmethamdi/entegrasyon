@@ -6,6 +6,7 @@ namespace Tests\Feature\Sync;
 
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Actions\CreateTenant;
@@ -497,7 +498,13 @@ final class RequestResyncTest extends TestCase
                 [
                     'name' => 'WooCommerce',
                     'kind' => 'storefront',
-                    'adapter_class' => 'App\\Domain\\Channels\\Adapters\\WooCommerceAdapter',
+                    // ⚠️ TAM SINIF ADI — `Adapters\WooCommerce\...` (klasör
+                    // adı namespace'in PARÇASIDIR). Eksik yazılmıştı ve
+                    // uzun süre görünmedi çünkü resync yolu içerik işini
+                    // SABİT seçiyordu ve registry hiç çağrılmıyordu;
+                    // `ContentPushDispatcher` yeteneği okumak için onu
+                    // çağırınca sahte ad hemen patladı.
+                    'adapter_class' => WooCommerceAdapter::class,
                     'is_active' => true,
                 ],
             ));
