@@ -583,6 +583,55 @@ YAZILMIYOR.
   birini seçer. **İddia DEĞER SAYISINA bakmalıdır**; tam değere veya
   anahtar sayısına bakan iki ayrı test de mutasyonu KAÇIRDI.
 
+### Slice 4.2 — OAuth akışı + seeder (`fbf2c51`)
+
+- **eBay OAUTH CONTROLLER'I ETSY'NİNKİNDEN KOPYALANAMAZ.** İskelet aynı
+  (iki adım, `web` grubu, `state` P0-10) ama DÖRT noktada ayrışır: PKCE
+  yok (oturumda `code_verifier` TUTULMAZ) · istemci kimliği `Basic`
+  BAŞLIKTA · gövde form-encoded · `client_id` KASADA. **İki akış AYRI
+  controller'da ve BİRLEŞTİRİLMEZ** — ortak bir "OAuth controller" kanal
+  adına bakan dallarla dolardı.
+- **`RuName` SABİT YAZILAMAZ ve SAĞLIK KONTROLÜNE KONMAZ.** eBay'de
+  `redirect_uri` ham adres değil TAKMA ADDIR (§13.3) ve satıcının KENDİ
+  uygulamasına aittir; sabitlenseydi yalnızca TEK geliştirici hesabı
+  çalışırdı. Sağlık kontrolüne konsaydı zaten yetkilendirilmiş bir
+  bağlantı, API çağrılarında HİÇ kullanılmayan bir alan yüzünden
+  SAĞLIKSIZ görünürdü.
+- **REFRESH TOKEN GELMEZSE HİÇBİR ŞEY YAZILMAZ.** eBay ilk takasta onu
+  DAİMA döner; sessizce kabul edilseydi bağlantı iki saat sonra ölürdü.
+  İstemci çifti de kasaya yazılır — yoksa yenileme kimliksiz kalır.
+- **"KANAL KAPALI DOĞAR" TESTİ KANAL LİSTESİ TAŞIR ve BÜYÜR.**
+  Yalnızca `hepsiburada`'yı kontrol ediyordu ve eBay'i açan mutasyon
+  HAYATTA KALDI. **Türetilmiş bir iddia ("bugün kapalı olan kapalı
+  kalsın") YAZILMAZ** — o, seeder ne yazarsa onu doğrular ve hiçbir şey
+  ölçmez; açık/kapalı bir KARARDIR ve testte de karar olarak durur.
+
+### Slice 4.3 — `SupportsOfferLifecycle` + `PushOfferListing` (`a6fd048`)
+
+- **ÇOK ADIMLI YAYINDA HER ADIM KENDİ SONUCUNU HEMEN YAZAR.** Bu,
+  "kimlik BAŞARIDAN SONRA yazılır" kuralının ÇOK ADIMLI biçimidir:
+  `PushListing`'de tek başarı anı vardır, burada ÜÇ vardır ve
+  ikincisinin çıktısı üçüncüsünün ÖN KOŞULUDUR. Yazım sona
+  bırakılsaydı zincirin ortasında düşen tur hiçbir iz bırakmazdı.
+- **ÇIPA ARTIK KANALIN VERDİĞİ ARA KİMLİKTİR.** Projede idempotency
+  çıpası hep BİZİM tarafımızdaydı (`MovementKey`, `external_event_id`);
+  eBay'de `offer_id` saklanmazsa idempotency KAYBOLUR.
+- **"HANGİ İÇERİK İŞİ ATILIR" TEK KAYNAKTIR** (`ContentPushDispatcher`).
+  İçerik işi İKİ yerden atılır (`PublishListing` + resync tüketicisi);
+  kopyalansaydı biri eski kalır ve eBay listing'i `/failures`'tan
+  denendiğinde `PushListing`'e düşer, o iş `SupportsCatalog`
+  bulamayınca ATLAR ve satır "denendi" görünürken kanala HİÇ gitmez.
+- **ATLAMA `COMPLETED` YAZAR — `SyncOperationStatus::SKIPPED` YOKTUR.**
+  Yeteneksiz kanalı sınayan testte duruma bakan iddia AYIRT EDİCİ
+  DEĞİLDİR; ayırt edici işaret **DENEME SAYISIDIR** (atlama deneme
+  AÇMAZ, hata açar). Kapıyı kaldıran mutasyon bu yüzden hayatta kaldı:
+  kapı olmadan `TypeError` fırlıyor, `catch (Throwable)` yakalıyor ve
+  operasyon hata yoluna giriyor — sürüm yine ilerlemiyor.
+- **TEK YAZIM VARKEN "BİRLEŞTİRME" İLE "EZME" AYNI SONUCU VERİR.**
+  Metadata ezme mutasyonu hayatta kaldı çünkü hiçbir test satıra
+  ÖNCEDEN metadata koymuyordu. Birleştirme sınanacaksa satır DOLU
+  başlamalıdır.
+
 ### Slice 4.1'de öğrenilen test kuralları
 
 - **SINIR TESTİ TEK YÖNDEN SÜRÜLÜRSE ÖTEKİ YÖN ÖLÇÜLMEMİŞ OLUR.**
@@ -2417,20 +2466,23 @@ kurallar aşağıda "Token ve kota metrikleri kuralları" başlığında.
 **YENİDEN AÇMA.**
 
 **SIRADAKİ İŞ — FAZ 4 · eBay SÜRÜYOR** (28 Ağustos, kullanıcı kararı).
-**Slice 4.1 KAPANDI (8/64 sa · `89bb53c`)**; sıradaki **slice 4.2 —
-bağlantı + politika/konum seçimi (6 sa)**. Kalan slice'lar: 4.3
-`SupportsOfferLifecycle` + `PushOfferListing` (10) · 4.4 üç adımlı
-yayın zinciri (12) · 4.5 taksonomi (8) · 4.6 stok+fiyat (8) · 4.7
-sipariş yoklama (6) · 4.8 iade+kargo (4) · 4.9 mutabakat + kanalı
-AÇMA (2).
+**Slice 4.1 + 4.2 + 4.3 KAPANDI (24/64 sa)**; sıradaki **slice 4.4 —
+inventory item + offer + publish zincirinin GERÇEK GÖVDELERİ (12 sa)**.
+Kalan: 4.5 taksonomi (8) · 4.6 stok+fiyat (8) · 4.7 sipariş yoklama (6)
+· 4.8 iade+kargo (4) · 4.9 mutabakat + kanalı AÇMA (2).
 
-**SLICE 4.2'NİN İLK İŞİ** A maddesinin kuralıdır: *"sağlık kontrolünün
-istediği HER kimlik alanı formda sorulmalıdır."* eBay'de o **beş
-alandır** ve `EbayAdapter::healthCheck()` beşini de ŞART KOŞUYOR;
-formda sorulmazsa panelden bağlanan hiçbir bağlantı `active` OLAMAZ
-(Shopify'da tam olarak bu yaşandı). Ayrıca `ChannelTypeSeeder`'a
-`ebay` satırı eklenecek (`is_active = false`, `supports_webhooks =
-false`) ve `capabilities` kolonu GERÇEK uygulamayı izlemelidir.
+**SLICE 4.4'ÜN İLK İŞİ `EbayProductMapper`** — `ListingPayload` → kanal
+gövdesi dönüşümü AYRI sınıfta yaşar (Woo/Etsy/Shopify kalıbı). Offer
+gövdesi `settings`'ten BEŞ alanı okur ve hepsi 4.2'de forma eklendi.
+
+**BİTİRİRKEN ÜÇ ŞEY BİRDEN GÜNCELLENİR** (biri unutulursa sessiz hata):
+(1) `EbayAdapter implements ... SupportsOfferLifecycle`; (2)
+`EbayAdapterTest::unwritten_capabilities_are_not_declared()` listesinden
+çıkarılıp `assertInstanceOf`'a taşınır; (3) `ChannelTypeSeeder` →
+`ebay.capabilities.catalog = true`. **`catalog` bayrağının hangi
+arayüze karşılık geldiği `ChannelTypeSeederTest`'te DOĞRULANIR** —
+eBay `SupportsCatalog` UYGULAMAYACAK, yetenek `offer_lifecycle`
+üzerinden görünecek.
 
 Bekleyen diğer maddeler: Hepsiburada dokümantasyonu (**birlikte**) ·
 Stripe'ı uçtan uca sürmek · proje ismi (~0.5 sa) · Etsy/Shopify'ı

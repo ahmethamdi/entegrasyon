@@ -1,9 +1,10 @@
-# Devir Notu — 28 Ağustos 2026 (V3.0 · **eBay BAŞLADI · slice 4.1 KAPANDI**)
+# Devir Notu — 28 Ağustos 2026 (V3.0 · **eBay 4.1 + 4.2 + 4.3 KAPANDI**)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1342 test yeşil** (4468 assertion), Pint temiz.
-Son commit `89bb53c`.
+**1373 test yeşil** (4564 assertion), Pint temiz.
+Son commit `a6fd048` — **her şey push EDİLDİ** (`git ls-remote` ile
+doğrulandı).
 
 > **PUSH DURUMUNU `git ls-remote origin main` İLE DOĞRULA.** Bu notun
 > push iddiası tek başına GÜVENİLMEZ: not push'tan önce yazılırsa
@@ -14,35 +15,62 @@ Son commit `89bb53c`.
 
 ---
 
-# 🌅 YARIN İLK İŞ — 29 Ağustos
+# 🌅 SIRADAKİ İŞ — slice 4.4 (12 sa)
 
-**eBay'e başlandı** (28 Ağustos, kullanıcı kararı). **Slice 4.1
-KAPANDI (8/64 sa)**; kalan sekiz slice aşağıda.
+**Faz 4 · eBay: 24/64 saat.** Üç slice kapandı, altı slice kaldı.
 
 | Slice | İş | Saat | Durum |
 |---|---|---|---|
 | 4.1 | OAuth2 + token yenileme | 8 | ✅ `89bb53c` |
-| **4.2** | **Bağlantı + politika/konum seçimi** | **6** | **SIRADA** |
-| 4.3 | `SupportsOfferLifecycle` + `PushOfferListing` | 10 | — |
-| 4.4 | Inventory item + offer + publish zinciri | 12 | — |
+| 4.2 | Bağlantı + politika/konum seçimi | 6 | ✅ `fbf2c51` |
+| 4.3 | `SupportsOfferLifecycle` + `PushOfferListing` | 10 | ✅ `a6fd048` |
+| **4.4** | **Inventory item + offer + publish zinciri** | **12** | **SIRADA** |
 | 4.5 | Taksonomi (kategori + aspects) | 8 | — |
-| 4.6 | Stok + fiyat (bulk, kısmi başarı) | 8 | — |
+| 4.6 | Stok + fiyat (bulk 25, kısmi başarı) | 8 | — |
 | 4.7 | Sipariş yoklama | 6 | — |
 | 4.8 | İade + kargo | 4 | — |
 | 4.9 | Mutabakat + production (kanalı AÇMA) | 2 | — |
 
-**Slice 4.2'nin ilk işi** A maddesinin kuralıdır: *"sağlık kontrolünün
-istediği HER kimlik alanı formda sorulmalıdır."* eBay'de o **beş
-alandır** (`merchant_location_key` · `marketplace_id` + politika
-üçlüsü) ve `EbayAdapter::healthCheck()` beşini de ŞART KOŞUYOR —
-formda sorulmazsa panelden bağlanan hiçbir bağlantı `active` OLAMAZ
-(Shopify'da tam olarak bu yaşandı: 52/52 saat "bitmiş" sayılırken
-`location_gid` hiçbir kod yolundan yazılmıyordu).
+## Slice 4.4 — NE YAPILACAK
 
-Ayrıca 4.2'de `ChannelTypeSeeder`'a `ebay` satırı eklenecek —
-`is_active = false` ve `supports_webhooks = false` ile. Seeder'daki
-`capabilities` kolonu GERÇEK uygulamayı izlemek zorundadır
-(`ChannelTypeSeederTest` bunu `instanceof` ile karşılaştırıyor).
+Zincirin **gerçek HTTP gövdeleri**. Çekirdek taraf 4.3'te BİTTİ; şimdi
+`EbayAdapter` `SupportsOfferLifecycle`'ı UYGULAYACAK:
+
+| Metot | Uç nokta (`EbayEndpoints`'te HAZIR) | Döndürmesi gereken |
+|---|---|---|
+| `upsertInventoryItem` | `PUT INVENTORY_ITEM` (`{sku}`) | kimlik YOK (SKU'nun kendisi) |
+| `upsertOffer` | `POST OFFER` / `PUT OFFER_ITEM` | `channel_metadata.offer_id` |
+| `publishOffer` | `POST OFFER_PUBLISH` | `external_id` (= `listing_id`) |
+| `withdrawOffer` | `POST OFFER_WITHDRAW` | — (SİLMEZ) |
+
+**İLK İŞ — `EbayProductMapper`.** Woo/Etsy/Shopify'da olduğu gibi
+`ListingPayload` → kanal gövdesi dönüşümü AYRI bir sınıfta yaşar.
+eBay'in offer gövdesi `settings`'ten BEŞ alanı okur
+(`merchant_location_key`, `marketplace_id` + politika üçlüsü) — hepsi
+4.2'de forma eklendi ve `EbayAdapter` sabitleri `public`.
+
+**BİTİRİRKEN ÜÇ ŞEY BİRDEN GÜNCELLENİR** (biri unutulursa sessiz hata):
+
+1. `EbayAdapter implements ... SupportsOfferLifecycle`
+2. `EbayAdapterTest::unwritten_capabilities_are_not_declared()` —
+   listeden `SupportsOfferLifecycle` **çıkarılır** (bugün listede YOK
+   çünkü arayüz o an yazılmamıştı; 4.4'te `assertInstanceOf`'a taşınır)
+3. `ChannelTypeSeeder` → `ebay.capabilities.catalog = true`
+   (`ChannelTypeSeederTest` bunu `instanceof` ile karşılaştırıyor ve
+   ayrışırsa KIRILIR — bu koruma bilinçli)
+
+**DİKKAT — `catalog` bayrağı `SupportsCatalog` DEĞİL.** eBay
+`SupportsCatalog` uygulamayacak; panel yeteneği `offer_lifecycle`
+üzerinden görecek. Seeder'daki anahtarın hangi arayüze karşılık
+geldiğini `ChannelTypeSeederTest` içinde DOĞRULA — yanlış anahtar
+açılırsa panelde çalışmayan sekme belirir (§05).
+
+### Slice 4.4'ün P0 testleri (§27)
+
+- **ara başarısızlık kaldığı yerden devam eder** → çekirdek tarafı 4.3'te
+  sürüldü (`PushOfferListingTest`), burada GERÇEK adapter'la tekrarlanır
+- **`offer_id` kalıcı** → `channel_metadata` birleştirme
+- `25xxx` sınıflandırması zaten 4.1'de yazıldı ve testli
 
 ### Bekleyen diğer maddeler (değişmedi)
 
@@ -53,6 +81,114 @@ Ayrıca 4.2'de `ChannelTypeSeeder`'a `ebay` satırı eklenecek —
 | — | Proje ismi | ~0.5 sa | 8 dosyalık iş |
 | — | Etsy/Shopify gerçek hesapla sürüm | ? | §26 adım 3-5, anahtarlar KULLANICIDA |
 | — | Faz 5 tampon | 28 sa | Faz 4 bitince |
+
+---
+
+# ✅ SLICE 4.3 — BİTTİ (28 Ağustos · `a6fd048`)
+
+**V3.0'ın TEK çekirdek arayüz eklemesi** (§03 · Delta 1). Yazılan:
+`SupportsOfferLifecycle` · `PushOfferListing` · `ContentPushDispatcher`.
+
+### Neden `SupportsCatalog` yetmiyor
+
+`createListing()` yayını TEK ÇAĞRI varsayar. eBay'de yayın ÜÇ ADIMDIR;
+offer yaratılıp publish 429 alırsa v2.2'nin "başarısızlıkta kimlik
+YAZILMAZ" kuralı `offer_id`'yi de götürürdü → sonraki tur ikinci bir
+offer yaratır → `25002` duplicate → **KALICI hata**, listing
+"düzeltilemez" damgasıyla ölür.
+
+**Bu, idempotency'nin KANAL TARAFINDAKİ karşılığıdır.** Projede çıpa hep
+BİZİM tarafımızdaydı (`MovementKey`, `external_event_id`); burada çıpa
+KANALIN VERDİĞİ ARA KİMLİKTİR.
+
+### `ContentPushDispatcher` — iş seçimi TEK KAYNAK
+
+İçerik işi İKİ yerden atılır (`PublishListing` + resync tüketicisi).
+Yetenek kontrolü kopyalansaydı biri eski kalırdı ve sonuç SESSİZ olurdu:
+eBay listing'i `/failures` ekranından denendiğinde `PushListing`'e
+düşer, o iş `SupportsCatalog` bulamayınca operasyonu ATLAR ve satır
+"denendi" görünürken kanala HİÇ gitmez.
+
+### Mutasyon 5/5 öldü — ama İKİSİ testi düzelttirdi
+
+- **METADATA EZME** hayatta kaldı: hiçbir test satıra ÖNCEDEN metadata
+  koymuyordu ve tek yazım varken "birleştirme" ile "ezme" AYNI sonucu
+  verir.
+- **YETENEK KAPISI** hayatta kaldı: kapı olmadan `TypeError` fırlıyor,
+  `catch (Throwable)` yakalıyor ve operasyon HATA yoluna giriyor; sürüm
+  yine ilerlemediği için zayıf iddia yeşil kalıyordu. Ayırt edici işaret
+  **DENEME SAYISIDIR** (atlama deneme AÇMAZ).
+  **`SyncOperationStatus::SKIPPED` DİYE BİR DURUM YOKTUR** — atlama
+  `COMPLETED` yazar (`SyncResultRecorder::recordSkipped`), yani duruma
+  bakan iddia ayırt edici DEĞİLDİR.
+
+### Yan bulgu — sahte adapter sınıfı
+
+`RequestResyncTest` `Adapters\WooCommerceAdapter` tohumluyordu; gerçek
+sınıf `Adapters\WooCommerce\WooCommerceAdapter`. Uzun süre görünmedi
+çünkü resync yolu içerik işini SABİT seçiyordu ve registry hiç
+çağrılmıyordu — dispatcher yeteneği okumak için çağırınca patladı.
+
+---
+
+# ✅ SLICE 4.2 — BİTTİ (28 Ağustos · `9a88fe1` + `fbf2c51`)
+
+Yazılan: `EbayOAuthController` (redirect + callback), rotalar,
+`ChannelTypeSeeder`'a `ebay` satırı, bağlanma formuna eBay dalı.
+
+### eBay OAuth controller'ı Etsy'ninkinden DÖRT noktada ayrılır
+
+İskelet aynıdır (iki adım, `web` grubu, `state` P0-10) ama içerik
+ayrışır ve her ayrım sessiz bir hataya karşılık gelir:
+
+1. **PKCE YOK** — oturumda `code_verifier` TUTULMAZ
+2. **İstemci kimliği `Authorization: Basic` BAŞLIĞINDA**, gövdede değil
+3. **Gövde FORM-ENCODED** (RFC 6749 · §4.1.3) — Etsy'nin uç noktası
+   JSON'u da kabul ettiği için bu fark beşinci kanalda HİÇ görünmemişti
+4. **`client_id` KASADADIR**, `settings`'te değil (Etsy'nin keystring'i
+   tek başına kimliktir; eBay'de `client_secret` ile AYRILMAZ çifttir)
+
+**İki akış AYRI controller'da ve BİRLEŞTİRİLMEZ** — ortak bir "OAuth
+controller" kanal adına bakan dallarla dolardı.
+
+### `RuName` — sabit YAZILAMAZ ve sağlık kontrolüne KONMAZ
+
+eBay'de `redirect_uri` ham adres değil bir TAKMA ADDIR (§13.3) ve
+satıcının KENDİ uygulamasına aittir; kodda sabitlenseydi yalnızca TEK
+bir geliştirici hesabı çalışırdı.
+
+**Sağlık kontrolü onu ARAMAZ ve bu bilinçlidir:** RuName yalnızca OAuth
+el sıkışmasında kullanılır, API çağrılarında DEĞİL. Sağlık kontrolüne
+konsaydı zaten yetkilendirilmiş bir bağlantı, artık kullanılmayan bir
+alan yüzünden SAĞLIKSIZ görünürdü.
+
+### REFRESH TOKEN GELMEZSE HİÇBİR ŞEY YAZILMAZ
+
+eBay ilk takasta onu DAİMA döner; sessizce kabul edilseydi bağlantı iki
+saat sonra ölür ve satıcı sebebini bulamazdı. İstemci çifti de kasaya
+YAZILIR — yazılmasaydı token yenileme sonraki turda kimliksiz kalırdı.
+
+### Mutasyon: 7 mutasyon, 6'sı ilk turda öldü
+
+**MUT-25 (`is_active = true`) HAYATTA KALDI:** "kapalı doğar" testi
+yalnızca `hepsiburada`'yı kontrol ediyordu. Liste açıkça yazılıp eBay
+eklendi — türetilmiş bir iddia ("bugün kapalı olan kapalı kalsın")
+YAZILMADI: o, seeder ne yazarsa onu doğrular ve HİÇBİR ŞEY ÖLÇMEZ.
+
+---
+
+# ⚠️ CI HATASI BULUNDU VE DÜZELTİLDİ (`90284a1`)
+
+`config/inertia.php` paketin varsayılanıyla `js/pages` (küçük p) diyordu;
+gerçek dizin `js/Pages`. **macOS dosya sistemi HARF DUYARSIZDIR** ve
+yolu yine bulduğu için hata yerelde HİÇ görünmedi — tüm panel ekranı
+testleri yeşildi. CI'ın Linux'u harf duyarlıdır ve
+`assertInertia(...)->component()` çağıran test orada DÜŞTÜ.
+
+**"Yalnızca CI'da kırılan" bir hata sınıfıydı.** `InertiaPagePathTest`
+artık yerelde yakalıyor; ölçüm `is_dir()` ile YAPILAMAZ (macOS'ta `true`
+döner ve test yanlış yapılandırmayla yeşil kalırdı) — karşılaştırma
+`scandir()` çıktısındaki GERÇEK adla yapılıyor.
 
 ---
 
