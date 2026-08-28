@@ -499,11 +499,14 @@ Dokümanın §13 listesinde YOKTUR — kullanıcı onaylı panel maddesi.
   Sözleşme **409 + `X-Inertia-Location`** (`Inertia::location()`).
   Inertia başlığı olmayan düz POST için normal 302 KORUNUR.
 
-## eBay kuralları (altıncı kanal · Faz 4 · slice 4.1 · `89bb53c`)
+## eBay kuralları (altıncı kanal · Faz 4 · slice 4.1–4.4)
 
-**SLICE 4.1 KAPANDI (8/64 sa)** — OAuth2 + token yenileme + adapter
-iskeleti. Kanal `is_active = false` ve panelde GÖRÜNMEZ; açılma kararı
-slice 4.9'da, gerçek mağaza doğrulamasından SONRA.
+**SLICE 4.1–4.4 KAPANDI (36/64 sa)** — OAuth2 + token yenileme +
+adapter iskeleti (`89bb53c`), OAuth akışı + seeder (`fbf2c51`),
+`SupportsOfferLifecycle` + `PushOfferListing` (`a6fd048`) ve **üç
+adımlı yayın zincirinin gerçek gövdeleri** (`6608eac`). Kanal
+`is_active = false` ve panelde GÖRÜNMEZ; açılma kararı slice 4.9'da,
+gerçek mağaza doğrulamasından SONRA.
 
 - **eBay OAUTH'U ETSY'DEN ALTI NOKTADA AYRILIR ve KOPYALANAMAZ.**
   Yüzeyde benzer olması tam da tehlikeli kılan şey — projenin "aynı
@@ -631,6 +634,88 @@ YAZILMIYOR.
   Metadata ezme mutasyonu hayatta kaldı çünkü hiçbir test satıra
   ÖNCEDEN metadata koymuyordu. Birleştirme sınanacaksa satır DOLU
   başlamalıdır.
+
+### Slice 4.4 — yayın zincirinin gerçek gövdeleri (`6608eac`)
+
+`EbayAdapter` `SupportsOfferLifecycle`'ı UYGULUYOR; gövde dönüşümü
+`EbayProductMapper`'da, marketplace eşlemeleri `EbayMarketplace`'te.
+
+- **`catalog` BAYRAĞI eBay'DE AÇILMAZ — `offer_lifecycle` AÇILIR**
+  (kullanıcı kararı). `AdapterRegistry::capabilitiesOf()` `catalog`'u
+  YALNIZCA `SupportsCatalog`'tan türetir ve eBay onu UYGULAMAZ; `true`
+  yazmak `ChannelTypeSeederTest`'i KIRARDI. Ama `false` bırakmak da
+  olmazdı: `ProductChannelController` yalnızca `catalog` okuyordu ve
+  eBay'i ELERDİ — zincir çalışır, testler yeşil kalır, **satıcı çalışan
+  özelliği panelden HİÇ göremez** (Etsy `pricing`/`orders` ve Woo
+  `catalog_import` hatasının ÜÇÜNCÜ tekrarı). Panel gate'i artık
+  İKİSİNİ de okur ve bu bir "veya" değil **İKİ AYRI YOLDUR**: `catalog`
+  TEK çağrılık yayındır (`PushListing`), `offer_lifecycle` ÜÇ ADIMLI ve
+  ara kimliklidir (`PushOfferListing`); seçimi `ContentPushDispatcher`
+  yapar. **Anahtar `SupportsOfferLifecycle`'ın KENDİ docblock'unda
+  ZATEN yazılıydı**, yalnızca hiç uygulanmamıştı.
+- **ENVANTER PUT'U TAM DEĞİŞTİRME YAPAR ve AKIŞ OKU-BİRLEŞTİR-YAZ'DIR**
+  (Etsy §11.3'ün eBay karşılığı). `availability` bloğu gönderilmezse
+  kanaldaki miktar SIFIRLANIR ve ürün SATIŞA KAPANIR — bir İÇERİK turu
+  sessizce bir STOK sıfırlaması yapar ve kanal 200 döndüğü için senkron
+  BAŞARILI görünür. **404 "kalem yok" demektir** ve zincirin ilk
+  turunda NORMALDİR; istisna fırlatılsaydı hiçbir ürün ilk kez
+  yayınlanamazdı. Miktar bilinmiyorsa blok HİÇ yazılmaz — **0
+  YAZILMAZ**, 0 ürünü satışa kapatırdı. **Okuma başka bir hata verirse
+  yazma hakkı da yoktur**: 500 alınmışken miktar "bilinmiyor" sayılsaydı
+  kanalda 40 adet duran ürün bir içerik turuyla sıfıra düşerdi.
+- **PARA BİRİMİ MARKETPLACE'İN GERÇEĞİDİR**, `variants.currency`'nin
+  DEĞİL. O kolonun varsayılanı `TRY`'dir ve `EBAY_DE`'ye TRY fiyat
+  `VALIDATION` (KALICI) demektir. Ters yön de yanlıştır: kanonik değer
+  yok sayılıp her pazara kendi parası yazılsaydı 199.90 TRY'lik ürün
+  Almanya'da **199.90 EUR** olurdu. **Bilinmeyen pazarda UYDURULMAZ**
+  ve fiyat bloğu HİÇ yazılmaz — eksik fiyat GÖRÜNÜR bir hatadır (eBay
+  offer'ı reddeder), yanlış fiyat GÖRÜNMEZ. **Kur çevrimi YAPILMAZ**;
+  o bir ÜRÜN kararıdır ve V3.0 kapsamında değildir.
+- **`Content-Language` BAŞLIĞI ZORUNLUDUR** ve eksikse `VALIDATION`
+  KALICIDIR — Hepsiburada'nın "`User-Agent` kimlik doğrulamanın
+  parçasıdır" kuralının eBay karşılığı: gövde ve kimlik DOĞRUYKEN istek
+  reddedilir ve sebep "başlık" olarak hiçbir yerde görünmez. Değer
+  marketplace'ten TÜRETİLİR ve **para biriminden AYRI tablodur** (dört
+  pazar euro kullanır, dilleri farklıdır). Burada varsayılan VARDIR
+  (`en-US`) ve bu para birimindeki kararın TERSİDİR çünkü bedeller
+  ters: eksik başlık isteği ÖLDÜRÜR, yanlış dil yalnızca ETİKETLER.
+- **OFFER `channel_metadata`'DAKİ `offer_id` İLE ADRESLENİR**,
+  `external_id` ile DEĞİL — o `listing_id`'dir ve offer'ı ADRESLEMEZ;
+  onunla `PUT /offer/{id}` çağrılsaydı istek var olmayan bir kaynağa
+  gider ve 404 alınırdı.
+- **İÇERİK TURU STOĞA DOKUNMAZ** — ne envanter ne offer gövdesi miktar
+  taşır. İkisinde de alan VARDIR (`availability` ve `availableQuantity`)
+  ve bu, katalog kuralını ihlal etmenin EN KOLAY yoludur.
+- **İLİŞKİ YÜKLEME `runAsSystem()` İLE SARILIR ve ADAPTER SINIRINDA
+  YAPILIR.** Kuyruk işi kendi bağlamını kurar ama mutabakat taraması
+  `runAsSystem()` altında koşar ve bağlam YOKTUR; sarılmasaydı zincir o
+  turda çökerdi. Sarmalayıcı MAPPER'a konmaz — mapper SAF kalmalıdır
+  (`EtsyAuth`/`CsvProductParser` kalıbı) ve içeride çağrılsaydı aynı
+  sarmalayıcı her metotta tekrarlanırdı.
+
+#### Slice 4.4'te öğrenilen test kuralları
+
+- **MUTASYON YİNE EKRANI SÜREN TESTİ YAZDIRDI.** Panel gate'ten
+  `offer_lifecycle` okumasını silen mutasyon HAYATTA KALDI: adapter
+  testleri yeteneği `instanceof` ile okuyor ve hepsi yeşil kalıyor;
+  **ekranı SÜREN kimse yoktu.** Yeni test kanal adı SORMAZ — sahte
+  `ProgrammableOfferAdapter` sürer, yani iddia yeteneğe bağlıdır.
+- **`assertNotSent` MEŞRU BİR ÇAĞRI VARKEN AYIRT EDİCİ DEĞİLDİR.** Ara
+  başarısızlık testinde tur 1 `POST /offer`'ı MEŞRU olarak yapar ve
+  iddia her hâlükârda kırmızı olurdu; ölçüm **SAYIYA** bakmalıdır
+  (toplamda BİR kez).
+- **`Http::fake()` TUZAĞI ÜÇÜNCÜ KEZ ISIRDI** — bu dosyada YAZILI
+  olmasına rağmen. İkinci `fake()` ilkinin YERİNE GEÇMEZ: tükenen dizi
+  `"response sequence is empty"` verir, NETWORK hatasına dönüşür ve
+  test "zincir devam etmedi" derken aslında sahte kanalın KURULUMUNU
+  ölçer. Çok turlu senaryoda TEK `fake()` kurulur ve dizi TÜM turları
+  taşır.
+- **ÇOK TURLU TESTTE İKİ ÇEKİRDEK KAPISI DA AÇILMALIDIR.** İkinci tur
+  YENİ sürümle açılmazsa `OpenSyncOperation`'ın sürüm kapısı
+  operasyonu ELER (`desired_version > eventVersion`) ve iş HİÇ koşmaz;
+  429 aldıysa devre kesici de AÇIKTIR ve sıfırlanmazsa ikinci turda tek
+  bir istek bile atılmaz. İkisi de "zincir devam etmedi" gibi görünür
+  ama ölçülen şey ÇEKİRDEĞİN DOĞRU DAVRANIŞIDIR.
 
 ### Slice 4.1'de öğrenilen test kuralları
 
@@ -2466,23 +2551,31 @@ kurallar aşağıda "Token ve kota metrikleri kuralları" başlığında.
 **YENİDEN AÇMA.**
 
 **SIRADAKİ İŞ — FAZ 4 · eBay SÜRÜYOR** (28 Ağustos, kullanıcı kararı).
-**Slice 4.1 + 4.2 + 4.3 KAPANDI (24/64 sa)**; sıradaki **slice 4.4 —
-inventory item + offer + publish zincirinin GERÇEK GÖVDELERİ (12 sa)**.
-Kalan: 4.5 taksonomi (8) · 4.6 stok+fiyat (8) · 4.7 sipariş yoklama (6)
-· 4.8 iade+kargo (4) · 4.9 mutabakat + kanalı AÇMA (2).
+**Slice 4.1 + 4.2 + 4.3 + 4.4 KAPANDI (36/64 sa)**; sıradaki **slice
+4.5 — taksonomi: kategori ağacı + aspects (8 sa)**. Kalan: 4.6
+stok+fiyat (8) · 4.7 sipariş yoklama (6) · 4.8 iade+kargo (4) · 4.9
+mutabakat + kanalı AÇMA (2).
 
-**SLICE 4.4'ÜN İLK İŞİ `EbayProductMapper`** — `ListingPayload` → kanal
-gövdesi dönüşümü AYRI sınıfta yaşar (Woo/Etsy/Shopify kalıbı). Offer
-gövdesi `settings`'ten BEŞ alanı okur ve hepsi 4.2'de forma eklendi.
+**SLICE 4.5'İN BAĞLANACAĞI YER HAZIR.** Uç noktalar `EbayEndpoints`'te
+(`DEFAULT_CATEGORY_TREE_ID` · `CATEGORY_TREE` · `CATEGORY_ASPECTS`);
+`EbayProductMapper::toOfferBody()` üçüncü parametre olarak
+`$categoryId` alıyor ve BOŞSA alanı HİÇ yazmıyor (boş dize
+`VALIDATION` = KALICI). Aspect'ler `toInventoryItemBody()` içinde
+`product.aspects` altına yazılıyor ve bugün yalnızca
+`payload->attributes['aspects']` üzerinden geliyor.
+
+**⚠️ AĞAÇ KİMLİĞİ MARKETPLACE'E BAĞLIDIR** ve `taxonomyVersion()`
+marketplace kimliğini İÇERMEK ZORUNDADIR; içermezse ABD ağacıyla
+eşleştirilen kategori Almanya'ya gönderilir ve `VALIDATION` alır.
 
 **BİTİRİRKEN ÜÇ ŞEY BİRDEN GÜNCELLENİR** (biri unutulursa sessiz hata):
-(1) `EbayAdapter implements ... SupportsOfferLifecycle`; (2)
+(1) `EbayAdapter implements ... SupportsTaxonomy`; (2)
 `EbayAdapterTest::unwritten_capabilities_are_not_declared()` listesinden
 çıkarılıp `assertInstanceOf`'a taşınır; (3) `ChannelTypeSeeder` →
-`ebay.capabilities.catalog = true`. **`catalog` bayrağının hangi
-arayüze karşılık geldiği `ChannelTypeSeederTest`'te DOĞRULANIR** —
-eBay `SupportsCatalog` UYGULAMAYACAK, yetenek `offer_lifecycle`
-üzerinden görünecek.
+`ebay.capabilities.taxonomy = true`. **Bu sefer anahtar GERÇEKTEN
+arayüzün karşılığıdır** — 4.4'teki `catalog` sapması TEKRARLANMAZ:
+orada `catalog` bayrağı açılamadığı için `offer_lifecycle` anahtarı
+AÇILDI (yukarıda "Slice 4.4" başlığı).
 
 Bekleyen diğer maddeler: Hepsiburada dokümantasyonu (**birlikte**) ·
 Stripe'ı uçtan uca sürmek · proje ismi (~0.5 sa) · Etsy/Shopify'ı
