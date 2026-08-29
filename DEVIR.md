@@ -3,7 +3,8 @@
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
 **1434 test yeşil** (4674 assertion), Pint temiz.
-Son commit `39cbed4` — **PUSH EDİLMEDİ** (aşağıdaki kutuyla DOĞRULA).
+Son commit `11816ed` — **her şey push EDİLDİ** (`git ls-remote origin
+main` ile doğrulandı: uzak ve yerel AYNI sha'da).
 
 > **PUSH DURUMUNU `git ls-remote origin main` İLE DOĞRULA.** Bu notun
 > push iddiası tek başına GÜVENİLMEZ: not push'tan önce yazılırsa
