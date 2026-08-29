@@ -1,9 +1,9 @@
-# Devir Notu — 28 Ağustos 2026 (V3.0 · **eBay 4.1–4.4 KAPANDI**)
+# Devir Notu — 29 Ağustos 2026 (V3.0 · **eBay 4.1–4.6 KAPANDI**)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
 
-**1396 test yeşil** (4607 assertion), Pint temiz.
-Son commit `6608eac` — **PUSH EDİLMEDİ** (aşağıdaki kutuyla DOĞRULA).
+**1434 test yeşil** (4674 assertion), Pint temiz.
+Son commit `39cbed4` — **PUSH EDİLMEDİ** (aşağıdaki kutuyla DOĞRULA).
 
 > **PUSH DURUMUNU `git ls-remote origin main` İLE DOĞRULA.** Bu notun
 > push iddiası tek başına GÜVENİLMEZ: not push'tan önce yazılırsa
@@ -14,9 +14,9 @@ Son commit `6608eac` — **PUSH EDİLMEDİ** (aşağıdaki kutuyla DOĞRULA).
 
 ---
 
-# 🌅 SIRADAKİ İŞ — slice 4.5 (8 sa)
+# 🌅 SIRADAKİ İŞ — slice 4.7 (6 sa)
 
-**Faz 4 · eBay: 36/64 saat.** Dört slice kapandı, beş slice kaldı.
+**Faz 4 · eBay: 44/64 saat.** Altı slice kapandı, üç slice kaldı.
 
 | Slice | İş | Saat | Durum |
 |---|---|---|---|
@@ -24,35 +24,43 @@ Son commit `6608eac` — **PUSH EDİLMEDİ** (aşağıdaki kutuyla DOĞRULA).
 | 4.2 | Bağlantı + politika/konum seçimi | 6 | ✅ `fbf2c51` |
 | 4.3 | `SupportsOfferLifecycle` + `PushOfferListing` | 10 | ✅ `a6fd048` |
 | 4.4 | Inventory item + offer + publish zinciri | 12 | ✅ `6608eac` |
-| **4.5** | **Taksonomi (kategori + aspects)** | **8** | **SIRADA** |
-| 4.6 | Stok + fiyat (bulk 25, kısmi başarı) | 8 | — |
-| 4.7 | Sipariş yoklama | 6 | — |
+| 4.5 | Taksonomi (kategori + aspects) | 8 | ✅ `e2fd74e` |
+| 4.6 | Stok + fiyat (bulk 25, kısmi başarı) | 8 | ✅ `39cbed4` |
+| **4.7** | **Sipariş yoklama** | **6** | **SIRADA** |
 | 4.8 | İade + kargo | 4 | — |
 | 4.9 | Mutabakat + production (kanalı AÇMA) | 2 | — |
 
-## Slice 4.5 — NE YAPILACAK
+## Slice 4.7 — NE YAPILACAK
 
-`SupportsTaxonomy` (§13.5). Uç noktalar `EbayEndpoints`'te HAZIR:
-`DEFAULT_CATEGORY_TREE_ID` · `CATEGORY_TREE` · `CATEGORY_ASPECTS`.
+`SupportsOrders` (§13.6). Uç nokta `EbayEndpoints::ORDER` HAZIR:
+`GET /sell/fulfillment/v1/order?filter=lastmodifieddate:[{since}..]`
 
-**⚠️ AĞAÇ KİMLİĞİ MARKETPLACE'E BAĞLIDIR** (`EBAY_US`, `EBAY_DE`) ve
-`taxonomyVersion()` marketplace kimliğini İÇERMEK ZORUNDADIR; içermezse
-ABD ağacıyla eşleştirilen kategori Almanya'ya gönderilir ve
-`VALIDATION` alır (`EbayEndpoints` docblock'unda yazılı).
+| eBay | Bizim |
+|---|---|
+| `orderId` | `orders.external_id` |
+| `lineItems[].lineItemId` | `order_lines.external_line_id` |
+| `orderFulfillmentStatus` | `orders.status` |
 
-**Bağlanacak yer HAZIR:** `EbayProductMapper::toOfferBody()` üçüncü
-parametre olarak `$categoryId` alıyor ve BOŞSA alanı HİÇ yazmıyor
-(boş dize `VALIDATION` = KALICI). Aspect'ler de
-`toInventoryItemBody()`'de `product.aspects` altına yazılıyor ve bugün
-yalnızca `payload->attributes['aspects']` üzerinden geliyor —
-taksonomi onu dolduracak.
+**⚠️ WEBHOOK YOKTUR ve `supports_webhooks = false` ZATEN yazılı.**
+eBay Notification API hesap kapanma/politika ihlali bildirir, SİPARİŞ
+İÇİN DEĞİLDİR. Sipariş YALNIZCA yoklamayla gelir.
 
-**BİTİRİRKEN ÜÇ ŞEY BİRDEN** (4.4'ün kalıbı): arayüzü uygula ·
-`EbayAdapterTest::unwritten_capabilities_are_not_declared()`
-listesinden `SupportsTaxonomy`'yi çıkar · `ChannelTypeSeeder` →
-`ebay.capabilities.taxonomy = true`. **Bu sefer `taxonomy` anahtarı
-GERÇEKTEN `SupportsTaxonomy`'ye karşılık geliyor** (4.4'teki `catalog`
-sapması TEKRARLANMAZ, aşağıya bak).
+**⚠️ `supports_webhooks` EAGER-LOAD'DA AÇIKÇA SEÇİLMELİ** — seçilmezse
+`PollChannelOrders` kapısı null okur ve yoklama HİÇ çalışmaz (gerçek
+çalıştırmada bulunmuş tuzak, `adapter_class` ile aynı aile).
+
+**⚠️ OLAY KİMLİĞİNİ ADAPTER ÜRETİR** (`SupportsOrders::
+pollingEventIdFor`) — Etsy slice 3.7'de öğrenildi: alan adı kanalın
+ŞEKLİDİR (Trendyol `orderNumber`, Woo `id`, Etsy `receipt_id`, eBay
+`orderId`). Çekirdekte tutulsaydı her yeni kanalda o satır uzardı.
+Kimlik `{orderId}:{status}` biçiminde olmalı ve `pollingEventIdFor()`
+ile `parseOrderEvent()` AYNI biçimi üretmeli — ayrışsalardı inbox
+satırı ile `order_events` satırı farklı kimliklere bağlanırdı.
+
+**BİTİRİRKEN ÜÇ ŞEY BİRDEN** (4.4/4.5/4.6'nın kalıbı): arayüzü uygula ·
+`EbayAdapterTest::unwritten_capabilities_are_not_declared()` listesinden
+`SupportsOrders`'ı çıkar · `ChannelTypeSeeder` → `ebay.capabilities.
+orders = true`.
 
 ### Bekleyen diğer maddeler (değişmedi)
 
@@ -63,6 +71,109 @@ sapması TEKRARLANMAZ, aşağıya bak).
 | — | Proje ismi | ~0.5 sa | 8 dosyalık iş |
 | — | Etsy/Shopify gerçek hesapla sürüm | ? | §26 adım 3-5, anahtarlar KULLANICIDA |
 | — | Faz 5 tampon | 28 sa | Faz 4 bitince |
+
+---
+
+# ✅ SLICE 4.6 — BİTTİ (29 Ağustos · `39cbed4`)
+
+`SupportsInventory` + `SupportsPricing`. Stok ve fiyat AYNI toplu uç
+noktaya gider ama AYRI yeteneklerdir.
+
+## ⚠️ ÇEKİRDEK DEĞİŞTİ — KISMİ BAŞARI (kullanıcı kararı)
+
+§13.4'ün "adapter kalem başına sonucu OPERASYON KİMLİĞİYLE eşleştirmek
+zorundadır" maddesinin çekirdekte karşılığı YOKTU. Eklenen:
+
+- **`AdapterResult::partial(failedOperations, ...)`** — sonuç YİNE
+  `successful`'dır (kanal cevap verdi, çoğu geçti: altyapı SAĞLIKLI ve
+  devre kesici AÇILMAZ) ama kalem seviyesinde hata taşır.
+- **`SyncResultRecorder::recordSuccess` kimlikleri AYIRIR**: geçenler
+  `COMPLETED` + sürüm ilerler, geçmeyenler `RETRYING` + sürüm
+  **İLERLEMEZ**.
+- **`PushInventory` başarısız kalemleri `markDead` eder.** Edilmeseydi o
+  satırlar `retrying` + `attempt_count > 0` ile SONSUZA KADAR asılı
+  kalırdı: seviye 2 taraması yalnızca `attempt_count = 0` olanları
+  kurtarır (§6) ve bu satırlar o filtreye TAKILMAZ — `/failures`
+  ekranında da GÖRÜNMEZLERDİ.
+
+**GERİYE UYUMLU:** `success()` boş liste taşır; beş kanalın davranışı
+değişmedi.
+
+**İki uçtan biri neden seçilmedi:** hepsi başarılı sayılsaydı başarısız
+kalemler "senkron" damgası yer ve stok kanalda YANLIŞ kalırdı; hepsi
+başarısız sayılsaydı KALICI hatalı TEK bir kalem partinin tamamını
+sonsuza kadar öldürürdü.
+
+## Kalıcı kurallar
+
+- **HEDEF `offerId`, SKU DEĞİL** — `channel_metadata`'da yaşar,
+  `InventoryPushItem` onu TAŞIMAZ.
+- **STOK YÜKÜ FİYAT TAŞIMAZ, FİYAT YÜKÜ MİKTAR TAŞIMAZ.** Alanı
+  GÖNDERMEMEK onu korumanın yoludur (Trendyol gibi, **Etsy'nin TERSİ** —
+  orada göndermemek SİLMEKTİ). Bedeller de ters: stok turu fiyatı
+  ezerse kampanya gider (§9), fiyat turu stoğu ezerse ürün satışa
+  KAPANIR.
+- **EŞLEŞTİRME `offerId` İLEDİR, SIRAYLA DEĞİL** — dizi gönderim
+  sırasını korumayabilir ve konumla eşleştirme İKİ satırı birden bozar.
+- **BİLİNMEYEN PAZARDA PARA BİRİMİ UYDURULMAZ** — yanlış para birimi
+  GÖRÜNMEZ hatadır, eksik fiyat GÖRÜNÜR.
+- **KALEM HATASI KALICIDIR** (`VALIDATION`).
+
+## Yan bulgu — `connectionFor()` tembel yükleme ÇÖKÜYORDU
+
+Maskeleme için bağlantı okunurken düz `$operation->connection` erişimi
+`LazyLoadingViolationException` fırlatıyordu; `recordFailure` bugüne
+kadar kurtulmuştu çünkü çağıranları ilişkiyi eager-load ediyordu.
+Kısmi başarı yolu o gizli kırılganlığı ORTAYA ÇIKARDI. Artık açıkça
+okunuyor ve istisna YUTULUYOR (maskeleme YAN İŞTİR; yazma yolunu onun
+uğruna düşürmek korumayı korunan şeyden büyük zarara çevirirdi).
+
+## Test tuzağı
+
+**STOK SATIRI OLMAYAN LISTING YÜKE ALINMAZ** — `InventoryBatchBuilder`
+onu eler ve iş `nothing_to_push` ile sessizce kapanır. Gerçek iş testi
+HİÇBİR ŞEY ölçmüyordu (`SENT: []` ile ölçüldü). Açılış stoğu LEDGER
+üzerinden girer (§4).
+
+---
+
+# ✅ SLICE 4.5 — BİTTİ (29 Ağustos · `e2fd74e`)
+
+`SupportsTaxonomy` — kategori ağacı + aspect'ler. Çekme
+`EbayTaxonomyClient`'ta. `PrerequisiteGate` DEĞİŞMEDEN çalışıyor.
+
+Etsy/Trendyol kalıbı geçerli ama **ÜÇ noktada ayrışır**:
+
+1. **AĞAÇ KİMLİĞİ ÖNCE SORULUR** — `marketplace_id` → `categoryTreeId`
+   çevrimi AYRI uç noktadır. Sabit yazılsaydı (`0` = EBAY_US) tüm
+   satıcılar ABD ağacını görürdü.
+2. **SÜRÜM KANALDAN GELİR** (`categoryTreeVersion`). Kanal vermezse
+   ağacın ŞEKLİNDEN türetilir — sabit YAZILMAZ.
+3. **SÜRÜM MARKETPLACE KİMLİĞİNİ İÇERİR** (§13.5). `EBAY_US` ve
+   `EBAY_DE` FARKLI ağaçlar taşır ama sürüm numaraları AYNI olabilir;
+   tekillik `(channel_type_code, taxonomy_version, external_id)` olduğu
+   için iki pazarın aynı kimlikli kategorileri BİRBİRİNİ EZERDİ.
+
+Diğer kurallar:
+
+- **YAPRAK BİLGİSİ ÇOCUK LİSTESİNDEN TÜRETİLİR** —
+  `leafCategoryTreeNode` bayrağı VAR ama TEK BAŞINA okunmaz: bayrak ile
+  çocuk listesi ÇELİŞEBİLİR. Çelişkide güvenli taraf "yaprak DEĞİL"dir
+  (ara kategori eşleştirilemez = görünür eksiklik; yanlış yaprak ürünü
+  ÖLDÜRÜR).
+- **ZORUNLULUK eBay'DE GERÇEKTİR — ETSY'NİN TERSİ.** Etsy'de
+  `is_required` DAİMA `false` yazılıyordu (kavram YOKTU); eBay'de eksik
+  zorunlu aspect KALICI `VALIDATION` üretir.
+- **DEĞER KİMLİĞİ METNİN KENDİSİDİR** — eBay ayrı id vermez.
+- **KATEGORİ KİMLİĞİ SORGU PARAMETRESİDİR**, yolda değil (Etsy'de yolda).
+- **AĞAÇ KİMLİĞİ TUR BOYUNCA BİR KEZ SORULUR** — önbellek İKİ katmanlı
+  (istemci + adapter). Adapter'daki olmadan `SyncTaxonomy` her yaprakta
+  YENİ istemci kurar ve tur kotayı İKİ KATINA çıkarır.
+
+**Mutasyon 15/15 öldü — biri test yazdırdı:** `sort()`'u parmak izinden
+kaldıran mutasyon HAYATTA KALMIŞTI (hiçbir test kanalın SIRASINI
+değiştirmiyordu). Kardeşleri ters sırada döndüren test eklendi ve ÖN
+KOŞULUNU da iddia ediyor.
 
 ---
 

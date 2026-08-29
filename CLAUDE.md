@@ -238,6 +238,11 @@ Bunlar test ile korunur. İhlal eden değişiklik reddedilmelidir.
 - `InventoryBatchBuilder` yalnızca **gruplama** yapar, fan-out yapmaz
 - `consumed_at` = planlama bitti, downstream başarısı **değil**
 - `sync_operations.outbox_event_id` **UNIQUE değil**, yalnızca indeks
+- **KISMİ BAŞARI OPERASYON KİMLİĞİYLE EŞLENİR** (`AdapterResult::
+  partial()`): kalem başına durum taşıyan toplu uç noktalarda geçen
+  kalemler `COMPLETED` + sürüm ilerler, geçmeyenler `markDead` edilir ve
+  sürümleri **İLERLEMEZ**. Devre kesici AÇILMAZ — kanal cevap verdi,
+  hata KALEM seviyesindedir
 
 ### Bütünlük taramaları
 - İki teslim zinciri, **iki ayrı tarama**; biri diğerinin kaybını göremez
@@ -499,14 +504,15 @@ Dokümanın §13 listesinde YOKTUR — kullanıcı onaylı panel maddesi.
   Sözleşme **409 + `X-Inertia-Location`** (`Inertia::location()`).
   Inertia başlığı olmayan düz POST için normal 302 KORUNUR.
 
-## eBay kuralları (altıncı kanal · Faz 4 · slice 4.1–4.4)
+## eBay kuralları (altıncı kanal · Faz 4 · slice 4.1–4.6)
 
-**SLICE 4.1–4.4 KAPANDI (36/64 sa)** — OAuth2 + token yenileme +
+**SLICE 4.1–4.6 KAPANDI (44/64 sa)** — OAuth2 + token yenileme +
 adapter iskeleti (`89bb53c`), OAuth akışı + seeder (`fbf2c51`),
-`SupportsOfferLifecycle` + `PushOfferListing` (`a6fd048`) ve **üç
-adımlı yayın zincirinin gerçek gövdeleri** (`6608eac`). Kanal
-`is_active = false` ve panelde GÖRÜNMEZ; açılma kararı slice 4.9'da,
-gerçek mağaza doğrulamasından SONRA.
+`SupportsOfferLifecycle` + `PushOfferListing` (`a6fd048`), **üç adımlı
+yayın zincirinin gerçek gövdeleri** (`6608eac`), **taksonomi**
+(`e2fd74e`) ve **stok + fiyat + çekirdeğe kısmi başarı** (`39cbed4`).
+Kanal `is_active = false` ve panelde GÖRÜNMEZ; açılma kararı slice
+4.9'da, gerçek mağaza doğrulamasından SONRA.
 
 - **eBay OAUTH'U ETSY'DEN ALTI NOKTADA AYRILIR ve KOPYALANAMAZ.**
   Yüzeyde benzer olması tam da tehlikeli kılan şey — projenin "aynı
@@ -692,6 +698,127 @@ YAZILMIYOR.
   turda çökerdi. Sarmalayıcı MAPPER'a konmaz — mapper SAF kalmalıdır
   (`EtsyAuth`/`CsvProductParser` kalıbı) ve içeride çağrılsaydı aynı
   sarmalayıcı her metotta tekrarlanırdı.
+
+### Slice 4.5 — taksonomi (`e2fd74e`)
+
+`SupportsTaxonomy` — kategori ağacı + aspect'ler; çekme
+`EbayTaxonomyClient`'ta. `PrerequisiteGate` DEĞİŞMEDEN çalışır.
+
+- **AĞAÇ KİMLİĞİ ÖNCE SORULUR ve SABİT YAZILAMAZ.** eBay'de ağaca
+  doğrudan erişilmez: `marketplace_id` → `categoryTreeId` çevrimi AYRI
+  bir uç noktadır. `EBAY_US` ağacı `0`, `EBAY_DE` `77`'dir ve liste
+  zamanla DEĞİŞİR; sabitlenseydi tüm satıcılar ABD ağacını görür ve o
+  ağaçtan seçilen kategori KALICI `VALIDATION` alırdı.
+- **SÜRÜM MARKETPLACE KİMLİĞİNİ İÇERİR** (§13.5). `EBAY_US` ve `EBAY_DE`
+  FARKLI ağaçlar taşır ama sürüm numaraları AYNI olabilir; tekillik
+  `(channel_type_code, taxonomy_version, external_id)` olduğu için iki
+  pazarın aynı kimlikli kategorileri BİRBİRİNİ EZERDİ.
+- **SÜRÜM KANALDAN GELİR** (`categoryTreeVersion`) — Etsy/Trendyol'da
+  parmak izi İÇERİKTEN üretiliyordu; kanalın kendi gerçeği bizim
+  türettiğimiz bir yaklaşıktan iyidir. Kanal vermezse ağacın ŞEKLİNDEN
+  türetilir ve **SIRALANIR**; sabit bir dize YAZILMAZ (ağaç değişince
+  sürüm aynı kalır, yeni satırlar eskilerin üzerine yazılır ve
+  eşleştirmeler sessizce başka kategoriyi gösterirdi).
+- **YAPRAK BİLGİSİ ÇOCUK LİSTESİNDEN TÜRETİLİR.**
+  `leafCategoryTreeNode` bayrağı gövdede VAR ama TEK BAŞINA okunmaz:
+  bayrak ile çocuk listesi ÇELİŞEBİLİR. Çelişkide GÜVENLİ taraf "yaprak
+  DEĞİL"dir — ara kategori eşleştirilemez (GÖRÜNÜR eksiklik), yanlış
+  yaprak ürünü ÖLDÜRÜR (ara kategoriye açılan ürün KALICI `VALIDATION`
+  alır). Etsy'nin "`level` DERİNLİKTİR, yaprak demez" notunun daha ince
+  biçimi.
+- **ZORUNLULUK eBay'DE GERÇEKTİR — ETSY'NİN TERSİ.** Etsy'de
+  `is_required` DAİMA `false` yazılıyordu çünkü o kanalda kavram YOKTU
+  ve uydurma bir zorunluluk kapıyı sonsuza kadar kapatırdı; eBay'de
+  kavram VAR ve eksik zorunlu aspect offer yaratmada KALICI `VALIDATION`
+  üretir. `false` yazılsaydı kapı ürünü geçirir ve HER ürün kanalda
+  ölürdü. **Aynı alan iki kanalda ters yönde tehlikelidir.**
+- **DEĞER KİMLİĞİ METNİN KENDİSİDİR** — eBay aspect değerine ayrı bir id
+  VERMEZ. Etsy'den kopyalanan `value_id` BOŞ kalır ve boş kimlik iki
+  farklı değeri BİRBİRİNE eşlerdi.
+- **KATEGORİ KİMLİĞİ SORGU PARAMETRESİDİR**, yolda DEĞİL (Etsy'de
+  yoldaydı) — kopyalansaydı istek `category_id` olmadan giderdi.
+- **AĞAÇ KİMLİĞİ TUR BOYUNCA BİR KEZ SORULUR ve ÖNBELLEK İKİ
+  KATMANLIDIR** (istemci + adapter). `SyncTaxonomy`
+  `fetchCategoryAttributes()`'ı YAPRAK BAŞINA çağırır; adapter her
+  çağrıda YENİ istemci kursaydı istemcinin önbelleği hiçbir işe yaramaz
+  ve tur günlük kotayı (~5.000/gün/uç nokta) İKİ KATINA çıkarırdı — eBay
+  ağacı ON BİNLERCE yaprak taşır. Bu, "registry'de önbellek yasak"
+  kuralını İHLAL ETMEZ: önbellek adapter ÖRNEĞİNİN içinde yaşar ve o
+  örnek zaten TEK bağlantıya aittir.
+
+### Slice 4.6 — stok + fiyat ve ÇEKİRDEĞE KISMİ BAŞARI (`39cbed4`)
+
+`SupportsInventory` + `SupportsPricing`. Stok ve fiyat AYNI toplu uç
+noktaya gider (§13.4) ama AYRI yeteneklerdir — uç noktayı paylaşmaları
+onları BİRLEŞTİRMEZ (Trendyol'daki kararın aynısı).
+
+- **`AdapterResult::partial()` ÇEKİRDEĞE EKLENDİ** (kullanıcı kararı).
+  §13.4 "adapter kalem başına sonucu OPERASYON KİMLİĞİYLE eşleştirmek
+  zorundadır" diyordu ama o yol çekirdekte YOKTU: `PushInventory` TÜM
+  parti için TEK verdict yazıyordu. Sonuç YİNE `successful`'dır (kanal
+  cevap verdi, çoğu geçti: altyapı SAĞLIKLI ve **devre kesici
+  AÇILMAZ**) ama kalem seviyesinde hata taşır.
+  **İki uçtan biri seçilemezdi:** hepsi başarılı sayılsaydı başarısız
+  kalemler "senkron" damgası yer ve stok kanalda YANLIŞ kalırdı; hepsi
+  başarısız sayılsaydı KALICI hatalı TEK bir kalem (silinmiş offer)
+  partinin tamamını sonsuza kadar `error_permanent`'a sürüklerdi.
+- **BAŞARISIZ KALEM `markDead` EDİLİR.** `recordSuccess` onu `RETRYING`
+  bırakır ve istisna fırlamadığı için `catch`/`RetryPolicy` yolu HİÇ
+  çalışmaz; dokunulmasaydı satır `retrying` + `attempt_count > 0` ile
+  SONSUZA KADAR asılı kalırdı — seviye 2 taraması yalnızca
+  `attempt_count = 0` olanları kurtarır (§6) ve bu satır o filtreye
+  TAKILMAZ. Ölü satır `/failures`'ta GÖRÜNÜR, asılı satır GÖRÜNMEZ.
+- **BAŞARISIZ KALEMİN SÜRÜMÜ İLERLEMEZ** — ayrımın VARLIK SEBEBİ budur.
+- **EŞLEŞTİRME `offerId` İLEDİR, SIRAYLA DEĞİL.** eBay `responses[]`
+  dizisini gönderim sırasında döndürmeyebilir; konumla eşleştirilseydi
+  bir kalemin hatası BAŞKA bir operasyona yazılır ve İKİ satır birden
+  yanlış olurdu. **Kimliği tanınmayan yanıt satırı YOK SAYILIR** —
+  yükte olmayan operasyona dokunmak v2.2'nin açık yasağı.
+- **HEDEF `offerId`, SKU DEĞİL** (§13.4) ve kimlik `channel_metadata`'da
+  yaşar; `InventoryPushItem` onu TAŞIMAZ. `external_id` kullanılsaydı
+  istek `listing_id`'yi offer kimliği sanardı.
+- **STOK YÜKÜ FİYAT TAŞIMAZ, FİYAT YÜKÜ MİKTAR TAŞIMAZ.** eBay kısmi
+  kalem kabul eder: alanı GÖNDERMEMEK onu korumanın yoludur (Trendyol
+  gibi, **Etsy'nin TERSİ** — orada göndermemek SİLMEKTİ). Bedeller de
+  ters: stok turu fiyatı ezerse satıcının kampanyası gider (§9), fiyat
+  turu stoğu ezerse ürün SATIŞA KAPANIR.
+- **BİLİNMEYEN PAZARDA PARA BİRİMİ UYDURULMAZ** — yanlış para birimi
+  GÖRÜNMEZ bir hatadır (ürün 199.90 EUR yerine 199.90 USD'ye satılır ve
+  satıcı ancak siparişte fark eder); eksik fiyat GÖRÜNÜR bir hatadır.
+- **KALEM HATASI KALICIDIR** (`VALIDATION`): silinmiş offer yeniden
+  denemeyle DÜZELMEZ.
+- **TEK SABİT, İKİ SINIR** (`MAX_BULK_BATCH = 25`) — ikisini de
+  belirleyen tek gerçek AYNI uç noktadır.
+- **`connectionFor()` TEMBEL YÜKLEMEYLE ÇÖKÜYORDU** ve kısmi başarı yolu
+  onu ORTAYA ÇIKARDI: düz `$operation->connection` erişimi
+  `LazyLoadingViolationException` fırlatır; `recordFailure` bugüne kadar
+  kurtulmuştu çünkü çağıranları ilişkiyi eager-load ediyordu. Artık
+  açıkça okunuyor ve **istisna YUTULUYOR** — maskeleme bir YAN İŞTİR ve
+  yazma yolunu onun uğruna düşürmek, korumayı korunan şeyden büyük bir
+  zarara çevirirdi (`api_calls` günlükleme kuralının aynısı).
+
+#### Slice 4.5–4.6'da öğrenilen test kuralları
+
+- **SIRALAMA İDDİASI SIRAYI DEĞİŞTİRMEDEN ÖLÇÜLEMEZ.** Parmak izinden
+  `sort()`'u kaldıran mutasyon HAYATTA KALDI: hiçbir test kanalın
+  döndürme SIRASINI değiştirmiyordu ve "aynı gövde aynı sürümü verir"
+  iddiası sıralamayı HİÇ ölçmez. Test kardeşleri TERS sırada döndürür ve
+  **ön koşulunu da iddia eder** (sıra gerçekten değişmediyse kendini
+  kırar).
+- **STOK SATIRI OLMAYAN LISTING YÜKE ALINMAZ.**
+  `InventoryBatchBuilder` onu eler ve iş `nothing_to_push` ile SESSİZCE
+  kapanır; gerçek iş testi hiçbir şey ölçmeden yeşil kalır (`SENT: []`
+  ile ölçüldü). Açılış stoğu LEDGER üzerinden girer (§4).
+- **`Http::fake` DESENİ ALT YOLLARI DA EŞLER.** `*category_tree*`
+  yazılırsa `get_default_category_tree_id` adresi DE eşleşir (o yol da o
+  dizgiyi içerir) ve dizinin ilk yanıtı YANLIŞ isteğe gider. Desen
+  ayırt edici olmalıdır (`*/category_tree/77*`).
+- **`array_keys()` İLE KİMLİK KARŞILAŞTIRILMAZ** — PHP sayısal görünen
+  dize anahtarlarını INT'e çevirir (`'11450'` → `11450`). İddia
+  `array_column()` ile KOLONDAN yapılır; kimliğin STRING kaldığı da
+  böyle sınanır.
+- **`assertNotSent` MEŞRU BİR ÇAĞRI VARKEN AYIRT EDİCİ DEĞİLDİR** —
+  ölçüm SAYIYA bakar.
 
 #### Slice 4.4'te öğrenilen test kuralları
 
@@ -2550,32 +2677,34 @@ kuralları" başlığında. **YENİDEN AÇMA.**
 kurallar aşağıda "Token ve kota metrikleri kuralları" başlığında.
 **YENİDEN AÇMA.**
 
-**SIRADAKİ İŞ — FAZ 4 · eBay SÜRÜYOR** (28 Ağustos, kullanıcı kararı).
-**Slice 4.1 + 4.2 + 4.3 + 4.4 KAPANDI (36/64 sa)**; sıradaki **slice
-4.5 — taksonomi: kategori ağacı + aspects (8 sa)**. Kalan: 4.6
-stok+fiyat (8) · 4.7 sipariş yoklama (6) · 4.8 iade+kargo (4) · 4.9
-mutabakat + kanalı AÇMA (2).
+**SIRADAKİ İŞ — FAZ 4 · eBay SÜRÜYOR** (29 Ağustos, kullanıcı kararı).
+**Slice 4.1–4.6 KAPANDI (44/64 sa)**; sıradaki **slice 4.7 — sipariş
+yoklama (6 sa)**. Kalan: 4.8 iade+kargo (4) · 4.9 mutabakat + kanalı
+AÇMA (2).
 
-**SLICE 4.5'İN BAĞLANACAĞI YER HAZIR.** Uç noktalar `EbayEndpoints`'te
-(`DEFAULT_CATEGORY_TREE_ID` · `CATEGORY_TREE` · `CATEGORY_ASPECTS`);
-`EbayProductMapper::toOfferBody()` üçüncü parametre olarak
-`$categoryId` alıyor ve BOŞSA alanı HİÇ yazmıyor (boş dize
-`VALIDATION` = KALICI). Aspect'ler `toInventoryItemBody()` içinde
-`product.aspects` altına yazılıyor ve bugün yalnızca
-`payload->attributes['aspects']` üzerinden geliyor.
+**SLICE 4.7 İÇİN HAZIR OLANLAR.** Uç nokta `EbayEndpoints::ORDER`
+(`GET /sell/fulfillment/v1/order?filter=lastmodifieddate:[{since}..]`)
+ve `supports_webhooks = false` ZATEN yazılı. Eşleme (§13.6):
+`orderId` → `orders.external_id` · `lineItems[].lineItemId` →
+`order_lines.external_line_id` · `orderFulfillmentStatus` →
+`orders.status`.
 
-**⚠️ AĞAÇ KİMLİĞİ MARKETPLACE'E BAĞLIDIR** ve `taxonomyVersion()`
-marketplace kimliğini İÇERMEK ZORUNDADIR; içermezse ABD ağacıyla
-eşleştirilen kategori Almanya'ya gönderilir ve `VALIDATION` alır.
+**⚠️ `supports_webhooks` EAGER-LOAD'DA AÇIKÇA SEÇİLMELİ** — seçilmezse
+`PollChannelOrders` kapısı null okur ve yoklama HİÇ çalışmaz (gerçek
+çalıştırmada bulunmuş tuzak, `adapter_class` ile aynı aile).
 
-**BİTİRİRKEN ÜÇ ŞEY BİRDEN GÜNCELLENİR** (biri unutulursa sessiz hata):
-(1) `EbayAdapter implements ... SupportsTaxonomy`; (2)
+**⚠️ OLAY KİMLİĞİNİ ADAPTER ÜRETİR** (`SupportsOrders::
+pollingEventIdFor`) — alan adı kanalın ŞEKLİDİR (Trendyol
+`orderNumber`, Woo `id`, Etsy `receipt_id`, eBay `orderId`). Kimlik
+`{orderId}:{status}` biçimindedir ve `pollingEventIdFor()` ile
+`parseOrderEvent()` AYNI biçimi üretmelidir — ayrışsalardı inbox satırı
+ile `order_events` satırı farklı kimliklere bağlanırdı.
+
+**BİTİRİRKEN ÜÇ ŞEY BİRDEN GÜNCELLENİR** (4.4/4.5/4.6'nın kalıbı):
+(1) `EbayAdapter implements ... SupportsOrders`; (2)
 `EbayAdapterTest::unwritten_capabilities_are_not_declared()` listesinden
 çıkarılıp `assertInstanceOf`'a taşınır; (3) `ChannelTypeSeeder` →
-`ebay.capabilities.taxonomy = true`. **Bu sefer anahtar GERÇEKTEN
-arayüzün karşılığıdır** — 4.4'teki `catalog` sapması TEKRARLANMAZ:
-orada `catalog` bayrağı açılamadığı için `offer_lifecycle` anahtarı
-AÇILDI (yukarıda "Slice 4.4" başlığı).
+`ebay.capabilities.orders = true`.
 
 Bekleyen diğer maddeler: Hepsiburada dokümantasyonu (**birlikte**) ·
 Stripe'ı uçtan uca sürmek · proje ismi (~0.5 sa) · Etsy/Shopify'ı
