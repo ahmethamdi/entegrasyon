@@ -372,7 +372,10 @@ class ChannelTypeSeeder extends Seeder
                     'inventory' => false,        // slice 4.6
                     'pricing' => false,          // slice 4.6
                     'orders' => false,           // slice 4.7
-                    'taxonomy' => false,         // slice 4.5
+                    // ⚠️ ASPECT'LER TRENDYOL'UN ZORUNLU ÖZNİTELİKLERİNİN
+                    // KARŞILIĞIDIR ve `PrerequisiteGate` DEĞİŞMEDEN
+                    // çalışır (§13.5). Ağaç MARKETPLACE başınadır.
+                    'taxonomy' => true,          // slice 4.5 ✓
                     // ⚠️ ONAY SÜRECİ YOKTUR — eBay'de ilan yayınlanır
                     // yayınlanmaz canlıdır (Etsy ile aynı). Açılsaydı
                     // panelde HİÇ DOLMAYACAK bir sekme belirirdi.

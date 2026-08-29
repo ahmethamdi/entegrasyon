@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Ebay;
 
+use App\Domain\Channels\Adapters\Ebay\Taxonomy\EbayTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
@@ -11,12 +12,14 @@ use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\ListingPayload;
 use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
@@ -31,7 +34,7 @@ use Throwable;
  * V3.0 · §13 · §20 · §21 · v2.2 §7.
  *
  * ─────────────────────────────────────────────────────────────────────
- * KAPSAM — SLICE 4.1 + 4.4
+ * KAPSAM — SLICE 4.1 + 4.4 + 4.5
  * ─────────────────────────────────────────────────────────────────────
  * 4.1'de yazılan: kimlik/başlık katmanı, sağlık kontrolü, hata
  * sınıflandırma, hız sınırı profili ve **token yenileme**
@@ -41,9 +44,12 @@ use Throwable;
  * — `upsertInventoryItem` → `upsertOffer` → `publishOffer`, artı
  * `withdrawOffer`. Gövde dönüşümü `EbayProductMapper`'dadır.
  *
- * HENÜZ YAZILMAYANLAR ve slice'ları: `SupportsTaxonomy` (4.5),
- * `SupportsInventory` + `SupportsPricing` (4.6), `SupportsOrders` (4.7),
- * `SupportsFulfillment` (4.8).
+ * 4.5'te yazılan: **taksonomi** (`SupportsTaxonomy`) — kategori ağacı ve
+ * aspect'ler. Çekme `EbayTaxonomyClient`'tadır.
+ *
+ * HENÜZ YAZILMAYANLAR ve slice'ları: `SupportsInventory` +
+ * `SupportsPricing` (4.6), `SupportsOrders` (4.7), `SupportsFulfillment`
+ * (4.8).
  *
  * ⚠️ `SupportsCatalog` HİÇ UYGULANMAYACAK ve bu bir eksiklik DEĞİLDİR.
  * O arayüz yayını TEK ÇAĞRI varsayar; eBay'de yayın ÜÇ ADIMDIR ve ara
@@ -83,7 +89,7 @@ use Throwable;
  * okur; `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
  * GELMEZDİ.
  */
-final class EbayAdapter implements ChannelAdapter, SupportsOfferLifecycle, SupportsTokenRefresh
+final class EbayAdapter implements ChannelAdapter, SupportsOfferLifecycle, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -142,6 +148,25 @@ final class EbayAdapter implements ChannelAdapter, SupportsOfferLifecycle, Suppo
         self::PAYMENT_POLICY_KEY,
         self::RETURN_POLICY_KEY,
     ];
+
+    /**
+     * Taksonomi istemcisi — ADAPTER ÖRNEĞİ BAŞINA önbelleklenir.
+     *
+     * ⚠️ ÖNBELLEK OLMADAN AĞAÇ KİMLİĞİ HER YAPRAKTA YENİDEN SORULUR.
+     * `SyncTaxonomy` `fetchCategoryTree()`'yi BİR kez, ama
+     * `fetchCategoryAttributes()`'ı YAPRAK BAŞINA çağırır; her çağrıda
+     * YENİ bir istemci kurulsaydı istemcinin kendi `treeId` önbelleği
+     * hiçbir işe yaramaz ve tur günlük kotayı (~5.000/gün/uç nokta,
+     * §21) İKİ KATINA çıkarırdı. eBay ağacı ON BİNLERCE yaprak taşır.
+     *
+     * ⚠️ BU, "REGISTRY'DE ÖNBELLEK YASAK" KURALINI İHLAL ETMEZ. O kural
+     * `AdapterRegistry`'nin ADAPTER örneklerini paylaşmamasıyla ilgili
+     * ve gerekçesi güvenliktir: paylaşılan adapter kiracı A'nın kimlik
+     * bilgisini kiracı B'nin işinde kullanırdı. Buradaki önbellek
+     * ADAPTER ÖRNEĞİNİN İÇİNDE yaşar ve o örnek zaten TEK bir bağlantıya
+     * aittir; registry her çağrıda yeni adapter üretmeye DEVAM eder.
+     */
+    private ?EbayTaxonomyClient $taxonomy = null;
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -590,6 +615,91 @@ final class EbayAdapter implements ChannelAdapter, SupportsOfferLifecycle, Suppo
         )->throw();
 
         return AdapterResult::success();
+    }
+
+    // ---------------------------------------------- §13.5 · taksonomi (4.5)
+
+    /**
+     * Marketplace'in kategori ağacı (§13.5).
+     *
+     * ⚠️ AĞAÇ MARKETPLACE BAŞINADIR ve sürüm marketplace kimliğini
+     * İÇERİR. `EBAY_US` ile `EBAY_DE` FARKLI ağaçlar taşır ve kategori
+     * kimlikleri ÖRTÜŞÜR; sürüm ayrıştırmasaydı iki pazarın ağaçları
+     * aynı tabloda BİRBİRİNİ EZER ve satıcı ABD kategorisini Almanya'ya
+     * gönderip `VALIDATION` alırdı — KALICI hata.
+     */
+    public function fetchCategoryTree(): CategoryTreeSnapshot
+    {
+        return $this->taxonomy()->fetchTree();
+    }
+
+    /**
+     * Yaprak kategorinin aspect'leri — Trendyol'un zorunlu
+     * özniteliklerinin karşılığı (§13.5).
+     *
+     * ⚠️ YALNIZCA YAPRAK İÇİN ÇAĞRILIR (`SyncTaxonomy` garanti eder).
+     * Ara kategoriye ürün açılamaz; öznitelik istemek boşuna istek ve
+     * boşuna KOTADIR — eBay'de tavan uç nokta başına ~5.000/gün (§21)
+     * ve ağaç ON BİNLERCE yaprak taşır.
+     *
+     * @return array<string, mixed>
+     */
+    public function fetchCategoryAttributes(string $categoryId): array
+    {
+        return $this->taxonomy()->fetchAttributes($categoryId);
+    }
+
+    /**
+     * Ağacın SÜRÜMÜ — kanaldan gelir, marketplace ile ön eklenir.
+     *
+     * ⚠️ AĞACI ÇEKER. Sözleşme tek başına çağrılmayı da destekler ve
+     * uydurma bir sabit dönseydi sürüm ağaçla AYRIŞIR, eşleştirmeler
+     * yanlış sürüme bağlanırdı (Etsy'deki kararın aynısı). `SyncTaxonomy`
+     * bu metodu ağacı çektikten SONRA çağırmaz — sürümü snapshot'tan
+     * okur.
+     */
+    public function taxonomyVersion(): string
+    {
+        return $this->fetchCategoryTree()->version;
+    }
+
+    /**
+     * ⚠️ MARKETPLACE `settings`'TEN OKUNUR ve BOŞSA İSTEK HİÇ ATILMAZ.
+     *
+     * Boş kimlikle giden çağrı eBay'den "hangi pazar" cevabını alamaz;
+     * varsayılana düşülseydi (`EBAY_US`) satıcının Almanya mağazası için
+     * ABD ağacı çekilir, eşleştirmeler o ağaca bağlanır ve gönderilen
+     * HER ürün `VALIDATION` alırdı — sebebi hiçbir yerde "yanlış ağaç"
+     * olarak görünmezdi.
+     *
+     * Sağlık kontrolü `marketplace_id`'yi ZATEN şart koşuyor ve bağlantı
+     * onsuz `active` olmuyor; buradaki kontrol o garantinin taksonomi
+     * yolundaki karşılığıdır (taksonomi turu `runAsSystem()` altında
+     * koşar ve bağlantıyı sağlık kontrolünden GEÇMEDEN de görebilir).
+     */
+    private function taxonomy(): EbayTaxonomyClient
+    {
+        if ($this->taxonomy !== null) {
+            return $this->taxonomy;
+        }
+
+        $settings = $this->connection->settings;
+        $marketplace = is_array($settings)
+            ? (string) ($settings[self::MARKETPLACE_ID_KEY] ?? '')
+            : '';
+
+        if ($marketplace === '') {
+            throw new RuntimeException(
+                'eBay marketplace kimliği tanımsız — kategori ağacı MARKETPLACE '
+                .'BAŞINADIR ve hangi ağacın çekileceği bilinemez.'
+            );
+        }
+
+        return $this->taxonomy = new EbayTaxonomyClient(
+            client: $this->client,
+            marketplaceId: $marketplace,
+            sandbox: $this->useSandbox(),
+        );
     }
 
     // ------------------------------------------------------- token yenileme

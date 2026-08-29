@@ -590,7 +590,6 @@ final class EbayAdapterTest extends TestCase
             SupportsInventory::class,
             SupportsPricing::class,
             SupportsOrders::class,
-            SupportsTaxonomy::class,
             SupportsFulfillment::class,
             SupportsApprovalWorkflow::class,
         ] as $capability) {
@@ -615,6 +614,13 @@ final class EbayAdapterTest extends TestCase
     public function the_offer_lifecycle_capability_is_declared(): void
     {
         $this->assertInstanceOf(SupportsOfferLifecycle::class, $this->adapter());
+    }
+
+    /** Slice 4.5 — taksonomi artık UYGULANMIŞTIR. */
+    #[Test]
+    public function the_taxonomy_capability_is_declared(): void
+    {
+        $this->assertInstanceOf(SupportsTaxonomy::class, $this->adapter());
     }
 
     // ──────────────────────────────────────────────────────── yardımcılar
