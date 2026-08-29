@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Jobs;
 
+use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
+use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\InventoryBatchBuilder;
+use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
 use App\Support\Tenancy\TenantContext;
@@ -160,8 +163,33 @@ final class PushInventory implements ShouldQueue
 
             $recorder->recordSuccess($batch->operations(), $attempt, $result);
 
+            // ⚠️ KISMİ BAŞARIDA BAŞARISIZ KALEMLER ÖLDÜRÜLÜR (§13.4).
+            //
+            // `recordSuccess` onları `retrying` bırakır — istisna
+            // fırlamadığı için `catch` bloğu HİÇ çalışmaz ve
+            // `RetryPolicy`/`release` yolu da işlemez. Dokunulmasaydı o
+            // satırlar `retrying` durumunda ve `attempt_count > 0` ile
+            // SONSUZA KADAR asılı kalırdı: seviye 2 taraması yalnızca
+            // `attempt_count = 0` olanları kurtarır (§6) ve bu satırlar o
+            // filtreye TAKILMAZ — hiçbir mekanizma onları bir daha
+            // görmezdi.
+            //
+            // Ölü satır `/failures` ekranında GÖRÜNÜR ve tek tıkla
+            // yeniden denenebilir (§12); asılı satır GÖRÜNMEZ.
+            if ($result->hasFailedOperations()) {
+                $recorder->markDead(
+                    $this->failedOperationsIn($batch, $result),
+                    $result->errorClass ?? ErrorClass::VALIDATION,
+                );
+            }
+
             // Devre sayacını sıfırla: "ardışık" hata sayılır, toplam değil.
             // Yarı açıktaysa bu başarı devreyi kapatır.
+            //
+            // ⚠️ KISMİ BAŞARIDA DA BAŞARI YAZILIR: kanal cevap verdi ve
+            // çağrıların çoğu geçti — altyapı SAĞLIKLIDIR. Başarısızlık
+            // KALEM seviyesindedir ve devreyi açmak çalışan bir kanalı
+            // kapatmak olurdu.
             $breaker->recordSuccess($connectionId);
         } catch (Throwable $e) {
             // Sınıflandırmayı ADAPTER yapar (kanal gövdesini yalnızca o
@@ -184,5 +212,32 @@ final class PushInventory implements ShouldQueue
 
             $recorder->markDead($batch->operations(), $class);
         }
+    }
+
+    /**
+     * Kısmi başarıda GEÇMEYEN operasyonlar.
+     *
+     * ⚠️ EŞLEŞTİRME KİMLİKLEDİR, SIRAYLA DEĞİL — kanalın yanıt dizisi
+     * gönderim sırasını KORUMAYABİLİR ve konumla eşleştirme bir kalemin
+     * hatasını BAŞKA bir operasyona yazardı.
+     *
+     * ⚠️ YALNIZCA YÜKTE OLAN OPERASYONLAR DÖNER. Adapter tanımadığı bir
+     * kimlik bildirirse (kanal gövdesi bozuksa) o kimlik SESSİZCE
+     * atlanır: yükte olmayan operasyona dokunmak v2.2'nin açık yasağıdır
+     * ve başka bir bağlantının satırını öldürebilirdi.
+     *
+     * @return list<SyncOperation>
+     */
+    private function failedOperationsIn(InventoryPushBatch $batch, AdapterResult $result): array
+    {
+        $failed = [];
+
+        foreach ($batch->operations() as $operation) {
+            if (isset($result->failedOperations[$operation->id])) {
+                $failed[] = $operation;
+            }
+        }
+
+        return $failed;
     }
 }

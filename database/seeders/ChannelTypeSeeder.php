@@ -369,8 +369,12 @@ class ChannelTypeSeeder extends Seeder
                     // hatasının aynısı.
                     'offer_lifecycle' => true,
                     'catalog_import' => false,   // kapsam DIŞI
-                    'inventory' => false,        // slice 4.6
-                    'pricing' => false,          // slice 4.6
+                    // ⚠️ STOK VE FİYAT AYNI ÇAĞRIDA GİDER (§13.4) ama
+                    // AYRI yeteneklerdir: uç noktayı paylaşmaları
+                    // onları birleştirmez (Trendyol'da da tek uç nokta,
+                    // iki yetenek).
+                    'inventory' => true,         // slice 4.6 ✓
+                    'pricing' => true,           // slice 4.6 ✓
                     'orders' => false,           // slice 4.7
                     // ⚠️ ASPECT'LER TRENDYOL'UN ZORUNLU ÖZNİTELİKLERİNİN
                     // KARŞILIĞIDIR ve `PrerequisiteGate` DEĞİŞMEDEN

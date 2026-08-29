@@ -11,7 +11,9 @@ use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
+use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
+use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -19,8 +21,13 @@ use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\CategoryTreeSnapshot;
+use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\PricePushBatch;
+use App\Domain\Sync\Support\RemoteInventorySnapshot;
+use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -47,9 +54,12 @@ use Throwable;
  * 4.5'te yazılan: **taksonomi** (`SupportsTaxonomy`) — kategori ağacı ve
  * aspect'ler. Çekme `EbayTaxonomyClient`'tadır.
  *
- * HENÜZ YAZILMAYANLAR ve slice'ları: `SupportsInventory` +
- * `SupportsPricing` (4.6), `SupportsOrders` (4.7), `SupportsFulfillment`
- * (4.8).
+ * 4.6'da yazılan: **stok + fiyat** (`SupportsInventory` +
+ * `SupportsPricing`) — AYNI toplu uç nokta, KISMİ BAŞARI operasyona
+ * eşlenir (§13.4).
+ *
+ * HENÜZ YAZILMAYANLAR ve slice'ları: `SupportsOrders` (4.7),
+ * `SupportsFulfillment` (4.8).
  *
  * ⚠️ `SupportsCatalog` HİÇ UYGULANMAYACAK ve bu bir eksiklik DEĞİLDİR.
  * O arayüz yayını TEK ÇAĞRI varsayar; eBay'de yayın ÜÇ ADIMDIR ve ara
@@ -89,12 +99,26 @@ use Throwable;
  * okur; `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
  * GELMEZDİ.
  */
-final class EbayAdapter implements ChannelAdapter, SupportsOfferLifecycle, SupportsTaxonomy, SupportsTokenRefresh
+final class EbayAdapter implements ChannelAdapter, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
     /** Sabit hız sınırı — eBay sınırı yanıt gövdesinde BİLDİRMEZ (§21). */
     private const REQUESTS_PER_SECOND = 5;
+
+    /**
+     * `bulk_update_price_quantity` parti sınırı — eBay'in KATI sınırı
+     * (§13.4 · §21).
+     *
+     * ⚠️ TEK SABİT, İKİ YETENEK. Stok ve fiyat AYNI uç noktaya gider ve
+     * sınırı belirleyen tek gerçek O uç noktadır; iki ayrı sabit
+     * tanımlansaydı biri değiştiğinde ötekinin sessizce eski kalması an
+     * meselesi olurdu (Etsy'deki kararın aynısı).
+     *
+     * ⚠️ AŞIM DENENMEZ. Trendyol'da 1000, Woo'da 100'dür; eBay 25'te
+     * KATIDIR ve aşan istek tamamen reddedilir.
+     */
+    private const MAX_BULK_BATCH = 25;
 
     /**
      * `settings` anahtarları (§17 · DB Delta 5).
@@ -615,6 +639,424 @@ final class EbayAdapter implements ChannelAdapter, SupportsOfferLifecycle, Suppo
         )->throw();
 
         return AdapterResult::success();
+    }
+
+    // ------------------------------------------ §13.4 · stok + fiyat (4.6)
+
+    /**
+     * Stok yazar — FİYATLA AYNI ÇAĞRIDA (§13.4).
+     *
+     * ═════════════════════════════════════════════════════════════════
+     * ⚠️ TRENDYOL'UN TERSİ, HEPSİBURADA GİBİ — KOPYALAMA
+     * ═════════════════════════════════════════════════════════════════
+     * Trendyol'da "stok yükü fiyat alanı TAŞIMAZ" KATI kuraldı: uç nokta
+     * kısmi güncellemeyi destekliyordu ve alanı GÖNDERMEMEK onu korumanın
+     * yoluydu. eBay'de `bulk_update_price_quantity` ikisini BİRLİKTE
+     * bekler; kalem yalnızca `shipToLocationAvailability` taşırsa fiyat
+     * DEĞİŞMEZ, ama ikisi de tek çağrıda gider ve parti sınırı ORTAKTIR.
+     *
+     * ⚠️ FİYAT ALANI BURADA GÖNDERİLMEZ ve bu BİLİNÇLİDİR. eBay kısmi
+     * kalem kabul eder: yalnızca miktar gönderilirse fiyata DOKUNULMAZ.
+     * Gönderilseydi bir STOK turu satıcının kanal panelinden yaptığı
+     * kampanyayı SESSİZCE ezerdi (§9: "sessizce ezmek EN SIK ŞİKAYET").
+     * Etsy'de durum TERSTİ — orada alanı göndermemek onu SİLMEKTİ; aynı
+     * cümle iki kanalda ters sonuç verir.
+     *
+     * ⚠️ HEDEF `offerId`, SKU DEĞİL (§13.4) — ve o kimlik `channel_
+     * metadata`'da yaşar. `InventoryPushItem` onu TAŞIMAZ (`sku` ve
+     * `external_id` taşır), bu yüzden listing satırından okunur.
+     * `external_id` kullanılsaydı istek `listing_id`'yi offer kimliği
+     * sanar ve var olmayan bir kaynağa giderdi.
+     */
+    public function pushInventory(InventoryPushBatch $batch): AdapterResult
+    {
+        if ($batch->isEmpty()) {
+            // Boş yük için çağrı yapılmaz; kota boşa harcanmaz.
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $offerIds = $this->offerIdsForBatch(array_map(
+            static fn (array $item): string => (string) $item['listing_id'],
+            $batch->toArray(),
+        ));
+
+        $requests = [];
+        $operationByOffer = [];
+        $missing = [];
+
+        foreach ($batch->toArray() as $index => $item) {
+            $listingId = (string) $item['listing_id'];
+            $offerId = $offerIds[$listingId] ?? null;
+
+            if ($offerId === null) {
+                $missing[] = (string) $item['sku'];
+
+                continue;
+            }
+
+            $requests[] = [
+                'offers' => [[
+                    'offerId' => $offerId,
+                    'availableQuantity' => (int) $item['quantity'],
+                ]],
+            ];
+
+            $operationByOffer[$offerId] = $batch->operations()[$index] ?? null;
+        }
+
+        if ($requests === []) {
+            // ⚠️ SESSİZCE BAŞARILI DÖNÜLMEZ (v2.2 · §7): dönülseydi
+            // operasyon tamamlandı sanılır, `synced_version` ilerler ve
+            // satır kanalda hiçbir şey değişmemişken "senkron" görünürdü.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'eBay stok yükündeki hiçbir kalemin offer kimliği yok: '
+                .implode(', ', $missing),
+            );
+        }
+
+        return $this->sendBulkUpdate($requests, $operationByOffer, count($requests));
+    }
+
+    /**
+     * Fiyat yazar — STOKLA AYNI UÇ NOKTA (§13.4).
+     *
+     * ⚠️ MİKTAR ALANI BURADA GÖNDERİLMEZ — stok turunun AYNASI ve aynı
+     * gerekçe TERSİNE. Gönderilseydi bir FİYAT turu stoğu ezerdi ve
+     * ürün satışa KAPANABİLİRDİ; yanlış fiyattan satış devam eder, sıfır
+     * stokta satış DURUR (Etsy'de aynı asimetri yazılı).
+     *
+     * ⚠️ PARA BİRİMİ MARKETPLACE'TEN GELİR, kanonik koldan DEĞİL —
+     * `EbayProductMapper`'daki kuralın aynısı. `variants.currency`
+     * varsayılanı `TRY`'dir ve `EBAY_DE`'ye TRY fiyat `VALIDATION`
+     * (KALICI) demektir.
+     */
+    public function pushPrices(PricePushBatch $batch): AdapterResult
+    {
+        if ($batch->isEmpty()) {
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $currency = EbayMarketplace::currencyFor($this->marketplaceId());
+
+        if ($currency === null) {
+            // ⚠️ UYDURMA PARA BİRİMİYLE GÖNDERİLMEZ. Yanlış para birimi
+            // GÖRÜNMEZ bir hatadır: kanal kabul ederse ürün 199.90 EUR
+            // yerine 199.90 USD'ye satılır ve satıcı ancak siparişte
+            // fark eder.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                "eBay marketplace `{$this->marketplaceId()}` için para birimi bilinmiyor; "
+                .'fiyat yanlış para biriminde gönderilemez.',
+            );
+        }
+
+        $offerIds = $this->offerIdsForBatch(array_map(
+            static fn (array $item): string => (string) $item['listing_id'],
+            $batch->items,
+        ));
+
+        $requests = [];
+        $operationByOffer = [];
+        $missing = [];
+
+        foreach ($batch->items as $index => $item) {
+            $listingId = (string) $item['listing_id'];
+            $offerId = $offerIds[$listingId] ?? null;
+
+            if ($offerId === null) {
+                $missing[] = $listingId;
+
+                continue;
+            }
+
+            $requests[] = [
+                'offers' => [[
+                    'offerId' => $offerId,
+                    'price' => [
+                        // Fiyat STRING taşınır — para float taşımaz.
+                        'value' => (string) $item['price'],
+                        'currency' => $currency,
+                    ],
+                ]],
+            ];
+
+            $operationByOffer[$offerId] = $batch->operations()[$index] ?? null;
+        }
+
+        if ($requests === []) {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'eBay fiyat yükündeki hiçbir kalemin offer kimliği yok: '
+                .implode(', ', $missing),
+            );
+        }
+
+        return $this->sendBulkUpdate($requests, $operationByOffer, count($requests));
+    }
+
+    /**
+     * Toplu uç nokta — KISMİ BAŞARIYI OPERASYONA EŞLER (§13.4).
+     *
+     * ═════════════════════════════════════════════════════════════════
+     * ⚠️ 200 GÖVDE KODU "HEPSİ GEÇTİ" DEMEK DEĞİLDİR
+     * ═════════════════════════════════════════════════════════════════
+     * Yanıt `responses[]` döner ve HER KALEM kendi `statusCode`'unu
+     * taşır. Tek bir verdict'e indirgenseydi:
+     *   · hepsi başarılı sayılsaydı → başarısız kalemler "senkron"
+     *     damgası yer ve stok kanalda YANLIŞ kalır;
+     *   · hepsi başarısız sayılsaydı → geçen kalemler de yeniden denenir
+     *     ve KALICI hatalı tek bir kalem partinin tamamını öldürür.
+     *
+     * ⚠️ EŞLEŞTİRME `offerId` İLEDİR, SIRAYLA DEĞİL. eBay `responses[]`
+     * dizisini gönderdiğimiz sırada döndürmeyebilir; konumla
+     * eşleştirilseydi bir kalemin hatası BAŞKA bir operasyona yazılır ve
+     * İKİ satır birden yanlış olurdu.
+     *
+     * ⚠️ KİMLİĞİ TANINMAYAN YANIT SATIRI YOK SAYILIR — yükte olmayan
+     * operasyona dokunmak v2.2'nin açık yasağıdır.
+     *
+     * @param  list<array<string, mixed>>  $requests
+     * @param  array<string, SyncOperation|null>  $operationByOffer
+     */
+    private function sendBulkUpdate(array $requests, array $operationByOffer, int $sent): AdapterResult
+    {
+        $response = $this->client->post(
+            EbayEndpoints::url(
+                EbayEndpoints::BULK_UPDATE_PRICE_QUANTITY,
+                sandbox: $this->useSandbox(),
+            ),
+            ['requests' => $requests],
+        );
+
+        // Taşıma katmanı hatası (401, 429, 5xx) İSTİSNA olarak yükselir ve
+        // `PushInventory` onu sınıflandırır; buradaki kısmi başarı yalnızca
+        // 2xx gövdesinin İÇİNDEKİ kalem hatalarıdır.
+        $response->throw();
+
+        $failed = [];
+
+        /** @var list<array<string, mixed>> $responses */
+        $responses = is_array($response->json('responses')) ? $response->json('responses') : [];
+
+        foreach ($responses as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $status = $item['statusCode'] ?? null;
+
+            // 2xx = bu kalem geçti.
+            if (is_int($status) && $status >= 200 && $status < 300) {
+                continue;
+            }
+
+            $offerId = isset($item['offerId']) ? (string) $item['offerId'] : '';
+            $operation = $operationByOffer[$offerId] ?? null;
+
+            if ($operation === null) {
+                continue;
+            }
+
+            $failed[$operation->id] = $this->itemErrorText($item, $offerId);
+        }
+
+        if ($failed === []) {
+            return AdapterResult::success(['pushed' => $sent]);
+        }
+
+        return AdapterResult::partial(
+            failedOperations: $failed,
+            data: ['pushed' => $sent - count($failed)],
+            // ⚠️ KALEM HATASI KALICIDIR: `25xxx` ailesi ve doğrulama
+            // hataları yeniden denemeyle DÜZELMEZ. Geçici sayılsaydı
+            // silinmiş bir offer her turda yeniden denenir ve satır
+            // sonsuza kadar kuyrukta kalırdı.
+            errorClass: ErrorClass::VALIDATION,
+        );
+    }
+
+    /**
+     * Kalem hatasının okunabilir metni.
+     *
+     * ⚠️ SEBEP ADIYLA SÖYLENİR. "Kalem başarısız" demek satıcıya ne
+     * yapacağını söylemez; eBay `errors[].message` alanını verir ve o
+     * metin `/failures` ekranında GÖRÜNÜR (§12).
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private function itemErrorText(array $item, string $offerId): string
+    {
+        $errors = is_array($item['errors'] ?? null) ? $item['errors'] : [];
+        $messages = [];
+
+        foreach ($errors as $error) {
+            if (! is_array($error)) {
+                continue;
+            }
+
+            $message = (string) ($error['message'] ?? '');
+
+            if ($message !== '') {
+                $id = $error['errorId'] ?? null;
+                $messages[] = $id !== null ? "[{$id}] {$message}" : $message;
+            }
+        }
+
+        $status = $item['statusCode'] ?? '?';
+
+        return $messages === []
+            ? "eBay offer {$offerId} güncellenemedi (durum {$status})."
+            : "eBay offer {$offerId}: ".implode(' · ', $messages);
+    }
+
+    public function maxInventoryBatchSize(): int
+    {
+        return self::MAX_BULK_BATCH;
+    }
+
+    /**
+     * ⚠️ FİYAT SINIRI DA AYNI SABİTTİR ve bu ZORUNLUDUR.
+     *
+     * İki ayrı sabit tanımlansaydı biri değiştiğinde ötekinin sessizce
+     * eski kalması an meselesi olurdu; ikisini de belirleyen tek gerçek
+     * AYNI uç noktadır (§13.4) — Etsy'deki kararın aynısı.
+     */
+    public function maxPriceBatchSize(): int
+    {
+        return self::MAX_BULK_BATCH;
+    }
+
+    /**
+     * Uzak stok — mutabakat okur (§10).
+     *
+     * ⚠️ OKUMA `offer_id` İLE YAPILIR ama SNAPSHOT `external_id` İLE
+     * ANAHTARLANIR. Mutabakat listing'i `external_id` (= `listing_id`)
+     * ile tanır; `offer_id` ile anahtarlansaydı hiçbir kalem eşleşmez ve
+     * tur her satırı `REMOTE_MISSING` sayardı — var olan ilanlar
+     * "silinmiş" görünürdü.
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchInventory(array $listings): RemoteInventorySnapshot
+    {
+        [$quantities, $prices] = $this->readOffers($listings);
+
+        unset($prices);
+
+        return new RemoteInventorySnapshot(
+            quantitiesByExternalId: $quantities,
+            observedAt: new DateTimeImmutable,
+        );
+    }
+
+    /**
+     * Uzak fiyat — mutabakat okur (§9).
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchPrices(array $listings): RemotePriceSnapshot
+    {
+        [$quantities, $prices] = $this->readOffers($listings);
+
+        unset($quantities);
+
+        return new RemotePriceSnapshot(
+            pricesByExternalId: $prices,
+            observedAt: new DateTimeImmutable,
+        );
+    }
+
+    /**
+     * Offer'ları okur — stok ve fiyat TEK turda.
+     *
+     * ⚠️ 404 İSTİSNA FIRLATMAZ — "offer silinmiş" demektir ve mutabakat
+     * bunu `REMOTE_MISSING` görmelidir. İstisna tek silinmiş ilanla TÜM
+     * turu düşürürdü (Etsy'deki kararın aynısı).
+     *
+     * @param  list<Listing>  $listings
+     * @return array{0: array<string, int>, 1: array<string, string>}
+     */
+    private function readOffers(array $listings): array
+    {
+        $quantities = [];
+        $prices = [];
+
+        foreach ($listings as $listing) {
+            $offerId = $this->offerIdOf($listing);
+            $externalId = $listing->external_id;
+
+            // Kimliği olmayan satır kanalda YOK — mutabakat onu
+            // `REMOTE_MISSING` görmelidir ve boş anahtar yazmak iki
+            // satırı birbirine eşlerdi.
+            if ($offerId === null || ! is_string($externalId) || $externalId === '') {
+                continue;
+            }
+
+            $response = $this->client->get(
+                EbayEndpoints::url(
+                    EbayEndpoints::OFFER_ITEM,
+                    ['offerId' => $offerId],
+                    sandbox: $this->useSandbox(),
+                ),
+            );
+
+            if ($response->status() === 404) {
+                continue;
+            }
+
+            $response->throw();
+
+            $quantity = $response->json('availableQuantity');
+
+            if (is_int($quantity) || (is_string($quantity) && ctype_digit($quantity))) {
+                $quantities[$externalId] = (int) $quantity;
+            }
+
+            $price = $response->json('pricingSummary.price.value');
+
+            if (is_string($price) || is_int($price) || is_float($price)) {
+                $prices[$externalId] = (string) $price;
+            }
+        }
+
+        return [$quantities, $prices];
+    }
+
+    /**
+     * Listing kimliği → `offer_id` haritası.
+     *
+     * ⚠️ SİSTEM BAĞLAMINDA OKUNUR: adapter kuyruk işinden (bağlam VAR) ve
+     * mutabakat taramasından (`runAsSystem`, bağlam YOK) çağrılır.
+     *
+     * @param  list<string>  $listingIds
+     * @return array<string, string>
+     */
+    private function offerIdsForBatch(array $listingIds): array
+    {
+        return TenantContext::runAsSystem(function () use ($listingIds): array {
+            $map = [];
+
+            foreach (Listing::query()->whereIn('id', $listingIds)->get() as $listing) {
+                $offerId = $this->offerIdOf($listing);
+
+                if ($offerId !== null) {
+                    $map[(string) $listing->id] = $offerId;
+                }
+            }
+
+            return $map;
+        });
+    }
+
+    /** Bağlantının marketplace kimliği — `settings`'ten. */
+    private function marketplaceId(): string
+    {
+        $settings = $this->connection->settings;
+
+        return is_array($settings)
+            ? (string) ($settings[self::MARKETPLACE_ID_KEY] ?? '')
+            : '';
     }
 
     // ---------------------------------------------- §13.5 · taksonomi (4.5)

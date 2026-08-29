@@ -12,6 +12,7 @@ use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncAttempt;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
@@ -76,10 +77,62 @@ final class SyncResultRecorder
      */
     public function recordSuccess(array $operations, SyncAttempt $attempt, AdapterResult $result): void
     {
-        DB::transaction(function () use ($operations, $attempt, $result): void {
+        // ⚠️ KISMİ BAŞARI — KALEM BAŞINA DURUM TAŞIYAN TOPLU UÇ NOKTALAR
+        // (§13.4). Maskeleme transaction DIŞINDA yapılır (`recordFailure`
+        // ile aynı gerekçe: kasa okuması bir DB işidir ve hata metni
+        // kanalın gövdesini taşır, sır yansıyabilir).
+        $failed = $result->failedOperations;
+        $messages = [];
+
+        if ($failed !== []) {
+            $connection = $this->connectionFor($operations, $attempt);
+
+            foreach ($failed as $operationId => $rawMessage) {
+                $messages[$operationId] = $this->errorText->redact($connection, $rawMessage);
+            }
+        }
+
+        // Kalem hatasının sınıfı adapter'dan gelir; söylenmediyse
+        // `VALIDATION` varsayılır. Gerekçe: kalem seviyesinde başarısızlık
+        // neredeyse her zaman O KALEME özgüdür (silinmiş offer, geçersiz
+        // değer) ve yeniden denemek DÜZELTMEZ. Geçici sayılsaydı kalıcı
+        // olarak bozuk tek bir satır her turda yeniden denenirdi.
+        $class = $result->errorClass ?? ErrorClass::VALIDATION;
+
+        DB::transaction(function () use ($operations, $attempt, $result, $messages, $class): void {
             $this->closeAttempt($attempt, outcome: 'success');
 
             foreach ($operations as $operation) {
+                // ⚠️ EŞLEŞTİRME OPERASYON KİMLİĞİYLEDİR, SIRAYLA DEĞİL.
+                // Kanalın yanıt dizisi gönderim sırasını KORUMAYABİLİR;
+                // konumla eşleştirilseydi bir kalemin hatası BAŞKA bir
+                // operasyona yazılır ve iki satır birden yanlış olurdu.
+                $itemError = $messages[$operation->id] ?? null;
+
+                if ($itemError !== null) {
+                    // Bu kalem GEÇMEDİ: deneme başarısız yazılır, sürüm
+                    // İLERLEMEZ. `advanceSyncState` çağrılsaydı satır
+                    // "senkron" görünür ve stok kanalda yanlış kalırdı —
+                    // bu ayrımın var olma sebebi tam olarak budur.
+                    if ($operation->id !== $attempt->sync_operation_id) {
+                        $this->recordPiggybackAttempt(
+                            $operation,
+                            outcome: $class->isPermanent() ? 'permanent' : 'transient',
+                            class: $class,
+                            message: $itemError,
+                        );
+                    }
+
+                    $operation->forceFill([
+                        'status' => SyncOperationStatus::RETRYING->value,
+                        'last_error_class' => $class->value,
+                    ])->save();
+
+                    $this->markSyncStateFailed($operation, $class, $itemError);
+
+                    continue;
+                }
+
                 // Tetikleyici dışındaki operasyonlar da bu çağrıda gitti;
                 // denemeleri kendi satırlarına yazılır, yoksa "hiç denenmedi"
                 // görünür ve seviye 2 taraması onları yanlışlıkla toplar.
@@ -352,10 +405,42 @@ final class SyncResultRecorder
     {
         foreach ($operations as $operation) {
             if ($operation->id === $attempt->sync_operation_id) {
-                return $operation->connection;
+                return $this->loadConnection($operation);
             }
         }
 
-        return $operations[0]->connection ?? null;
+        return isset($operations[0]) ? $this->loadConnection($operations[0]) : null;
+    }
+
+    /**
+     * Operasyonun bağlantısı — İLİŞKİ YÜKLÜ DEĞİLSE AÇIKÇA YÜKLENİR.
+     *
+     * ⚠️ TEMBEL YÜKLEME KAPALIDIR (`Model::preventLazyLoading`) ve düz
+     * `$operation->connection` erişimi `LazyLoadingViolationException`
+     * FIRLATIR. Çağıranların bazıları ilişkiyi eager-load eder
+     * (`InventoryBatchBuilder`), bazıları ETMEZ; kural "yükleyen çağıran"
+     * olsaydı yeni bir çağrı yolu eklendiği gün maskeleme yazma yolunu
+     * ÇÖKERTİRDİ — ve bu, kısmi başarı yolu eklenirken GERÇEKTEN yaşandı.
+     *
+     * ⚠️ İSTİSNA YUTULUR ve `null` DÖNER. Maskeleme bir YAN İŞTİR: yazma
+     * yolunu onun uğruna düşürmek, korumayı korunan şeyden büyük bir
+     * zarara çevirirdi (`api_calls` günlükleme kuralının aynısı). Katman
+     * 1 (desen tabanlı maskeleme) bağlantısız da çalışır.
+     */
+    private function loadConnection(SyncOperation $operation): ?ChannelConnection
+    {
+        if ($operation->relationLoaded('connection')) {
+            return $operation->connection;
+        }
+
+        try {
+            return TenantContext::runAsSystem(
+                fn (): ?ChannelConnection => ChannelConnection::query()
+                    ->whereKey($operation->channel_connection_id)
+                    ->first()
+            );
+        } catch (Throwable) {
+            return null;
+        }
     }
 }

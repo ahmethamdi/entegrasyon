@@ -587,8 +587,6 @@ final class EbayAdapterTest extends TestCase
             // `SupportsOfferLifecycle` aldı.
             SupportsCatalog::class,
             SupportsCatalogImport::class,
-            SupportsInventory::class,
-            SupportsPricing::class,
             SupportsOrders::class,
             SupportsFulfillment::class,
             SupportsApprovalWorkflow::class,
@@ -621,6 +619,37 @@ final class EbayAdapterTest extends TestCase
     public function the_taxonomy_capability_is_declared(): void
     {
         $this->assertInstanceOf(SupportsTaxonomy::class, $this->adapter());
+    }
+
+    /**
+     * Slice 4.6 — stok ve fiyat artık UYGULANMIŞTIR.
+     *
+     * ⚠️ AYNI UÇ NOKTA, İKİ YETENEK (§13.4). Uç noktayı paylaşmaları
+     * onları birleştirmez; panel ikisini AYRI rozetlerde gösterir.
+     */
+    #[Test]
+    public function the_inventory_and_pricing_capabilities_are_declared(): void
+    {
+        $adapter = $this->adapter();
+
+        $this->assertInstanceOf(SupportsInventory::class, $adapter);
+        $this->assertInstanceOf(SupportsPricing::class, $adapter);
+    }
+
+    /**
+     * ⚠️ İKİ SINIR DA 25 ve AYNI SABİTTEN gelir (§13.4).
+     *
+     * İki ayrı sabit tanımlansaydı biri değiştiğinde ötekinin sessizce
+     * eski kalması an meselesi olurdu; ikisini de belirleyen tek gerçek
+     * AYNI uç noktadır.
+     */
+    #[Test]
+    public function both_batch_limits_are_the_channel_hard_limit(): void
+    {
+        $adapter = $this->adapter();
+
+        $this->assertSame(25, $adapter->maxInventoryBatchSize());
+        $this->assertSame(25, $adapter->maxPriceBatchSize());
     }
 
     // ──────────────────────────────────────────────────────── yardımcılar
