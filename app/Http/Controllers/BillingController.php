@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Domain\Billing\Actions\EnforceQuota;
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Enums\QuotaMetric;
+use App\Domain\Billing\Models\BillingConsent;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
 use App\Support\Tenancy\TenantContext;
@@ -123,6 +124,27 @@ final class BillingController extends Controller
                 'plan_code' => 'Zaten bu plandasınız.',
             ]);
         }
+
+        // ÖN BİLGİLENDİRME ONAYI — plan geçerli ve ödeme gerçekten
+        // açılacaksa istenir. Daha önce istenseydi gizli/ücretsiz plan
+        // denemesi asıl sebep yerine "sözleşmeyi onaylayın" hatası alırdı.
+        $consent = $request->validate([
+            'accept_terms' => ['accepted'],
+            'waive_withdrawal' => ['sometimes', 'boolean'],
+        ], [
+            'accept_terms.accepted' => 'Devam etmek için sözleşmeyi okuyup onaylaman gerekiyor.',
+        ]);
+
+        BillingConsent::query()->create([
+            'tenant_id' => $tenantId,
+            'user_id' => $request->user()?->id,
+            'plan_code' => $plan->code,
+            'terms_version' => BillingConsent::TERMS_VERSION,
+            'terms_accepted_at' => now(),
+            'withdrawal_waived' => (bool) ($consent['waive_withdrawal'] ?? false),
+            'ip' => $request->ip(),
+            'user_agent' => mb_substr((string) $request->userAgent(), 0, 500),
+        ]);
 
         try {
             if ($live !== null) {

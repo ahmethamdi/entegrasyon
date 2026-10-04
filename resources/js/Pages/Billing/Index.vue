@@ -61,12 +61,32 @@ function formatDate(iso) {
  */
 const buying = ref(null);
 
-function buy(planCode) {
-    if (buying.value !== null) return;
+/*
+ * ÖDEME ÖNCESİ ONAY (mesafeli hizmet sözleşmesi madde 9, cayma hakkı
+ * istisnası). Plan düğmesi doğrudan Stripe'a GİTMEZ; önce bu kutu açılır.
+ * Sözleşme onayı zorunlu, cayma hakkından vazgeçme İSTEĞE BAĞLI:
+ * işaretlenmezse hizmet yine açılır, 14 günlük cayma hakkı sürer.
+ */
+const selected = ref(null);
+const acceptTerms = ref(false);
+const waiveWithdrawal = ref(false);
 
-    buying.value = planCode;
+function choose(plan) {
+    selected.value = plan;
+    acceptTerms.value = false;
+    waiveWithdrawal.value = false;
+}
 
-    router.post('/billing/checkout', { plan_code: planCode }, {
+function buy() {
+    if (buying.value !== null || selected.value === null || !acceptTerms.value) return;
+
+    buying.value = selected.value.code;
+
+    router.post('/billing/checkout', {
+        plan_code: selected.value.code,
+        accept_terms: acceptTerms.value,
+        waive_withdrawal: waiveWithdrawal.value,
+    }, {
         onError: () => {
             buying.value = null;
         },
@@ -96,8 +116,8 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
             </p>
         </div>
 
-        <p v-if="errors.plan_code" class="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {{ errors.plan_code }}
+        <p v-if="errors.plan_code || errors.accept_terms" class="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {{ errors.plan_code ?? errors.accept_terms }}
         </p>
 
         <!-- Mevcut plan -->
@@ -192,13 +212,59 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                         type="button"
                         class="mt-4 rounded-md bg-stone-900 py-2 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
                         :disabled="!paymentsEnabled || buying !== null"
-                        @click="buy(plan.code)"
+                        @click="choose(plan)"
                     >
                         {{ buying === plan.code ? 'Yönlendiriliyor…' : 'Bu plana geç' }}
                     </button>
                     <p v-else class="mt-4 py-2 text-center text-xs text-stone-500">
                         Ücretsiz
                     </p>
+                </div>
+            </div>
+
+            <!-- Ödeme öncesi onay — plan seçilince açılır. -->
+            <div
+                v-if="selected"
+                class="mt-6 rounded-lg border border-stone-300 bg-white p-5"
+                role="region"
+                aria-label="Ödeme onayı"
+            >
+                <p class="font-medium text-stone-900">
+                    {{ selected.name }} · {{ money(selected.price, selected.currency) }} / ay
+                </p>
+                <p class="mt-1 text-sm text-stone-600">
+                    Abonelik her ay yenilenir, istediğin zaman iptal edebilirsin.
+                </p>
+
+                <label class="mt-4 flex items-start gap-3 text-sm text-stone-800">
+                    <input v-model="acceptTerms" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-stone-400">
+                    <span>
+                        <a href="/yasal/mesafeli-satis" target="_blank" class="underline underline-offset-2">Mesafeli hizmet sözleşmesini</a>
+                        ve
+                        <a href="/yasal/kullanim-kosullari" target="_blank" class="underline underline-offset-2">kullanım koşullarını</a>
+                        okudum; hizmetin temel nitelikleri, ücreti ve cayma hakkı konusunda bilgilendirildim.
+                        <span class="text-red-700">*</span>
+                    </span>
+                </label>
+
+                <label class="mt-3 flex items-start gap-3 text-sm text-stone-800">
+                    <input v-model="waiveWithdrawal" type="checkbox" class="mt-0.5 h-4 w-4 rounded border-stone-400">
+                    <span>
+                        Hizmetin hemen başlamasını istiyorum; hizmet başladığında 14 günlük cayma hakkımın sona ereceğini biliyorum.
+                        <span class="block text-xs text-stone-500">İsteğe bağlı. İşaretlemezsen hizmet yine hemen açılır ve 14 gün içinde cayma hakkın devam eder.</span>
+                    </span>
+                </label>
+
+                <div class="mt-5 flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                        :disabled="!acceptTerms || buying !== null"
+                        @click="buy"
+                    >
+                        {{ buying ? 'Yönlendiriliyor…' : 'Ödemeye geç' }}
+                    </button>
+                    <button type="button" class="text-sm text-stone-600 underline" @click="selected = null">Vazgeç</button>
                 </div>
             </div>
         </section>

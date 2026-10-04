@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Billing;
 
+use App\Domain\Billing\Models\BillingConsent;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Catalog\Models\Product;
@@ -234,7 +235,7 @@ final class BillingScreenTest extends TestCase
 
         // Stripe anahtarı yok: istek başarısız olur ama ASLA yerel
         // abonelik yazılmamalıdır.
-        $this->actingAs($user)->post('/billing/checkout', ['plan_code' => 'pro']);
+        $this->actingAs($user)->post('/billing/checkout', ['plan_code' => 'pro', 'accept_terms' => '1']);
 
         $this->assertSame(0, TenantContext::runAsSystem(
             fn (): int => Subscription::withoutGlobalScopes()->count(),
@@ -340,7 +341,7 @@ final class BillingScreenTest extends TestCase
         [$tenant, $user] = $this->subscribed('active');
 
         $this->actingAs($user)
-            ->post('/billing/checkout', ['plan_code' => 'business'])
+            ->post('/billing/checkout', ['plan_code' => 'business', 'accept_terms' => '1'])
             ->assertRedirect('/billing')
             ->assertSessionHas('success');
 
@@ -356,13 +357,69 @@ final class BillingScreenTest extends TestCase
         ));
     }
 
+    /**
+     * SÖZLEŞME ONAYI OLMADAN ÖDEME AÇILMAZ (mesafeli hizmet sözleşmesi
+     * madde 9). Onaysız satışta "bilgilendirildi" iddiası kanıtsız kalır.
+     */
+    #[Test]
+    public function checkout_requires_terms_acceptance(): void
+    {
+        [, $user] = $this->subscribed('active');
+
+        $this->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'business'])
+            ->assertSessionHasErrors('accept_terms');
+
+        $this->assertSame([], $this->payments->planChanges);
+        $this->assertSame(0, TenantContext::runAsSystem(fn (): int => BillingConsent::withoutGlobalScopes()->count()));
+    }
+
+    /**
+     * Onay KAYDEDİLİR — kim, hangi metin sürümü, cayma hakkı tercihi.
+     * Kanıt yükü satıcıdadır; kayıt yoksa istisnaya dayanılamaz.
+     */
+    #[Test]
+    public function consent_is_recorded_with_the_withdrawal_choice(): void
+    {
+        [$tenant, $user] = $this->subscribed('active');
+
+        $this->actingAs($user)->post('/billing/checkout', [
+            'plan_code' => 'business',
+            'accept_terms' => '1',
+            'waive_withdrawal' => '1',
+        ]);
+
+        $consent = TenantContext::runAsSystem(fn () => BillingConsent::withoutGlobalScopes()->sole());
+
+        $this->assertSame($tenant->id, $consent->tenant_id);
+        $this->assertSame($user->id, $consent->user_id);
+        $this->assertSame('business', $consent->plan_code);
+        $this->assertSame(BillingConsent::TERMS_VERSION, $consent->terms_version);
+        $this->assertTrue($consent->withdrawal_waived);
+    }
+
+    /** Cayma hakkından vazgeçmek İSTEĞE BAĞLIDIR; işaretsizse hak sürer. */
+    #[Test]
+    public function withdrawal_waiver_is_optional(): void
+    {
+        [, $user] = $this->subscribed('active');
+
+        $this->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'business', 'accept_terms' => '1'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse(TenantContext::runAsSystem(
+            fn (): bool => BillingConsent::withoutGlobalScopes()->sole()->withdrawal_waived,
+        ));
+    }
+
     /** `past_due` abonelik de yaşar — yanına ikinci abonelik açılmaz. */
     #[Test]
     public function a_past_due_subscription_is_changed_not_duplicated(): void
     {
         [, $user] = $this->subscribed('past_due');
 
-        $this->actingAs($user)->post('/billing/checkout', ['plan_code' => 'business']);
+        $this->actingAs($user)->post('/billing/checkout', ['plan_code' => 'business', 'accept_terms' => '1']);
 
         $this->assertSame([], $this->payments->checkouts);
         $this->assertCount(1, $this->payments->planChanges);
@@ -375,7 +432,7 @@ final class BillingScreenTest extends TestCase
         [, $user] = $this->subscribed('active');
 
         $this->actingAs($user)
-            ->post('/billing/checkout', ['plan_code' => 'pro'])
+            ->post('/billing/checkout', ['plan_code' => 'pro', 'accept_terms' => '1'])
             ->assertSessionHasErrors(['plan_code' => 'Zaten bu plandasınız.']);
 
         $this->assertSame([], $this->payments->checkouts);
@@ -389,7 +446,7 @@ final class BillingScreenTest extends TestCase
         [, $user] = $this->subscribed('cancelled');
 
         $this->actingAs($user)
-            ->post('/billing/checkout', ['plan_code' => 'business'])
+            ->post('/billing/checkout', ['plan_code' => 'business', 'accept_terms' => '1'])
             ->assertRedirect('https://checkout.stripe.test/business');
 
         $this->assertCount(1, $this->payments->checkouts);
@@ -404,7 +461,7 @@ final class BillingScreenTest extends TestCase
         $this->payments->failNextCall = true;
 
         $this->actingAs($user)
-            ->post('/billing/checkout', ['plan_code' => 'business'])
+            ->post('/billing/checkout', ['plan_code' => 'business', 'accept_terms' => '1'])
             ->assertSessionHasErrors(['plan_code' => 'Plan değiştirilemedi. Lütfen tekrar deneyin.']);
     }
 

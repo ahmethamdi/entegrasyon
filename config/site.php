@@ -7,8 +7,8 @@ declare(strict_types=1);
  * JSON-LD buradan okur. Tek yerde durur: adres değişince yasal metinlerin
  * biri eski adreste kalmasın.
  *
- * ⚠️ `contact_email` KESİNLEŞMEDİ: 34pazar.com için posta kutusu henüz
- * açılmadı. Yayından önce kullanıcı onaylayacak.
+ * `contact_email` 34Devs'in ortak adresi (kullanıcı kararı, 5 Ekim 2026);
+ * 34pazar.com posta kutusu açılınca SITE_CONTACT_EMAIL ile değişir.
  */
 return [
     'brand' => '34Pazar',
@@ -19,7 +19,7 @@ return [
     'city' => 'Korschenbroich',
     'country' => 'Almanya',
     'phone' => '+49 176 76798125',
-    'contact_email' => env('SITE_CONTACT_EMAIL', 'destek@34pazar.com'),
+    'contact_email' => env('SITE_CONTACT_EMAIL', 'info@34devs.com'),
     'parent_url' => 'https://34devs.com',
 
     // Blog yazılarının Markdown dizini. Ayar olarak durur ki testler

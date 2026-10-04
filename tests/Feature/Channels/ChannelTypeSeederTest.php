@@ -119,8 +119,9 @@ final class ChannelTypeSeederTest extends TestCase
     /**
      * Elle açılan kanal, seeder yeniden koşunca AÇIK KALIR.
      *
-     * Kanıtlanan tuzağın birebir yeniden üretimi: Trendyol tohumda
-     * kapalı doğar, operatör onu açar, seeder yeniden koşar.
+     * Kanıtlanan tuzağın birebir yeniden üretimi (o gün Trendyol'du; Trendyol
+     * artık açık doğduğu için senaryo kapalı doğan Hepsiburada ile kurulur):
+     * kanal tohumda kapalı doğar, operatör onu açar, seeder yeniden koşar.
      */
     #[Test]
     public function seeder_does_not_close_a_manually_activated_channel(): void
@@ -128,13 +129,13 @@ final class ChannelTypeSeederTest extends TestCase
         $this->seed(ChannelTypeSeeder::class);
 
         // §05 · adım 12 — gerçek hesapla sağlık kontrolü geçti, kanal açıldı.
-        ChannelType::query()->where('code', 'trendyol')->update(['is_active' => true]);
+        ChannelType::query()->where('code', 'hepsiburada')->update(['is_active' => true]);
 
         // Bir hafta sonra başka bir sebeple deploy: db:seed yeniden koşar.
         $this->seed(ChannelTypeSeeder::class);
 
         $this->assertTrue(
-            (bool) ChannelType::query()->where('code', 'trendyol')->value('is_active'),
+            (bool) ChannelType::query()->where('code', 'hepsiburada')->value('is_active'),
             'Seeder elle açılmış kanalı kapattı — `356a662`\'de yaşanan hata geri geldi.',
         );
     }
@@ -196,6 +197,20 @@ final class ChannelTypeSeederTest extends TestCase
             $this->assertFalse(
                 (bool) ChannelType::query()->where('code', $code)->value('is_active'),
                 "`{$code}` kapalı doğmalıydı — {$reason}.",
+            );
+        }
+
+        // Yayına AÇIK çıkan kanallar — her biri bir karar.
+        $open = [
+            'woocommerce' => 'ilk kanal',
+            'shopify' => 'slice 1.9',
+            'trendyol' => 'kullanıcı kararı, 5 Ekim 2026',
+        ];
+
+        foreach ($open as $code => $reason) {
+            $this->assertTrue(
+                (bool) ChannelType::query()->where('code', $code)->value('is_active'),
+                "`{$code}` açık doğmalıydı — {$reason}.",
             );
         }
     }

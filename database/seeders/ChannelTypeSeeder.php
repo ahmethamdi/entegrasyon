@@ -75,7 +75,7 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
-        // İkinci kanal — pazaryeri (marketplace). Faz 2'de aktifleşir.
+        // İkinci kanal — pazaryeri (marketplace).
         $this->upsert(
             ['code' => 'trendyol'],
             [
@@ -109,7 +109,11 @@ class ChannelTypeSeeder extends Seeder
                 ],
                 // Webhook yok: sipariş yoklama ile çekilir.
                 'supports_webhooks' => false,
-                'is_active' => false,
+                // AÇIK DOĞAR — kullanıcı kararı (5 Ekim 2026): A11'de V2
+                // uçlarına geçildi, yayına Trendyol açık çıkılıyor. Gerçek
+                // hesapla sağlık kontrolü canlı testte yapılacak; sorun
+                // çıkarsa elle kapatılır ve seeder onu geri AÇMAZ.
+                'is_active' => true,
             ],
         );
 
