@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Trendyol\Catalog;
 
-use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Models\VariantOption;
+use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\AttributeMapping;
 use App\Domain\Channels\Models\AttributeValueMapping;
@@ -192,26 +192,7 @@ final class ListingMapper
      */
     private function imageUrls(Variant $variant): array
     {
-        $images = ProductImage::query()
-            ->where('product_id', $variant->product_id)
-            ->where(fn ($q) => $q->whereNull('variant_id')->orWhere('variant_id', $variant->id))
-            // Satıcı bu görseli Trendyol'dan hariç tuttuysa gitmez (A15).
-            ->forChannel('trendyol')
-            ->orderByRaw('CASE WHEN variant_id IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('position')
-            ->get(['id', 'storage_path']);
-
-        $urls = [];
-
-        foreach ($images as $image) {
-            $url = $image->publicUrl();
-
-            if ($url !== null) {
-                $urls[] = $url;
-            }
-        }
-
-        $urls = array_values(array_unique($urls));
+        $urls = ChannelImages::urlsFor($variant, 'trendyol');
 
         if ($urls === []) {
             throw new ListingNotPublishable(sprintf(

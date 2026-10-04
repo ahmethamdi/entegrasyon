@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Ebay;
 
+use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Adapters\Ebay\Taxonomy\EbayTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
@@ -201,7 +202,7 @@ final class EbayAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsI
     /** eBay: ilan başına en fazla 24 görsel. */
     public function maxImages(): int
     {
-        return 24;
+        return EbayProductMapper::MAX_IMAGES;
     }
 
     public function connection(): ChannelConnection
@@ -450,9 +451,13 @@ final class EbayAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsI
         $sku = $this->skuOf($listing);
         $this->loadVariant($payload->listing);
 
+        $current = $this->currentInventoryItem($sku);
+
         $body = EbayProductMapper::toInventoryItemBody(
             $payload,
-            knownQuantity: $this->currentInventoryQuantity($sku),
+            knownQuantity: $current['quantity'],
+            imageUrls: ChannelImages::urlsFor($payload->listing->variant, 'ebay', $this->connection->id),
+            knownImageUrls: $current['imageUrls'],
         );
 
         $this->client->put(
@@ -1474,7 +1479,13 @@ final class EbayAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsI
      * "bilinmiyor" sayılsaydı, kanalda 40 adet duran ürün bir içerik
      * turuyla sıfıra düşerdi.
      */
-    private function currentInventoryQuantity(string $sku): ?int
+    /**
+     * Kanaldaki mevcut miktar VE görseller — ikisi de tam değiştirmede
+     * kaybolur ve korunmalıdır (A15).
+     *
+     * @return array{quantity: int|null, imageUrls: list<string>}
+     */
+    private function currentInventoryItem(string $sku): array
     {
         $response = $this->client->get(
             EbayEndpoints::url(
@@ -1485,16 +1496,24 @@ final class EbayAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsI
         );
 
         if ($response->status() === 404) {
-            return null;
+            return ['quantity' => null, 'imageUrls' => []];
         }
 
         $response->throw();
 
         $quantity = $response->json('availability.shipToLocationAvailability.quantity');
 
-        return is_int($quantity) || (is_string($quantity) && ctype_digit($quantity))
-            ? (int) $quantity
-            : null;
+        $imageUrls = array_values(array_filter(
+            (array) ($response->json('product.imageUrls') ?? []),
+            static fn (mixed $url): bool => is_string($url) && $url !== '',
+        ));
+
+        return [
+            'quantity' => is_int($quantity) || (is_string($quantity) && ctype_digit($quantity))
+                ? (int) $quantity
+                : null,
+            'imageUrls' => $imageUrls,
+        ];
     }
 
     /**

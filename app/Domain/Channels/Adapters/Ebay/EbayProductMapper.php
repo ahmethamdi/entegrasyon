@@ -52,6 +52,9 @@ use App\Domain\Sync\Support\ListingPayload;
  */
 final class EbayProductMapper
 {
+    /** eBay: ilan başına en fazla 24 görsel. */
+    public const MAX_IMAGES = 24;
+
     /**
      * `PUT /inventory_item/{sku}` gövdesi — NE satılıyor (§13.1).
      *
@@ -69,11 +72,22 @@ final class EbayProductMapper
      * `null` geçilirse blok HİÇ yazılmaz; 0 yazılsaydı bir İÇERİK turu
      * sessizce bir STOK sıfırlaması yapar ve ürün satışa kapanırdı.
      *
+     * ⚠️ GÖRSEL DE AYNI TUZAKTADIR (A15). `product.imageUrls` hiç
+     * gönderilmiyordu ve tam değiştirme yüzünden satıcının eBay'de
+     * eklediği görseller HER içerik turunda SİLİNİYORDU. Bizde görsel
+     * varsa onlar gider; yoksa kanaldakiler (`$knownImageUrls`) korunur.
+     *
      * @param  int|null  $knownQuantity  Kanalda ZATEN duran miktar; bilinmiyorsa null
+     * @param  list<string>  $imageUrls  Bizim gönderdiğimiz görseller
+     * @param  list<string>  $knownImageUrls  Kanalda ZATEN duran görseller
      * @return array<string, mixed>
      */
-    public static function toInventoryItemBody(ListingPayload $payload, ?int $knownQuantity = null): array
-    {
+    public static function toInventoryItemBody(
+        ListingPayload $payload,
+        ?int $knownQuantity = null,
+        array $imageUrls = [],
+        array $knownImageUrls = [],
+    ): array {
         $variant = $payload->listing->variant;
 
         $body = [
@@ -105,6 +119,12 @@ final class EbayProductMapper
         // gönderilmez — boş dizi göndermek `VALIDATION` üretir.
         if ($variant?->barcode !== null && $variant->barcode !== '') {
             $body['product']['ean'] = [$variant->barcode];
+        }
+
+        $images = $imageUrls !== [] ? $imageUrls : $knownImageUrls;
+
+        if ($images !== []) {
+            $body['product']['imageUrls'] = array_slice(array_values($images), 0, self::MAX_IMAGES);
         }
 
         if ($knownQuantity !== null) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Channels;
 
+use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -130,6 +131,73 @@ final class EbayOfferLifecycleTest extends TestCase
 
             return ($r->data()['availability']['shipToLocationAvailability']['quantity'] ?? null) === 40;
         });
+    }
+
+    /**
+     * ⚠️ GÖRSELLER `product.imageUrls` İLE GİDER (A15): satıcının eBay'den
+     * hariç tuttuğu ve kaynağı bu bağlantı olan görsel GİTMEZ, HTTPS
+     * olmayan adres düşer, varyantın kendi görseli ÖNCE gelir.
+     */
+    #[Test]
+    public function catalog_images_are_written_as_image_urls(): void
+    {
+        [$adapter, $listing, $tenant] = $this->scenario();
+
+        $this->asTenant($tenant, function () use ($listing, $tenant): void {
+            $variant = $listing->variant;
+
+            foreach ([
+                ['https://cdn.x/ortak.jpg', null, null, null],
+                ['https://cdn.x/varyant.jpg', $variant->id, null, null],
+                ['https://cdn.x/haric.jpg', null, ['ebay'], null],
+                ['https://cdn.x/ebaydengelen.jpg', null, null, $listing->channel_connection_id],
+                ['http://cdn.x/guvensiz.jpg', null, null, null],
+            ] as $i => [$url, $variantId, $excluded, $source]) {
+                ProductImage::query()->create([
+                    'tenant_id' => $tenant->id,
+                    'product_id' => $variant->product_id,
+                    'variant_id' => $variantId,
+                    'source_connection_id' => $source,
+                    'storage_path' => $url,
+                    'position' => $i,
+                    'excluded_channels' => $excluded,
+                ]);
+            }
+        });
+
+        Http::fake([
+            '*/inventory_item/*' => Http::sequence()
+                ->push(['product' => ['imageUrls' => ['https://ebay.x/eski.jpg']]], 200)
+                ->push([], 204),
+        ]);
+
+        $adapter->upsertInventoryItem($listing, $this->payload($listing));
+
+        Http::assertSent(static fn (Request $r): bool => $r->method() === 'PUT'
+            && ($r->data()['product']['imageUrls'] ?? null) === ['https://cdn.x/varyant.jpg', 'https://cdn.x/ortak.jpg']);
+    }
+
+    /**
+     * ⚠️ BİZDE GÖRSEL YOKSA eBay'DEKİLER KORUNUR.
+     *
+     * PUT tam değiştirme yapar; `imageUrls` gönderilmeyince satıcının
+     * eBay'de eklediği görseller her içerik turunda SİLİNİYORDU.
+     */
+    #[Test]
+    public function existing_ebay_images_survive_a_content_push(): void
+    {
+        [$adapter, $listing] = $this->scenario();
+
+        Http::fake([
+            '*/inventory_item/*' => Http::sequence()
+                ->push(['product' => ['imageUrls' => ['https://ebay.x/1.jpg', 'https://ebay.x/2.jpg']]], 200)
+                ->push([], 204),
+        ]);
+
+        $adapter->upsertInventoryItem($listing, $this->payload($listing));
+
+        Http::assertSent(static fn (Request $r): bool => $r->method() === 'PUT'
+            && ($r->data()['product']['imageUrls'] ?? null) === ['https://ebay.x/1.jpg', 'https://ebay.x/2.jpg']);
     }
 
     /**
