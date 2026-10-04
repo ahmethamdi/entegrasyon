@@ -434,6 +434,50 @@ final class IngestChannelOrderTest extends TestCase
     }
 
     /**
+     * A13 · EKSİK STOK SATIRLARI DA variant_id SIRASIYLA EKLENİR.
+     *
+     * ON CONFLICT DO NOTHING, commit edilmemiş çakışan satırın sahibini
+     * bekler: iki eşzamanlı ilk sipariş yeni varyantları ters sırada
+     * eklerse FOR UPDATE'e gelmeden deadlock olur. Kilit sorgusu sıralı
+     * olsa da INSERT sıralı değilse bu pencere açık kalır.
+     */
+    #[Test]
+    public function missing_inventory_rows_are_inserted_in_variant_order(): void
+    {
+        [$tenant, $connection, $warehouseId] = $this->makeContext(stock: 0);
+
+        // Stok satırı OLMAYAN varyantlar — kilit yolu onları yaratmak zorunda.
+        $variantIds = $this->asTenant($tenant, fn () => collect(range(1, 4))
+            ->map(fn () => Variant::factory()->create()->id)
+            ->all());
+
+        $sorted = $variantIds;
+        sort($sorted, SORT_STRING);
+
+        $inserts = [];
+        DB::listen(function ($query) use (&$inserts): void {
+            if (str_contains($query->sql, 'insert into "inventory_levels"')) {
+                $inserts[] = $query->bindings;
+            }
+        });
+
+        // Kasten TERS sıra.
+        $this->ingest($tenant, $connection, $warehouseId, array_map(
+            static fn (string $id): array => [$id, 1],
+            array_reverse($sorted),
+        ));
+
+        $this->assertCount(1, $inserts, 'Eksik satırlar TEK INSERT ile eklenmeli.');
+
+        $insertedOrder = array_values(array_filter(
+            $inserts[0],
+            static fn ($value): bool => in_array($value, $variantIds, true),
+        ));
+
+        $this->assertSame($sorted, $insertedOrder, 'Eksik stok satırları variant_id sırasıyla eklenmeli.');
+    }
+
+    /**
      * İade yolu da kilidi TEK sorguda ve sıralı alır.
      *
      * Aynı gerekçe: kural sipariş alımına özgü değildir.

@@ -106,11 +106,19 @@ final class LockInventoryRows
             ->pluck('variant_id')
             ->all();
 
-        $missing = array_diff($variantIds, $existing);
+        $missing = array_values(array_diff($variantIds, $existing));
 
         if ($missing === []) {
             return;
         }
+
+        // ⚠️ INSERT DE SIRALI (A13). ON CONFLICT DO NOTHING, çakışan satırı
+        // başka bir transaction henüz commit etmemişse ONUN BİTMESİNİ BEKLER.
+        // İki eşzamanlı ilk sipariş aynı yeni varyantları ters sırada eklerse
+        // A c'yi, B a'yı ekler ve birbirini bekler: FOR UPDATE'teki ABBA
+        // deadlock'unun aynısı, sorgudan ÖNCE. array_diff çağıranın sırasını
+        // korur; sıralama burada yapılır.
+        sort($missing, SORT_STRING);
 
         $now = now();
 
@@ -125,7 +133,7 @@ final class LockInventoryRows
             'last_movement_id' => null,
             'created_at' => $now,
             'updated_at' => $now,
-        ], array_values($missing));
+        ], $missing);
 
         DB::table('inventory_levels')->insertOrIgnore($rows);
     }
