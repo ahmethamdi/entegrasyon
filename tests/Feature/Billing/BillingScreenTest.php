@@ -326,6 +326,110 @@ final class BillingScreenTest extends TestCase
             ->assertSessionHasErrors(['plan_code' => 'Bu plan satın alınamaz.']);
     }
 
+    // ---------------------------------------------------------------- plan değişikliği (B1)
+
+    /**
+     * YAŞAYAN ABONELİKTE YENİ CHECKOUT AÇILMAZ — aynı abonelik değişir.
+     *
+     * Önceden yükseltme yeni bir Stripe aboneliği açıyordu ve eskisi
+     * kesilmeye devam ediyordu: satıcı her ay İKİ KEZ öderdi.
+     */
+    #[Test]
+    public function upgrading_changes_the_existing_subscription_instead_of_opening_a_new_one(): void
+    {
+        [$tenant, $user] = $this->subscribed('active');
+
+        $this->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'business'])
+            ->assertRedirect('/billing')
+            ->assertSessionHas('success');
+
+        $this->assertSame([], $this->payments->checkouts, 'Yeni checkout AÇILMAMALI.');
+        $this->assertSame(
+            [['ref' => 'sub_ESKI', 'plan' => 'business', 'tenant' => $tenant->id]],
+            $this->payments->planChanges,
+        );
+
+        // PANEL YAZMAZ: yerel plan webhook gelene kadar değişmez.
+        $this->assertSame('pro', TenantContext::runAsSystem(
+            fn () => Subscription::withoutGlobalScopes()->value('plan_code'),
+        ));
+    }
+
+    /** `past_due` abonelik de yaşar — yanına ikinci abonelik açılmaz. */
+    #[Test]
+    public function a_past_due_subscription_is_changed_not_duplicated(): void
+    {
+        [, $user] = $this->subscribed('past_due');
+
+        $this->actingAs($user)->post('/billing/checkout', ['plan_code' => 'business']);
+
+        $this->assertSame([], $this->payments->checkouts);
+        $this->assertCount(1, $this->payments->planChanges);
+    }
+
+    /** Aynı plana tekrar geçilemez. */
+    #[Test]
+    public function choosing_the_current_plan_is_rejected(): void
+    {
+        [, $user] = $this->subscribed('active');
+
+        $this->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'pro'])
+            ->assertSessionHasErrors(['plan_code' => 'Zaten bu plandasınız.']);
+
+        $this->assertSame([], $this->payments->checkouts);
+        $this->assertSame([], $this->payments->planChanges);
+    }
+
+    /** İptal edilmiş abonelikten sonra yeni ödeme sayfası açılır. */
+    #[Test]
+    public function after_cancellation_a_new_checkout_is_opened(): void
+    {
+        [, $user] = $this->subscribed('cancelled');
+
+        $this->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'business'])
+            ->assertRedirect('https://checkout.stripe.test/business');
+
+        $this->assertCount(1, $this->payments->checkouts);
+        $this->assertSame([], $this->payments->planChanges);
+    }
+
+    /** Sağlayıcı hatası kullanıcıya söylenir. */
+    #[Test]
+    public function a_failed_plan_change_is_reported(): void
+    {
+        [, $user] = $this->subscribed('active');
+        $this->payments->failNextCall = true;
+
+        $this->actingAs($user)
+            ->post('/billing/checkout', ['plan_code' => 'business'])
+            ->assertSessionHasErrors(['plan_code' => 'Plan değiştirilemedi. Lütfen tekrar deneyin.']);
+    }
+
+    /** @return array{0: Tenant, 1: User} */
+    private function subscribed(string $status): array
+    {
+        [$tenant, $user] = $this->context();
+        config()->set('entegrasyon.stripe.secret', 'sk_test_dummy');
+
+        foreach ([['pro', 499], ['business', 999]] as [$code, $price]) {
+            Plan::create(['code' => $code, 'name' => ucfirst($code), 'price_monthly' => $price, 'limits' => []]);
+        }
+
+        TenantContext::runAsSystem(fn () => Subscription::create([
+            'tenant_id' => $tenant->id,
+            'plan_code' => 'pro',
+            'status' => $status,
+            'external_ref' => 'sub_ESKI',
+            'started_at' => now()->subMonth(),
+            'cancelled_at' => $status === 'cancelled' ? now() : null,
+        ]));
+
+        return [$tenant, $user];
+    }
+
     // ---------------------------------------------------------------- yardımcılar
 
     /** @return array{0: Tenant, 1: User} */

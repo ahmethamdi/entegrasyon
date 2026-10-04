@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Tests;
 
+use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\Billing\FakePaymentGateway;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected FakePaymentGateway $payments;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -26,6 +30,10 @@ abstract class TestCase extends BaseTestCase
         // anahtar sızdırma riski hem de ağa bağlı, kırılgan test demekti.
         // Eşleşmeyen istek artık testi düşürür.
         Http::preventStrayRequests();
+
+        // Aynı gerekçe, ödeme tarafı: Stripe SDK'sı curl kullanır ve
+        // yukarıdaki kural onu YAKALAMAZ. Test ödeme sağlayıcısına çıkmaz.
+        $this->app->instance(PaymentGateway::class, $this->payments = new FakePaymentGateway);
     }
 
     protected function tearDown(): void

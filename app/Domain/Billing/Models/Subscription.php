@@ -39,6 +39,13 @@ final class Subscription extends Model
     /** Aktif sayılan durumlar — kota bu ikisinde verilir. */
     public const ACTIVE_STATUSES = ['active', 'trialing'];
 
+    /**
+     * Sağlayıcıda HÂLÂ YAŞAYAN (fatura kesilen) durumlar — kota değil,
+     * çift abonelik sorusu. `past_due` kota VERMEZ ama Stripe onu tahsil
+     * etmeye devam eder; yanında yeni abonelik açmak çift faturadır.
+     */
+    public const LIVE_STATUSES = ['active', 'trialing', 'past_due'];
+
     protected $fillable = [
         'tenant_id',
         'plan_code',

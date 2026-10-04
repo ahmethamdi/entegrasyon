@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Billing\Contracts\PaymentGateway;
+use App\Domain\Billing\Support\StripePaymentGateway;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Support\Logging\PayloadRedactor;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,6 +22,8 @@ class AppServiceProvider extends ServiceProvider
         // onlar AdapterRegistry tarafından her çağrıda yeniden yaratılır.
         $this->app->singleton(PayloadRedactor::class);
         $this->app->singleton(CredentialVault::class);
+
+        $this->app->bind(PaymentGateway::class, StripePaymentGateway::class);
     }
 
     public function boot(): void

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Domain\Billing\Actions;
 
+use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Stripe olayını yerel aboneliğe uygular.
@@ -43,6 +45,10 @@ use Illuminate\Support\Facades\Log;
  */
 final class SyncSubscriptionFromStripe
 {
+    public function __construct(
+        private readonly PaymentGateway $gateway,
+    ) {}
+
     /**
      * Stripe durumlarını yerel durumlara çevirir.
      *
@@ -103,18 +109,23 @@ final class SyncSubscriptionFromStripe
                 return null;
             }
 
-            return DB::transaction(function () use ($tenantId, $planCode, $externalRef): Subscription {
+            $supersededRefs = [];
+
+            $subscription = DB::transaction(function () use ($tenantId, $planCode, $externalRef, &$supersededRefs): Subscription {
                 // AYNI KİRACININ ÖNCEKİ AKTİF ABONELİĞİ KAPATILIR.
                 //
                 // `UNIQUE(tenant_id) WHERE aktif` kısıtı iki aktif satıra
                 // izin vermez; plan yükseltmede eskisi kapatılmasaydı
                 // INSERT kısıta takılır ve ödeme alınmışken abonelik
                 // AÇILMAZDI — en kötü hata biçimi.
-                Subscription::withoutGlobalScopes()
+                $superseded = Subscription::withoutGlobalScopes()
                     ->where('tenant_id', $tenantId)
-                    ->whereIn('status', Subscription::ACTIVE_STATUSES)
-                    ->where('external_ref', '!=', $externalRef)
-                    ->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+                    ->whereIn('status', Subscription::LIVE_STATUSES)
+                    ->where('external_ref', '!=', $externalRef);
+
+                $supersededRefs = $superseded->clone()->whereNotNull('external_ref')->pluck('external_ref')->all();
+
+                $superseded->update(['status' => 'cancelled', 'cancelled_at' => now()]);
 
                 // Çıpa `external_ref`: tekrar gelen olay AYNI satırı
                 // günceller, ikincisini AÇMAZ.
@@ -138,7 +149,37 @@ final class SyncSubscriptionFromStripe
 
                 return $subscription;
             });
+
+            // ⚠️ YERELDE KAPATMAK YETMEZ — STRIPE'TA DA KESİLİR.
+            //
+            // Panel yaşayan abonelikte yeni checkout açmaz; ama iki sekmeden
+            // iki ödeme tamamlanırsa (veya eski sürümden kalma ikinci
+            // abonelik) burada iki canlı Stripe aboneliği olur ve yalnız
+            // yerel satırı kapatmak satıcıyı her ay İKİ KEZ faturalardı.
+            // Transaction DIŞINDA: ağ çağrısı kilit tutmaz; başarısızlık
+            // aboneliği geri almaz ama SESSİZ de kalmaz.
+            foreach ($supersededRefs as $ref) {
+                $this->cancelAtProvider((string) $ref, $tenantId);
+            }
+
+            return $subscription;
         });
+    }
+
+    private function cancelAtProvider(string $ref, string $tenantId): void
+    {
+        try {
+            $this->gateway->cancelSubscription($ref);
+
+            Log::warning('stripe.superseded_subscription_cancelled', ['tenant' => $tenantId, 'ref' => $ref]);
+        } catch (Throwable $e) {
+            Log::error('stripe.superseded_subscription_cancel_failed', [
+                'tenant' => $tenantId,
+                'ref' => $ref,
+                'error' => $e->getMessage(),
+            ]);
+            report($e);
+        }
     }
 
     /**
@@ -174,12 +215,35 @@ final class SyncSubscriptionFromStripe
 
             $subscription->status = $status;
 
+            // PLAN DEĞİŞİKLİĞİ buradan gelir: panel aynı aboneliğin kalemini
+            // değiştirir ve planı aboneliğin metadata'sına yazar. Bilinmeyen
+            // plan kodu YAZILMAZ (FK) — mevcut plan korunur.
+            $newPlan = $object['metadata']['plan_code'] ?? null;
+
+            if (! $deleted
+                && is_string($newPlan)
+                && $newPlan !== $subscription->plan_code
+                && Plan::query()->whereKey($newPlan)->exists()
+            ) {
+                $subscription->plan_code = $newPlan;
+                Tenant::query()->whereKey($subscription->tenant_id)->update(['plan_code' => $newPlan]);
+            }
+
             // NULL "DEĞİŞMEDİ" DEMEKTİR, "BOŞALT" DEĞİL — sipariş
             // güncelleme kuralının aynısı. Stripe her olayda tüm
             // alanları göndermez ve boş değerin mevcut veriyi ezmesi
             // GERİ ALINAMAZ.
-            if (isset($object['current_period_end']) && is_int($object['current_period_end'])) {
-                $subscription->current_period_end = now()->setTimestamp($object['current_period_end']);
+            //
+            // 2025-03-31 (basil) API sürümünden beri alan aboneliğin üstünde
+            // DEĞİL, kalemdedir (`items.data[].current_period_end`). Yalnız
+            // üst alan okunsaydı yeni webhook uç noktalarında yenileme
+            // tarihi hiç yazılmazdı. İkisi de okunur.
+            $periodEnd = $object['current_period_end']
+                ?? $object['items']['data'][0]['current_period_end']
+                ?? null;
+
+            if (is_int($periodEnd)) {
+                $subscription->current_period_end = now()->setTimestamp($periodEnd);
             }
 
             if ($status === 'cancelled' && $subscription->cancelled_at === null) {

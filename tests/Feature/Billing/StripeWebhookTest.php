@@ -360,6 +360,135 @@ final class StripeWebhookTest extends TestCase
         $this->assertSame(0, $this->subscriptionCount());
     }
 
+    // ---------------------------------------------------------------- çift abonelik (B1)
+
+    /**
+     * İKİNCİ ÖDEME ESKİ ABONELİĞİ STRIPE'TA DA KESER.
+     *
+     * Önceden yalnız yerel satır "cancelled" yapılıyordu; Stripe'taki eski
+     * abonelik kesilmeye devam eder ve satıcı her ay İKİ KEZ öderdi.
+     */
+    #[Test]
+    public function a_second_checkout_cancels_the_previous_subscription_at_stripe(): void
+    {
+        [$tenant] = $this->context();
+        $this->makePlan('business', 999);
+
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+
+        $second = $this->checkoutPayload($tenant, 'business');
+        $second['id'] = 'evt_checkout_2';
+        $second['data']['object']['subscription'] = 'sub_YENI';
+        $this->sendSigned($second)->assertOk();
+
+        $this->assertSame(['sub_TEST123'], $this->payments->cancellations);
+
+        $statuses = TenantContext::runAsSystem(fn (): array => Subscription::withoutGlobalScopes()
+            ->pluck('status', 'external_ref')->all());
+        $this->assertSame(['sub_TEST123' => 'cancelled', 'sub_YENI' => 'active'], $statuses);
+    }
+
+    /** `past_due` da kesilir: kota vermez ama Stripe onu tahsil etmeye devam eder. */
+    #[Test]
+    public function a_past_due_previous_subscription_is_also_cancelled(): void
+    {
+        [$tenant] = $this->context();
+
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+        $this->sendSigned($this->subscriptionEvent('customer.subscription.updated', 'past_due'))->assertOk();
+
+        $second = $this->checkoutPayload($tenant);
+        $second['id'] = 'evt_checkout_2';
+        $second['data']['object']['subscription'] = 'sub_YENI';
+        $this->sendSigned($second)->assertOk();
+
+        $this->assertSame(['sub_TEST123'], $this->payments->cancellations);
+    }
+
+    /** Aynı olayın tekrarı kendi aboneliğini İPTAL ETMEZ. */
+    #[Test]
+    public function a_repeated_checkout_never_cancels_its_own_subscription(): void
+    {
+        [$tenant] = $this->context();
+
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+
+        $this->assertSame([], $this->payments->cancellations);
+    }
+
+    /** Stripe iptali başarısızsa yeni abonelik GERİ ALINMAZ ve uç nokta 2xx döner. */
+    #[Test]
+    public function a_failed_provider_cancellation_keeps_the_new_subscription(): void
+    {
+        [$tenant] = $this->context();
+
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+
+        $this->payments->failNextCall = true;
+
+        $second = $this->checkoutPayload($tenant);
+        $second['id'] = 'evt_checkout_2';
+        $second['data']['object']['subscription'] = 'sub_YENI';
+        $this->sendSigned($second)->assertOk();
+
+        $active = TenantContext::runAsSystem(fn () => Subscription::withoutGlobalScopes()
+            ->where('status', 'active')->value('external_ref'));
+        $this->assertSame('sub_YENI', $active);
+    }
+
+    /** Plan değişikliği abonelik güncellemesinin metadata'sından yazılır. */
+    #[Test]
+    public function a_plan_change_is_applied_from_the_subscription_metadata(): void
+    {
+        [$tenant] = $this->context();
+        $this->makePlan('business', 999);
+
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+
+        $event = $this->subscriptionEvent('customer.subscription.updated', 'active');
+        $event['data']['object']['metadata'] = ['tenant_id' => $tenant->id, 'plan_code' => 'business'];
+        $this->sendSigned($event)->assertOk();
+
+        $this->assertSame('business', $this->firstSubscription()?->plan_code);
+        $this->assertSame('business', TenantContext::runAsSystem(
+            fn () => Tenant::query()->whereKey($tenant->id)->value('plan_code'),
+        ));
+        $this->assertSame(1, $this->subscriptionCount());
+    }
+
+    /** Bilinmeyen plan kodu planı EZMEZ. */
+    #[Test]
+    public function an_unknown_plan_in_the_metadata_keeps_the_current_plan(): void
+    {
+        [$tenant] = $this->context();
+
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+
+        $event = $this->subscriptionEvent('customer.subscription.updated', 'active');
+        $event['data']['object']['metadata'] = ['plan_code' => 'hic-yok'];
+        $this->sendSigned($event)->assertOk();
+
+        $this->assertSame('pro', $this->firstSubscription()?->plan_code);
+    }
+
+    /** Yeni API sürümü (basil): dönem sonu kalemde gelir ve yine yazılır. */
+    #[Test]
+    public function the_period_end_is_read_from_the_item_in_newer_api_versions(): void
+    {
+        [$tenant] = $this->context();
+
+        $this->sendSigned($this->checkoutPayload($tenant))->assertOk();
+
+        $periodEnd = time() + 30 * 86400;
+        $event = $this->subscriptionEvent('customer.subscription.updated', 'active');
+        unset($event['data']['object']['current_period_end']);
+        $event['data']['object']['items'] = ['data' => [['current_period_end' => $periodEnd]]];
+        $this->sendSigned($event)->assertOk();
+
+        $this->assertSame($periodEnd, $this->firstSubscription()?->current_period_end?->getTimestamp());
+    }
+
     // ---------------------------------------------------------------- yardımcılar
 
     /** @return array{0: Tenant, 1: User} */
@@ -460,6 +589,16 @@ final class StripeWebhookTest extends TestCase
             'CONTENT_TYPE' => 'application/json',
             'HTTP_STRIPE_SIGNATURE' => sprintf('t=%d,v1=%s', $timestamp, $signature),
         ];
+    }
+
+    private function makePlan(string $code, int $price): void
+    {
+        Plan::create([
+            'code' => $code,
+            'name' => ucfirst($code),
+            'price_monthly' => $price,
+            'limits' => [],
+        ]);
     }
 
     private function subscriptionCount(): int

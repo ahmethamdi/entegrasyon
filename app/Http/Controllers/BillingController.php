@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Domain\Billing\Actions\EnforceQuota;
+use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
@@ -15,7 +16,6 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Stripe\Exception\ApiErrorException;
-use Stripe\StripeClient;
 
 /**
  * Abonelik ekranı — plan seçimi, kullanım ve ödeme başlatma.
@@ -38,7 +38,7 @@ use Stripe\StripeClient;
  */
 final class BillingController extends Controller
 {
-    public function index(Request $request, EnforceQuota $quota): InertiaResponse
+    public function index(Request $request, EnforceQuota $quota, PaymentGateway $gateway): InertiaResponse
     {
         $plan = $quota->planForCurrentTenant();
 
@@ -59,16 +59,17 @@ final class BillingController extends Controller
             // Stripe yapılandırılmamışsa ekran bunu SÖYLER; "satın al"
             // düğmesine basıp sessizce hata almak, sebebi hiç
             // anlaşılmayan bir başarısızlıktır.
-            'paymentsEnabled' => $this->stripeConfigured(),
+            'paymentsEnabled' => $gateway->isConfigured(),
         ]);
     }
 
     /**
-     * Stripe Checkout oturumu açar ve kullanıcıyı yönlendirir.
+     * Stripe Checkout oturumu açar ve kullanıcıyı yönlendirir; yaşayan
+     * abonelik varsa onun planını değiştirir.
      *
      * ABONELİK BURADA YAZILMAZ — webhook yazar.
      */
-    public function checkout(Request $request): RedirectResponse
+    public function checkout(Request $request, PaymentGateway $gateway): RedirectResponse
     {
         $validated = $request->validate([
             'plan_code' => ['required', 'string'],
@@ -96,7 +97,7 @@ final class BillingController extends Controller
             ]);
         }
 
-        if (! $this->stripeConfigured()) {
+        if (! $gateway->isConfigured()) {
             throw ValidationException::withMessages([
                 'plan_code' => 'Ödeme altyapısı henüz yapılandırılmadı.',
             ]);
@@ -104,47 +105,53 @@ final class BillingController extends Controller
 
         $tenantId = TenantContext::idOrFail();
 
-        try {
-            $session = $this->stripe()->checkout->sessions->create([
-                'mode' => 'subscription',
-                'line_items' => [[
-                    'quantity' => 1,
-                    'price_data' => [
-                        'currency' => mb_strtolower($plan->currency),
-                        'unit_amount' => $plan->priceInMinorUnits(),
-                        'recurring' => ['interval' => 'month'],
-                        'product_data' => ['name' => $plan->name],
-                    ],
-                ]],
-                // KİRACI VE PLAN METADATA İLE TAŞINIR — Stripe bizim
-                // kimliklerimizi bilmez ve webhook onları buradan okur.
-                // Yazılmazsa ödeme alınır ama abonelik AÇILAMAZ.
-                'metadata' => [
-                    'tenant_id' => $tenantId,
-                    'plan_code' => $plan->code,
-                ],
-                // Abonelik nesnesine de yazılır: `customer.subscription.*`
-                // olayları oturum metadata'sını TAŞIMAZ.
-                'subscription_data' => [
-                    'metadata' => [
-                        'tenant_id' => $tenantId,
-                        'plan_code' => $plan->code,
-                    ],
-                ],
-                'success_url' => url('/billing?durum=basarili'),
-                'cancel_url' => url('/billing?durum=iptal'),
-                'client_reference_id' => $tenantId,
+        // ⚠️ YAŞAYAN ABONELİK VARSA YENİ CHECKOUT AÇILMAZ.
+        //
+        // Açılsaydı webhook yeni aboneliği yazar, eskisini YEREL olarak
+        // kapatırdı — ama Stripe'taki eski abonelik kesilmeye devam eder ve
+        // satıcı her ay İKİ KEZ ödeme yapardı. Plan değişikliği aynı
+        // aboneliğin kalemini değiştirir; yerel plan yine webhook'tan
+        // (`customer.subscription.updated` + metadata) yazılır.
+        $live = Subscription::query()
+            ->whereIn('status', Subscription::LIVE_STATUSES)
+            ->whereNotNull('external_ref')
+            ->latest('started_at')
+            ->first();
+
+        if ($live !== null && $live->plan_code === $plan->code) {
+            throw ValidationException::withMessages([
+                'plan_code' => 'Zaten bu plandasınız.',
             ]);
+        }
+
+        try {
+            if ($live !== null) {
+                $gateway->changePlan((string) $live->external_ref, $plan, $tenantId);
+
+                return redirect('/billing')->with(
+                    'success',
+                    "Plan değişikliği {$plan->name} olarak gönderildi; ödeme sağlayıcısı onaylayınca birkaç saniye içinde görünür. Fark orantılı faturalanır.",
+                );
+            }
+
+            $url = $gateway->startCheckout(
+                $plan,
+                $tenantId,
+                url('/billing?durum=basarili'),
+                url('/billing?durum=iptal'),
+            );
         } catch (ApiErrorException $e) {
             report($e);
 
             throw ValidationException::withMessages([
-                'plan_code' => 'Ödeme sayfası açılamadı. Lütfen tekrar deneyin.',
+                'plan_code' => $live !== null
+                    ? 'Plan değiştirilemedi. Lütfen tekrar deneyin.'
+                    : 'Ödeme sayfası açılamadı. Lütfen tekrar deneyin.',
             ]);
         }
 
         // Stripe'a yönlendirme — Inertia dışı, tam sayfa.
-        return redirect()->away($session->url);
+        return redirect()->away($url);
     }
 
     // ─────────────────────────────────────────────────── yardımcılar
@@ -188,17 +195,5 @@ final class BillingController extends Controller
         }
 
         return $usage;
-    }
-
-    private function stripeConfigured(): bool
-    {
-        $secret = config('entegrasyon.stripe.secret');
-
-        return is_string($secret) && $secret !== '';
-    }
-
-    private function stripe(): StripeClient
-    {
-        return new StripeClient((string) config('entegrasyon.stripe.secret'));
     }
 }
