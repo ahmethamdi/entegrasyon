@@ -56,6 +56,9 @@ final class OrderController extends Controller
             // satırlık listede 50 ek sorgu olurdu (lazy loading kapalı,
             // istisna fırlatır — bu ekran her gün açılıyor).
             ->with('connection:id,channel_type_code,label')
+            // Kargo durumu rozeti için: kanal durumu henüz "processing"
+            // derken panelden kargo girilmiş olabilir.
+            ->withCount('fulfillments')
             // En yeni üstte: satıcı önce bugünün siparişine bakar.
             // `placed_at` NULL olabilir (kanal vermemiş); o satırlar
             // kaybolmasın diye `created_at`'e düşülür.
@@ -275,6 +278,13 @@ final class OrderController extends Controller
             $query->whereHas('lines', fn (Builder $lines) => $lines->whereNull('variant_id'));
         }
 
+        // Ana sayfadaki "kargolanmayı bekliyor" maddesiyle AYNI tanım
+        // (`Order::awaitingShipment`); iki yerde ayrı yazılsaydı sayı ile
+        // liste ayrışırdı.
+        if ($filter === 'awaiting_shipment') {
+            $query->awaitingShipment();
+        }
+
         if ($search !== '') {
             $needle = '%'.$search.'%';
 
@@ -397,6 +407,8 @@ final class OrderController extends Controller
             'placedAt' => $order->placed_at?->toIso8601String(),
             'channel' => $this->presentChannel($order),
 
+            'hasShipment' => ($order->fulfillments_count ?? 0) > 0,
+
             'lineCount' => $stats['lines'],
             'itemCount' => $stats['items'],
 
@@ -450,6 +462,6 @@ final class OrderController extends Controller
     /** Bilinmeyen filtre sessizce "hepsi"ne düşer. */
     private function normalizeFilter(string $filter): string
     {
-        return in_array($filter, ['oversold', 'unmatched'], strict: true) ? $filter : 'all';
+        return in_array($filter, ['oversold', 'unmatched', 'awaiting_shipment'], strict: true) ? $filter : 'all';
     }
 }

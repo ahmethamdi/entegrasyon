@@ -118,7 +118,7 @@ const lastCapture = computed(() => {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Gözlemlenebilirlik" title="Sistem sağlığı">
+        <PageHeader section="Gelişmiş" title="Sistem durumu">
             <template #actions>
                 <p v-if="lastCapture" class="text-xs text-stone-500">
                     Son ölçüm: {{ lastCapture }}

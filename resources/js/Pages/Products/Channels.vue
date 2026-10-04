@@ -157,7 +157,7 @@ function send(connectionId) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Ürün · kanallar" :title="product.title">
+        <PageHeader section="Ürün · hangi kanallarda" :title="product.title">
             <template #actions>
                 <Link
                     :href="`/products/${product.id}/edit`"

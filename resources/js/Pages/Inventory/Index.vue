@@ -33,11 +33,11 @@ function submitSearch() {
  * kendiliğinden düzelecek sanmaya iter.
  */
 const badges = {
-    error: { text: 'HATA', class: 'bg-red-50 text-red-800 border-red-200' },
-    retrying: { text: 'YENİDEN DENENİYOR', class: 'bg-amber-50 text-amber-900 border-amber-300' },
-    pending: { text: 'BEKLİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
-    synced: { text: 'SENKRON', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-    unlisted: { text: 'LİSTELENMEDİ', class: 'bg-stone-50 text-stone-600 border-stone-200' },
+    error: { text: 'Hata', class: 'bg-red-50 text-red-800 border-red-200' },
+    retrying: { text: 'Yeniden deneniyor', class: 'bg-amber-50 text-amber-900 border-amber-300' },
+    pending: { text: 'Bekliyor', class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    synced: { text: 'Kanallarla aynı', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    unlisted: { text: 'Listelenmedi', class: 'bg-stone-50 text-stone-600 border-stone-200' },
 };
 
 // ── düzeltme formu ────────────────────────────────────────────────────
@@ -153,12 +153,12 @@ function money(row) {
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">SKU</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Elde</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Rezerve</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Satılabilir</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Senkron</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600"></th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Ürün</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Depoda</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Ayrılmış</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Satılabilir</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kanallar</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600"></th>
                     </tr>
                 </thead>
 
@@ -176,10 +176,10 @@ function money(row) {
                                 </p>
                             </td>
 
-                            <td class="px-4 py-3 text-right font-mono text-xs tabular-nums text-stone-700">
+                            <td class="px-4 py-3 text-right text-sm tabular-nums text-stone-700">
                                 {{ row.onHand }}
                             </td>
-                            <td class="px-4 py-3 text-right font-mono text-xs tabular-nums text-stone-700">
+                            <td class="px-4 py-3 text-right text-sm tabular-nums text-stone-700">
                                 {{ row.reserved }}
                             </td>
 
@@ -201,7 +201,7 @@ function money(row) {
 
                             <td class="px-4 py-3">
                                 <span
-                                    class="rounded border px-2 py-0.5 font-mono text-[10px] tracking-wider"
+                                    class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                     :class="badges[row.sync.badge]?.class"
                                 >
                                     {{ badges[row.sync.badge]?.text ?? row.sync.badge }}

@@ -22,9 +22,9 @@ function submit() {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Katalog"
+            section="Ürünler"
             title="Ürün ekle"
-            description="Açılış stoğu stok defterine bir giriş hareketi olarak işlenir; bakiye o hareketten türer. Ürün eklendikten sonra kanallara gönderilebilir."
+            description="Ürünü bir kez ekle, istediğin kanallara buradan gönder. Girdiğin stok tüm kanallarda ortak kullanılır."
         />
 
         <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">

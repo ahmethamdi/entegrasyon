@@ -23,7 +23,7 @@ function submit() {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Katalog" :title="product.title">
+        <PageHeader section="Ürünler" :title="product.title">
             <template #actions>
                 <div class="text-right">
                     <p class="text-xs text-stone-500">Toplam stok</p>

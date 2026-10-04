@@ -30,7 +30,7 @@ function toggle(key) {
         <PageHeader
             section="Destek"
             title="Yardım"
-            description="Panelde sık karşılaşılan durumlar ve sistemin neden öyle davrandığı. Aradığınızı bulamazsanız ilgili ekrandaki uyarı metinleri de aynı gerekçeleri anlatır."
+            description="Sık sorulan sorular ve panelin neden öyle davrandığı."
         />
 
         <!--

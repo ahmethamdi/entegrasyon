@@ -36,7 +36,7 @@ function statusClass(status) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Katalog" title="Ürünler">
+        <PageHeader section="Mağazam" title="Ürünler">
             <template #actions>
                 <div class="flex items-center gap-2">
                     <!--
@@ -98,11 +98,11 @@ function statusClass(status) {
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Ürün</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Varyant</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Toplam stok</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600"></th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Ürün</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Durum</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Varyant</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Toplam stok</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600"></th>
                     </tr>
                 </thead>
 
@@ -120,14 +120,14 @@ function statusClass(status) {
 
                         <td class="px-4 py-3">
                             <span
-                                class="rounded border px-2 py-0.5 font-mono text-[10px] tracking-wider"
+                                class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="statusClass(row.status)"
                             >
                                 {{ statusLabels[row.status] ?? row.status }}
                             </span>
                         </td>
 
-                        <td class="px-4 py-3 text-right font-mono text-xs tabular-nums text-stone-700">
+                        <td class="px-4 py-3 text-right text-sm tabular-nums text-stone-700">
                             {{ row.variantCount }}
                         </td>
 

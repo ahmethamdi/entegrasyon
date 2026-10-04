@@ -6,10 +6,16 @@ namespace App\Http\Controllers;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Inventory\Models\InventoryLevel;
+use App\Domain\Orders\Models\Fulfillment;
+use App\Domain\Orders\Models\Order;
+use App\Domain\Reconciliation\Enums\ItemStatus;
 use App\Domain\Sync\Enums\SyncOperationStatus;
+use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
@@ -42,7 +48,152 @@ final class DashboardController extends Controller
             'syncHealth' => $this->syncHealth(),
             'oversold' => $this->oversold(),
             'recentOperations' => $this->recentOperations(),
+            'todos' => $this->todos(),
+            'today' => $this->today(),
         ]);
+    }
+
+    /**
+     * "Bugün yapman gerekenler" — satıcının diliyle, eyleme bağlı.
+     *
+     * Ana ekranın işi SAYI GÖSTERMEK DEĞİL, NE YAPILACAĞINI SÖYLEMEKTİR.
+     * Teknik sağlık sayıları (senkron, geçici hata) satıcıya bir şey
+     * yaptırmaz; her madde bir ekrana gider ve orada çözülür. Sayısı sıfır
+     * olan madde GÖSTERİLMEZ: boş liste "her şey yolunda" demektir ve bu da
+     * bir bilgidir.
+     *
+     * SIRA ACİLİYETE GÖREDİR: elinde olmayan malı satmış olmak (fazla
+     * satış) kargo beklemekten önce gelir — müşteriye söz verilmiş ve
+     * tutulamıyor.
+     *
+     * @return list<array{key: string, count: int, title: string, hint: string, href: string, tone: string}>
+     */
+    private function todos(): array
+    {
+        $tenantId = TenantContext::idOrFail();
+
+        $items = [
+            [
+                'key' => 'oversold',
+                'count' => InventoryLevel::query()->where('available', '<', 0)->count(),
+                'title' => 'ürünü elinde olandan fazla sattın',
+                'hint' => 'Stoğu düzelt ya da müşteriye haber ver.',
+                'href' => '/inventory?filter=oversold',
+                'tone' => 'urgent',
+            ],
+            [
+                'key' => 'awaiting_shipment',
+                'count' => Order::query()->awaitingShipment()->count(),
+                'title' => 'sipariş kargolanmayı bekliyor',
+                'hint' => 'Kargoya verince takip numarasını gir.',
+                'href' => '/orders?filter=awaiting_shipment',
+                'tone' => 'action',
+            ],
+            [
+                'key' => 'shipment_failed',
+                'count' => Fulfillment::query()->where('push_status', Fulfillment::PUSH_FAILED)->count(),
+                'title' => 'kargo bilgisi kanala gönderilemedi',
+                'hint' => 'Takip numarasını kontrol edip tekrar gönder.',
+                'href' => '/orders',
+                'tone' => 'urgent',
+            ],
+            [
+                'key' => 'unmatched',
+                'count' => Order::query()->whereHas('lines', fn ($q) => $q->whereNull('variant_id'))->count(),
+                'title' => 'siparişte tanımadığımız ürün var',
+                'hint' => 'Stok kodunu (SKU) kataloğundaki ürünle aynı yap; stok o zaman düşer.',
+                'href' => '/orders?filter=unmatched',
+                'tone' => 'action',
+            ],
+            [
+                'key' => 'rejected',
+                'count' => Listing::query()->where('lifecycle_status', 'rejected')->count(),
+                'title' => 'ürün kanal tarafından reddedildi',
+                'hint' => 'Red sebebini oku, ürünü düzeltip tekrar gönder.',
+                'href' => '/approvals?status=rejected',
+                'tone' => 'action',
+            ],
+            [
+                'key' => 'price_conflict',
+                'count' => $this->priceConflictCount($tenantId),
+                'title' => 'üründe kanaldaki fiyat seninkinden farklı',
+                'hint' => 'Hangi fiyatın geçerli olacağına sen karar ver.',
+                'href' => '/reconciliation',
+                'tone' => 'action',
+            ],
+            [
+                'key' => 'failed_sync',
+                'count' => SyncOperation::query()->where('status', SyncOperationStatus::DEAD->value)->count(),
+                'title' => 'güncelleme kanala gönderilemedi',
+                'hint' => 'Sebebine bak, düzeltip tek tıkla tekrar dene.',
+                'href' => '/failures',
+                'tone' => 'urgent',
+            ],
+            [
+                'key' => 'broken_channel',
+                'count' => ChannelConnection::query()->where('health_status', 'unhealthy')->count(),
+                'title' => 'kanal bağlantısı koptu',
+                'hint' => 'Kanal bilgilerini yenile; kopukken stok gönderilemez.',
+                'href' => '/channels',
+                'tone' => 'urgent',
+            ],
+        ];
+
+        return array_values(array_filter($items, static fn (array $item): bool => $item['count'] > 0));
+    }
+
+    /**
+     * Fiyat çakışması — listing başına SON kalem, çözülmemiş olan.
+     *
+     * Mutabakat ekranıyla AYNI kural: eski turların kalemleri sayılsaydı
+     * tek çakışma her turda bir daha sayılır, çözülmüş olan da sayılsaydı
+     * satıcının karar verdiği satır "bekliyor" görünürdü.
+     */
+    private function priceConflictCount(string $tenantId): int
+    {
+        $row = DB::selectOne(<<<'SQL'
+            SELECT count(*) AS n FROM (
+                SELECT DISTINCT ON (listing_id) status, resolved_at
+                  FROM reconciliation_items
+                 WHERE tenant_id = ?
+                 ORDER BY listing_id, id DESC
+            ) latest
+             WHERE latest.status = ? AND latest.resolved_at IS NULL
+        SQL, [$tenantId, ItemStatus::PRICE_CONFLICT->value]);
+
+        return (int) ($row?->n ?? 0);
+    }
+
+    /**
+     * Bugünün özeti — satıcının sabah ilk baktığı iki sayı.
+     *
+     * Ciro PARA BİRİMİ BAŞINA ayrı toplanır: TL ile Euro toplansaydı
+     * anlamsız bir sayı çıkardı (Etsy/eBay siparişi yabancı parayla gelir).
+     * İptal edilenler sayılmaz.
+     *
+     * @return array{orderCount: int, revenue: list<array{currency: string, total: string}>}
+     */
+    private function today(): array
+    {
+        $base = Order::query()
+            ->whereRaw('coalesce(placed_at, created_at) >= ?', [now()->startOfDay()])
+            ->whereRaw('lower(status) <> ?', ['cancelled']);
+
+        $revenue = (clone $base)
+            ->selectRaw('currency, sum(grand_total) AS total')
+            ->groupBy('currency')
+            ->orderBy('currency')
+            ->get()
+            ->map(fn ($row): array => [
+                'currency' => (string) ($row->currency ?? 'TRY'),
+                'total' => number_format((float) $row->total, 2, '.', ''),
+            ])
+            ->all();
+
+        return [
+            'orderCount' => (clone $base)->count(),
+            'revenue' => $revenue,
+        ];
     }
 
     /** @return array<string, mixed> */

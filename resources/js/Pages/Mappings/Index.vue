@@ -94,9 +94,9 @@ function toggle(id) {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Kanal · eşleştirme"
-            title="Kategori ve öznitelik eşleştirme"
-            description="Ürünlerin kanalda hangi kategoriye açılacağı burada belirlenir. Eksik eşleştirmede ürün kanala gönderilemez; stok akışı etkilenmez."
+            section="Gelişmiş"
+            title="Kategori eşleştirme"
+            description="Ürünlerinin kanalda hangi kategoride ve hangi özelliklerle (renk, beden…) açılacağını burada seçersin. Eşleştirme eksikse ürün o kanala gönderilemez; stok yine de güncellenir."
         >
             <template #actions>
                 <div v-if="channelTypes.length > 1" class="shrink-0">

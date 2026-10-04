@@ -60,42 +60,42 @@ const domains = {
  */
 const errors = {
     AUTHENTICATION: {
-        text: 'YETKİ',
+        text: 'Yetki sorunu',
         advice: 'Kanal anahtarını yenileyin — yeniden deneme tek başına çözmez.',
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     VALIDATION: {
-        text: 'DOĞRULAMA',
+        text: 'Bilgi hatalı',
         advice: 'Kanal ürün verisini reddetti; veriyi düzeltip yeniden deneyin.',
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     RATE_LIMITED: {
-        text: 'HIZ SINIRI',
+        text: 'Kanal yoğun',
         advice: 'Kanal kotası doldu; yeniden deneme genellikle çözer.',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     SERVER_ERROR: {
-        text: 'KANAL HATASI',
+        text: 'Kanal hatası',
         advice: 'Kanal 5xx döndü; yeniden deneme genellikle çözer.',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     TIMEOUT: {
-        text: 'ZAMAN AŞIMI',
+        text: 'Kanal geç cevap verdi',
         advice: 'İstek yanıtsız kaldı; yeniden deneme genellikle çözer.',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     NETWORK: {
-        text: 'AĞ',
+        text: 'Bağlantı sorunu',
         advice: 'Kanala ulaşılamadı; yeniden deneme genellikle çözer.',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     CONFLICT: {
-        text: 'ÇAKIŞMA',
+        text: 'Çakışma',
         advice: 'Eşzamanlı değişiklik çakıştı; yeniden deneme genellikle çözer.',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     NOT_FOUND: {
-        text: 'KANALDA YOK',
+        text: 'Kanalda yok',
         advice: 'Ürün kanalda bulunamadı; kanal panelinden kontrol edin.',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
@@ -117,9 +117,9 @@ function domainFor(domain) {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Senkron"
-            title="Başarısız işlemler"
-            description="Tüm denemelerini tüketen gönderimler burada listelenir. Yetki ve doğrulama hataları yeniden denemeyle çözülmez."
+            section="Gelişmiş"
+            title="Kanala gönderilemeyenler"
+            description="Birkaç kez denenip kanala ulaştırılamayan güncellemeler. Sebebini oku; çoğu zaman ürün bilgisini ya da kanal bağlantısını düzeltip tekrar denemen yeter."
         >
             <template #actions>
                 <button
@@ -186,13 +186,13 @@ function domainFor(domain) {
             <table class="w-full min-w-208 text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">SKU</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kanal</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Alan</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Hata</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Deneme</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Zaman</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600"></th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">SKU</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kanal</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Alan</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Hata</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Deneme</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Zaman</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600"></th>
                     </tr>
                 </thead>
 

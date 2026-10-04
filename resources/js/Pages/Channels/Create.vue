@@ -107,9 +107,9 @@ function submit() {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Kanallar"
-            title="Mağaza bağla"
-            description="Anahtarlar şifrelenerek saklanır ve panele bir daha gönderilmez. Kaydettikten sonra kanala bir sağlık isteği gönderilir; cevap gelmezse bağlantı beklemede kalır."
+            section="Kanallarım"
+            title="Kanal bağla"
+            description="Bilgilerin şifrelenerek saklanır, kimseye gösterilmez. Kaydedince bağlantıyı hemen deneriz; başarılıysa kanal kullanıma açılır."
         />
 
         <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">

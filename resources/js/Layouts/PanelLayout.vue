@@ -27,37 +27,55 @@ const tenantName = computed(() => page.props.tenant?.name ?? '');
  */
 const navGroups = [
     {
-        heading: 'İşleyiş',
+        heading: null,
         items: [
-            { href: '/panel', label: 'Özet' },
+            { href: '/panel', label: 'Ana sayfa' },
             { href: '/orders', label: 'Siparişler' },
             { href: '/inventory', label: 'Stok' },
         ],
     },
     {
-        heading: 'Katalog',
+        heading: 'Mağazam',
         items: [
             { href: '/products', label: 'Ürünler' },
-            { href: '/channels', label: 'Kanallar' },
-            { href: '/mappings', label: 'Eşleştirme' },
+            { href: '/channels', label: 'Kanallarım' },
             /*
-             * "Onaylar" KATALOG altındadır, İZLEME altında DEĞİL.
-             *
-             * İzleme grubu SİSTEMİN sağlığını gösterir (sürüklenme, hata,
-             * metrik) ve oradaki satırlar bizim bir şeyi beceremediğimizi
-             * söyler. Onay ise ürünün kanaldaki NORMAL yaşam döngüsüdür:
-             * gönderdik, kanal bakıyor. Hataların yanına konsaydı satıcı
-             * bekleyen her ürünü bir arıza sanardı.
+             * Onaylar GÜNLÜK işe yakındır (Trendyol reddettiği ürünün
+             * sebebini burada gösteriyoruz), bu yüzden "Gelişmiş"e
+             * gömülmedi. Hata grubuna da konmaz: onay kanalın NORMAL
+             * süreci, arıza değil.
              */
-            { href: '/approvals', label: 'Onaylar' },
+            { href: '/approvals', label: 'Kanal onayları' },
         ],
     },
     {
-        heading: 'İzleme',
+        /*
+         * MODÜLLER — 34Pazar'ın büyüyeceği yer. Muhasebe henüz yok;
+         * "Yakında" olarak görünür ama tıklanmaz. Hiç gösterilmeseydi
+         * satıcı ürünün nereye gittiğini bilemez; tıklanabilir olsaydı
+         * boş bir sayfaya düşerdi.
+         */
+        heading: 'Modüller',
         items: [
-            { href: '/reconciliation', label: 'Mutabakat' },
-            { href: '/failures', label: 'Hatalar' },
-            { href: '/metrics', label: 'Sağlık' },
+            { href: null, label: 'Muhasebe', soon: true },
+        ],
+    },
+    {
+        /*
+         * GELİŞMİŞ — KATLANIR, varsayılan KAPALI. Bu ekranlar sistemin
+         * iç işleyişini gösterir (mutabakat, ölü gönderimler, metrikler)
+         * ve satıcının günlük işi değildir; açık dursalardı menünün
+         * yarısını teknik terimler kaplardı. İçlerinde YAPILMASI gereken
+         * bir şey çıkarsa ana sayfadaki "Yapman gerekenler" oraya
+         * bağlantı verir — satıcı menüyü karıştırmadan ulaşır.
+         */
+        heading: 'Gelişmiş',
+        collapsible: true,
+        items: [
+            { href: '/mappings', label: 'Kategori eşleştirme' },
+            { href: '/reconciliation', label: 'Fiyat ve stok kontrolü' },
+            { href: '/failures', label: 'Gönderilemeyenler' },
+            { href: '/metrics', label: 'Sistem durumu' },
         ],
     },
 ];
@@ -69,6 +87,18 @@ const accountNav = [
 ];
 
 const currentPath = computed(() => page.url.split('?')[0]);
+
+/*
+ * Gelişmiş grubu, içindeki bir ekrandaysan AÇIK başlar: kapalı kalsaydı
+ * satıcı bulunduğu sayfanın menüde nerede olduğunu göremezdi.
+ */
+const advancedOpen = ref(false);
+
+watch(currentPath, (path) => {
+    if (navGroups.some((g) => g.collapsible && g.items.some((i) => i.href && path.startsWith(i.href)))) {
+        advancedOpen.value = true;
+    }
+}, { immediate: true });
 
 /*
  * Mobil çekmece (§13 · Faz 4 · panel cilası — sidebar turunda korundu).
@@ -154,9 +184,9 @@ const onboardingSteps = [
     },
     {
         key: 'sync',
-        label: 'İlk senkron',
-        done: 'İlk senkronun tamamlandı.',
-        todo: 'Bir ürünü kanala gönder — senkron tamamlanınca kurulum biter.',
+        label: 'İlk gönderim',
+        done: 'İlk ürünün kanala ulaştı.',
+        todo: 'Bir ürünü kanala gönder; kanala ulaşınca kurulum biter.',
         href: '/products',
         action: 'Ürüne git',
     },
@@ -248,16 +278,35 @@ function logout() {
             </div>
 
             <nav class="flex-1 overflow-y-auto px-2 py-2" aria-label="Ana menü">
-                <div v-for="(group, groupIndex) in navGroups" :key="group.heading">
+                <div v-for="(group, groupIndex) in navGroups" :key="group.heading ?? 'ana'">
+                    <button
+                        v-if="group.collapsible"
+                        type="button"
+                        class="mt-3 flex w-full items-center justify-between border-t border-stone-200 px-3 pb-1.5 pt-4 text-xs font-medium text-stone-500 transition hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        :aria-expanded="advancedOpen"
+                        @click="advancedOpen = !advancedOpen"
+                    >
+                        {{ group.heading }}
+                        <span class="transition" :class="advancedOpen ? 'rotate-90' : ''" aria-hidden="true">›</span>
+                    </button>
                     <p
-                        class="px-3 pb-1.5 font-mono text-[10px] uppercase tracking-widest text-stone-400"
+                        v-else-if="group.heading"
+                        class="px-3 pb-1.5 text-xs font-medium text-stone-500"
                         :class="groupIndex === 0 ? 'pt-2' : 'mt-3 border-t border-stone-200 pt-4'"
                     >
                         {{ group.heading }}
                     </p>
 
-                    <ul>
-                        <li v-for="item in group.items" :key="item.href">
+                    <ul v-show="!group.collapsible || advancedOpen" :class="groupIndex === 0 ? 'pt-1' : ''">
+                        <li v-for="item in group.items" :key="item.href ?? item.label">
+                            <span
+                                v-if="item.soon"
+                                class="flex items-center justify-between rounded px-3 py-2 text-sm text-stone-400"
+                                aria-disabled="true"
+                            >
+                                {{ item.label }}
+                                <span class="rounded-full border border-stone-200 px-2 py-0.5 text-[11px] text-stone-500">Yakında</span>
+                            </span>
                             <!--
                                 AKTİF İŞARET 3px'LİK SOL ÇUBUKTUR, DOLGU
                                 DEĞİL. Marka turuncusu dolgu olarak
@@ -275,6 +324,7 @@ function logout() {
                                 renksiz de okunur.
                             -->
                             <Link
+                                v-else
                                 :href="item.href"
                                 :aria-current="isActive(item.href) ? 'page' : undefined"
                                 class="relative flex items-center rounded px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -368,7 +418,7 @@ function logout() {
                         <h2 class="text-sm font-semibold text-amber-900">
                             Kurulumu tamamla
                         </h2>
-                        <p class="font-mono text-xs tabular-nums text-amber-700">
+                        <p class="text-sm tabular-nums text-amber-800">
                             {{ doneCount }}/{{ steps.length }} adım
                         </p>
                     </div>

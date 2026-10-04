@@ -50,8 +50,8 @@ function submitChannel() {
  * kanaldaki ürünü düzeltir. Ayrılmasaydı hangi işi yapacağını bilemezdi.
  */
 const sources = {
-    csv: { text: 'DOSYA', class: 'bg-stone-100 text-stone-700' },
-    channel: { text: 'KANAL', class: 'bg-sky-100 text-sky-800' },
+    csv: { text: 'Dosya', class: 'bg-stone-100 text-stone-700' },
+    channel: { text: 'Kanal', class: 'bg-sky-100 text-sky-800' },
 };
 
 function sourceFor(source) {
@@ -66,10 +66,10 @@ function sourceFor(source) {
  * hiç işlenmedi ve kullanıcının yapması gereken belli bir iş var.
  */
 const badges = {
-    pending: { text: 'SIRADA', class: 'bg-stone-50 text-stone-600 border-stone-200' },
-    running: { text: 'İŞLENİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
-    completed: { text: 'TAMAMLANDI', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-    failed: { text: 'BAŞARISIZ', class: 'bg-red-50 text-red-900 border-red-300' },
+    pending: { text: 'Sırada', class: 'bg-stone-50 text-stone-600 border-stone-200' },
+    running: { text: 'İşleniyor', class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    completed: { text: 'Tamamlandı', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    failed: { text: 'Başarısız', class: 'bg-red-50 text-red-900 border-red-300' },
 };
 
 function badgeFor(status) {
@@ -243,13 +243,13 @@ function toggleErrors(id) {
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kaynak</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Yeni</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Güncellenen</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Atlanan</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Hata</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Başladı</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kaynak</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Durum</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Yeni</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Güncellenen</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Atlanan</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Hata</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Başladı</th>
                     </tr>
                 </thead>
 

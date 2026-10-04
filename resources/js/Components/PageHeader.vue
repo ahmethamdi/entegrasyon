@@ -22,7 +22,7 @@ defineProps({
     <header class="border-b border-stone-200 pb-5">
         <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div class="min-w-0">
-                <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
+                <p class="text-sm font-medium text-stone-500">
                     {{ section }}
                 </p>
                 <h1 class="mt-1.5 text-2xl font-semibold tracking-tight text-stone-900">

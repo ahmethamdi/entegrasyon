@@ -40,7 +40,7 @@ const values = {
     <div class="relative overflow-hidden rounded-lg border border-stone-200 bg-white p-4">
         <span class="absolute inset-x-0 top-0 h-[3px]" :class="rails[tone] ?? rails.neutral" aria-hidden="true" />
 
-        <p class="font-mono text-[10px] uppercase tracking-wider text-stone-500">
+        <p class="text-sm text-stone-600">
             {{ label }}
         </p>
         <p class="mt-1.5 text-2xl font-semibold tabular-nums" :class="values[tone] ?? values.neutral">

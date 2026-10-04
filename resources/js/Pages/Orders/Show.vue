@@ -3,6 +3,7 @@ import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { channelName, money, orderState, toneClass } from '../../lib/format.js';
 
 const props = defineProps({
     order: { type: Object, required: true },
@@ -57,18 +58,18 @@ function submitRetry(fulfillment) {
 
 /** Gönderim durumu rozetleri; kanaldan gelen satırın rozeti yoktur. */
 const pushBadges = {
-    pending: { text: 'KANALA GÖNDERİLİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
-    sent: { text: 'KANALA GÖNDERİLDİ', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-    failed: { text: 'GÖNDERİLEMEDİ', class: 'bg-red-50 text-red-800 border-red-200' },
+    pending: { text: 'Kanala gönderiliyor', class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    sent: { text: 'Kanala gönderildi', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    failed: { text: 'Gönderilemedi', class: 'bg-red-50 text-red-800 border-red-200' },
 };
 
 const lineBadges = {
-    OVERSOLD: { text: 'FAZLA SATIŞ', class: 'bg-red-50 text-red-800 border-red-200' },
-    PENDING: { text: 'BEKLİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
-    APPLIED: { text: 'STOK DÜŞÜLDÜ', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    OVERSOLD: { text: 'Fazla satış', class: 'bg-red-50 text-red-800 border-red-200' },
+    PENDING: { text: 'Stok düşülmedi', class: 'bg-amber-50 text-amber-900 border-amber-200' },
+    APPLIED: { text: 'Stok düştü', class: 'bg-stone-50 text-stone-600 border-stone-200' },
     // Sonradan eşleşti; satış açılış stoğundan önceydi veya satır tamamen
     // iptal edilmişti — stok bilerek düşülmedi.
-    SKIPPED: { text: 'STOK DÜŞÜLMEDİ', class: 'bg-slate-50 text-slate-700 border-slate-200' },
+    SKIPPED: { text: 'Stoktan düşülmedi', class: 'bg-slate-50 text-slate-700 border-slate-200' },
 };
 
 /**
@@ -82,6 +83,15 @@ const eventLabels = {
     returned: 'İade edildi',
     fulfilled: 'Kargolandı',
     OVERSELL_DETECTED: 'Fazla satış tespit edildi',
+};
+
+/* Olayın nereden geldiği — "webhook" / "polling" satıcıya bir şey söylemez. */
+const sourceLabels = {
+    webhook: 'kanaldan geldi',
+    polling: 'kanaldan alındı',
+    channel: 'kanaldan geldi',
+    panel: 'panelden',
+    system: 'sistem',
 };
 
 function stamp(value) {
@@ -107,9 +117,13 @@ function stamp(value) {
 
             <template #toolbar>
                 <p class="text-sm text-stone-600">
-                    {{ order.channel.label ?? '—' }}
-                    <span class="font-mono text-xs text-stone-500">({{ order.channel.type }})</span>
+                    {{ channelName(order.channel.type) }}
+                    <span v-if="order.channel.label" class="text-stone-500">· {{ order.channel.label }}</span>
                     · {{ stamp(order.placedAt) }}
+                    <span
+                        class="ml-2 rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                        :class="toneClass[orderState(order.status, order.fulfillments.length > 0).tone]"
+                    >{{ orderState(order.status, order.fulfillments.length > 0).text }}</span>
                 </p>
             </template>
         </PageHeader>
@@ -125,26 +139,26 @@ function stamp(value) {
         <div class="mt-6 grid gap-4 sm:grid-cols-4">
             <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Ara toplam</p>
-                <p class="mt-1 font-mono text-sm tabular-nums text-stone-900">
-                    {{ order.subtotal }} {{ order.currency }}
+                <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
+                    {{ money(order.subtotal, order.currency) }}
                 </p>
             </div>
             <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Kargo</p>
-                <p class="mt-1 font-mono text-sm tabular-nums text-stone-900">
-                    {{ order.shippingTotal }} {{ order.currency }}
+                <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
+                    {{ money(order.shippingTotal, order.currency) }}
                 </p>
             </div>
             <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Vergi</p>
-                <p class="mt-1 font-mono text-sm tabular-nums text-stone-900">
-                    {{ order.taxTotal }} {{ order.currency }}
+                <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
+                    {{ money(order.taxTotal, order.currency) }}
                 </p>
             </div>
             <div class="rounded-lg border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">Genel toplam</p>
-                <p class="mt-1 font-mono text-sm font-semibold tabular-nums text-stone-900">
-                    {{ order.grandTotal }} {{ order.currency }}
+                <p class="mt-1 text-lg font-semibold tabular-nums text-stone-900">
+                    {{ money(order.grandTotal, order.currency) }}
                 </p>
             </div>
         </div>
@@ -157,11 +171,11 @@ function stamp(value) {
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Ürün</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Adet</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">İptal / İade</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Tutar</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Stok</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Ürün</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Adet</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">İptal / İade</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Tutar</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Stok</th>
                     </tr>
                 </thead>
 
@@ -177,21 +191,21 @@ function stamp(value) {
                             <p class="mt-0.5 font-mono text-[11px] text-stone-500">{{ line.sku }}</p>
                         </td>
 
-                        <td class="px-4 py-3 text-right font-mono text-xs tabular-nums text-stone-700">
+                        <td class="px-4 py-3 text-right text-sm tabular-nums text-stone-700">
                             {{ line.quantity }}
                         </td>
 
-                        <td class="px-4 py-3 text-right font-mono text-xs tabular-nums text-stone-700">
+                        <td class="px-4 py-3 text-right text-sm tabular-nums text-stone-700">
                             {{ line.quantityCancelled }} / {{ line.quantityReturned }}
                         </td>
 
-                        <td class="px-4 py-3 text-right font-mono text-xs tabular-nums text-stone-900">
-                            {{ line.lineTotal }} {{ order.currency }}
+                        <td class="px-4 py-3 text-right text-sm tabular-nums text-stone-900">
+                            {{ money(line.lineTotal, order.currency) }}
                         </td>
 
                         <td class="px-4 py-3">
                             <span
-                                class="rounded border px-2 py-0.5 font-mono text-[10px] tracking-wider"
+                                class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="lineBadges[line.stockStatus]?.class"
                             >
                                 {{ lineBadges[line.stockStatus]?.text ?? line.stockStatus }}
@@ -203,7 +217,7 @@ function stamp(value) {
                                 bakiye olduğundan fazla görünür.
                             -->
                             <p v-if="!line.isMatched" class="mt-0.5 text-[11px] text-amber-800">
-                                Kataloğunuzda eşleşen ürün yok · stok düşülmedi
+                                Bu stok kodu kataloğunda yok · stok düşülmedi
                             </p>
                         </td>
                     </tr>
@@ -242,7 +256,7 @@ function stamp(value) {
                         <div class="flex items-center gap-2">
                             <span
                                 v-if="pushBadges[fulfillment.pushStatus]"
-                                class="rounded border px-2 py-0.5 font-mono text-[10px] tracking-wider"
+                                class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="pushBadges[fulfillment.pushStatus].class"
                             >
                                 {{ pushBadges[fulfillment.pushStatus].text }}
@@ -344,7 +358,7 @@ function stamp(value) {
             </button>
 
             <p class="w-full text-xs text-stone-500">
-                Takip numarası {{ order.channel.label ?? 'kanala' }} gönderilir; sipariş kanalda kargolandı olarak işaretlenir.
+                Takip numarası siparişin geldiği kanala ({{ channelName(order.channel.type) }}) gönderilir ve sipariş orada kargolandı olarak işaretlenir.
             </p>
             <p v-if="shipForm.errors.tracking_number" class="w-full text-sm text-red-700">
                 {{ shipForm.errors.tracking_number }}
@@ -380,7 +394,7 @@ function stamp(value) {
                                 · {{ event.quantity }} adet
                             </span>
                         </p>
-                        <p class="mt-0.5 font-mono text-[11px] text-stone-500">{{ event.source }}</p>
+                        <p class="mt-0.5 text-xs text-stone-500">{{ sourceLabels[event.source] ?? event.source }}</p>
                     </div>
 
                     <p class="font-mono text-[11px] text-stone-500">{{ stamp(event.occurredAt) }}</p>

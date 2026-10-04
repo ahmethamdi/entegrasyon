@@ -60,35 +60,35 @@ const badges = {
      * geçince bu rozet yanındaki kırmızı ELLE İNCELEME ile aynı görünecekti.
      */
     PRICE_CONFLICT: {
-        text: 'FİYAT ÇAKIŞMASI',
+        text: 'Fiyat çakışması',
         class: 'bg-violet-50 text-violet-800 border-violet-300',
     },
     MANUAL_REVIEW: {
-        text: 'ELLE İNCELEME',
+        text: 'Elle inceleme',
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     DRIFT_DETECTED: {
-        text: 'SÜRÜKLENME',
+        text: 'Farklılık var',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     REPAIR_QUEUED: {
-        text: 'ONARILIYOR',
+        text: 'Onarılıyor',
         class: 'bg-sky-50 text-sky-800 border-sky-200',
     },
     REMOTE_MISSING: {
-        text: 'KANALDA YOK',
+        text: 'Kanalda yok',
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     REMOTE_UNREACHABLE: {
-        text: 'KANAL OKUNAMADI',
+        text: 'Kanal okunamadı',
         class: 'bg-stone-100 text-stone-700 border-stone-300',
     },
     REPAIRED: {
-        text: 'ONARILDI',
+        text: 'Onarıldı',
         class: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     },
     MATCHED: {
-        text: 'EŞLEŞTİ',
+        text: 'Eşleşti',
         class: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     },
 };
@@ -169,7 +169,7 @@ function isDeciding(row, decision) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Mutabakat" title="Kanal sürüklenmesi">
+        <PageHeader section="Gelişmiş" title="Fiyat ve stok kontrolü">
             <template #actions>
                 <p v-if="lastRunText" class="text-xs text-stone-500">
                     Son tur: {{ lastRunText }}
@@ -298,14 +298,14 @@ function isDeciding(row, decision) {
             <table class="w-full min-w-5xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">SKU</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Sebep</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Bizde</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kanalda</th>
-                        <th class="px-4 py-2.5 text-right font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Fark</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kontrol</th>
-                        <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Karar</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">SKU</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Durum</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Sebep</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Bizde</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Kanalda</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Fark</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kontrol</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Karar</th>
                     </tr>
                 </thead>
 

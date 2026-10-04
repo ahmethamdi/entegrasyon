@@ -26,11 +26,11 @@ const props = defineProps({
  */
 const badges = {
     rejected: {
-        text: 'REDDEDİLDİ',
+        text: 'Reddedildi',
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     pending_approval: {
-        text: 'ONAY BEKLİYOR',
+        text: 'Onay bekliyor',
         class: 'bg-sky-50 text-sky-800 border-sky-200',
     },
 };
@@ -65,7 +65,7 @@ function applyFilter(patch) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Katalog" title="Kanal onayları">
+        <PageHeader section="Mağazam" title="Kanal onayları">
             <template #actions>
                 <p v-if="lastCheckedText" class="text-xs text-stone-500">
                     Son kontrol: {{ lastCheckedText }}
@@ -185,11 +185,11 @@ function applyFilter(patch) {
                 <table class="w-full min-w-4xl text-sm">
                     <thead class="border-b border-stone-200 bg-stone-50 text-left">
                         <tr>
-                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Ürün</th>
-                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Kanal</th>
-                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Durum</th>
-                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Sebep</th>
-                            <th class="px-4 py-2.5 font-mono text-[10px] font-medium uppercase tracking-wider text-stone-600">Son kontrol</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Ürün</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kanal</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Durum</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Sebep</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Son kontrol</th>
                         </tr>
                     </thead>
 

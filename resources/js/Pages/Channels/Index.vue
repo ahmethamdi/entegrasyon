@@ -117,7 +117,7 @@ function formatDate(iso) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Kanallar" title="Bağlı mağazalar">
+        <PageHeader section="Mağazam" title="Kanallarım">
             <template #actions>
                 <Link
                     href="/channels/create"
