@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Channels;
 
+use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Contracts\SupportsCatalog;
@@ -557,6 +558,115 @@ final class ShopifyCatalogTest extends TestCase
     }
 
     // ─────────────────────────────────────────────────── yardımcılar
+
+    // ─────────────────────────────────────────────────── görseller (A15)
+
+    /**
+     * Yaratmadan sonra görseller EKLENİR ve gönderilenler saklanır.
+     * Medya isteği ürün kimliğini hedefler.
+     */
+    #[Test]
+    public function images_are_added_after_create_and_remembered(): void
+    {
+        Http::fake(['*' => Http::sequence()
+            ->push($this->productSetResponse())
+            ->push(['data' => ['productUpdate' => ['product' => ['id' => 'gid://shopify/Product/123'], 'userErrors' => []]]]),
+        ]);
+
+        [$adapter, $listing, $variant] = $this->adapterWithListing();
+        $this->images($variant, ['https://cdn.x/1.jpg', 'https://cdn.x/2.jpg']);
+
+        $result = $adapter->createListing($this->payload($listing));
+
+        $this->assertSame(['https://cdn.x/1.jpg', 'https://cdn.x/2.jpg'], $result->data['channel_metadata']['pushed_image_urls']);
+        $this->assertSame('gid://shopify/InventoryItem/789', $result->data['channel_metadata']['inventory_item_gid'], 'Kimlik ezilmemeli.');
+
+        Http::assertSent(fn ($request): bool => ($request->data()['variables']['product']['id'] ?? null) === 'gid://shopify/Product/123'
+            && array_column($request->data()['variables']['media'] ?? [], 'originalSource') === ['https://cdn.x/1.jpg', 'https://cdn.x/2.jpg']
+            && ($request->data()['variables']['media'][0]['mediaContentType'] ?? null) === 'IMAGE');
+    }
+
+    /**
+     * ⚠️ DAHA ÖNCE GÖNDERİLEN GÖRSEL YENİDEN EKLENMEZ — kopya olmaz;
+     * yeni görsel yoksa medya isteği hiç atılmaz.
+     */
+    #[Test]
+    public function previously_pushed_images_are_not_added_again(): void
+    {
+        Http::fake(['*' => Http::sequence()
+            ->push($this->productSetResponse())
+            ->push(['data' => ['productUpdate' => ['product' => ['id' => 'gid://shopify/Product/123'], 'userErrors' => []]]])
+            ->push($this->productSetResponse()),
+        ]);
+
+        [$adapter, $listing, $variant] = $this->adapterWithListing();
+        $this->images($variant, ['https://cdn.x/1.jpg', 'https://cdn.x/2.jpg']);
+
+        $listing->channel_metadata = ['pushed_image_urls' => ['https://cdn.x/1.jpg']];
+
+        $adapter->createListing($this->payload($listing));
+
+        Http::assertSent(fn ($request): bool => array_column($request->data()['variables']['media'] ?? [['originalSource' => 'x']], 'originalSource') === ['https://cdn.x/2.jpg']);
+
+        // Hepsi gönderilmiş: medya isteği YOK.
+        $listing->channel_metadata = ['pushed_image_urls' => ['https://cdn.x/1.jpg', 'https://cdn.x/2.jpg']];
+        $adapter->createListing($this->payload($listing));
+
+        Http::assertSentCount(3);
+    }
+
+    /**
+     * MEDYA HATASI ÜRÜN YARATMAYI BOZMAZ: kimlik döner (yeniden deneme
+     * ikinci ürün yaratmasın), adres listeye girmez ve sonra yeniden denenir.
+     */
+    #[Test]
+    public function a_media_failure_keeps_the_product_identity(): void
+    {
+        Http::fake(['*' => Http::sequence()
+            ->push($this->productSetResponse())
+            ->push(['data' => ['productUpdate' => ['product' => null, 'userErrors' => [['field' => ['media'], 'message' => 'Görsel indirilemedi']]]]]),
+        ]);
+
+        [$adapter, $listing, $variant] = $this->adapterWithListing();
+        $this->images($variant, ['https://cdn.x/1.jpg']);
+
+        $result = $adapter->createListing($this->payload($listing));
+
+        $this->assertFalse($result->failed());
+        $this->assertSame('gid://shopify/ProductVariant/456', $result->data['external_id']);
+        $this->assertArrayNotHasKey('pushed_image_urls', $result->data['channel_metadata']);
+    }
+
+    /** @return array<string, mixed> */
+    private function productSetResponse(): array
+    {
+        return ['data' => ['productSet' => [
+            'product' => [
+                'id' => 'gid://shopify/Product/123',
+                'variants' => ['nodes' => [[
+                    'id' => 'gid://shopify/ProductVariant/456',
+                    'sku' => 'SKU-TEST',
+                    'inventoryItem' => ['id' => 'gid://shopify/InventoryItem/789'],
+                ]]],
+            ],
+            'userErrors' => [],
+        ]]];
+    }
+
+    /** @param list<string> $urls */
+    private function images(Variant $variant, array $urls): void
+    {
+        $this->asSystem(function () use ($variant, $urls): void {
+            foreach ($urls as $position => $url) {
+                ProductImage::query()->create([
+                    'tenant_id' => $variant->tenant_id,
+                    'product_id' => $variant->product_id,
+                    'storage_path' => $url,
+                    'position' => $position,
+                ]);
+            }
+        });
+    }
 
     /** @return array{0: ShopifyAdapter, 1: Listing, 2: Variant} */
     private function adapterWithListing(

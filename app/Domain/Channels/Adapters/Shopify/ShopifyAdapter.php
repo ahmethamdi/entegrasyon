@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Shopify;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
@@ -39,6 +40,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Sleep;
 use RuntimeException;
 use Throwable;
@@ -676,7 +678,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             );
         }
 
-        return AdapterResult::success($identity);
+        return AdapterResult::success($this->withNewMedia($payload, (string) ($identity['external_parent_id'] ?? ''), $identity));
     }
 
     /**
@@ -762,10 +764,89 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
         // ürünün "ilk varyantından" okunsaydı çok varyantlı üründe BAŞKA
         // varyantın stok hedefi yazılır ve stok sessizce yanlış varyanta
         // giderdi.
-        return AdapterResult::success(ShopifyProductMapper::toIdentityResult(
+        return AdapterResult::success($this->withNewMedia($payload, $productGid, ShopifyProductMapper::toIdentityResult(
             ['id' => $productGid, 'variants' => ['nodes' => [$variant]]],
             $this->shopDomain(),
+        )));
+    }
+
+    /**
+     * Daha önce GÖNDERİLMEMİŞ görselleri ürüne EKLER (A15).
+     *
+     * ⚠️ YALNIZCA EKLER, DEĞİŞTİRMEZ. `productSet files` tam değiştirme
+     * yapar: bizim listemiz (bu mağazadan gelenler hariç) gönderilseydi
+     * satıcının Shopify'daki kendi görselleri SİLİNİRDİ. Bizde silinen
+     * görsel de Shopify'dan silinmez — satıcının medyasını silmek geri
+     * alınamaz.
+     *
+     * ⚠️ GÖNDERİLENLER LİSTING'DE TUTULUR (`pushed_image_urls`). Shopify
+     * her adresi yeniden indirir; liste olmasaydı her içerik turunda
+     * bütün görseller bir kez daha eklenir ve ürün kopyalarla dolardı.
+     *
+     * MEDYA HATASI ÜRÜNÜ GERİ SAYMAZ: ürün yazıldı ve kimliği
+     * saklanmalı; aksi hâlde yeniden deneme ikinci bir ürün yaratabilirdi.
+     * Başarısız adresler listeye EKLENMEZ ve sonraki turda yeniden denenir.
+     *
+     * @param  array<string, mixed>  $identity
+     * @return array<string, mixed>
+     */
+    private function withNewMedia(ListingPayload $payload, string $productGid, array $identity): array
+    {
+        $variant = $payload->listing->variant;
+
+        if ($variant === null || $productGid === '') {
+            return $identity;
+        }
+
+        $pushed = (array) ($payload->listing->channel_metadata['pushed_image_urls'] ?? []);
+
+        $new = array_values(array_diff(
+            array_slice(ChannelImages::urlsFor($variant, 'shopify', $this->connection->id), 0, $this->maxImages()),
+            $pushed,
         ));
+
+        if ($new === []) {
+            return $identity;
+        }
+
+        try {
+            $this->gql(
+                <<<'GQL'
+                mutation AddMedia($product: ProductUpdateInput!, $media: [CreateMediaInput!]) {
+                  productUpdate(product: $product, media: $media) {
+                    product { id }
+                    userErrors { field message }
+                  }
+                }
+                GQL,
+                variables: [
+                    'product' => ['id' => $productGid],
+                    'media' => array_map(
+                        static fn (string $url): array => ['originalSource' => $url, 'mediaContentType' => 'IMAGE'],
+                        $new,
+                    ),
+                ],
+                operation: 'productUpdate',
+                userErrorPath: 'productUpdate',
+            );
+        } catch (Throwable $e) {
+            Log::warning('shopify.media_add_failed', [
+                'connection' => $this->connection->id,
+                'product' => $productGid,
+                'urls' => count($new),
+                'error' => $e->getMessage(),
+            ]);
+
+            return $identity;
+        }
+
+        return [
+            ...$identity,
+            'channel_metadata' => [
+                ...($identity['channel_metadata'] ?? []),
+                'pushed_image_urls' => array_values(array_unique([...$pushed, ...$new])),
+            ],
+        ];
     }
 
     /**
