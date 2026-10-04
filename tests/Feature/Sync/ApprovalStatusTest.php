@@ -29,6 +29,7 @@ use App\Support\Logging\PayloadRedactor;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -663,7 +664,7 @@ final class ApprovalStatusTest extends TestCase
      */
     private function fakeTrendyol(array $approved = [], array $rejected = [], array $pending = []): void
     {
-        Http::fake(function (\Illuminate\Http\Client\Request $request) use ($approved, $rejected, $pending) {
+        Http::fake(function (Request $request) use ($approved, $rejected, $pending) {
             if (str_contains($request->url(), '/products/approved')) {
                 return Http::response([
                     'content' => $approved === [] ? [] : [['contentId' => 1, 'variants' => $approved]],
