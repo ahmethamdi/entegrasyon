@@ -248,6 +248,47 @@ final class PushListingTest extends TestCase
     }
 
     /**
+     * DÖNEN BAŞARISIZLIK SATIRI CANLI YAPMAZ.
+     *
+     * Shopify senaryosu: SKU kanalda bulunur ve kimlik BELLEKTE benimsenir,
+     * ama güncelleme `AdapterResult::failure()` döner ("üst ürün kimliği
+     * yok"). Önceden sonuç kontrol edilmiyordu: kimlik ve `live` KALICI
+     * yazılır, operasyon tamamlanırdı — kanalda hiçbir şey güncellenmemişken
+     * satır fan-out hedefi olurdu.
+     */
+    #[Test]
+    public function a_returned_failure_neither_adopts_the_identity_nor_goes_live(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $listing = $this->draftListing($tenant, $variant, 'woocommerce');
+
+        ProgrammableCatalogAdapter::alreadyHas('woocommerce', $variant->sku, externalId: '31');
+        ProgrammableCatalogAdapter::returnFailureOn('woocommerce', ErrorClass::VALIDATION, 'üst ürün kimliği yok');
+
+        $operation = $this->openOperation($tenant, $listing, version: 1);
+
+        $this->runJob($tenant, $operation->id);
+
+        $fresh = $this->asTenant($tenant, fn () => $listing->fresh());
+
+        $this->assertNull($fresh->external_id, 'Başarısız güncellemeden sonra kimlik kalıcı yazılmamalı.');
+        $this->assertFalse($fresh->isLive(), 'Kanalda güncellenmeyen satır canlı olmamalı.');
+
+        $this->assertSame(
+            SyncOperationStatus::DEAD,
+            $this->asTenant($tenant, fn () => $operation->fresh())->status,
+            'Sınıf sonuçtan okunmalı: VALIDATION kalıcıdır.',
+        );
+
+        $state = $this->stateFor($tenant, $listing->id);
+
+        $this->assertSame('error_permanent', $state->status);
+        $this->assertSame(0, $state->synced_version);
+        $this->assertStringContainsString('üst ürün kimliği yok', (string) $state->last_error);
+    }
+
+    /**
      * Kanal katalog yeteneğini desteklemiyorsa DENEME AÇILMAZ.
      *
      * Yetenek `instanceof` ile okunur; panelde tip kontrolü yazılmaz (§7).

@@ -12,6 +12,7 @@ use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Domain\Sync\Support\ListingPayloadBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -153,13 +154,17 @@ final class PushOfferListing implements ShouldQueue
 
             $breaker->recordSuccess($connectionId);
         } catch (Throwable $e) {
-            $class = $adapter->classifyError($e);
+            $class = AdapterReportedFailure::classify($e, $adapter);
 
             $recorder->recordFailure([$operation], $attempt, $class, $e);
 
             $breaker->recordFailure($connectionId, $class);
 
-            $delay = RetryPolicy::delayFor($class, $operation->fresh()->attempt_count);
+            $delay = RetryPolicy::delayFor(
+                $class,
+                $operation->fresh()->attempt_count,
+                AdapterReportedFailure::retryAfterOf($e),
+            );
 
             if ($delay !== null) {
                 $this->release($delay);
@@ -248,6 +253,12 @@ final class PushOfferListing implements ShouldQueue
         AdapterResult $result,
         bool $awaitsApproval = false,
     ): AdapterResult {
+        // ⚠️ BAŞARISIZ ADIM ZİNCİRİ DURDURUR. Dönen `failure()` istisnaya
+        // çevrilmeseydi sonraki adım çağrılır (offer'sız publish) ve son
+        // adımın sonucu "başarılı" diye kaydedilirdi. Önceki adımların
+        // yazdığı kimlikler satırda KALIR — sonraki tur oradan devam eder.
+        AdapterReportedFailure::throwIfFailed($result);
+
         $attributes = [];
 
         $externalId = $result->data['external_id'] ?? null;

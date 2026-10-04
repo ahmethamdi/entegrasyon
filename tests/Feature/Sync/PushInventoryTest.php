@@ -226,6 +226,75 @@ final class PushInventoryTest extends TestCase
     }
 
     /**
+     * İSTİSNASIZ BAŞARISIZLIK DA BAŞARISIZLIKTIR.
+     *
+     * Adapter `AdapterResult::failure()` döndüğünde (Shopify "inventory
+     * item kimliği yok") operasyon COMPLETED OLMAMALI ve `synced_version`
+     * İLERLEMEMELİ — yoksa kanala hiçbir şey gitmemişken satır "senkron"
+     * görünür.
+     *
+     * Sınıf SONUÇTAN okunur: `classifyError()` bu senaryoda SERVER_ERROR
+     * (geçici) der, sonuç VALIDATION (kalıcı) der. Operasyonun ÖLMESİ
+     * çekirdeğin adapter'a yeniden sormadığını kanıtlar.
+     */
+    #[Test]
+    public function returned_failure_is_not_recorded_as_success(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $this->listVariantOn($tenant, $variant, ['woocommerce', 'shopify']);
+
+        ProgrammableInventoryAdapter::succeedOn('woocommerce');
+        ProgrammableInventoryAdapter::returnFailureOn('shopify', ErrorClass::VALIDATION, 'inventory item kimliği yok');
+
+        $this->seedStock($tenant, $variant, 6);
+
+        $this->dispatchInventoryChange($tenant, $variant, version: 14);
+        $this->workQueue($tenant);
+
+        $byChannel = $this->operationsByChannel($tenant);
+
+        $this->assertSame(SyncOperationStatus::DEAD, $byChannel['shopify']->status);
+        $this->assertSame(ErrorClass::VALIDATION->value, $byChannel['shopify']->last_error_class);
+
+        $state = $this->syncState($tenant, $variant, 'shopify');
+
+        // Adapter'ın metni panelde görünür — "ayrıntı yok" değil.
+        $this->assertStringContainsString('inventory item kimliği yok', (string) $state->last_error);
+
+        $this->assertSame(0, $state->synced_version, 'Kanala gitmeyen sürüm senkron sayılmamalı.');
+        $this->assertSame('error_permanent', $state->status);
+
+        // Sağlıklı kanal etkilenmedi.
+        $this->assertSame(SyncOperationStatus::COMPLETED, $byChannel['woocommerce']->status);
+        $this->assertSame(14, $this->syncState($tenant, $variant, 'woocommerce')->synced_version);
+    }
+
+    /**
+     * Geçici sınıfla dönen başarısızlık yeniden denenir — ölmez.
+     */
+    #[Test]
+    public function returned_transient_failure_is_retried(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $this->listVariantOn($tenant, $variant, ['shopify']);
+
+        ProgrammableInventoryAdapter::returnFailureOn('shopify', ErrorClass::RATE_LIMITED, 'throttled', retryAfter: 7);
+
+        $this->seedStock($tenant, $variant, 3);
+
+        $this->dispatchInventoryChange($tenant, $variant, version: 5);
+        $this->workQueue($tenant);
+
+        $operation = $this->operationsByChannel($tenant)['shopify'];
+
+        $this->assertSame(SyncOperationStatus::RETRYING, $operation->status);
+        $this->assertSame('error_transient', $this->syncState($tenant, $variant, 'shopify')->status);
+        $this->assertSame(0, $this->syncState($tenant, $variant, 'shopify')->synced_version);
+    }
+
+    /**
      * Superseded operasyon GÖNDERİLMEZ — erken çıkış.
      *
      * Eski sürümün kanala yazılması, yeni sürümün üzerine bayat veri yazmak

@@ -12,6 +12,7 @@ use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Domain\Sync\Support\ListingPayloadBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -151,7 +152,9 @@ final class PushListing implements ShouldQueue
         $attempt = $recorder->openAttempt($operation);          // attempt_count++ BURADA
 
         try {
-            $result = $this->send($adapter, $listing, $builder, $operation->entity_version);
+            $result = AdapterReportedFailure::throwIfFailed(
+                $this->send($adapter, $listing, $builder, $operation->entity_version)
+            );
 
             // Kimlik ve yaşam döngüsü BAŞARIDAN SONRA yazılır.
             $this->adoptRemoteIdentity($listing, $result, $adapter);
@@ -162,13 +165,17 @@ final class PushListing implements ShouldQueue
             $breaker->recordSuccess($connectionId);
         } catch (Throwable $e) {
             // Sınıflandırmayı ADAPTER yapar, ne yapılacağına ÇEKİRDEK karar verir.
-            $class = $adapter->classifyError($e);
+            $class = AdapterReportedFailure::classify($e, $adapter);
 
             $recorder->recordFailure([$operation], $attempt, $class, $e);
 
             $breaker->recordFailure($connectionId, $class);
 
-            $delay = RetryPolicy::delayFor($class, $operation->fresh()->attempt_count);
+            $delay = RetryPolicy::delayFor(
+                $class,
+                $operation->fresh()->attempt_count,
+                AdapterReportedFailure::retryAfterOf($e),
+            );
 
             if ($delay !== null) {
                 $this->release($delay);

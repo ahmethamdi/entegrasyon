@@ -13,6 +13,7 @@ use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
@@ -52,6 +53,25 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
 
     /** @var array<string, int> */
     private static array $batchSize = [];
+
+    /**
+     * Kanal kodu → istisna FIRLATMADAN dönülecek başarısızlık.
+     *
+     * Gerçek adapter'lar başarısızlığı iki biçimde bildirir; bu, ikincisi
+     * (`AdapterResult::failure()`). `classifyError()` bu programdan
+     * ETKİLENMEZ — çekirdeğin sınıfı sonuçtan okuduğu böyle kanıtlanır.
+     *
+     * @var array<string, array{class: ErrorClass, message: string, retryAfter: ?int}>
+     */
+    private static array $resultFailure = [];
+
+    /**
+     * Kanal kodu → kısmi başarıda BAŞARISIZ sayılacak kalem sırası
+     * (0'dan). Operasyon kimliği yükten okunur.
+     *
+     * @var array<string, list<int>>
+     */
+    private static array $partialFailures = [];
 
     /**
      * Kanal kodu → external_id → kanalda GÖZLENEN miktar.
@@ -106,6 +126,31 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
         ];
     }
 
+    /** Kanal istisna fırlatmadan `AdapterResult::failure()` dönsün. */
+    public static function returnFailureOn(
+        string $channelTypeCode,
+        ErrorClass $class,
+        string $message = 'programlı başarısız sonuç',
+        ?int $retryAfter = null,
+    ): void {
+        self::$resultFailure[$channelTypeCode] = [
+            'class' => $class,
+            'message' => $message,
+            'retryAfter' => $retryAfter,
+        ];
+    }
+
+    /**
+     * Kanal `AdapterResult::partial()` dönsün — verilen sıradaki kalemler
+     * başarısız, gerisi geçti.
+     *
+     * @param  list<int>  $positions
+     */
+    public static function partiallyFailOn(string $channelTypeCode, array $positions): void
+    {
+        self::$partialFailures[$channelTypeCode] = $positions;
+    }
+
     /** Kanalın tek çağrıda kaç kalem aldığını değiştirir — gruplama testi için. */
     public static function batchSizeFor(string $channelTypeCode, int $size): void
     {
@@ -149,6 +194,8 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
         self::$plan = [];
         self::$pushes = [];
         self::$batchSize = [];
+        self::$resultFailure = [];
+        self::$partialFailures = [];
         self::$remote = [];
         self::$fetchFails = [];
         self::$remotePrices = [];
@@ -218,7 +265,7 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
             throw $throw;
         }
 
-        return AdapterResult::success(['pushed' => $batch->count()]);
+        return $this->programmedResult($batch->operations(), $batch->count());
     }
 
     public function fetchInventory(array $listings): RemoteInventorySnapshot
@@ -257,7 +304,9 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
     {
         $code = $this->code();
 
-        self::$pricePushes[$code][] = $batch->toArray();
+        // `PricePushBatch` `toArray()` TAŞIMAZ; kalemler açık alanda durur.
+        // Önceden olmayan metot çağrılıyordu ve bu yol hiç koşmamıştı.
+        self::$pricePushes[$code][] = $batch->items;
 
         $throw = self::$plan[$code]['throw'] ?? null;
 
@@ -265,7 +314,7 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
             throw $throw;
         }
 
-        return AdapterResult::success(['pushed' => $batch->count()]);
+        return $this->programmedResult($batch->operations(), $batch->count());
     }
 
     public function fetchPrices(array $listings): RemotePriceSnapshot
@@ -299,6 +348,36 @@ final class ProgrammableInventoryAdapter implements ChannelAdapter, SupportsInve
     public function maxPriceBatchSize(): int
     {
         return self::$batchSize[$this->code()] ?? 50;
+    }
+
+    /**
+     * Programlanan sonuç: başarısız sonuç → kısmi → başarı.
+     *
+     * @param  list<SyncOperation>  $operations
+     */
+    private function programmedResult(array $operations, int $count): AdapterResult
+    {
+        $code = $this->code();
+
+        if (isset(self::$resultFailure[$code])) {
+            $failure = self::$resultFailure[$code];
+
+            return AdapterResult::failure($failure['class'], $failure['message'], $failure['retryAfter']);
+        }
+
+        if (isset(self::$partialFailures[$code])) {
+            $failed = [];
+
+            foreach (self::$partialFailures[$code] as $position) {
+                if (isset($operations[$position])) {
+                    $failed[$operations[$position]->id] = 'programlı kalem hatası';
+                }
+            }
+
+            return AdapterResult::partial($failed, ['pushed' => $count]);
+        }
+
+        return AdapterResult::success(['pushed' => $count]);
     }
 
     private function code(): string

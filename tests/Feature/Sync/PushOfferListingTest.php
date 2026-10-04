@@ -251,6 +251,39 @@ final class PushOfferListingTest extends TestCase
     }
 
     /**
+     * ⚠️ DÖNEN BAŞARISIZLIK DA ZİNCİRİ DURDURUR.
+     *
+     * Offer adımı istisna fırlatmadan `failure()` dönerse publish
+     * ÇAĞRILMAMALI ve operasyon tamamlanmamalı. Önceden sonuç kontrol
+     * edilmiyordu: offer'sız publish denenir ve son adımın sonucu başarı
+     * diye kaydedilirdi.
+     */
+    #[Test]
+    public function a_returned_failure_stops_the_chain(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+        $listing = $this->draftListing($tenant, $variant);
+
+        ProgrammableOfferAdapter::succeed();
+        ProgrammableOfferAdapter::returnFailureAt('offer');
+
+        $operation = $this->openOperation($tenant, $listing, version: 1);
+        $this->runJob($tenant, $operation->id);
+
+        $this->assertSame(['inventory_item', 'offer'], ProgrammableOfferAdapter::calls());
+
+        $this->assertSame(
+            SyncOperationStatus::DEAD,
+            $this->asTenant($tenant, fn () => $operation->fresh())->status,
+        );
+
+        $fresh = $this->asTenant($tenant, fn () => $listing->fresh());
+
+        $this->assertNull($fresh->external_id);
+        $this->assertFalse($fresh->isLive());
+    }
+
+    /**
      * ⚠️ `channel_metadata` BİRLEŞTİRİLİR, EZİLMEZ.
      *
      * Zincir metadata'yı İKİ FARKLI adımda yazabilir ve bir kanal

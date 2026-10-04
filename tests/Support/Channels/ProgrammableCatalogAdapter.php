@@ -41,6 +41,9 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
     /** @var array<string, list<array{op: string, title: string, sku: ?string, version: int, externalId: ?string}>> */
     private static array $calls = [];
 
+    /** @var array<string, array{class: ErrorClass, message: string}> */
+    private static array $resultFailure = [];
+
     /** Kanalda ZATEN var olan ürünler: kanal kodu → sku → external id. */
     private static array $existing = [];
 
@@ -83,6 +86,20 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
         ];
     }
 
+    /**
+     * Create/update istisna FIRLATMADAN `AdapterResult::failure()` dönsün.
+     *
+     * `classifyError()` bundan etkilenmez — çekirdeğin sınıfı SONUÇTAN
+     * okuduğu böyle kanıtlanır.
+     */
+    public static function returnFailureOn(
+        string $channelTypeCode,
+        ErrorClass $class,
+        string $message = 'programlı başarısız sonuç',
+    ): void {
+        self::$resultFailure[$channelTypeCode] = ['class' => $class, 'message' => $message];
+    }
+
     /** Kanalda bu SKU zaten varmış gibi davran — kopya listeleme testi. */
     public static function alreadyHas(string $channelTypeCode, string $sku, string $externalId): void
     {
@@ -106,6 +123,7 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
         self::$existing = [];
         self::$nextExternalId = [];
         self::$extraIdentity = [];
+        self::$resultFailure = [];
     }
 
     /** @return list<array{op: string, title: string, sku: ?string, version: int, externalId: ?string}> */
@@ -159,6 +177,10 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
 
         $this->throwIfProgrammed();
 
+        if (($failure = $this->programmedFailure()) !== null) {
+            return $failure;
+        }
+
         $externalId = self::$nextExternalId[$this->code()] ?? '900';
 
         return AdapterResult::success([
@@ -173,6 +195,10 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
         $this->record('update', $payload);
 
         $this->throwIfProgrammed();
+
+        if (($failure = $this->programmedFailure()) !== null) {
+            return $failure;
+        }
 
         return AdapterResult::success([
             'external_id' => $payload->listing->external_id,
@@ -221,6 +247,13 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
             'version' => $payload->version,
             'externalId' => $payload->listing->external_id,
         ];
+    }
+
+    private function programmedFailure(): ?AdapterResult
+    {
+        $failure = self::$resultFailure[$this->code()] ?? null;
+
+        return $failure === null ? null : AdapterResult::failure($failure['class'], $failure['message']);
     }
 
     private function throwIfProgrammed(): void

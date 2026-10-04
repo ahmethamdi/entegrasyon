@@ -12,6 +12,7 @@ use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Domain\Sync\Support\InventoryBatchBuilder;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\RetryPolicy;
@@ -159,7 +160,7 @@ final class PushInventory implements ShouldQueue
         $attempt = $recorder->openAttempt($operation);          // attempt_count++ BURADA
 
         try {
-            $result = $adapter->pushInventory($batch);
+            $result = AdapterReportedFailure::throwIfFailed($adapter->pushInventory($batch));
 
             $recorder->recordSuccess($batch->operations(), $attempt, $result);
 
@@ -194,7 +195,7 @@ final class PushInventory implements ShouldQueue
         } catch (Throwable $e) {
             // Sınıflandırmayı ADAPTER yapar (kanal gövdesini yalnızca o
             // anlar), ne yapılacağına ÇEKİRDEK karar verir.
-            $class = $adapter->classifyError($e);
+            $class = AdapterReportedFailure::classify($e, $adapter);
 
             $recorder->recordFailure($batch->operations(), $attempt, $class, $e);
 
@@ -202,7 +203,11 @@ final class PushInventory implements ShouldQueue
             // AUTHENTICATION eşiği beklemez, tek hatada süresiz açar.
             $breaker->recordFailure($connectionId, $class);
 
-            $delay = RetryPolicy::delayFor($class, $operation->fresh()->attempt_count);
+            $delay = RetryPolicy::delayFor(
+                $class,
+                $operation->fresh()->attempt_count,
+                AdapterReportedFailure::retryAfterOf($e),
+            );
 
             if ($delay !== null) {
                 $this->release($delay);

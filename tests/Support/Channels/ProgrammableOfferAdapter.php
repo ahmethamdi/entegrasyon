@@ -42,6 +42,12 @@ final class ProgrammableOfferAdapter implements ChannelAdapter, SupportsOfferLif
 
     private static ?ErrorClass $failClass = null;
 
+    /**
+     * İstisna FIRLATMADAN `failure()` dönecek adım — gerçek eBay adapter'ı
+     * "pazar para birimi bilinmiyor" gibi durumları böyle bildirir.
+     */
+    private static ?string $returnFailureStep = null;
+
     /** @var list<string> Çağrılan adımlar, SIRASIYLA. */
     private static array $calls = [];
 
@@ -75,8 +81,15 @@ final class ProgrammableOfferAdapter implements ChannelAdapter, SupportsOfferLif
         self::$failClass = $class;
     }
 
+    /** Belirli bir adım istisnasız `AdapterResult::failure(VALIDATION)` dönsün. */
+    public static function returnFailureAt(string $step): void
+    {
+        self::$returnFailureStep = $step;
+    }
+
     public static function reset(): void
     {
+        self::$returnFailureStep = null;
         self::$failStep = null;
         self::$failClass = null;
         self::$calls = [];
@@ -105,6 +118,10 @@ final class ProgrammableOfferAdapter implements ChannelAdapter, SupportsOfferLif
 
         $this->throwIfProgrammed('inventory_item');
 
+        if (self::$returnFailureStep === 'inventory_item') {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'programlı inventory_item başarısızlığı');
+        }
+
         return AdapterResult::success();
     }
 
@@ -114,6 +131,10 @@ final class ProgrammableOfferAdapter implements ChannelAdapter, SupportsOfferLif
         self::$calls[] = 'offer';
 
         $this->throwIfProgrammed('offer');
+
+        if (self::$returnFailureStep === 'offer') {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'programlı offer başarısızlığı');
+        }
 
         return AdapterResult::success([
             'channel_metadata' => ['offer_id' => self::$offerId],
@@ -126,6 +147,10 @@ final class ProgrammableOfferAdapter implements ChannelAdapter, SupportsOfferLif
         self::$calls[] = 'publish';
 
         $this->throwIfProgrammed('publish');
+
+        if (self::$returnFailureStep === 'publish') {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'programlı publish başarısızlığı');
+        }
 
         return AdapterResult::success([
             'external_id' => self::$listingId,

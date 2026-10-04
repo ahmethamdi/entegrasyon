@@ -18,6 +18,7 @@ use App\Domain\Messaging\Consumers\VariantPriceChangedConsumer;
 use App\Domain\Messaging\Jobs\ConsumeOutboxEvent;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Actions\OpenSyncOperation;
+use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Jobs\PushPrices;
@@ -31,6 +32,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Support\Channels\ProgrammableInventoryAdapter;
 use Tests\TestCase;
 
 /**
@@ -61,6 +63,15 @@ final class PriceSyncTest extends TestCase
 
         // Planlamayı sınıyoruz; gerçek worker'ı `sync` sürücü taklit etmez.
         Queue::fake();
+
+        ProgrammableInventoryAdapter::reset();
+    }
+
+    protected function tearDown(): void
+    {
+        ProgrammableInventoryAdapter::reset();
+
+        parent::tearDown();
     }
 
     // ------------------------------------------------------------ tetikleyici
@@ -545,6 +556,86 @@ final class PriceSyncTest extends TestCase
     }
 
     /**
+     * İSTİSNASIZ BAŞARISIZLIK FİYATTA DA BAŞARISIZLIKTIR.
+     *
+     * Adapter `AdapterResult::failure()` dönerse (eBay "pazar para birimi
+     * bilinmiyor") operasyon tamamlanmaz ve `synced_version` ilerlemez.
+     * Önceden `recordSuccess` koşulsuz çağrılıyordu: fiyat kanala hiç
+     * gitmemişken satır "senkron" görünürdü.
+     */
+    #[Test]
+    public function a_returned_failure_does_not_advance_the_synced_version(): void
+    {
+        [$tenant, , $variant] = $this->makeProduct(price: 100.00, withVariant: true);
+
+        ProgrammableInventoryAdapter::returnFailureOn('ebay', ErrorClass::VALIDATION, 'para birimi bilinmiyor');
+
+        $operationId = $this->asTenant($tenant, function () use ($tenant, $variant): string {
+            $listing = $this->listingFor($variant, externalId: 'E-1', connectionId: $this->programmableConnection('ebay')->id);
+
+            return $this->openPriceOperation($tenant, $listing)->id;
+        });
+
+        $this->runPriceJob($tenant, $operationId);
+
+        $operation = $this->asTenant($tenant, fn () => SyncOperation::query()->findOrFail($operationId));
+
+        $this->assertSame(SyncOperationStatus::DEAD, $operation->status);
+
+        $state = $this->asTenant($tenant, fn () => DB::table('listing_sync_states')
+            ->where('domain', SyncDomain::PRICE->value)
+            ->first());
+
+        $this->assertSame(0, (int) $state->synced_version, 'Kanala gitmeyen fiyat senkron sayılmamalı.');
+        $this->assertSame('error_permanent', $state->status);
+    }
+
+    /**
+     * KISMİ BAŞARIDA GEÇMEYEN KALEM ÖLÜR, ASILI KALMAZ.
+     *
+     * `PushInventory`'deki kuralın fiyat karşılığı (§13.4). Öldürülmeseydi
+     * kalem `retrying` + `attempt_count > 0` ile kalır, seviye 2 taraması
+     * onu görmez ve `/failures` ekranında da görünmezdi.
+     */
+    #[Test]
+    public function a_partially_failed_price_item_is_killed_not_left_retrying(): void
+    {
+        [$tenant, , $variant] = $this->makeProduct(price: 100.00, withVariant: true);
+
+        $other = $this->asTenant($tenant, fn () => Variant::factory()->create([
+            'product_id' => $variant->product_id,
+            'price' => 50.00,
+            'content_version' => 1,
+        ]));
+
+        ProgrammableInventoryAdapter::partiallyFailOn('ebay', [0]);
+
+        $operationId = $this->asTenant($tenant, function () use ($tenant, $variant, $other): string {
+            $connection = $this->programmableConnection('ebay');
+
+            $first = $this->openPriceOperation($tenant, $this->listingFor($variant, externalId: 'E-1', connectionId: $connection->id));
+            $this->openPriceOperation($tenant, $this->listingFor($other, externalId: 'E-2', connectionId: $connection->id));
+
+            return $first->id;
+        });
+
+        $this->runPriceJob($tenant, $operationId);
+
+        $statuses = $this->asTenant($tenant, fn () => SyncOperation::query()
+            ->pluck('status')
+            ->map(fn (SyncOperationStatus $s): string => $s->value)
+            ->sort()
+            ->values()
+            ->all());
+
+        $this->assertSame(
+            [SyncOperationStatus::COMPLETED->value, SyncOperationStatus::DEAD->value],
+            $statuses,
+            'Geçen kalem tamamlanmalı, geçmeyen ÖLMELİ — retrying kalırsa hiçbir mekanizma onu bir daha görmez.',
+        );
+    }
+
+    /**
      * FİYAT İŞİ HORIZON'UN DİNLEDİĞİ KUYRUĞA ATILIR.
      *
      * BU TESTİN VARLIK NEDENİ: kuyruk adı uydurulursa iş Redis'e yazılır ve
@@ -640,6 +731,31 @@ final class PriceSyncTest extends TestCase
             listing: $listing,
             domain: SyncDomain::PRICE,
             eventVersion: 2,
+        );
+    }
+
+    /** Programlanabilir adapter'a bağlı bağlantı — kanal yanıtı testten yönetilir. */
+    private function programmableConnection(string $channelTypeCode): ChannelConnection
+    {
+        $this->asSystem(fn () => ChannelType::query()->updateOrCreate(
+            ['code' => $channelTypeCode],
+            [
+                'name' => ucfirst($channelTypeCode),
+                'kind' => 'marketplace',
+                'adapter_class' => ProgrammableInventoryAdapter::class,
+                'is_active' => true,
+            ],
+        ));
+
+        return ChannelConnection::factory()->create(['channel_type_code' => $channelTypeCode]);
+    }
+
+    private function runPriceJob(Tenant $tenant, string $operationId): void
+    {
+        (new PushPrices($operationId, $tenant->id))->handle(
+            app(PriceBatchBuilder::class),
+            app(SyncResultRecorder::class),
+            app(AdapterRegistry::class),
         );
     }
 

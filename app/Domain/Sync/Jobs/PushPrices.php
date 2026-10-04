@@ -8,8 +8,10 @@ use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
+use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Domain\Sync\Support\PriceBatchBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -147,22 +149,42 @@ final class PushPrices implements ShouldQueue
         $attempt = $recorder->openAttempt($operation);          // attempt_count++ BURADA
 
         try {
-            $result = $adapter->pushPrices($batch);
+            $result = AdapterReportedFailure::throwIfFailed($adapter->pushPrices($batch));
 
             $recorder->recordSuccess($batch->operations(), $attempt, $result);
+
+            // ⚠️ KISMİ BAŞARIDA BAŞARISIZ KALEMLER ÖLDÜRÜLÜR — `PushInventory`
+            // ile AYNI kural (§13.4). `recordSuccess` onları `retrying`
+            // bırakır ve istisna fırlamadığı için `catch` hiç çalışmaz;
+            // dokunulmasaydı `attempt_count > 0` ile seviye 2 taramasına
+            // takılmadan sonsuza kadar asılı kalırlardı. Ölü satır
+            // `/failures` ekranında görünür ve yeniden denenebilir.
+            if ($result->hasFailedOperations()) {
+                $recorder->markDead(
+                    array_values(array_filter(
+                        $batch->operations(),
+                        static fn (SyncOperation $op): bool => isset($result->failedOperations[$op->id]),
+                    )),
+                    $result->errorClass ?? ErrorClass::VALIDATION,
+                );
+            }
 
             // Devre sayacını sıfırla: *ardışık* hata sayılır, toplam değil.
             $breaker->recordSuccess($connectionId);
         } catch (Throwable $e) {
             // Sınıflandırmayı ADAPTER yapar (kanal gövdesini yalnızca o
             // anlar), ne yapılacağına ÇEKİRDEK karar verir.
-            $class = $adapter->classifyError($e);
+            $class = AdapterReportedFailure::classify($e, $adapter);
 
             $recorder->recordFailure($batch->operations(), $attempt, $class, $e);
 
             $breaker->recordFailure($connectionId, $class);
 
-            $delay = RetryPolicy::delayFor($class, $operation->fresh()->attempt_count);
+            $delay = RetryPolicy::delayFor(
+                $class,
+                $operation->fresh()->attempt_count,
+                AdapterReportedFailure::retryAfterOf($e),
+            );
 
             if ($delay !== null) {
                 $this->release($delay);
