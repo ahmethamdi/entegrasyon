@@ -5,7 +5,7 @@ siteleri de çalışır; bu yüzden **80/443 Plesk'te kalır**, uygulama Docker'
 yalnız `127.0.0.1:8090`'dan düz HTTP dinler, Plesk alan adını ve SSL'i yönetir.
 
 ```
-ziyaretçi ──https──▶ Plesk nginx (34pazar.com, Let's Encrypt)
+ziyaretçi ──https──▶ Plesk Apache (34pazar.com, Let's Encrypt)
                        └─▶ 127.0.0.1:8090 Caddy ─▶ php-fpm (app)
                                                 horizon · scheduler · relay
                                                 postgres · redis (dışarı kapalı)
@@ -53,27 +53,46 @@ APP_KEY=            # ilk kurulumda: docker compose ... run --rm app php artisan
 
 ## 3. Plesk'te alan adı
 
-1. **Websites & Domains → Add Domain → 34pazar.com** (hosting türü: Website).
-2. **SSL/TLS Certificates → Let's Encrypt** — `34pazar.com` ve `www` için.
-3. **Hosting Settings → "Permanent SEO-safe 301 redirect from HTTP to HTTPS"** açık.
-4. **Apache & nginx Settings → Additional nginx directives**:
+⚠️ Bu sunucuda Plesk'in nginx bileşeni KURULU DEĞİL — 80/443'ü doğrudan
+Apache tutar. "Additional nginx directives" burada hiçbir şey yapmaz;
+yönlendirme Apache'de kurulur (5 Eki 2026'da böyle kuruldu).
 
-```nginx
-location ~ ^/ {
-    proxy_pass http://127.0.0.1:8090;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Host $host;
-    proxy_set_header X-Forwarded-Port $server_port;
-    proxy_read_timeout 120s;
-    client_max_body_size 21m;
-}
+```bash
+plesk bin subscription --create 34pazar.com -owner admin -service-plan "Default Domain" \
+  -ip 212.227.142.108 -login pazar34_web -passwd "$(openssl rand -base64 24)" -hosting true -notify false
+# Sertifika, yönlendirme YOKKEN alınır (ACME dosyasını Plesk kendisi sunar)
+plesk bin extension --exec letsencrypt cli.php -d 34pazar.com -d www.34pazar.com -m info@34devs.com
 ```
 
+`/var/www/vhosts/system/34pazar.com/conf/vhost_ssl.conf` (= panelde
+**Apache & nginx Settings → Additional directives for HTTPS**):
+
+```apache
+RewriteEngine On
+RewriteCond %{HTTP_HOST} ^www\.34pazar\.com$ [NC]
+RewriteRule ^(.*)$ https://34pazar.com$1 [R=301,L]
+
+ProxyPreserveHost On
+ProxyTimeout 120
+ProxyPass /.well-known/acme-challenge !
+ProxyPass / http://127.0.0.1:8090/
+ProxyPassReverse / http://127.0.0.1:8090/
+RequestHeader set X-Forwarded-Proto "https"
+RequestHeader set X-Forwarded-Port "443"
+LimitRequestBody 22020096
+```
+
+Sonra `plesk sbin httpdmng --reconfigure-domain 34pazar.com`. HTTP→HTTPS
+301'i Plesk'in varsayılanı (yeni abonelikte açık geldi).
+
+`ProxyPass /.well-known/acme-challenge !` OLMAZSA Let's Encrypt
+yenilemesi uygulamaya gider ve 404 alır — sertifika 90 günde düşer.
 `X-Forwarded-Proto` OLMAZSA uygulama isteği `http` sanar ve e-posta
 doğrulama bağlantıları "geçersiz imza" verir (Laravel tarafında
 `trustProxies` açık; Caddy tarafında `trusted_proxies` — ikisi de hazır).
+
+Sunucuda nginx olsaydı aynı iş `location ~ ^/ { proxy_pass http://127.0.0.1:8090; … }`
+ile "Additional nginx directives"ten yapılırdı.
 
 ## 4. İlk dağıtım
 
@@ -96,7 +115,7 @@ volume'lerini KAPSAMAZ — bu yüzden ayrı):
 
 ```bash
 cat > /etc/cron.d/34pazar-yedek <<'CRON'
-30 3 * * * root cd /opt/34pazar && docker compose -f docker-compose.prod.yml -f docker-compose.plesk.yml --env-file .env.production exec -T postgres pg_dump -U entegrasyon -Fc entegrasyon > /var/backups/34pazar-$(date +\%F).dump && find /var/backups -name '34pazar-*.dump' -mtime +14 -delete
+30 3 * * * root umask 077 && cd /opt/34pazar && docker compose -f docker-compose.prod.yml -f docker-compose.plesk.yml --env-file .env.production exec -T postgres pg_dump -U entegrasyon -Fc entegrasyon > /var/backups/34pazar-$(date +\%F).dump && find /var/backups -name '34pazar-*.dump' -mtime +14 -delete
 CRON
 ```
 
