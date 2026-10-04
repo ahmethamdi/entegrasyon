@@ -39,6 +39,12 @@ final class FakeOrderAdapter implements ChannelAdapter, SupportsOrders
     /** parseOrderEvent null dönsün mü — "sipariş olayı değil" yolu. */
     public static bool $parsesEvents = true;
 
+    /**
+     * Ayrıştırma bu kadar kez patlasın — geçici arıza (deadlock, DB
+     * kopması) taklidi. Her patlamada bir azalır.
+     */
+    public static int $failuresBeforeSuccess = 0;
+
     public function __construct(
         private readonly ChannelConnection $connection,
         public readonly mixed $client = null,
@@ -48,6 +54,7 @@ final class FakeOrderAdapter implements ChannelAdapter, SupportsOrders
     {
         self::$signatureValid = true;
         self::$parsesEvents = true;
+        self::$failuresBeforeSuccess = 0;
     }
 
     public function connection(): ChannelConnection
@@ -116,6 +123,12 @@ final class FakeOrderAdapter implements ChannelAdapter, SupportsOrders
      */
     public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
     {
+        if (self::$failuresBeforeSuccess > 0) {
+            self::$failuresBeforeSuccess--;
+
+            throw new \RuntimeException('programlı geçici arıza (deadlock)');
+        }
+
         if (! self::$parsesEvents) {
             return null;
         }

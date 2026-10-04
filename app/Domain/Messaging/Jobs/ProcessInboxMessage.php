@@ -36,6 +36,15 @@ use Throwable;
  */
 final class ProcessInboxMessage extends TenantAwareJob
 {
+    /**
+     * Bu sayıda denemeden sonra mesaj `failed` olur.
+     *
+     * Geçici arızalar (deadlock, bağlantı kopması) saniyeler içinde geçer;
+     * `inbox:recover` dakikalık koştuğu için beş deneme ~5 dakikalık bir
+     * pencere demektir.
+     */
+    public const MAX_ATTEMPTS = 5;
+
     public function __construct(
         string $tenantId,
         public readonly string $inboxMessageId,
@@ -102,16 +111,31 @@ final class ProcessInboxMessage extends TenantAwareJob
 
             $message->markProcessed();
         } catch (Throwable $e) {
-            // Hata mesajı kaybolmaz: satır failed olur, yükü durur ve
-            // panelden yeniden denenebilir. Kuyruk yeniden denemesi de
-            // koşullu geçişe takılmaması için durumu pending'e döndürür.
+            // ⚠️ HATA MESAJI ÖLDÜRMEZ — BÜTÇE TÜKENENE KADAR GERİ DÖNER.
+            //
+            // Önceden satır İLK hatada `failed` yapılıyordu ve hiçbir yol
+            // onu geri almıyordu: kuyruk yeniden denemesi `status =
+            // 'pending'` koşuluna takılıp boş çıkar, `inbox:recover`
+            // yalnızca `pending` toplar. Tek bir deadlock veya DB kopması
+            // SİPARİŞİ KAYBETTİRİRDİ — stok düşmez, webhook 202 döndüğü için
+            // kanal da yeniden göndermez.
+            //
+            // Sipariş yolu idempotenttir (sipariş tekilliği + hareket
+            // `idempotency_key`'i), yani yeniden işlemek çift etki ÜRETMEZ.
+            //
+            // Bütçe tükenince `failed` olur: kalıcı bozuk bir gövde her
+            // dakika sonsuza kadar denenmesin. `failed` satırlar
+            // `inbox_failed` metriğinde GÖRÜNÜR (§11).
+            $exhausted = $message->attempt_count >= self::MAX_ATTEMPTS;
+
             $message->forceFill([
-                'status' => 'failed',
+                'status' => $exhausted ? 'failed' : 'pending',
                 'last_error' => mb_substr($e->getMessage(), 0, 2000),
             ])->save();
 
-            Log::error('inbox.process_failed', [
+            Log::error($exhausted ? 'inbox.process_failed' : 'inbox.process_retrying', [
                 'message' => $message->id,
+                'attempt' => $message->attempt_count,
                 'error' => $e->getMessage(),
             ]);
 

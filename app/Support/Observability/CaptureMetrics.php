@@ -141,6 +141,7 @@ final class CaptureMetrics
         $this->push($rows, Metric::OUTBOX_CONSUME_GAP, $this->outboxConsumeGap());
         $this->push($rows, Metric::INBOX_PROCESSING_LAG, $this->inboxProcessingLag());
         $this->push($rows, Metric::INBOX_RECOVERY_BACKLOG, $this->inboxRecoveryBacklog());
+        $this->push($rows, Metric::INBOX_FAILED, $this->inboxFailed());
         $this->push($rows, Metric::SYNC_DELIVERY_GAP, $this->syncDeliveryGap());
         $this->push($rows, Metric::DRIFT_RATE, $this->driftRate());
     }
@@ -267,6 +268,21 @@ final class CaptureMetrics
              WHERE status = 'pending'
                AND received_at < clock_timestamp() - ?::interval
         SQL, [self::RECOVERY_CANDIDATE_MINUTES.' minutes']);
+    }
+
+    /**
+     * Deneme bütçesi tükenmiş gelen mesaj sayısı.
+     *
+     * `inbox:recover` bu satırları ARTIK ALMAZ; ölçülmezse işlenmemiş
+     * siparişler hiçbir yerde görünmeden birikir.
+     */
+    private function inboxFailed(): float
+    {
+        return (float) $this->scalar(<<<'SQL'
+            SELECT count(*) AS value
+              FROM inbox_messages
+             WHERE status = 'failed'
+        SQL);
     }
 
     /**

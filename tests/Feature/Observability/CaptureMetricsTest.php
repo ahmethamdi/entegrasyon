@@ -366,6 +366,26 @@ final class CaptureMetricsTest extends TestCase
         $this->assertSame(2.0, $this->snapshot(Metric::INBOX_RECOVERY_BACKLOG));
     }
 
+    /**
+     * BÜTÇESİ TÜKENMİŞ MESAJ ÖLÇÜLÜR — kurtarma onu artık ALMAZ.
+     *
+     * Ölçülmeseydi işlenmemiş siparişler hiçbir yerde görünmeden birikirdi.
+     */
+    #[Test]
+    public function it_captures_failed_inbox_messages(): void
+    {
+        $tenant = $this->makeTenant();
+
+        $this->inboxMessage($tenant, status: 'failed', receivedAgo: 600);
+        $this->inboxMessage($tenant, status: 'pending', receivedAgo: 600);
+        $this->inboxMessage($tenant, status: 'processed', receivedAgo: 600);
+
+        $this->capture();
+
+        $this->assertSame(1.0, $this->snapshot(Metric::INBOX_FAILED));
+        $this->assertTrue(Metric::INBOX_FAILED->breaches(1.0), 'Tek bir işlenemeyen sipariş bile uyarı üretmeli.');
+    }
+
     // ------------------------------------------------------- teslim boşluğu
 
     /**

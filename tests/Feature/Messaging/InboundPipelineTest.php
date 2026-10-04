@@ -15,6 +15,7 @@ use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Inventory\Support\MovementKey;
 use App\Domain\Messaging\Actions\IngestInboxMessage;
+use App\Domain\Messaging\Console\RecoverPendingInbox;
 use App\Domain\Messaging\Jobs\ProcessInboxMessage;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Enums\StockStatus;
@@ -551,6 +552,136 @@ final class InboundPipelineTest extends TestCase
 
         $this->artisan('inbox:recover')->assertSuccessful();
 
+        Queue::assertNothingPushed();
+    }
+
+    /**
+     * ⚠️ GEÇİCİ ARIZA SİPARİŞİ KAYBETTİRMEZ.
+     *
+     * Önceden ilk hatada satır `failed` olurdu ve hiçbir yol onu geri
+     * almazdı: kuyruk yeniden denemesi `pending` koşuluna takılır,
+     * `inbox:recover` yalnızca `pending` toplar. Tek bir deadlock
+     * siparişi kaybettirir, stok hiç düşmezdi.
+     */
+    #[Test]
+    public function a_transient_failure_returns_the_message_to_pending_and_the_retry_ingests_it(): void
+    {
+        [$tenant, $connection, $variant, $warehouseId] = $this->makeContextWithStock(10);
+
+        $message = $this->recordMessage($connection, [
+            'type' => 'created',
+            'external_order_id' => 'ORD-DL',
+            'lines' => [['external_line_id' => 'l1', 'sku' => $variant->sku, 'quantity' => 4]],
+        ]);
+
+        FakeOrderAdapter::$failuresBeforeSuccess = 1;
+
+        try {
+            (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+            $this->fail('İlk deneme hatayı kuyruğa yükseltmeli (Horizon yeniden denesin).');
+        } catch (\RuntimeException) {
+        }
+
+        $this->assertSame('pending', $message->fresh()->status, 'Geçici arızada mesaj yeniden işlenebilir kalmalı.');
+        $this->assertSame(10, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        // Kuyruğun yeniden denemesi.
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+
+        $this->assertSame('processed', $message->fresh()->status);
+        $this->assertSame(6, $this->onHand($tenant, $warehouseId, $variant->id), 'Yeniden deneme stoğu BİR KEZ düşürmeli.');
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /** Bütçe tükenince mesaj `failed` olur — sonsuza kadar denenmez. */
+    #[Test]
+    public function a_message_that_keeps_failing_is_failed_after_the_budget(): void
+    {
+        [$tenant, $connection] = $this->makeContext();
+
+        $message = $this->recordMessage($connection, ['type' => 'created', 'external_order_id' => 'ORD-BOZUK']);
+
+        FakeOrderAdapter::$failuresBeforeSuccess = ProcessInboxMessage::MAX_ATTEMPTS + 1;
+
+        for ($i = 1; $i <= ProcessInboxMessage::MAX_ATTEMPTS; $i++) {
+            try {
+                (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+            } catch (\RuntimeException) {
+            }
+
+            $expected = $i < ProcessInboxMessage::MAX_ATTEMPTS ? 'pending' : 'failed';
+            $this->assertSame($expected, $message->fresh()->status, "{$i}. denemeden sonra");
+        }
+
+        $this->assertStringContainsString('deadlock', (string) $message->fresh()->last_error);
+    }
+
+    /**
+     * ⚠️ WORKER ÖLÜNCE `processing`'DE KALAN MESAJ GERİ ALINIR.
+     *
+     * İşleyici satırı aldıktan sonra süreç ölürse (zaman aşımı, OOM,
+     * deploy) `catch` hiç çalışmaz. Önceden bu satırı hiçbir şey
+     * toplamazdı.
+     */
+    #[Test]
+    public function recovery_reclaims_messages_abandoned_in_processing(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $abandoned = $this->recordMessage($connection, ['type' => 'created']);
+        $working = $this->recordMessage($connection, ['type' => 'created']);
+
+        $this->asSystem(function () use ($abandoned, $working): void {
+            DB::table('inbox_messages')->where('id', $abandoned->id)->update([
+                'status' => 'processing',
+                'attempt_count' => 1,
+                'received_at' => now()->subMinutes(30),
+                'updated_at' => now()->subMinutes(RecoverPendingInbox::ABANDONED_AFTER_MINUTES + 1),
+            ]);
+
+            // Hâlâ çalışan işleyicinin satırı ELİNDEN ALINMAZ.
+            DB::table('inbox_messages')->where('id', $working->id)->update([
+                'status' => 'processing',
+                'attempt_count' => 1,
+                'received_at' => now()->subMinutes(30),
+                'updated_at' => now()->subSeconds(30),
+            ]);
+        });
+
+        $this->artisan('inbox:recover')->assertSuccessful();
+
+        $this->assertSame('pending', $abandoned->fresh()->status);
+        $this->assertSame('processing', $working->fresh()->status);
+
+        Queue::assertPushed(
+            ProcessInboxMessage::class,
+            fn (ProcessInboxMessage $job): bool => $job->inboxMessageId === $abandoned->id,
+        );
+        Queue::assertPushed(ProcessInboxMessage::class, 1);
+    }
+
+    /** Bütçesi tükenmiş yarım satır geri alınmaz, `failed` olur. */
+    #[Test]
+    public function recovery_fails_an_abandoned_message_whose_budget_is_spent(): void
+    {
+        Queue::fake();
+
+        [, $connection] = $this->makeContext();
+
+        $message = $this->recordMessage($connection, ['type' => 'created']);
+
+        $this->asSystem(fn () => DB::table('inbox_messages')->where('id', $message->id)->update([
+            'status' => 'processing',
+            'attempt_count' => ProcessInboxMessage::MAX_ATTEMPTS,
+            'received_at' => now()->subMinutes(30),
+            'updated_at' => now()->subMinutes(RecoverPendingInbox::ABANDONED_AFTER_MINUTES + 1),
+        ]));
+
+        $this->artisan('inbox:recover')->assertSuccessful();
+
+        $this->assertSame('failed', $message->fresh()->status);
         Queue::assertNothingPushed();
     }
 

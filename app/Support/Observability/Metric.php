@@ -46,6 +46,14 @@ enum Metric: string
     /** Kurtarmaya aday bekleyen inbox mesajı sayısı (§11 · saatte > 10). */
     case INBOX_RECOVERY_BACKLOG = 'inbox_recovery_backlog';
 
+    /**
+     * Deneme bütçesi tükenmiş gelen mesaj sayısı (> 0).
+     *
+     * Her biri İŞLENMEMİŞ bir sipariş olayıdır: stok düşmemiş veya geri
+     * eklenmemiştir. Kurtarma bunları ARTIK ALMAZ — insan bakmalıdır.
+     */
+    case INBOX_FAILED = 'inbox_failed';
+
     /** Worker'ın hiç almadığı operasyon sayısı (§11 · 5 dk üstü > 0). */
     case SYNC_DELIVERY_GAP = 'sync_delivery_gap';
 
@@ -104,6 +112,7 @@ enum Metric: string
             self::OUTBOX_CONSUME_GAP => 0,               // tek bir tane bile fazla
             self::INBOX_PROCESSING_LAG => 300,           // 5 dk
             self::INBOX_RECOVERY_BACKLOG => 10,
+            self::INBOX_FAILED => 0,                     // tek bir tane bile fazla
             self::SYNC_DELIVERY_GAP => 0,
             self::DRIFT_RATE => 1,                       // %1
             self::OVERSOLD_UNITS => 5,
@@ -234,6 +243,7 @@ enum Metric: string
             self::OUTBOX_CONSUME_GAP => 'Tüketilmemiş olay',
             self::INBOX_PROCESSING_LAG => 'Gelen mesaj gecikmesi',
             self::INBOX_RECOVERY_BACKLOG => 'Kurtarma bekleyen mesaj',
+            self::INBOX_FAILED => 'İşlenemeyen sipariş mesajı',
             self::SYNC_DELIVERY_GAP => 'Worker almadı',
             self::DRIFT_RATE => 'Sürüklenme oranı',
             self::OVERSOLD_UNITS => 'Fazla satış (adet)',
