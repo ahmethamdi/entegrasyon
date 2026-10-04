@@ -38,7 +38,7 @@ Sıra: ① form + taban adres ② User-Agent ③ yollar + sipariş alanları ④
 **Gerçek Trendyol API anahtarı kullanıcıdan istenecek** — doğrulama onsuz yapılamaz.
 
 ## Sonraki maddeler
-- A12 eşleşmeyen sipariş satırları (SKU sonradan gelince stok hiç düşmüyor) · A13 `LockInventoryRows` insert sırası
+- ✅ A12 `e4068d0` (orders:resolve-unmatched, SKIPPED kuralı) · A13 `LockInventoryRows` insert sırası
 - B: Stripe yükseltmede çift abonelik · içe aktarma kotayı atlıyor · SSRF (StoreUrl iç ağ) ·
   kayıt hız sınırı/e-posta doğrulama/şifre sıfırlama · **yerel `.env`'de sk_live — kullanıcı döndürmeli**
 - C: üretim altyapısı (worker/Horizon/scheduler, Redis parola, deploy) · D: gerçek hesap pilotu
