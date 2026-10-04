@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\WooCommerce;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
@@ -320,14 +321,17 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
 
     public function createListing(ListingPayload $payload): AdapterResult
     {
-        $response = $this->client->post('products', WooProductMapper::toWooProduct($payload));
+        [$images, $metadata] = $this->imagePart($payload);
+
+        $response = $this->client->post('products', [...WooProductMapper::toWooProduct($payload), ...$images]);
 
         $response->throw();
 
-        return AdapterResult::success([
+        return AdapterResult::success(array_filter([
             'external_id' => (string) $response->json('id'),
             'external_url' => $response->json('permalink'),
-        ]);
+            'channel_metadata' => $metadata,
+        ]));
     }
 
     public function updateListing(ListingPayload $payload): AdapterResult
@@ -341,14 +345,64 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
             );
         }
 
+        [$images, $metadata] = $this->imagePart($payload);
+
         $response = $this->client->put(
             "products/{$externalId}",
-            WooProductMapper::toWooProduct($payload),
+            [...WooProductMapper::toWooProduct($payload), ...$images],
         );
 
         $response->throw();
 
-        return AdapterResult::success(['external_id' => $externalId]);
+        return AdapterResult::success(array_filter([
+            'external_id' => $externalId,
+            'channel_metadata' => $metadata,
+        ]));
+    }
+
+    /**
+     * Ürün gövdesinin görsel kısmı ve saklanacak özet (A15).
+     *
+     * ⚠️ WOO HER `src`'Yİ YENİDEN İNDİRİR ve medya kütüphanesinde yeni bir
+     * kopya açar. Görseller her içerik turunda gönderilseydi her
+     * güncellemede kütüphane büyür, ürün galerisi yeniden kurulurdu.
+     * Bu yüzden YALNIZCA görsel seti DEĞİŞTİYSE gönderilir; değişip
+     * değişmediği listing'de saklanan özetle anlaşılır.
+     *
+     * Bizde görsel yoksa (ya da hepsi zaten bu mağazadan geldiyse)
+     * `images` HİÇ gönderilmez: boş dizi Woo'daki galeriyi SİLERDİ.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, mixed>|null}
+     */
+    private function imagePart(ListingPayload $payload): array
+    {
+        $variant = $payload->listing->variant;
+
+        if ($variant === null) {
+            return [[], null];
+        }
+
+        $urls = ChannelImages::urlsFor($variant, 'woocommerce', $this->connection->id);
+
+        if ($urls === []) {
+            return [[], null];
+        }
+
+        $hash = sha1(implode("\n", $urls));
+
+        if (($payload->listing->channel_metadata['images_hash'] ?? null) === $hash
+            && $payload->listing->external_id !== null) {
+            return [[], null];
+        }
+
+        return [
+            ['images' => array_map(
+                static fn (string $url, int $position): array => ['src' => $url, 'position' => $position],
+                $urls,
+                array_keys($urls),
+            )],
+            ['images_hash' => $hash],
+        ];
     }
 
     public function delist(Listing $listing): AdapterResult

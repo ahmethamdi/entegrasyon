@@ -46,8 +46,11 @@ final class WooProductMapper
             $product['sku'] = $variant->sku;
         }
 
-        if ($payload->categoryId !== null) {
-            // Woo'da taksonomi doğrulaması yoktur; kategori serbesttir.
+        // Woo'da taksonomi doğrulaması yoktur; kategori serbesttir.
+        // ⚠️ YALNIZCA SAYISAL KİMLİK GİDER: alan iç kategori ADINI taşır
+        // ("kadin-elbise") ve `(int)` onu 0'a çevirip Woo'ya `id: 0`
+        // gönderiyordu — sessiz çöp yazımı (A15'te bulundu).
+        if ($payload->categoryId !== null && ctype_digit($payload->categoryId)) {
             $product['categories'] = [['id' => (int) $payload->categoryId]];
         }
 
