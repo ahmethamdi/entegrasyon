@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Channels\Contracts\SupportsFulfillment;
+use App\Domain\Orders\Actions\RecordPanelShipment;
+use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Models\OrderEvent;
 use App\Domain\Orders\Models\OrderLine;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -89,7 +93,9 @@ final class OrderController extends Controller
             'lines' => fn ($query) => $query->orderBy('created_at'),
             'lines.variant:id,sku',
             'events' => fn ($query) => $query->orderByDesc('occurred_at'),
+            'fulfillments' => fn ($query) => $query->orderBy('created_at'),
             'connection:id,channel_type_code,label',
+            'connection.channelType:code,adapter_class',
         ])->findOrFail($order);
 
         return Inertia::render('Orders/Show', [
@@ -136,8 +142,114 @@ final class OrderController extends Controller
                     'occurredAt' => $event->occurred_at?->toIso8601String(),
                     'source' => $event->source,
                 ])->all(),
+
+                'fulfillments' => $order->fulfillments->map(fn (Fulfillment $fulfillment): array => [
+                    'id' => $fulfillment->id,
+                    'carrier' => $fulfillment->carrier,
+                    'trackingNumber' => $fulfillment->tracking_number,
+                    'status' => $fulfillment->status,
+                    'source' => $fulfillment->source,
+                    'pushStatus' => $fulfillment->push_status,
+                    'pushError' => $fulfillment->push_error,
+                    'shippedAt' => $fulfillment->shipped_at?->toIso8601String(),
+                    'pushedAt' => $fulfillment->pushed_at?->toIso8601String(),
+                ])->all(),
+
+                'canShip' => $this->channelSupportsFulfillment($order),
             ],
         ]);
+    }
+
+    /**
+     * Panelden kargo bildirimi — takip numarası siparişin kanalına gider.
+     *
+     * Kanal desteklemiyorsa (Trendyol, Etsy, eBay) kayıt AÇILMAZ: satır
+     * yazılıp sonra "gönderilemedi" denseydi satıcı ilk anda neden
+     * olmayacağını bilmeden bir deneme görürdü.
+     *
+     * Gönderilmiş ya da gönderilmekte olan bildirim varken ikincisi
+     * reddedilir: Shopify'da sipariş tamamen kargolanmıştır ve ikinci istek
+     * hiçbir şey yapmaz; satıcı "değiştirdim" sanırdı.
+     */
+    public function ship(Request $request, string $order, RecordPanelShipment $record): RedirectResponse
+    {
+        $order = Order::query()->with('connection.channelType:code,adapter_class')->findOrFail($order);
+
+        $validated = $request->validate([
+            'carrier' => ['nullable', 'string', 'max:100'],
+            'tracking_number' => ['required', 'string', 'max:100'],
+        ]);
+
+        if (! $this->channelSupportsFulfillment($order)) {
+            return back()->withErrors([
+                'tracking_number' => 'Bu kanal kargo bildirimini desteklemiyor; takip numarasını kanalın kendi panelinden girin.',
+            ]);
+        }
+
+        $active = $order->fulfillments()
+            ->where('source', Fulfillment::SOURCE_PANEL)
+            ->whereIn('push_status', [Fulfillment::PUSH_PENDING, Fulfillment::PUSH_SENT])
+            ->exists();
+
+        if ($active) {
+            return back()->withErrors([
+                'tracking_number' => 'Bu sipariş için kargo bildirimi zaten gönderildi.',
+            ]);
+        }
+
+        $record->run(
+            $order,
+            carrier: $this->blankToNull($validated['carrier'] ?? null),
+            trackingNumber: trim($validated['tracking_number']),
+            actorId: $request->user()?->id,
+        );
+
+        return back()->with('success', 'Kargo bildirimi kanala gönderiliyor.');
+    }
+
+    /**
+     * Gönderilemeyen kargo bildirimini yeniden dener; satıcı numarayı
+     * düzeltebilir. Yalnız BAŞARISIZ panel satırı denenir.
+     */
+    public function retryShipment(Request $request, string $order, string $fulfillment, RecordPanelShipment $record): RedirectResponse
+    {
+        $row = Fulfillment::query()
+            ->where('order_id', $order)
+            ->where('source', Fulfillment::SOURCE_PANEL)
+            ->where('push_status', Fulfillment::PUSH_FAILED)
+            ->findOrFail($fulfillment);
+
+        $validated = $request->validate([
+            'carrier' => ['nullable', 'string', 'max:100'],
+            'tracking_number' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $record->retry(
+            $row,
+            carrier: $this->blankToNull($validated['carrier'] ?? null),
+            trackingNumber: $this->blankToNull($validated['tracking_number'] ?? null),
+        );
+
+        return back()->with('success', 'Kargo bildirimi yeniden gönderiliyor.');
+    }
+
+    /**
+     * Adapter KURULMADAN sınıftan okunur: ekranı açmak kanal kimlik
+     * bilgisini çözmeyi gerektirmemeli ve bozuk bir bağlantı sipariş
+     * ayrıntısını 500'e düşürmemeli.
+     */
+    private function channelSupportsFulfillment(Order $order): bool
+    {
+        $class = $order->connection?->channelType?->adapter_class;
+
+        return is_string($class) && $class !== '' && is_subclass_of($class, SupportsFulfillment::class);
+    }
+
+    private function blankToNull(?string $value): ?string
+    {
+        $value = $value === null ? null : trim($value);
+
+        return $value === '' ? null : $value;
     }
 
     // ─────────────────────────────────────────────────── sorgular

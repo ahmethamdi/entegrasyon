@@ -1,11 +1,66 @@
 <script setup>
-import { Link } from '@inertiajs/vue3';
+import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
-defineProps({
+const props = defineProps({
     order: { type: Object, required: true },
 });
+
+const page = usePage();
+const flashSuccess = computed(() => page.props.flash?.success);
+
+// ── kargo bildirimi ───────────────────────────────────────────────────
+/**
+ * Firma adı serbest metindir: Shopify tanıdığı adlarda takip bağlantısını
+ * kendisi kurar, Woo müşteri notuna yazar. Liste yalnız öneridir.
+ */
+const carrierSuggestions = [
+    'Yurtiçi Kargo', 'Aras Kargo', 'MNG Kargo', 'PTT Kargo', 'Sürat Kargo',
+    'DHL', 'DHL Express', 'UPS', 'DPD', 'GLS', 'Hermes', 'FedEx',
+];
+
+const shipForm = useForm({ carrier: '', tracking_number: '' });
+
+function submitShipment() {
+    shipForm.post(`/orders/${props.order.id}/shipments`, {
+        preserveScroll: true,
+        onSuccess: () => shipForm.reset(),
+    });
+}
+
+/**
+ * Gönderilmiş ya da gönderilmekte olan panel bildirimi varken form
+ * gösterilmez: ikinci istek kanalda hiçbir şey değiştirmez.
+ */
+const hasActiveShipment = computed(() => props.order.fulfillments.some(
+    (f) => f.source === 'panel' && (f.pushStatus === 'pending' || f.pushStatus === 'sent'),
+));
+
+const retrying = ref(null);
+const retryForm = useForm({ carrier: '', tracking_number: '' });
+
+function openRetry(fulfillment) {
+    retrying.value = fulfillment.id;
+    retryForm.carrier = fulfillment.carrier ?? '';
+    retryForm.tracking_number = fulfillment.trackingNumber ?? '';
+    retryForm.clearErrors();
+}
+
+function submitRetry(fulfillment) {
+    retryForm.post(`/orders/${props.order.id}/shipments/${fulfillment.id}/retry`, {
+        preserveScroll: true,
+        onSuccess: () => { retrying.value = null; },
+    });
+}
+
+/** Gönderim durumu rozetleri; kanaldan gelen satırın rozeti yoktur. */
+const pushBadges = {
+    pending: { text: 'KANALA GÖNDERİLİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    sent: { text: 'KANALA GÖNDERİLDİ', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    failed: { text: 'GÖNDERİLEMEDİ', class: 'bg-red-50 text-red-800 border-red-200' },
+};
 
 const lineBadges = {
     OVERSOLD: { text: 'FAZLA SATIŞ', class: 'bg-red-50 text-red-800 border-red-200' },
@@ -58,6 +113,13 @@ function stamp(value) {
                 </p>
             </template>
         </PageHeader>
+
+        <div
+            v-if="flashSuccess"
+            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+        >
+            {{ flashSuccess }}
+        </div>
 
         <!-- tutarlar -->
         <div class="mt-6 grid gap-4 sm:grid-cols-4">
@@ -148,6 +210,153 @@ function stamp(value) {
                 </tbody>
             </table>
         </div>
+
+        <!--
+            KARGO. Satıcı takip numarasını burada TEK yerden girer ve
+            sipariş geldiği kanala gönderilir. Kanaldan gelen kargo da
+            burada listelenir (rozetsiz).
+        -->
+        <h2 class="mt-10 text-sm font-semibold text-stone-900">Kargo</h2>
+
+        <div class="mt-3 rounded-lg border border-stone-200 bg-white">
+            <ul v-if="order.fulfillments.length">
+                <li
+                    v-for="fulfillment in order.fulfillments"
+                    :key="fulfillment.id"
+                    class="border-b border-stone-100 px-4 py-3 last:border-b-0"
+                >
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p class="text-xs text-stone-900">
+                                {{ fulfillment.carrier ?? 'Kargo firması belirtilmedi' }}
+                                <span v-if="fulfillment.trackingNumber" class="font-mono text-stone-600">
+                                    · {{ fulfillment.trackingNumber }}
+                                </span>
+                            </p>
+                            <p class="mt-0.5 font-mono text-[11px] text-stone-500">
+                                {{ fulfillment.source === 'panel' ? 'panelden girildi' : 'kanaldan geldi' }}
+                                · {{ stamp(fulfillment.shippedAt) }}
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <span
+                                v-if="pushBadges[fulfillment.pushStatus]"
+                                class="rounded border px-2 py-0.5 font-mono text-[10px] tracking-wider"
+                                :class="pushBadges[fulfillment.pushStatus].class"
+                            >
+                                {{ pushBadges[fulfillment.pushStatus].text }}
+                            </span>
+                            <button
+                                v-if="fulfillment.pushStatus === 'failed' && retrying !== fulfillment.id"
+                                type="button"
+                                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                @click="openRetry(fulfillment)"
+                            >
+                                Düzelt ve tekrar gönder
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Hata metni gizlenmez: satıcı neyi düzelteceğini buradan anlar. -->
+                    <p v-if="fulfillment.pushError" class="mt-1.5 text-[11px] text-red-700">
+                        {{ fulfillment.pushError }}
+                    </p>
+
+                    <form
+                        v-if="retrying === fulfillment.id"
+                        class="mt-3 flex flex-wrap items-end gap-3"
+                        @submit.prevent="submitRetry(fulfillment)"
+                    >
+                        <div>
+                            <label :for="`retry-carrier-${fulfillment.id}`" class="block text-xs font-medium text-stone-700">Kargo firması</label>
+                            <input
+                                :id="`retry-carrier-${fulfillment.id}`"
+                                v-model="retryForm.carrier"
+                                type="text"
+                                list="carrier-suggestions"
+                                class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                            >
+                        </div>
+                        <div>
+                            <label :for="`retry-tracking-${fulfillment.id}`" class="block text-xs font-medium text-stone-700">Takip numarası</label>
+                            <input
+                                :id="`retry-tracking-${fulfillment.id}`"
+                                v-model="retryForm.tracking_number"
+                                type="text"
+                                class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                            >
+                        </div>
+                        <button
+                            type="submit"
+                            :disabled="retryForm.processing"
+                            class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            Tekrar gönder
+                        </button>
+                        <button type="button" class="text-sm text-stone-600 underline" @click="retrying = null">
+                            Vazgeç
+                        </button>
+                    </form>
+                </li>
+            </ul>
+
+            <p v-else class="px-4 py-3 text-xs text-stone-500">Henüz kargo bilgisi yok.</p>
+        </div>
+
+        <!-- Kanal desteklemiyorsa form yerine ne yapılacağı söylenir. -->
+        <p v-if="!order.canShip" class="mt-3 text-xs text-stone-500">
+            Bu kanal kargo bildirimini desteklemiyor; takip numarasını kanalın kendi panelinden girin.
+        </p>
+
+        <form
+            v-else-if="!hasActiveShipment"
+            class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4"
+            @submit.prevent="submitShipment"
+        >
+            <div>
+                <label for="ship-carrier" class="block text-xs font-medium text-stone-700">Kargo firması</label>
+                <input
+                    id="ship-carrier"
+                    v-model="shipForm.carrier"
+                    type="text"
+                    list="carrier-suggestions"
+                    placeholder="Yurtiçi Kargo"
+                    class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                >
+            </div>
+            <div>
+                <label for="ship-tracking" class="block text-xs font-medium text-stone-700">Takip numarası</label>
+                <input
+                    id="ship-tracking"
+                    v-model="shipForm.tracking_number"
+                    type="text"
+                    required
+                    class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                >
+            </div>
+            <button
+                type="submit"
+                :disabled="shipForm.processing"
+                class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+                Kargoya verildi
+            </button>
+
+            <p class="w-full text-xs text-stone-500">
+                Takip numarası {{ order.channel.label ?? 'kanala' }} gönderilir; sipariş kanalda kargolandı olarak işaretlenir.
+            </p>
+            <p v-if="shipForm.errors.tracking_number" class="w-full text-sm text-red-700">
+                {{ shipForm.errors.tracking_number }}
+            </p>
+            <p v-if="shipForm.errors.carrier" class="w-full text-sm text-red-700">
+                {{ shipForm.errors.carrier }}
+            </p>
+        </form>
+
+        <datalist id="carrier-suggestions">
+            <option v-for="name in carrierSuggestions" :key="name" :value="name" />
+        </datalist>
 
         <!-- olay geçmişi -->
         <h2 class="mt-10 text-sm font-semibold text-stone-900">Geçmiş</h2>

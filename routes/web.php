@@ -177,6 +177,13 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
 
+    // Kargo bildirimi — satıcı takip numarasını TEK yerden girer, sipariş
+    // geldiği kanala gönderilir (Shopify, Woo). Siparişin kendisi yine
+    // salt okunurdur; bu yalnız kargo satırı yazar.
+    Route::post('/orders/{order}/shipments', [OrderController::class, 'ship'])->name('orders.ship');
+    Route::post('/orders/{order}/shipments/{fulfillment}/retry', [OrderController::class, 'retryShipment'])
+        ->name('orders.ship.retry');
+
     // Onay durumu ekranı (§13 · Faz 4, §14 · onay süreci). SALT OKUNUR:
     // onay kararını KANAL verir ve biz yalnızca okuruz (`approval:track`,
     // saatlik). Panelden "onayla" düğmesi koymak, kanalın kararını bizim

@@ -649,6 +649,21 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
 
         $response->throw();
 
+        // ⚠️ META MÜŞTERİYE GÖRÜNMEZ. `_tracking_*` anahtarlarını Woo
+        // çekirdeği ve yaygın takip eklentileri OKUMAZ; yalnız onlara
+        // yazılsaydı satıcı "bildirdim" sanır, müşteri numarayı hiç
+        // görmezdi. Çekirdeğin müşteri notu siparişte görünür ve
+        // müşteriye e-postayla gider. Not durumdan SONRA yazılır: durum
+        // isteği mutlak değerdir ve tekrarı zararsızdır, not değildir.
+        if ($fulfillment->tracking_number !== null && $fulfillment->tracking_number !== '') {
+            $this->client->post("orders/{$externalOrderId}/notes", [
+                'note' => $fulfillment->carrier === null || $fulfillment->carrier === ''
+                    ? "Siparişiniz kargoya verildi. Takip numarası: {$fulfillment->tracking_number}"
+                    : "Siparişiniz kargoya verildi. Kargo: {$fulfillment->carrier} · Takip numarası: {$fulfillment->tracking_number}",
+                'customer_note' => true,
+            ])->throw();
+        }
+
         return AdapterResult::success(['status' => 'completed']);
     }
 

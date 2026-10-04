@@ -1556,7 +1556,13 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             );
         }
 
-        $fulfillmentOrderIds = $this->openFulfillmentOrderIds($externalOrderId);
+        // ⚠️ SİPARİŞ KİMLİĞİ SAYISALDIR, SORGU GID İSTER. Sipariş webhook'tan
+        // ve yoklamadan gövdenin sayısal `id`'siyle kaydedilir; olduğu gibi
+        // `order(id:)`'ye verilseydi Shopify "geçersiz global kimlik" der ve
+        // kargo bildirimi gerçek mağazada HİÇ çalışmazdı.
+        $fulfillmentOrderIds = $this->openFulfillmentOrderIds(
+            str_starts_with($externalOrderId, 'gid://') ? $externalOrderId : 'gid://shopify/Order/'.$externalOrderId,
+        );
 
         if ($fulfillmentOrderIds === []) {
             return AdapterResult::success(['already_fulfilled' => true]);
@@ -1590,8 +1596,12 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
         $created = $data['fulfillmentCreateV2']['fulfillment'] ?? null;
 
         return AdapterResult::success(array_filter([
+            // Paket kimliği webhook BİÇİMİNDE (sayısal) döner: kanal yankısı
+            // (`fulfillments/create`) satırı `(order_id, external_id)` ile
+            // bulur ve gövdede sayısal `id` vardır. Gid yazılsaydı yankı
+            // eşleşmez ve aynı kargo panelde iki kez görünürdü.
             'external_id' => is_array($created) && isset($created['id'])
-                ? (string) $created['id']
+                ? self::numericTail((string) $created['id'])
                 : null,
             'status' => is_array($created) && isset($created['status'])
                 ? (string) $created['status']
@@ -1678,6 +1688,20 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
         ], static fn (mixed $v): bool => is_string($v) && $v !== '');
 
         return $info === [] ? null : $info;
+    }
+
+    /** `gid://shopify/Fulfillment/55` → `55`; gid değilse olduğu gibi. */
+    private static function numericTail(string $gid): string
+    {
+        $slash = strrpos($gid, '/');
+
+        if ($slash === false) {
+            return $gid;
+        }
+
+        $tail = substr($gid, $slash + 1);
+
+        return ctype_digit($tail) ? $tail : $gid;
     }
 
     // ------------------------------------------------------ ürün içe aktarma
