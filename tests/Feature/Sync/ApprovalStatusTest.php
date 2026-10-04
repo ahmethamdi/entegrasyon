@@ -66,13 +66,12 @@ final class ApprovalStatusTest extends TestCase
     #[Test]
     public function approval_status_is_fetched_in_one_batch(): void
     {
-        Http::fake(['*' => Http::response([
-            'content' => [
-                ['barcode' => 'SKU-1', 'approved' => true, 'onSale' => true],
-                ['barcode' => 'SKU-2', 'approved' => false, 'onSale' => false,
-                    'rejectReasonDetails' => [['reason' => 'Görsel çözünürlüğü yetersiz']]],
-            ],
-        ], 200)]);
+        $this->fakeTrendyol(
+            approved: [['barcode' => 'SKU-1', 'onSale' => true]],
+            rejected: [['barcode' => 'SKU-2', 'rejectReasonDetails' => [
+                ['rejectReason' => 'Görsel çözünürlüğü yetersiz'],
+            ]]],
+        );
 
         [$tenant] = $this->makeTenant();
         $connection = $this->connection($tenant);
@@ -88,8 +87,41 @@ final class ApprovalStatusTest extends TestCase
         $this->assertSame('rejected', $batch->statusFor('SKU-2')['status']);
         $this->assertSame('Görsel çözünürlüğü yetersiz', $batch->statusFor('SKU-2')['reason']);
 
-        // TEK istek: listing başına ayrı çağrı yapılmadı.
-        Http::assertSentCount(1);
+        // Listing başına ayrı çağrı YOK: onaylılar tek, kalanların redleri
+        // tek istekte sorulur (V2'de ikisi ayrı uç noktadır).
+        Http::assertSentCount(2);
+    }
+
+    /**
+     * ⚠️ ONAY BEKLEYEN ÜRÜN "REDDEDİLDİ" SAYILMAZ (A11 ④).
+     *
+     * V1 kodu `approved: false` olan her satırı red sayıyordu. V2'de
+     * bekleyen ürün de `products/unapproved` altındadır; durum filtresi
+     * olmadan sorulsaydı aynı hata geri gelirdi. Red sebebi `rejectReason`
+     * + `rejectReasonDetail` olarak birlikte gösterilir.
+     */
+    #[Test]
+    public function a_pending_product_is_not_reported_as_rejected(): void
+    {
+        $this->fakeTrendyol(
+            rejected: [['barcode' => 'SKU-2', 'rejectReasonDetails' => [
+                ['rejectReason' => 'Eksik bilgi', 'rejectReasonDetail' => 'Menşei girin'],
+            ]]],
+            pending: [['barcode' => 'SKU-3']],
+        );
+
+        [$tenant] = $this->makeTenant();
+        $connection = $this->connection($tenant);
+
+        $listings = $this->asTenant($tenant, fn () => [
+            $this->listing($tenant, $connection, 'SKU-2', externalId: 'SKU-2'),
+            $this->listing($tenant, $connection, 'SKU-3', externalId: 'SKU-3'),
+        ]);
+
+        $batch = $this->adapter($connection)->fetchApprovalStatus($listings);
+
+        $this->assertSame('Eksik bilgi: Menşei girin', $batch->statusFor('SKU-2')['reason']);
+        $this->assertNull($batch->statusFor('SKU-3'), 'Bekleyen ürün için durum uydurulmamalı.');
     }
 
     /**
@@ -102,11 +134,7 @@ final class ApprovalStatusTest extends TestCase
     #[Test]
     public function approved_but_not_on_sale_is_reported_separately(): void
     {
-        Http::fake(['*' => Http::response([
-            'content' => [
-                ['barcode' => 'SKU-1', 'approved' => true, 'onSale' => false],
-            ],
-        ], 200)]);
+        $this->fakeTrendyol(approved: [['barcode' => 'SKU-1', 'onSale' => false]]);
 
         [$tenant] = $this->makeTenant();
         $connection = $this->connection($tenant);
@@ -275,9 +303,7 @@ final class ApprovalStatusTest extends TestCase
     #[Test]
     public function approval_marks_the_listing_live(): void
     {
-        Http::fake(['*' => Http::response([
-            'content' => [['barcode' => 'SKU-1', 'approved' => true, 'onSale' => true]],
-        ], 200)]);
+        $this->fakeTrendyol(approved: [['barcode' => 'SKU-1', 'onSale' => true]]);
 
         [$tenant] = $this->makeTenant();
         $connection = $this->connection($tenant);
@@ -305,14 +331,10 @@ final class ApprovalStatusTest extends TestCase
     #[Test]
     public function rejection_records_the_reason_and_does_not_go_live(): void
     {
-        Http::fake(['*' => Http::response([
-            'content' => [[
-                'barcode' => 'SKU-1',
-                'approved' => false,
-                'onSale' => false,
-                'rejectReasonDetails' => [['reason' => 'Marka onayı yok']],
-            ]],
-        ], 200)]);
+        $this->fakeTrendyol(rejected: [[
+            'barcode' => 'SKU-1',
+            'rejectReasonDetails' => [['rejectReason' => 'Marka onayı yok']],
+        ]]);
 
         [$tenant] = $this->makeTenant();
         $connection = $this->connection($tenant);
@@ -348,9 +370,7 @@ final class ApprovalStatusTest extends TestCase
             rejectionReason: 'Marka onayı yok',
         ));
 
-        Http::fake(['*' => Http::response([
-            'content' => [['barcode' => 'SKU-1', 'approved' => true, 'onSale' => true]],
-        ], 200)]);
+        $this->fakeTrendyol(approved: [['barcode' => 'SKU-1', 'onSale' => true]]);
 
         $this->asTenant($tenant, fn () => app(TrackApprovalStatus::class)->run($connection));
 
@@ -452,9 +472,7 @@ final class ApprovalStatusTest extends TestCase
     #[Test]
     public function approval_tracking_does_not_touch_the_stock_flow(): void
     {
-        Http::fake(['*' => Http::response([
-            'content' => [['barcode' => 'SKU-1', 'approved' => true, 'onSale' => true]],
-        ], 200)]);
+        $this->fakeTrendyol(approved: [['barcode' => 'SKU-1', 'onSale' => true]]);
 
         [$tenant] = $this->makeTenant();
         $connection = $this->connection($tenant);
@@ -489,9 +507,7 @@ final class ApprovalStatusTest extends TestCase
     #[Test]
     public function another_tenants_listing_is_not_included(): void
     {
-        Http::fake(['*' => Http::response([
-            'content' => [['barcode' => 'SKU-B', 'approved' => true, 'onSale' => true]],
-        ], 200)]);
+        $this->fakeTrendyol(approved: [['barcode' => 'SKU-B', 'onSale' => true]]);
 
         [$tenantA] = $this->makeTenant();
         [$tenantB] = $this->makeTenant();
@@ -634,5 +650,40 @@ final class ApprovalStatusTest extends TestCase
             'lifecycle_status' => $lifecycle,
             'approval_rejection_reason' => $rejectionReason,
         ]);
+    }
+
+    /**
+     * Trendyol Product V2 filtrelerinin sahtesi: onaylılar `products/approved`
+     * altında içerik → `variants[]`; onaysızlar `products/unapproved`
+     * altında düz satır ve `status` filtresine uyar.
+     *
+     * @param  list<array<string, mixed>>  $approved
+     * @param  list<array<string, mixed>>  $rejected
+     * @param  list<array<string, mixed>>  $pending
+     */
+    private function fakeTrendyol(array $approved = [], array $rejected = [], array $pending = []): void
+    {
+        Http::fake(function (\Illuminate\Http\Client\Request $request) use ($approved, $rejected, $pending) {
+            if (str_contains($request->url(), '/products/approved')) {
+                return Http::response([
+                    'content' => $approved === [] ? [] : [['contentId' => 1, 'variants' => $approved]],
+                    'totalPages' => 1,
+                ], 200);
+            }
+
+            if (str_contains($request->url(), '/products/unapproved')) {
+                $status = $request->data()['status'] ?? null;
+
+                $rows = match ($status) {
+                    'rejected' => $rejected,
+                    'pendingApproval' => $pending,
+                    default => [...$rejected, ...$pending],
+                };
+
+                return Http::response(['content' => $rows, 'totalPages' => 1], 200);
+            }
+
+            return Http::response([], 404);
+        });
     }
 }

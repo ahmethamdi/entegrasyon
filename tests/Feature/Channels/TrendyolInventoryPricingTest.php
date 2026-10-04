@@ -300,11 +300,19 @@ final class TrendyolInventoryPricingTest extends TestCase
     #[Test]
     public function remote_inventory_is_read_in_one_batched_call(): void
     {
+        // Product V2 gövdesi: içerik → `variants[]`, stok `stock.quantity`.
+        // Kardeş varyant (BARKOD-Z) sorulmadı ve snapshot'a GİRMEZ.
         Http::fake(['*' => Http::response([
-            'content' => [
-                ['barcode' => 'BARKOD-A', 'quantity' => 12],
-                ['barcode' => 'BARKOD-B', 'quantity' => 0],
-            ],
+            'content' => [[
+                'contentId' => 55,
+                'variants' => [
+                    ['barcode' => 'BARKOD-A', 'stock' => ['quantity' => 12]],
+                    // Hiç stok girilmemiş varyant: `stock` miktarsız gelir.
+                    ['barcode' => 'BARKOD-B', 'stock' => ['lastModifiedDate' => null]],
+                    ['barcode' => 'BARKOD-Z', 'stock' => ['quantity' => 99]],
+                ],
+            ]],
+            'totalPages' => 1,
         ], 200)]);
 
         $snapshot = $this->adapter()->fetchInventory([
@@ -314,11 +322,40 @@ final class TrendyolInventoryPricingTest extends TestCase
 
         $this->assertSame(12, $snapshot->quantityFor('BARKOD-A'));
         $this->assertSame(0, $snapshot->quantityFor('BARKOD-B'));
+        $this->assertNull($snapshot->quantityFor('BARKOD-Z'));
 
         // Okuma anı taşınır: gecikmeli okuma sürüklenme sanılmamalı (§10).
         $this->assertNotNull($snapshot->observedAt);
 
         Http::assertSentCount(1);
+
+        // Barkodlar `barcodes` parametresinde (V2) — V1'in tek `barcode`
+        // alanına virgülle konsaydı kanal hiçbirini bulmazdı.
+        Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/product/sellers/123456/products/approved')
+            && ($request->data()['barcodes'] ?? null) === 'BARKOD-A,BARKOD-B');
+    }
+
+    /**
+     * ⚠️ İSTEK BAŞINA EN FAZLA 50 BARKOD (Product V2 sınırı).
+     *
+     * Fazlası tek istekte gitseydi kanal isteği reddeder ve mutabakat
+     * büyük katalogda HİÇ çalışmazdı.
+     */
+    #[Test]
+    public function remote_reads_are_chunked_by_fifty_barcodes(): void
+    {
+        Http::fake(['*' => Http::response(['content' => [], 'totalPages' => 1], 200)]);
+
+        $listings = array_map(fn (int $i) => $this->listing("B-{$i}"), range(1, 120));
+
+        $this->adapter()->fetchInventory($listings);
+
+        $sizes = array_map(
+            static fn (array $pair): int => count(explode(',', $pair[0]->data()['barcodes'] ?? '')),
+            Http::recorded()->all(),
+        );
+
+        $this->assertSame([50, 50, 20], $sizes);
     }
 
     /**
@@ -363,7 +400,10 @@ final class TrendyolInventoryPricingTest extends TestCase
     public function remote_prices_are_read_in_one_batched_call(): void
     {
         Http::fake(['*' => Http::response([
-            'content' => [['barcode' => 'BARKOD-A', 'salePrice' => 149.9]],
+            'content' => [['variants' => [
+                ['barcode' => 'BARKOD-A', 'price' => ['salePrice' => 149.9, 'listPrice' => 199.9]],
+            ]]],
+            'totalPages' => 1,
         ], 200)]);
 
         $snapshot = $this->adapter()->fetchPrices([$this->listing('BARKOD-A')]);

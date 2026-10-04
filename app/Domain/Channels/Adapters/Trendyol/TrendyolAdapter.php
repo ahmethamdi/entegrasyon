@@ -117,6 +117,15 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     /** Öğrenilen sınırın `settings` içindeki yeri. */
     private const LEARNED_RATE_LIMIT_KEY = 'learned_rate_limit';
 
+    /** V2 ürün filtresi: istek başına en fazla 50 barkod. */
+    private const BARCODES_PER_REQUEST = 50;
+
+    /** `products/approved` sayfa üst sınırı. */
+    private const APPROVED_PAGE_SIZE = 100;
+
+    /** `products/unapproved` sayfa üst sınırı. */
+    private const UNAPPROVED_PAGE_SIZE = 1000;
+
     /** Yoklama sayfa boyutu — kanalın üst sınırı 200. */
     private const ORDER_PAGE_SIZE = 200;
 
@@ -425,14 +434,8 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
         $quantities = [];
 
-        foreach ($rows as $row) {
-            $barcode = (string) ($row['barcode'] ?? '');
-
-            if ($barcode === '') {
-                continue;
-            }
-
-            $quantities[$barcode] = (int) ($row['quantity'] ?? 0);
+        foreach ($rows as $barcode => $row) {
+            $quantities[$barcode] = $row['quantity'];
         }
 
         // Okuma anı taşınır: gecikmeli okuma sürüklenme sanılmamalı (§10).
@@ -513,14 +516,8 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
         $prices = [];
 
-        foreach ($rows as $row) {
-            $barcode = (string) ($row['barcode'] ?? '');
-
-            if ($barcode === '') {
-                continue;
-            }
-
-            $prices[$barcode] = (string) ($row['salePrice'] ?? '0');
+        foreach ($rows as $barcode => $row) {
+            $prices[$barcode] = $row['sale_price'];
         }
 
         return new RemotePriceSnapshot($prices, new DateTimeImmutable);
@@ -535,36 +532,150 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      * kalırdı.
      *
      * @param  list<Listing>  $listings
-     * @return list<array<string, mixed>>|null Sorulacak kimlik yoksa null
+     * @return array<string, array<string, mixed>>|null Sorulacak kimlik yoksa null
      */
     private function fetchRemoteRows(array $listings): ?array
     {
-        $barcodes = [];
-
-        foreach ($listings as $listing) {
-            if ($listing->external_id !== null) {
-                $barcodes[] = $listing->external_id;
-            }
-        }
+        $barcodes = $this->barcodesOf($listings);
 
         // Filtresiz istek kanalın TÜM kataloğunu getirirdi.
         if ($barcodes === []) {
             return null;
         }
 
-        $barcodes = array_values(array_unique($barcodes));
+        return $this->approvedVariants($barcodes);
+    }
 
-        $response = $this->get($this->sellerUrl('product', 'products'), [
-            'barcode' => implode(',', $barcodes),
-            'size' => count($barcodes),
-        ]);
+    /**
+     * Onaylı ürünlerin varyantları, barkoda göre — Product V2.
+     *
+     * Mimari değişiklik (A11 ④): V1 `product/sellers/{id}/products` düz
+     * satır dönüyordu; V2 `products/approved` İÇERİK → `variants[]`
+     * döner, stok `stock.quantity`, fiyat `price.salePrice` altındadır.
+     * Eski adlarla okunsaydı her ürün stok 0 / fiyat 0 görünür ve
+     * mutabakat bütün kataloğu "sürüklenmiş" sanıp yeniden iterdi.
+     *
+     * ⚠️ İSTEK BAŞINA EN FAZLA 50 BARKOD, sayfa en fazla 100 (doküman).
+     * V1 kodu bütün barkodları virgülle tek `barcode` parametresine
+     * koyuyordu — kanal onu TEK barkod sayar ve hiçbirini bulmazdı.
+     *
+     * İçerik, sorulmayan kardeş varyantları da döndürür; yalnızca
+     * sorulan barkodlar alınır.
+     *
+     * @param  list<string>  $barcodes
+     * @return array<string, array{barcode: string, content_id: string|null, title: string|null, url: string|null, quantity: int, sale_price: string, sellable: bool, lock_reason: string|null, raw: array<string, mixed>}>
+     */
+    private function approvedVariants(array $barcodes): array
+    {
+        $found = [];
 
-        // Sessizce boş snapshot'a düşme — yükselt.
-        $response->throw();
+        foreach (array_chunk($barcodes, self::BARCODES_PER_REQUEST) as $chunk) {
+            $wanted = array_flip($chunk);
 
-        $rows = $response->json('content') ?? [];
+            foreach ($this->pages('products/approved', ['barcodes' => implode(',', $chunk)], self::APPROVED_PAGE_SIZE) as $product) {
+                foreach ((array) ($product['variants'] ?? []) as $variant) {
+                    $barcode = is_array($variant) ? (string) ($variant['barcode'] ?? '') : '';
 
-        return array_values(array_filter($rows, 'is_array'));
+                    if ($barcode === '' || ! isset($wanted[$barcode])) {
+                        continue;
+                    }
+
+                    $found[$barcode] = [
+                        'barcode' => $barcode,
+                        'content_id' => isset($product['contentId']) ? (string) $product['contentId'] : null,
+                        'title' => isset($product['title']) ? (string) $product['title'] : null,
+                        'url' => isset($variant['productUrl']) ? (string) $variant['productUrl'] : null,
+                        // `stock` nesnesi miktarsız gelebilir (hiç stok
+                        // girilmemiş varyant) — o 0'dır.
+                        'quantity' => (int) ($variant['stock']['quantity'] ?? 0),
+                        'sale_price' => (string) ($variant['price']['salePrice'] ?? '0'),
+                        'sellable' => (bool) ($variant['onSale'] ?? false)
+                            && ! ($variant['archived'] ?? false)
+                            && ! ($variant['locked'] ?? false)
+                            && ! ($variant['blacklisted'] ?? false),
+                        'lock_reason' => isset($variant['lockReason']) ? (string) $variant['lockReason'] : null,
+                        'raw' => [...$variant, 'contentId' => $product['contentId'] ?? null],
+                    ];
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Onaysız ürünler, barkoda göre — Product V2 `products/unapproved`.
+     *
+     * Onaysız gövdede `variants[]` YOKTUR; barkod satırın kendisindedir.
+     * `status` verilirse (`rejected`, `pendingApproval`) yalnızca o
+     * durumdakiler döner.
+     *
+     * @param  list<string>  $barcodes
+     * @return array<string, array<string, mixed>>
+     */
+    private function unapprovedProducts(array $barcodes, ?string $status = null): array
+    {
+        $found = [];
+
+        foreach (array_chunk($barcodes, self::BARCODES_PER_REQUEST) as $chunk) {
+            $wanted = array_flip($chunk);
+            $query = array_filter(['barcodes' => implode(',', $chunk), 'status' => $status]);
+
+            foreach ($this->pages('products/unapproved', $query, self::UNAPPROVED_PAGE_SIZE) as $row) {
+                $barcode = (string) ($row['barcode'] ?? '');
+
+                if ($barcode !== '' && isset($wanted[$barcode])) {
+                    $found[$barcode] = $row;
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    /**
+     * Ürün filtresinin bütün sayfaları.
+     *
+     * BAŞARISIZ YANIT YÜKSELTİLİR: `json()` bir 500 gövdesinde de dizi
+     * döndürür ve boş sonuç "kanalda ürün yok" diye okunurdu.
+     *
+     * @param  array<string, mixed>  $query
+     * @return \Generator<int, array<string, mixed>>
+     */
+    private function pages(string $endpoint, array $query, int $size): \Generator
+    {
+        $page = 0;
+
+        do {
+            $response = $this->get($this->sellerUrl('product', $endpoint), [...$query, 'page' => $page, 'size' => $size]);
+
+            $response->throw();
+
+            foreach ((array) ($response->json('content') ?? []) as $row) {
+                if (is_array($row)) {
+                    yield $row;
+                }
+            }
+
+            $page++;
+        } while ($page < (int) ($response->json('totalPages') ?? 1));
+    }
+
+    /**
+     * @param  list<Listing>  $listings
+     * @return list<string>
+     */
+    private function barcodesOf(array $listings): array
+    {
+        $barcodes = [];
+
+        foreach ($listings as $listing) {
+            if ($listing->external_id !== null && $listing->external_id !== '') {
+                $barcodes[] = (string) $listing->external_id;
+            }
+        }
+
+        return array_values(array_unique($barcodes));
     }
 
     // ------------------------------------------------------------- katalog
@@ -645,24 +756,31 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
             return null;
         }
 
-        $response = $this->get(
-            $this->sellerUrl('product', 'products'),
-            ['barcode' => $barcode],
-        );
+        $barcode = (string) $barcode;
 
-        $response->throw();
+        $approved = $this->approvedVariants([$barcode])[$barcode] ?? null;
 
-        foreach ($response->json('content') ?? [] as $row) {
-            // Kanal benzer barkodları da döndürebilir; TAM eşleşme aranır.
-            if ((string) ($row['barcode'] ?? '') !== (string) $barcode) {
-                continue;
-            }
-
+        if ($approved !== null) {
             return new RemoteListing(
-                externalId: (string) $row['barcode'],
-                title: $row['title'] ?? null,
-                url: $row['productUrl'] ?? null,
-                raw: $row,
+                externalId: $barcode,
+                title: $approved['title'],
+                url: $approved['url'],
+                raw: $approved['raw'],
+            );
+        }
+
+        // ⚠️ ONAY BEKLEYEN ÜRÜN DE "VAR" SAYILIR. Yalnızca onaylılara
+        // bakılsaydı satıcının panelden açtığı ama henüz onaylanmamış
+        // ürün görünmez, aynı barkod ikinci kez gönderilir ve kanal onu
+        // kalıcı `VALIDATION` ile reddederdi.
+        $pending = $this->unapprovedProducts([$barcode])[$barcode] ?? null;
+
+        if ($pending !== null) {
+            return new RemoteListing(
+                externalId: $barcode,
+                title: isset($pending['title']) ? (string) $pending['title'] : null,
+                url: null,
+                raw: $pending,
             );
         }
 
@@ -967,13 +1085,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      */
     public function fetchApprovalStatus(array $listings): ApprovalStatusBatch
     {
-        $barcodes = [];
-
-        foreach ($listings as $listing) {
-            if ($listing->external_id !== null) {
-                $barcodes[] = $listing->external_id;
-            }
-        }
+        $barcodes = $this->barcodesOf($listings);
 
         // Sorulacak kimlik yoksa çağrı yapılmaz: filtresiz istek kanalın
         // tüm kataloğunu getirirdi.
@@ -981,57 +1093,31 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
             return new ApprovalStatusBatch([]);
         }
 
-        $response = $this->get(
-            $this->sellerUrl('product', 'products'),
-            ['barcode' => implode(',', array_unique($barcodes)), 'size' => count($barcodes)],
-        );
-
-        // Sessizce boş ağaca/listeye düşme — yükselt.
-        $response->throw();
-
         $statuses = [];
 
-        foreach ($response->json('content') ?? [] as $row) {
-            $barcode = (string) ($row['barcode'] ?? '');
-
-            if ($barcode === '') {
-                continue;
-            }
-
-            $statuses[$barcode] = $this->classifyApproval($row);
-        }
-
-        return new ApprovalStatusBatch($statuses, new DateTimeImmutable);
-    }
-
-    /**
-     * Kanal satırını kanonik onay durumuna çevirir.
-     *
-     * ONAYLANMIŞ AMA SATIŞA KAPALI ÜRÜN "approved" SAYILMAZ:
-     *   Trendyol'da `approved: true` + `onSale: false` mümkündür (satıcı
-     *   kapatmış olabilir). O satır kanalda GÖRÜNMEZ; "onaylandı" demek
-     *   satıcıya ürünün yayında olduğunu düşündürür ve neden satmadığını
-     *   araştırmasına engel olurdu.
-     *
-     * @param  array<string, mixed>  $row
-     * @return array{status: string, reason: string|null}
-     */
-    private function classifyApproval(array $row): array
-    {
-        $approved = (bool) ($row['approved'] ?? false);
-        $onSale = (bool) ($row['onSale'] ?? false);
-
-        if (! $approved) {
-            return [
-                'status' => 'rejected',
-                'reason' => $this->rejectionReason($row),
+        foreach ($this->approvedVariants($barcodes) as $barcode => $row) {
+            $statuses[$barcode] = [
+                'status' => $row['sellable'] ? 'approved' : 'inactive',
+                'reason' => $row['sellable'] ? null : $row['lock_reason'],
             ];
         }
 
-        return [
-            'status' => $onSale ? 'approved' : 'inactive',
-            'reason' => null,
-        ];
+        $remaining = array_values(array_diff($barcodes, array_keys($statuses)));
+
+        // ⚠️ YALNIZCA `rejected` SORULUR. V1 kodu `approved: false` olan
+        // HER satırı red sayıyordu — onay BEKLEYEN ürün de "reddedildi"
+        // görünür ve satıcı var olmayan bir hatayı düzeltmeye giderdi.
+        // Bekleyen ürün için durum uydurulmaz (sınıf notu).
+        if ($remaining !== []) {
+            foreach ($this->unapprovedProducts($remaining, 'rejected') as $barcode => $row) {
+                $statuses[$barcode] = [
+                    'status' => 'rejected',
+                    'reason' => $this->rejectionReason($row),
+                ];
+            }
+        }
+
+        return new ApprovalStatusBatch($statuses, new DateTimeImmutable);
     }
 
     /**
@@ -1040,6 +1126,8 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      * SEBEP GÖSTERİLMEK ZORUNDADIR: "reddedildi" tek başına satıcıya ne
      * düzelteceğini söylemez. Birden çok sebep varsa hepsi birleştirilir;
      * ilkini almak satıcıyı düzeltip yeniden reddedilmeye gönderirdi.
+     * V2: `{rejectReason, rejectReasonDetail}` — ikisi de gösterilir;
+     * ayrıntı ne yapılacağını söyler.
      *
      * @param  array<string, mixed>  $row
      */
@@ -1054,7 +1142,12 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         $reasons = [];
 
         foreach ($details as $detail) {
-            $reason = is_array($detail) ? ($detail['reason'] ?? null) : $detail;
+            $reason = is_array($detail)
+                ? implode(': ', array_filter([
+                    $detail['rejectReason'] ?? $detail['reason'] ?? null,
+                    $detail['rejectReasonDetail'] ?? null,
+                ], static fn (mixed $v): bool => is_string($v) && $v !== ''))
+                : $detail;
 
             if (is_string($reason) && $reason !== '') {
                 $reasons[] = $reason;

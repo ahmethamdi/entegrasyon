@@ -163,9 +163,18 @@ final class TrendyolCatalogTest extends TestCase
     #[Test]
     public function an_existing_product_is_found_by_barcode(): void
     {
-        Http::fake(['*' => Http::response([
-            'content' => [['barcode' => 'SKU-1', 'title' => 'Yazlık Elbise', 'productUrl' => 'https://ty/p/1']],
-        ], 200)]);
+        // V2 onaylı gövdesi: içerik → `variants[]`.
+        Http::fake([
+            '*/products/approved*' => Http::response([
+                'content' => [[
+                    'contentId' => 7,
+                    'title' => 'Yazlık Elbise',
+                    'variants' => [['barcode' => 'SKU-1', 'productUrl' => 'https://ty/p/1']],
+                ]],
+                'totalPages' => 1,
+            ], 200),
+            '*' => Http::response(['content' => []], 200),
+        ]);
 
         [$tenant, $connection, $listing] = $this->scenario();
 
@@ -176,6 +185,39 @@ final class TrendyolCatalogTest extends TestCase
 
         $this->assertNotNull($found);
         $this->assertSame('SKU-1', $found->externalId);
+        $this->assertSame('Yazlık Elbise', $found->title);
+        $this->assertSame('https://ty/p/1', $found->url);
+        $this->assertSame(7, $found->raw['contentId']);
+    }
+
+    /**
+     * ⚠️ ONAY BEKLEYEN ÜRÜN DE "VAR" SAYILIR (A11 ④).
+     *
+     * Satıcının panelden açtığı ürün henüz onaylanmadıysa `approved`
+     * filtresinde görünmez. Yalnızca oraya bakılsaydı aynı barkod ikinci
+     * kez gönderilir ve kanal kalıcı `VALIDATION` ile reddederdi.
+     */
+    #[Test]
+    public function a_pending_product_counts_as_existing(): void
+    {
+        Http::fake([
+            '*/products/approved*' => Http::response(['content' => [], 'totalPages' => 1], 200),
+            '*/products/unapproved*' => Http::response([
+                'content' => [['barcode' => 'SKU-1', 'title' => 'Bekleyen']],
+                'totalPages' => 1,
+            ], 200),
+        ]);
+
+        [$tenant, $connection, $listing] = $this->scenario();
+
+        $variant = $this->asTenant($tenant, fn () => $listing->variant);
+
+        $found = $this->asTenant($tenant, fn () => $this->adapter($connection)
+            ->findExistingListing($variant));
+
+        $this->assertNotNull($found);
+        $this->assertSame('SKU-1', $found->externalId);
+        $this->assertSame('Bekleyen', $found->title);
     }
 
     /**
