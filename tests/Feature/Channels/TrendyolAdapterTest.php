@@ -246,6 +246,42 @@ final class TrendyolAdapterTest extends TestCase
     }
 
     /**
+     * ⚠️ V2 ÖZNİTELİK DEĞERLERİ AYRI VE SAYFALI GELİR (A11 ④c).
+     *
+     * V2 öznitelik listesi değer içermez. Eski okuma boş değer listesi
+     * bulur, eşleştirme ekranı "seçenek yok" der ve zorunlu öznitelik
+     * eşleştirilemezdi. İkinci sayfa okunmasaydı 1000'den sonraki
+     * renkler hiç görünmezdi.
+     */
+    #[Test]
+    public function v2_attribute_values_are_fetched_separately_and_paged(): void
+    {
+        Http::fake([
+            '*/product/categories/42/attributes/293/values*' => Http::sequence()
+                ->push(['content' => [['attributeValueId' => 4602, 'attributeValue' => 'S']], 'totalPages' => 2], 200)
+                ->push(['content' => [['attributeValueId' => 4603, 'attributeValue' => 'M']], 'totalPages' => 2], 200),
+            '*/product/categories/42/attributes' => Http::response(['id' => 42, 'categoryAttributes' => [[
+                'attribute' => ['id' => 293, 'name' => 'Beden'],
+                'required' => true,
+                'varianter' => true,
+                'allowCustom' => false,
+            ]]], 200),
+        ]);
+
+        $attributes = $this->adapter()->fetchCategoryAttributes('42');
+
+        $this->assertSame('293', $attributes[0]['external_attribute_id']);
+        $this->assertTrue($attributes[0]['is_required']);
+        $this->assertSame([
+            ['id' => '4602', 'label' => 'S'],
+            ['id' => '4603', 'label' => 'M'],
+        ], $attributes[0]['allowed_values']);
+
+        Http::assertSentCount(3);
+        Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), 'product-categories/42'));
+    }
+
+    /**
      * ⚠️ HER İSTEK `User-Agent: {satıcı ID} - {ad}` TAŞIR.
      *
      * Trendyol başlıksız isteği anahtar doğru olsa bile 403 ile reddeder;

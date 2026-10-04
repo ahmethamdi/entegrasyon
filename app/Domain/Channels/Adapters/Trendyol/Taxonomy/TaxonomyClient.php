@@ -75,29 +75,56 @@ final readonly class TaxonomyClient
         );
     }
 
+    /** Değer listesi sayfa boyutu — kanalın üst sınırı 1000. */
+    private const VALUES_PAGE_SIZE = 1000;
+
+    /** Sonsuz döngü sigortası: 1000 × 1000 değer hiçbir öznitelikte yok. */
+    private const MAX_VALUE_PAGES = 1000;
+
     /**
-     * Bir kategorinin öznitelik tanımları.
+     * Bir kategorinin öznitelik tanımları — Product V2.
+     *
+     * ⚠️ V2 LİSTESİ DEĞER İÇERMEZ (A11 ④c). V1 `attributeValues`'ı satır
+     * içinde döndürüyordu; V2'de her özniteliğin değerleri AYRI ve
+     * SAYFALI uç noktadan (`.../attributes/{id}/values`) gelir. Eski
+     * okuma V2 gövdesinde boş değer listesi bulur ve eşleştirme ekranı
+     * "bu öznitelikte seçenek yok" derdi — ürün zorunlu özniteliği
+     * olmadan gidip kalıcı hatayla reddedilirdi.
      *
      * @return list<array<string, mixed>>
      */
     public function fetchAttributes(string $categoryId): array
     {
-        $response = $this->client->get("{$this->baseUrl}/product/product-categories/{$categoryId}/attributes", headers: $this->headers);
+        $categoryId = rawurlencode($categoryId);
+
+        $response = $this->client->get(
+            "{$this->baseUrl}/product/categories/{$categoryId}/attributes",
+            headers: $this->headers,
+        );
 
         // Ağaçtaki ile aynı gerekçe: başarısız yanıt "bu kategoride zorunlu
         // öznitelik yok" anlamına GELMEZ. Sessizce boş dönseydi ön koşul
         // kapısı ürünü geçirir ve kanal onu reddederdi.
         $response->throw();
 
-        /** @var array<string, mixed> $body */
-        $body = $response->json() ?? [];
-
         /** @var list<array<string, mixed>> $raw */
-        $raw = $body['categoryAttributes'] ?? [];
+        $raw = $response->json('categoryAttributes') ?? [];
 
-        return array_values(array_map(
-            static fn (array $item): array => [
-                'external_attribute_id' => (string) ($item['attribute']['id'] ?? ''),
+        $attributes = [];
+
+        foreach ($raw as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $attributeId = (string) ($item['attribute']['id'] ?? '');
+
+            if ($attributeId === '') {
+                continue;
+            }
+
+            $attributes[] = [
+                'external_attribute_id' => $attributeId,
                 'name' => (string) ($item['attribute']['name'] ?? ''),
                 'is_required' => (bool) ($item['required'] ?? false),
                 // Varyant belirleyici: ürünün kaç varyantla açılacağını
@@ -105,16 +132,72 @@ final readonly class TaxonomyClient
                 'is_variant_defining' => (bool) ($item['varianter'] ?? false),
                 // Serbest metin kabul ediyorsa değer listesi bağlayıcı değildir.
                 'data_type' => ($item['allowCustom'] ?? false) ? 'string' : 'enum',
-                'allowed_values' => array_values(array_map(
-                    static fn (array $value): array => [
-                        'id' => (string) ($value['id'] ?? ''),
-                        'label' => (string) ($value['name'] ?? ''),
-                    ],
-                    $item['attributeValues'] ?? [],
-                )),
-            ],
-            $raw,
-        ));
+                'allowed_values' => isset($item['attributeValues']) && is_array($item['attributeValues'])
+                    // Satır içi değer gelirse (V1 biçimi) ek çağrı yapılmaz.
+                    ? $this->inlineValues($item['attributeValues'])
+                    : $this->fetchValues($categoryId, rawurlencode($attributeId)),
+            ];
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Bir özniteliğin bütün değerleri — sayfa sayfa.
+     *
+     * İlk sayfayla yetinilseydi 1000'den fazla değerli öznitelikte (renk,
+     * beden) kalanlar eşleştirme ekranında HİÇ görünmez, satıcı doğru
+     * değeri bulamaz ve yanlış değer seçerdi.
+     *
+     * @return list<array{id: string, label: string}>
+     */
+    private function fetchValues(string $categoryId, string $attributeId): array
+    {
+        $values = [];
+        $page = 0;
+
+        do {
+            $response = $this->client->get(
+                "{$this->baseUrl}/product/categories/{$categoryId}/attributes/{$attributeId}/values",
+                ['page' => $page, 'size' => self::VALUES_PAGE_SIZE],
+                headers: $this->headers,
+            );
+
+            $response->throw();
+
+            foreach ((array) ($response->json('content') ?? []) as $value) {
+                if (is_array($value) && isset($value['attributeValueId'])) {
+                    $values[] = [
+                        'id' => (string) $value['attributeValueId'],
+                        'label' => (string) ($value['attributeValue'] ?? ''),
+                    ];
+                }
+            }
+
+            $page++;
+        } while ($page < min((int) ($response->json('totalPages') ?? 1), self::MAX_VALUE_PAGES));
+
+        return $values;
+    }
+
+    /**
+     * @param  array<int, mixed>  $raw
+     * @return list<array{id: string, label: string}>
+     */
+    private function inlineValues(array $raw): array
+    {
+        $values = [];
+
+        foreach ($raw as $value) {
+            if (is_array($value)) {
+                $values[] = [
+                    'id' => (string) ($value['id'] ?? ''),
+                    'label' => (string) ($value['name'] ?? ''),
+                ];
+            }
+        }
+
+        return $values;
     }
 
     /**
