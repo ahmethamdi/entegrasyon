@@ -55,6 +55,10 @@ const allFields = computed(() => [...secretFields.value, ...identityFields.value
 // onay adımı henüz BAŞLAMAMIŞTIR.
 const usesOauth = computed(() => selected.value?.oauth === true);
 
+// Hesap kimliği bir alandan gelen kanal (Trendyol) mağaza adresi SORMAZ:
+// tek bir API adresi vardır ve satıcıyı satıcı ID'si ayırır.
+const asksStoreUrl = computed(() => selected.value?.asksStoreUrl !== false);
+
 // Kanal değişince ESKİ KANALIN ALANLARI BOŞALTILIR.
 //
 // ⚠️ Boşaltılmasaydı Woo'yu deneyip Shopify'a geçen satıcının `ck_...`
@@ -83,7 +87,7 @@ function submit() {
     const allowed = [
         'channel_type_code',
         'label',
-        'store_url',
+        ...(asksStoreUrl.value ? ['store_url'] : []),
         ...allFields.value.map((field) => field.name),
     ];
 
@@ -148,7 +152,7 @@ function submit() {
                 </p>
             </div>
 
-            <div>
+            <div v-if="asksStoreUrl">
                 <label for="store_url" class="block text-sm font-medium text-stone-700">
                     Mağaza adresi
                 </label>

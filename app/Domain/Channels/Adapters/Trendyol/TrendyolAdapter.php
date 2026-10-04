@@ -90,6 +90,12 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 {
     use DeclaresRequestQuota;
 
+    /**
+     * Satıcı kimliğinin `settings` içindeki adı — bağlanma formu da
+     * bunu okur (`ChannelConnectForm`). Bağlantının hesap kimliği de odur.
+     */
+    public const SELLER_ID_KEY = 'supplier_id';
+
     /** Trendyol sınırı dakika penceresinde bildirir. */
     private const RATE_LIMIT_WINDOW_SECONDS = 60;
 
@@ -1029,7 +1035,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
     private function supplierPath(string $endpoint): string
     {
-        $supplierId = (string) ($this->connection->settings['supplier_id'] ?? '');
+        $supplierId = (string) ($this->connection->settings[self::SELLER_ID_KEY] ?? '');
 
         if ($supplierId === '') {
             throw new RuntimeException(

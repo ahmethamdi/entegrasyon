@@ -119,7 +119,12 @@ final class ChannelConnectionController extends Controller
                 },
             ],
             'label' => ['required', 'string', 'max:120'],
-            'store_url' => ['required', 'string', 'max:255'],
+
+            // Hesap kimliği bir alandan gelen kanal (Trendyol) adres
+            // SORMAZ; sorsaydı satıcı olmayan bir "mağaza adresi" arardı.
+            ...ChannelConnectForm::isDefined($code) && ! ChannelConnectForm::asksStoreUrl($code)
+                ? []
+                : ['store_url' => ['required', 'string', 'max:255']],
 
             // ⚠️ ALAN KURALLARI TANIMDAN TÜRETİLİR — ELLE YAZILMAZ.
             // Elle yazılsaydı form ile doğrulama ayrışır: alan sorulur
@@ -132,6 +137,14 @@ final class ChannelConnectionController extends Controller
 
         $fields = $request->validate($rules);
 
+        $storeUrl = $fields['store_url'] ?? null;
+        $accountField = ChannelConnectForm::accountField($code);
+        $accountId = $accountField !== null ? (string) $fields[$accountField] : null;
+
+        // Hata, satıcının GÖRDÜĞÜ alana yazılır: adres sorulmayan kanalda
+        // `store_url` hatası ekranda hiçbir yerde çıkmazdı.
+        $errorKey = $accountField ?? 'store_url';
+
         // Plan kotası (§13 · Faz 4) — YALNIZCA GERÇEKTEN YENİ mağazada.
         //
         // `ConnectChannel` aynı hesabı `firstOrNew` ile yeniden kullanır
@@ -139,11 +152,11 @@ final class ChannelConnectionController extends Controller
         // Ayrım yapılmasaydı kotası dolu bir satıcı süresi dolmuş
         // anahtarını güncelleyemez ve kanalı KALICI olarak ölürdü —
         // üstelik tam da ödeme yapmasını istediğimiz anda.
-        if ($this->wouldAddNewConnection($code, $fields['store_url'])) {
+        if ($this->wouldAddNewConnection($code, $storeUrl, $accountId)) {
             try {
                 app(EnforceQuota::class)->check(QuotaMetric::CHANNELS);
             } catch (QuotaExceededException $e) {
-                throw ValidationException::withMessages(['store_url' => $e->userMessage()]);
+                throw ValidationException::withMessages([$errorKey => $e->userMessage()]);
             }
         }
 
@@ -165,21 +178,22 @@ final class ChannelConnectionController extends Controller
             $connection = $connect->run(
                 channelTypeCode: $code,
                 label: $fields['label'],
-                storeUrl: $fields['store_url'],
+                storeUrl: $storeUrl,
                 secrets: $secrets,
                 settings: $settings,
                 checkHealth: ! $usesOauth,
+                accountId: $accountId,
             );
         } catch (AccountAlreadyConnectedException $e) {
             // Kısıt ihlalini alan hatasına çevir: kullanıcı 500 değil açıklama görür.
-            throw ValidationException::withMessages(['store_url' => $e->getMessage()]);
+            throw ValidationException::withMessages([$errorKey => $e->getMessage()]);
         } catch (\InvalidArgumentException $e) {
-            throw ValidationException::withMessages(['store_url' => $e->getMessage()]);
+            throw ValidationException::withMessages([$errorKey => $e->getMessage()]);
         } catch (Throwable $e) {
             // Veritabanı kısıtı yarışta devreye girdiyse de anlaşılır hata ver.
             if ($this->isAccountUniquenessViolation($e)) {
                 throw ValidationException::withMessages([
-                    'store_url' => 'Bu mağaza başka bir hesaba bağlı.',
+                    $errorKey => 'Bu mağaza başka bir hesaba bağlı.',
                 ]);
             }
 
@@ -446,17 +460,22 @@ final class ChannelConnectionController extends Controller
      * `ConnectChannel` zaten alan hatasına çevirir ve iki yerde
      * doğrulamak mesajı ikiye böler.
      */
-    private function wouldAddNewConnection(string $channelTypeCode, string $storeUrl): bool
+    private function wouldAddNewConnection(string $channelTypeCode, ?string $storeUrl, ?string $accountId): bool
     {
-        try {
-            $host = StoreUrl::parse($storeUrl)->host;
-        } catch (\InvalidArgumentException) {
-            return true;
+        // Hesap kimliği `ConnectChannel` ile AYNI biçimde çözülür.
+        if ($accountId !== null) {
+            $account = trim($accountId);
+        } else {
+            try {
+                $account = StoreUrl::parse($storeUrl ?? '')->host;
+            } catch (\InvalidArgumentException) {
+                return true;
+            }
         }
 
         return ! ChannelConnection::query()
             ->where('channel_type_code', $channelTypeCode)
-            ->where('external_account_id', $host)
+            ->where('external_account_id', $account)
             ->exists();
     }
 

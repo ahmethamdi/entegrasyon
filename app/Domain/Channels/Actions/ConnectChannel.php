@@ -54,25 +54,43 @@ final class ConnectChannel
      *                                          kolonuna BİRLEŞTİRİLİR (ŞİFRESİZ)
      * @param  bool  $checkHealth  OAuth kanallarında `false`: kimlik henüz
      *                             GELMEDİ ve kontrol kimliksiz gider
+     * @param  string|null  $accountId  Hesap kimliği adresten DEĞİL bir
+     *                                  alandan geliyorsa (Trendyol satıcı
+     *                                  ID'si). Verilirse `$storeUrl` yok
+     *                                  sayılır ve `base_url` yazılmaz —
+     *                                  taban adresi adapter bilir.
      *
      * @throws AccountAlreadyConnectedException Mağaza başka kiracıya bağlıysa
      */
     public function run(
         string $channelTypeCode,
         string $label,
-        string $storeUrl,
+        ?string $storeUrl,
         array $secrets,
         array $settings = [],
         bool $checkHealth = true,
+        ?string $accountId = null,
     ): ChannelConnection {
-        $url = StoreUrl::parse($storeUrl);
+        if ($accountId !== null) {
+            if (trim($accountId) === '') {
+                throw new \InvalidArgumentException('Hesap kimliği boş olamaz.');
+            }
 
-        $this->guardAgainstForeignTenant($channelTypeCode, $url->host);
+            $account = trim($accountId);
+            $baseUrl = [];
+        } else {
+            $url = StoreUrl::parse($storeUrl ?? '');
+            $account = $url->host;
+            $baseUrl = ['base_url' => $url->baseUrl];
+        }
+
+        $this->guardAgainstForeignTenant($channelTypeCode, $account);
 
         $connection = DB::transaction(function () use (
             $channelTypeCode,
             $label,
-            $url,
+            $account,
+            $baseUrl,
             $secrets,
             $settings,
         ): ChannelConnection {
@@ -82,7 +100,7 @@ final class ConnectChannel
             // bağlantıya asılı kalırdı.
             $connection = ChannelConnection::query()->firstOrNew([
                 'channel_type_code' => $channelTypeCode,
-                'external_account_id' => $url->host,
+                'external_account_id' => $account,
             ]);
 
             // Denetim olayı YAZMADAN ÖNCE belirlenir: `save()` sonrası
@@ -104,7 +122,7 @@ final class ConnectChannel
                 // kanalın kendi gerçeği kazanmalıdır.
                 'settings' => [
                     ...$connection->settings ?? [],
-                    'base_url' => $url->baseUrl,
+                    ...$baseUrl,
                     ...$settings,
                 ],
             ]);
@@ -151,7 +169,7 @@ final class ConnectChannel
                 subjectId: $connection->id,
                 changes: [
                     'channel_type_code' => $channelTypeCode,
-                    'external_account_id' => $url->host,
+                    'external_account_id' => $account,
                     'label' => $label,
                     'secret_keys' => array_keys($secrets),
                 ],

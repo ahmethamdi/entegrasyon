@@ -7,6 +7,7 @@ namespace Tests\Feature\Channels;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
+use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Registry\AdapterRegistry;
@@ -739,6 +740,142 @@ final class ChannelConnectFormTest extends TestCase
         $this->assertSame('gid://shopify/Location/12', $settings[ShopifyAdapter::LOCATION_KEY]);
     }
 
+    // ══════════════════════════════════════════════ A11 · Trendyol bağlama
+
+    /**
+     * ⚠️ TRENDYOL PANELDEN BAĞLANABİLİR ve HESAP KİMLİĞİ SATICI ID'SİDİR.
+     *
+     * Önceki hâl: form satıcı ID'si sormuyordu (adapter onsuz her çağrıda
+     * istisna fırlatır) ve "mağaza adresi" Woo ayrıştırıcısından geçip
+     * `base_url`'ün sonuna `/wp-json/wc/v3` ekliyordu. Panelden bağlanan
+     * bir Trendyol hesabı HİÇBİR koşulda çalışamazdı ve testler bunu
+     * göremedi çünkü hepsi ayarları elle kuruyordu.
+     */
+    #[Test]
+    public function trendyol_connects_with_the_seller_id_as_account_identity(): void
+    {
+        [$user] = $this->tenantWithChannels();
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $this->actingAs($user)->post('/channels', [
+            'channel_type_code' => 'trendyol',
+            'label' => 'Trendyol',
+            'api_key' => 'anahtar',
+            'api_secret' => 'gizli',
+            TrendyolAdapter::SELLER_ID_KEY => '123456',
+        ])->assertSessionHasNoErrors()->assertRedirect('/channels');
+
+        $connection = $this->connectionFor('trendyol');
+
+        $this->assertNotNull($connection);
+        $this->assertSame('123456', $connection->external_account_id);
+        $this->assertSame('123456', $connection->settings[TrendyolAdapter::SELLER_ID_KEY] ?? null);
+
+        // Woo ayrıştırıcısının izi YOK.
+        $this->assertArrayNotHasKey('base_url', $connection->settings);
+
+        $secrets = $this->storedSecrets($connection);
+        $this->assertSame('anahtar', $secrets['api_key'] ?? null);
+        $this->assertSame('gizli', $secrets['api_secret'] ?? null);
+    }
+
+    /**
+     * ⚠️ İKİ TRENDYOL SATICISI YAN YANA BAĞLANABİLİR.
+     *
+     * Hesap kimliği adresin host'u olsaydı ikisi de `apigw.trendyol.com`
+     * olur ve ikinci satıcı "bu mağaza başka bir hesaba bağlı" diye
+     * reddedilirdi — üstelik başka bir kiracıdaysa.
+     */
+    #[Test]
+    public function two_trendyol_sellers_in_different_tenants_do_not_collide(): void
+    {
+        [$first] = $this->tenantWithChannels();
+        [$second] = $this->tenantWithChannels();
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        foreach ([[$first, '111'], [$second, '222']] as [$user, $sellerId]) {
+            $this->actingAs($user)->post('/channels', [
+                'channel_type_code' => 'trendyol',
+                'label' => 'Trendyol',
+                'api_key' => 'k',
+                'api_secret' => 's',
+                TrendyolAdapter::SELLER_ID_KEY => $sellerId,
+            ])->assertSessionHasNoErrors();
+        }
+
+        $accounts = $this->asSystem(fn (): array => ChannelConnection::query()
+            ->where('channel_type_code', 'trendyol')
+            ->orderBy('external_account_id')
+            ->pluck('external_account_id')
+            ->all());
+
+        $this->assertSame(['111', '222'], $accounts);
+    }
+
+    /**
+     * Aynı satıcı ID'si başka kiracıya bağlıysa hata SATICI ID ALANINDA
+     * görünür — ekranda olmayan `store_url` alanında kaybolmaz.
+     */
+    #[Test]
+    public function a_seller_id_owned_by_another_tenant_is_a_field_error(): void
+    {
+        [$first] = $this->tenantWithChannels();
+        [$second] = $this->tenantWithChannels();
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $payload = [
+            'channel_type_code' => 'trendyol',
+            'label' => 'Trendyol',
+            'api_key' => 'k',
+            'api_secret' => 's',
+            TrendyolAdapter::SELLER_ID_KEY => '555',
+        ];
+
+        $this->actingAs($first)->post('/channels', $payload)->assertSessionHasNoErrors();
+
+        $this->actingAs($second)->post('/channels', $payload)
+            ->assertSessionHasErrors(TrendyolAdapter::SELLER_ID_KEY);
+    }
+
+    /**
+     * ⚠️ SATICI ID'Sİ YALNIZCA RAKAMDIR — değer İSTEK YOLUNA girer.
+     */
+    #[Test]
+    public function a_non_numeric_seller_id_is_refused(): void
+    {
+        [$user] = $this->tenantWithChannels();
+
+        Http::fake();
+
+        $this->actingAs($user)->post('/channels', [
+            'channel_type_code' => 'trendyol',
+            'label' => 'Trendyol',
+            'api_key' => 'k',
+            'api_secret' => 's',
+            TrendyolAdapter::SELLER_ID_KEY => '123/../../orders',
+        ])->assertSessionHasErrors(TrendyolAdapter::SELLER_ID_KEY);
+
+        $this->assertNull($this->connectionFor('trendyol'));
+        Http::assertNothingSent();
+    }
+
+    /** Ekran Trendyol'da adres sormaz, öteki kanallarda sorar. */
+    #[Test]
+    public function only_address_based_channels_ask_for_a_store_url(): void
+    {
+        $this->assertFalse(ChannelConnectForm::present('trendyol')['asksStoreUrl']);
+        $this->assertTrue(ChannelConnectForm::present('shopify')['asksStoreUrl']);
+        $this->assertTrue(ChannelConnectForm::present('woocommerce')['asksStoreUrl']);
+
+        // Doğrulama kuralları tarayıcıya gitmez.
+        foreach (ChannelConnectForm::present('trendyol')['identityFields'] as $field) {
+            $this->assertArrayNotHasKey('rules', $field);
+        }
+    }
+
     // ═══════════════════════════════════════════════════ form ekranı
 
     /**
@@ -827,6 +964,14 @@ final class ChannelConnectFormTest extends TestCase
                 'name' => 'Etsy',
                 'kind' => 'marketplace',
                 'adapter_class' => EtsyAdapter::class,
+                'supports_webhooks' => false,
+                'is_active' => true,
+            ]);
+
+            ChannelType::query()->updateOrCreate(['code' => 'trendyol'], [
+                'name' => 'Trendyol',
+                'kind' => 'marketplace',
+                'adapter_class' => TrendyolAdapter::class,
                 'supports_webhooks' => false,
                 'is_active' => true,
             ]);

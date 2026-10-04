@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Support;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
+use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use InvalidArgumentException;
 
 /**
@@ -70,7 +71,8 @@ final class ChannelConnectForm
      *
      * @var array<string, array{
      *     secrets: array<int, array{name: string, label: string, hint?: string, masked?: bool, placeholder?: string}>,
-     *     identity: array<int, array{name: string, label: string, hint?: string, placeholder?: string}>,
+     *     identity: array<int, array{name: string, label: string, hint?: string, placeholder?: string, rules?: list<string>}>,
+     *     account?: string,
      *     oauth: bool,
      *     help?: string,
      * }>
@@ -92,10 +94,32 @@ final class ChannelConnectForm
                 ['name' => 'api_key', 'label' => 'API key', 'placeholder' => ''],
                 ['name' => 'api_secret', 'label' => 'API secret', 'placeholder' => '', 'masked' => true],
             ],
-            'identity' => [],
+            'identity' => [
+                [
+                    'name' => TrendyolAdapter::SELLER_ID_KEY,
+                    'label' => 'Satıcı ID (Cari ID)',
+                    'placeholder' => '123456',
+                    // ⚠️ YALNIZCA RAKAM. Değer İSTEK YOLUNA girer
+                    // (`.../sellers/{id}/...`); `../` ya da `?` taşıyan
+                    // bir değer isteği başka bir kaynağa yönlendirirdi.
+                    'rules' => ['regex:/^[0-9]+$/'],
+                    'hint' => 'Aynı sayfadaki "Satıcı ID" değeri. Bütün '
+                        .'Trendyol çağrıları bu kimlik üzerinden yapılır.',
+                ],
+            ],
+            // ⚠️ HESAP KİMLİĞİ SATICI ID'SİDİR — MAĞAZA ADRESİ SORULMAZ.
+            //
+            // Trendyol'da tek bir API adresi vardır ve bütün satıcılar
+            // onu paylaşır. Adres sorulup host'u hesap kimliği yapılsaydı
+            // her Trendyol satıcısı aynı `external_account_id`'ye düşer
+            // ve `(type, account)` tekilliği İKİNCİ satıcıyı "bu mağaza
+            // başka bir hesaba bağlı" diye reddederdi. Üstelik adres
+            // Woo ayrıştırıcısından geçip sonuna `/wp-json/wc/v3`
+            // ekleniyordu — panelden bağlanan Trendyol hiç çalışamazdı.
+            'account' => TrendyolAdapter::SELLER_ID_KEY,
             'oauth' => false,
             'help' => 'Trendyol Satıcı Paneli → Hesap Bilgilerim → Entegrasyon '
-                .'Bilgileri altındaki API anahtarı ve gizli anahtar.',
+                .'Bilgileri altındaki API anahtarı, gizli anahtar ve satıcı ID.',
         ],
 
         'hepsiburada' => [
@@ -339,6 +363,24 @@ final class ChannelConnectForm
     }
 
     /**
+     * Hesap kimliğini taşıyan kimlik alanının adı; mağaza adresinden
+     * türüyorsa null.
+     *
+     * Tek API adresini paylaşan pazaryerlerinde (Trendyol) hesap kimliği
+     * adres OLAMAZ — bkz. tanımdaki `account` notu.
+     */
+    public static function accountField(string $channelTypeCode): ?string
+    {
+        return self::definition($channelTypeCode)['account'] ?? null;
+    }
+
+    /** Form mağaza adresi soruyor mu? Hesap kimliği bir alandan geliyorsa hayır. */
+    public static function asksStoreUrl(string $channelTypeCode): bool
+    {
+        return self::accountField($channelTypeCode) === null;
+    }
+
+    /**
      * Laravel doğrulama kuralları — alan tanımından TÜRETİLİR.
      *
      * Elle yazılsaydı tanım ile kural ayrışır ve form sorduğu bir alanı
@@ -356,7 +398,7 @@ final class ChannelConnectForm
         }
 
         foreach (self::identityFields($channelTypeCode) as $field) {
-            $rules[$field['name']] = ['required', 'string', 'max:255'];
+            $rules[$field['name']] = ['required', 'string', 'max:255', ...$field['rules'] ?? []];
         }
 
         return $rules;
@@ -380,15 +422,23 @@ final class ChannelConnectForm
                 'identityFields' => [],
                 'oauth' => false,
                 'help' => null,
+                'asksStoreUrl' => true,
                 'connectable' => false,
             ];
         }
 
+        // Doğrulama kuralları sunucunun işidir; ekrana gitmez.
+        $withoutRules = static fn (array $fields): array => array_map(
+            static fn (array $field): array => array_diff_key($field, ['rules' => true]),
+            $fields,
+        );
+
         return [
-            'secretFields' => self::secretFields($channelTypeCode),
-            'identityFields' => self::identityFields($channelTypeCode),
+            'secretFields' => $withoutRules(self::secretFields($channelTypeCode)),
+            'identityFields' => $withoutRules(self::identityFields($channelTypeCode)),
             'oauth' => self::usesOauth($channelTypeCode),
             'help' => self::help($channelTypeCode),
+            'asksStoreUrl' => self::asksStoreUrl($channelTypeCode),
             'connectable' => true,
         ];
     }
