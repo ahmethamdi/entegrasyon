@@ -1,2 +1,25 @@
+# 34pazar.com — tanıtım sitesi dizine açık; panel ve hesap sayfaları kapalı.
+# Not: Disallow taramayı engeller, dizinden çıkarmaz. Panel sayfaları
+# ayrıca <meta name="robots" content="noindex"> taşır.
 User-agent: *
-Disallow:
+Allow: /
+Disallow: /panel
+Disallow: /login
+Disallow: /register
+Disallow: /password
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /email
+Disallow: /billing
+Disallow: /orders
+Disallow: /inventory
+Disallow: /products
+Disallow: /channels
+Disallow: /mappings
+Disallow: /approvals
+Disallow: /reconciliation
+Disallow: /failures
+Disallow: /metrics
+Disallow: /help
+
+Sitemap: https://34pazar.com/sitemap.xml

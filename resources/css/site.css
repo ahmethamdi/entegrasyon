@@ -1,0 +1,948 @@
+/*
+ * 34Pazar tanıtım sitesi — tasarım sistemi.
+ *
+ * FONTLAR SUNUCUDAN, CDN'DEN DEĞİL: Google Fonts'u doğrudan çağırmak
+ * ziyaretçinin IP adresini ABD'ye gönderir; Alman mahkemeleri (LG München,
+ * 2022) bunu izinsiz veri aktarımı saydı. Fontsource dosyaları derlemeye
+ * girer ve kendi alan adımızdan sunulur.
+ *
+ * `wdth.css`: Archivo'nun genişlik ekseni de gelir — büyük başlıklar
+ * hafif geniş kesimde (font-stretch) daha iddialı durur.
+ */
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/inter-tight/wght.css';
+
+/*
+ * `source(none)` + açık kaynak listesi: Tailwind yalnız site görünümlerini
+ * tarar. Yoksa panelin bütün Vue dosyaları da taranır ve sitenin CSS'i
+ * panelde kullanılan yüzlerce sınıfla şişerdi.
+ */
+@import 'tailwindcss' source(none);
+@source '../views/site';
+@source '../views/errors';
+@source '../js/site.js';
+
+@theme {
+    --color-ink: #111111;
+    --color-ink-2: #1c1c1c;
+    --color-paper: #ffffff;
+    --color-sand: #f3f1ec;
+    --color-brand: #ce310d;
+    --color-brand-dark: #a92709;
+    /* Kontrast ölçüldü: #5a5a5a beyazda 6.9:1, sand üstünde 6.2:1. */
+    --color-muted: #5a5a5a;
+    /* Koyu zeminde ikincil yazı: #a3a3a3 → #111 üstünde 7.9:1. */
+    --color-muted-dark: #a3a3a3;
+    --color-line: #e2dfd8;
+    --color-line-dark: #2e2e2e;
+
+    --font-display: 'Archivo Variable', 'Arial Black', 'Helvetica Neue', system-ui, sans-serif;
+    --font-sans: 'Inter Tight Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ───────────────────────────────────────────────────── temel */
+
+@layer base {
+    html {
+        -webkit-text-size-adjust: 100%;
+        /* Yapışkan başlık çapa hedefini örtmesin (/#sss gibi). */
+        scroll-padding-top: 5.5rem;
+    }
+
+    body {
+        font-family: var(--font-sans);
+        font-size: 1.0625rem;
+        line-height: 1.6;
+        color: var(--color-ink);
+        background: var(--color-paper);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+        /* Yatay taşmaya karşı son güvence; asıl önlem bileşenlerde. */
+        overflow-x: clip;
+    }
+
+    ::selection {
+        background: var(--color-brand);
+        color: #fff;
+    }
+
+    /*
+     * WCAG 2.2 · 2.4.11: odak en az 2px ve zeminden ayrışmalı. Marka
+     * kırmızısı beyazda 5.2:1; koyu ve kırmızı zeminde beyaza döner
+     * (aşağıda .on-dark / .on-brand).
+     */
+    :focus-visible {
+        outline: 2px solid var(--color-brand);
+        outline-offset: 3px;
+        border-radius: 2px;
+    }
+
+    .on-dark :focus-visible,
+    .on-brand :focus-visible {
+        outline-color: #fff;
+    }
+
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+}
+
+/* ───────────────────────────────────────────────────── bileşenler */
+
+@layer components {
+    .wrap {
+        width: 100%;
+        max-width: 90rem;
+        margin-inline: auto;
+        padding-inline: clamp(1.25rem, 4vw, 3.5rem);
+    }
+
+    .on-dark {
+        background: var(--color-ink);
+        color: #fff;
+    }
+
+    .on-brand {
+        background: var(--color-brand);
+        color: #fff;
+    }
+
+    /* ── tipografi
+     * Başlıklar Archivo 850, hafif geniş kesim, sıkı satır ve harf aralığı.
+     * Boyutlar clamp ile akar: 390px'te taşmadan, 1440px'te sayfayı
+     * dolduracak kadar büyük.
+     */
+    .display {
+        font-family: var(--font-display);
+        font-weight: 850;
+        font-stretch: 106%;
+        letter-spacing: -0.035em;
+        line-height: 0.94;
+        text-wrap: balance;
+    }
+
+    .t-hero {
+        font-size: clamp(2.6rem, 0.9rem + 7.2vw, 8.25rem);
+        line-height: 0.9;
+        letter-spacing: -0.045em;
+    }
+
+    .t-1 {
+        font-size: clamp(2.4rem, 1rem + 5.2vw, 6rem);
+    }
+
+    .t-2 {
+        font-size: clamp(2rem, 1rem + 3.4vw, 4.25rem);
+        line-height: 0.98;
+    }
+
+    .t-3 {
+        font-size: clamp(1.5rem, 1rem + 1.5vw, 2.4rem);
+        line-height: 1.04;
+        letter-spacing: -0.025em;
+    }
+
+    /* Zikzak satırlarındaki başlık: 5 sütunluk metin alanına sığacak ölçek. */
+    .t-scene {
+        font-size: clamp(2rem, 1rem + 2.6vw, 3.75rem);
+        line-height: 0.98;
+    }
+
+    .lead {
+        font-size: clamp(1.125rem, 1rem + 0.4vw, 1.375rem);
+        line-height: 1.5;
+        letter-spacing: -0.005em;
+    }
+
+    .muted {
+        color: var(--color-muted);
+    }
+
+    .on-dark .muted {
+        color: var(--color-muted-dark);
+    }
+
+    .accent {
+        color: var(--color-brand);
+    }
+
+    /*
+     * Bölüm etiketi: numara kırmızı, ad siyah, arada ince çizgi. Hap
+     * şeklinde rozet DEĞİL — o kalıp "şablon site" gibi okunuyor.
+     */
+    .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.8125rem;
+        font-weight: 650;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+    }
+
+    .eyebrow b {
+        color: var(--color-brand);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .eyebrow::after {
+        content: '';
+        width: 2.5rem;
+        height: 2px;
+        background: currentColor;
+        opacity: 0.25;
+    }
+
+    .on-dark .eyebrow b {
+        color: #ff6a47; /* koyu zeminde marka tonu — #111 üstünde 6.3:1 */
+    }
+
+    /* ── düğmeler
+     * Köşeli, kalın, ok işaretli. Hedef yüksekliği 52px (WCAG 2.5.8
+     * en az 24px; parmakla rahat basılsın diye bilerek büyük).
+     */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        min-height: 3.25rem;
+        padding: 0 1.5rem;
+        font-weight: 650;
+        font-size: 1rem;
+        letter-spacing: -0.005em;
+        border: 2px solid transparent;
+        border-radius: 0.25rem;
+        transition:
+            background-color 0.2s,
+            color 0.2s,
+            border-color 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn .arrow {
+        transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+
+    .btn:hover .arrow {
+        transform: translateX(4px);
+    }
+
+    .btn-primary {
+        background: var(--color-brand);
+        color: #fff;
+    }
+
+    .btn-primary:hover {
+        background: var(--color-ink);
+    }
+
+    .on-dark .btn-primary:hover {
+        background: #fff;
+        color: var(--color-ink);
+    }
+
+    .btn-outline {
+        border-color: var(--color-ink);
+        color: var(--color-ink);
+    }
+
+    .btn-outline:hover {
+        background: var(--color-ink);
+        color: #fff;
+    }
+
+    .btn-light {
+        background: #fff;
+        color: var(--color-ink);
+    }
+
+    .btn-light:hover {
+        background: var(--color-ink);
+        color: #fff;
+    }
+
+    .btn-sm {
+        min-height: 2.75rem;
+        padding: 0 1.125rem;
+        font-size: 0.9375rem;
+    }
+
+    .link-u {
+        text-decoration: underline;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 0.3em;
+        text-decoration-color: color-mix(in srgb, currentColor 30%, transparent);
+        transition: text-decoration-color 0.2s;
+    }
+
+    .link-u:hover {
+        text-decoration-color: var(--color-brand);
+    }
+
+    /* ── başlık (header) */
+    .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: rgb(255 255 255 / 0.96);
+        border-bottom: 1px solid var(--color-line);
+    }
+
+    .nav-link {
+        position: relative;
+        padding: 0.5rem 0;
+        font-weight: 550;
+        font-size: 0.9875rem;
+    }
+
+    /* Bulunulan sayfa: altında kırmızı çizgi. */
+    .nav-link::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 2px;
+        background: var(--color-brand);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.25s;
+    }
+
+    .nav-link:hover::after,
+    .nav-link[aria-current='page']::after {
+        transform: scaleX(1);
+    }
+
+    /*
+     * Mobil menü: başlığın altından açılan tam ekran siyah panel, büyük
+     * bağlantılar. `hidden` özelliğiyle kapalı başlar — JS yoksa da
+     * açık kalıp sayfayı örtmez.
+     */
+    .mobile-menu {
+        position: fixed;
+        inset: 4.25rem 0 0 0;
+        z-index: 49;
+        overflow-y: auto;
+        background: var(--color-ink);
+        color: #fff;
+    }
+
+    .mobile-menu a.menu-big {
+        display: block;
+        padding: 0.6rem 0;
+        font-family: var(--font-display);
+        font-weight: 850;
+        font-stretch: 106%;
+        font-size: 2.5rem;
+        letter-spacing: -0.035em;
+        line-height: 1.05;
+        border-bottom: 1px solid var(--color-line-dark);
+    }
+
+    /* ── ekran görüntüsü çerçevesi
+     * Gerçek panel görüntüsü, koyu tarayıcı çerçevesinde. Çerçeve sade:
+     * üç nokta ve adres; uydurma araç çubuğu yok.
+     */
+    .shot {
+        position: relative;
+        background: var(--color-ink);
+        border: 1px solid #000;
+        border-radius: 0.875rem;
+        overflow: hidden;
+        box-shadow:
+            0 1px 0 rgb(255 255 255 / 0.06) inset,
+            0 60px 120px -50px rgb(17 17 17 / 0.55);
+    }
+
+    .on-dark .shot {
+        border-color: #333;
+    }
+
+    .shot__bar {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        height: 2.25rem;
+        padding: 0 0.875rem;
+        color: #8f8f8f;
+        font-size: 0.75rem;
+        letter-spacing: 0.01em;
+    }
+
+    .shot__bar i {
+        width: 0.6rem;
+        height: 0.6rem;
+        border-radius: 999px;
+        background: #3a3a3a;
+    }
+
+    .shot__bar span {
+        margin-inline: auto;
+        padding-right: 2.2rem; /* üç noktanın genişliği kadar: adres ortada dursun */
+    }
+
+    .shot__view {
+        position: relative;
+        overflow: hidden;
+        background: #fafaf9;
+    }
+
+    .shot__view img {
+        display: block;
+        width: 100%;
+    }
+
+    /*
+     * DAR EKRANDA YAKINLAŞTIRMA (önceki sürümde ölçüldü): 1440px'lik ekran
+     * 350px'e inince yazılar okunmuyordu. 640px altında görsel 1,75 kat
+     * büyütülür ve panelin sol menüsü (genişliğin ~%18'i) kadrajın dışına
+     * itilir. `--dy` ile anlatılan öğe kadrajda kalacak şekilde kaydırılır.
+     */
+    @media (width < 40rem) {
+        .shot__view {
+            aspect-ratio: 4 / 3.4;
+        }
+
+        .shot__view img {
+            width: 175%;
+            max-width: none;
+            margin-left: -32%;
+            margin-top: calc(var(--dy, 0) * -1%);
+        }
+    }
+
+    /* Geniş ekranda belirli bir bölgeye odaklı kırpım (ör. "Yapman gerekenler"). */
+    .shot--crop .shot__view {
+        aspect-ratio: var(--ratio, 16 / 10);
+    }
+
+    /*
+     * Dikey kaydırma `margin-top` ile: yüzde değeri KUTU GENİŞLİĞİNE göre
+     * hesaplanır, `top` ise yüksekliğe — en-boy oranı değişince kadraj
+     * kaymasın diye ikisi de genişlik biriminde tutulur.
+     */
+    .shot--crop .shot__view img {
+        position: absolute;
+        top: 0;
+        left: var(--x, 0%);
+        width: var(--zoom, 100%);
+        max-width: none;
+        margin: var(--y, 0%) 0 0 0;
+    }
+
+    .phone {
+        width: 100%;
+        max-width: 19rem;
+        border: 8px solid var(--color-ink);
+        border-radius: 2.25rem;
+        overflow: hidden;
+        background: var(--color-ink);
+        box-shadow: 0 50px 90px -40px rgb(17 17 17 / 0.6);
+    }
+
+    .phone img {
+        display: block;
+        width: 100%;
+        border-radius: 1.6rem;
+    }
+
+    /* ── kayan bant (marquee)
+     * İçerik iki kez basılır, iz -%50 kayar → kesintisiz döngü. İkinci
+     * kopya aria-hidden: ekran okuyucu kanalları iki kez okumasın.
+     */
+    .marquee {
+        overflow: hidden;
+        user-select: none;
+    }
+
+    .marquee__track {
+        display: flex;
+        width: max-content;
+        animation: marquee 38s linear infinite;
+    }
+
+    .marquee:hover .marquee__track {
+        animation-play-state: paused;
+    }
+
+    .marquee__group {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .marquee__item {
+        display: inline-flex;
+        align-items: center;
+        gap: clamp(1.5rem, 3vw, 3.5rem);
+        padding-right: clamp(1.5rem, 3vw, 3.5rem);
+        font-family: var(--font-display);
+        font-weight: 850;
+        font-stretch: 112%;
+        font-size: clamp(3rem, 1rem + 7vw, 8.5rem);
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+        white-space: nowrap;
+    }
+
+    .marquee__item::after {
+        content: '';
+        width: 0.28em;
+        height: 0.28em;
+        background: currentColor;
+        transform: rotate(45deg);
+        opacity: 0.9;
+    }
+
+    @keyframes marquee {
+        to {
+            transform: translateX(-50%);
+        }
+    }
+
+    /* ── numaralı adımlar */
+    .step-num {
+        font-family: var(--font-display);
+        font-weight: 900;
+        font-stretch: 112%;
+        font-size: clamp(4rem, 2rem + 6vw, 8rem);
+        line-height: 0.8;
+        letter-spacing: -0.06em;
+        color: var(--color-brand);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ── kanal listesi: büyük yazılı satırlar, üstüne gelince kayar */
+    .channel-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 1rem;
+        padding-block: clamp(1rem, 2vw, 1.6rem);
+        border-bottom: 1px solid var(--color-line);
+        transition: padding 0.3s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+
+    .on-dark .channel-row {
+        border-color: var(--color-line-dark);
+    }
+
+    .channel-row:hover {
+        padding-left: 0.75rem;
+    }
+
+    /* Dar ekranda ad ve durum alt alta: "WooCommerce" + etiket 390px'e sığmıyordu (ölçüldü). */
+    @media (width < 40rem) {
+        .channel-row {
+            grid-template-columns: 1fr;
+            gap: 0.4rem;
+        }
+
+        .channel-row:hover {
+            padding-left: 0;
+        }
+    }
+
+    .channel-row__name {
+        font-family: var(--font-display);
+        font-weight: 850;
+        font-stretch: 106%;
+        font-size: clamp(2rem, 1rem + 3.6vw, 4.5rem);
+        letter-spacing: -0.04em;
+        line-height: 1;
+    }
+
+    .channel-row:hover .channel-row__name {
+        color: var(--color-brand);
+    }
+
+    .on-dark .channel-row:hover .channel-row__name {
+        color: #ff6a47;
+    }
+
+    .tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.8125rem;
+        font-weight: 650;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    .tag::before {
+        content: '';
+        width: 0.5rem;
+        height: 0.5rem;
+        background: currentColor;
+    }
+
+    .tag--soon {
+        color: var(--color-muted);
+    }
+
+    .tag--soon::before {
+        background: transparent;
+        border: 1.5px solid currentColor;
+    }
+
+    .on-dark .tag--soon {
+        color: var(--color-muted-dark);
+    }
+
+    /* ── SSS: yerel <details>, JS gerekmez */
+    .faq {
+        border-top: 2px solid var(--color-ink);
+    }
+
+    .faq details {
+        border-bottom: 1px solid var(--color-line);
+    }
+
+    .faq summary {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1.5rem;
+        padding: 1.4rem 0;
+        cursor: pointer;
+        list-style: none;
+        font-family: var(--font-display);
+        font-weight: 750;
+        font-size: clamp(1.15rem, 1rem + 0.6vw, 1.5rem);
+        letter-spacing: -0.02em;
+        line-height: 1.25;
+    }
+
+    .faq summary::-webkit-details-marker {
+        display: none;
+    }
+
+    /* Artı işareti CSS ile çizilir; açılınca eksiye döner. */
+    .faq summary::after {
+        content: '';
+        flex-shrink: 0;
+        width: 1rem;
+        height: 1rem;
+        margin-top: 0.35rem;
+        background:
+            linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
+            linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
+        transition: transform 0.25s;
+    }
+
+    .faq details[open] summary::after {
+        transform: rotate(45deg);
+        color: var(--color-brand);
+    }
+
+    .faq details > div {
+        max-width: 62ch;
+        padding-bottom: 1.6rem;
+        color: var(--color-muted);
+        line-height: 1.65;
+    }
+
+    /* ── fiyat tablosu */
+    .price {
+        font-family: var(--font-display);
+        font-weight: 850;
+        font-stretch: 106%;
+        letter-spacing: -0.04em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .plan-col--hi {
+        background: var(--color-sand);
+    }
+
+    /* ── alt bilgi */
+    .wordmark {
+        display: block;
+        font-family: var(--font-display);
+        font-weight: 900;
+        font-stretch: 125%;
+        /* Kelime sayfa genişliğini doldurur; 7 harf, geniş kesim. */
+        font-size: clamp(3.5rem, 15.4vw, 15rem);
+        line-height: 0.78;
+        letter-spacing: -0.055em;
+        white-space: nowrap;
+    }
+
+    .footer-link {
+        color: var(--color-muted-dark);
+        transition: color 0.2s;
+    }
+
+    .footer-link:hover {
+        color: #fff;
+    }
+
+    /* ── kaydırınca beliren öğeler
+     * JS YOKSA HER ŞEY GÖRÜNÜR: gizleme sınıfını site.js ekler ve yalnız
+     * ekranın altında kalan öğelere ekler (ilk ekranda titreme olmaz).
+     */
+    .reveal-pending {
+        opacity: 0;
+        transform: translateY(2.5rem);
+    }
+
+    .reveal-in {
+        transition:
+            opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1),
+            transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+}
+
+/* ───────────────────────────────────────────────────── uzun metin
+ *
+ * `.prose-site` — blog yazıları ve yasal sayfalar (başka görünümler de
+ * kullanır, sınıf adı SÖZLEŞMEDİR). Satır ~68 karakter: uzun metinde göz
+ * satır başını kaybetmesin. Başlıklar sitenin kalın display fontuyla,
+ * gövde Inter Tight ile.
+ */
+@layer components {
+    .prose-site {
+        max-width: 68ch;
+        font-size: 1.125rem;
+        line-height: 1.75;
+        color: #2a2a2a; /* beyazda 14:1 — uzun okumada saf siyahtan yumuşak */
+    }
+
+    .prose-site > * + * {
+        margin-top: 1.25em;
+    }
+
+    .prose-site h2,
+    .prose-site h3,
+    .prose-site h4 {
+        font-family: var(--font-display);
+        font-weight: 800;
+        font-stretch: 104%;
+        color: var(--color-ink);
+        letter-spacing: -0.03em;
+        text-wrap: balance;
+        scroll-margin-top: 6rem;
+    }
+
+    .prose-site h2 {
+        margin-top: 2.4em;
+        font-size: clamp(1.6rem, 1.1rem + 1.4vw, 2.25rem);
+        line-height: 1.1;
+    }
+
+    .prose-site h3 {
+        margin-top: 2em;
+        font-size: clamp(1.3rem, 1.1rem + 0.6vw, 1.6rem);
+        line-height: 1.2;
+    }
+
+    .prose-site h4 {
+        margin-top: 1.8em;
+        font-size: 1.15rem;
+        line-height: 1.3;
+        letter-spacing: -0.015em;
+    }
+
+    .prose-site h2 + *,
+    .prose-site h3 + *,
+    .prose-site h4 + * {
+        margin-top: 0.6em;
+    }
+
+    .prose-site > :first-child {
+        margin-top: 0;
+    }
+
+    .prose-site strong {
+        font-weight: 650;
+        color: var(--color-ink);
+    }
+
+    .prose-site a {
+        color: var(--color-ink);
+        font-weight: 550;
+        text-decoration: underline;
+        text-decoration-color: var(--color-brand);
+        text-decoration-thickness: 2px;
+        text-underline-offset: 0.22em;
+    }
+
+    .prose-site a:hover {
+        color: var(--color-brand);
+    }
+
+    .prose-site ul,
+    .prose-site ol {
+        padding-left: 1.4em;
+    }
+
+    .prose-site ul {
+        list-style: none;
+    }
+
+    /* Madde imi: küçük kırmızı kare — sitenin işaret dili. */
+    .prose-site ul > li {
+        position: relative;
+    }
+
+    .prose-site ul > li::before {
+        content: '';
+        position: absolute;
+        left: -1.2em;
+        top: 0.68em;
+        width: 0.42em;
+        height: 0.42em;
+        background: var(--color-brand);
+    }
+
+    .prose-site ol {
+        list-style: decimal;
+    }
+
+    .prose-site ol > li::marker {
+        color: var(--color-brand);
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .prose-site li + li {
+        margin-top: 0.5em;
+    }
+
+    .prose-site li > ul,
+    .prose-site li > ol {
+        margin-top: 0.5em;
+    }
+
+    .prose-site blockquote {
+        padding: 0.25em 0 0.25em 1.25em;
+        border-left: 4px solid var(--color-brand);
+        font-family: var(--font-display);
+        font-weight: 650;
+        font-size: 1.25em;
+        line-height: 1.4;
+        letter-spacing: -0.015em;
+        color: var(--color-ink);
+    }
+
+    .prose-site blockquote p + p {
+        margin-top: 0.75em;
+    }
+
+    .prose-site code {
+        padding: 0.12em 0.36em;
+        border-radius: 0.25rem;
+        background: var(--color-sand);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.86em;
+        color: var(--color-ink);
+    }
+
+    .prose-site pre {
+        padding: 1.1em 1.25em;
+        border-radius: 0.5rem;
+        background: var(--color-ink);
+        color: #f1f1f1;
+        overflow-x: auto;
+        font-size: 0.9em;
+        line-height: 1.6;
+    }
+
+    .prose-site pre code {
+        padding: 0;
+        background: none;
+        color: inherit;
+        font-size: inherit;
+    }
+
+    .prose-site hr {
+        margin-block: 2.5em;
+        border: 0;
+        height: 2px;
+        background: var(--color-ink);
+        width: 3rem;
+    }
+
+    /*
+     * Tablo dar ekranda taşmasın diye kendi içinde kayar. `display:block`
+     * + overflow tabloyu bölmeden yatay kaydırma verir.
+     */
+    .prose-site table {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        border-collapse: collapse;
+        font-size: 0.95em;
+        line-height: 1.5;
+    }
+
+    .prose-site thead th {
+        border-bottom: 2px solid var(--color-ink);
+        font-weight: 650;
+        color: var(--color-ink);
+        text-align: left;
+    }
+
+    .prose-site th,
+    .prose-site td {
+        padding: 0.7em 1em 0.7em 0;
+        vertical-align: top;
+    }
+
+    .prose-site tbody tr {
+        border-bottom: 1px solid var(--color-line);
+    }
+
+    .prose-site img,
+    .prose-site figure {
+        margin-block: 2em;
+        border-radius: 0.5rem;
+    }
+
+    .prose-site figcaption {
+        margin-top: 0.6em;
+        font-size: 0.875rem;
+        color: var(--color-muted);
+    }
+}
+
+/* ───────────────────────────────────────────────────── hareket azaltma
+ *
+ * İşletim sisteminde "hareketi azalt" açıksa bant durur ve sarılır,
+ * beliren öğeler hemen görünür, geçişler kapanır.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .marquee__track {
+        animation: none;
+        width: auto;
+        flex-wrap: wrap;
+    }
+
+    .marquee__group[aria-hidden='true'] {
+        display: none;
+    }
+
+    .marquee__group {
+        flex-wrap: wrap;
+    }
+
+    .reveal-pending {
+        opacity: 1;
+        transform: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

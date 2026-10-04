@@ -74,7 +74,23 @@ Route::middleware('auth')->group(function (): void {
 
 // Herkese açık: reklamdan gelen satıcı önce ürünü görür, sonra kayıt olur.
 // Giriş yapmış kullanıcı da görebilir (sayfada "Panele git" düğmesi var).
-Route::get('/', [SiteController::class, 'home'])->name('home');
+//
+// BLADE İLE SUNUCUDA ÜRETİLİR, Inertia DEĞİL: arama motoru ve sosyal
+// önizleme botu sayfayı JavaScript çalıştırmadan okur. Panel Inertia
+// kalır; giriş arkasındaki ekranın dizine girmesi zaten istenmez.
+Route::controller(SiteController::class)->group(function (): void {
+    Route::get('/', 'home')->name('home');
+    Route::get('/ozellikler', 'features')->name('site.features');
+    Route::get('/fiyatlar', 'pricing')->name('site.pricing');
+    Route::get('/entegrasyonlar', 'channels')->name('site.channels');
+    Route::get('/entegrasyonlar/{channel}', 'channel')->where('channel', '[a-z0-9-]+')->name('site.channel');
+    Route::get('/hakkimizda', 'about')->name('site.about');
+    Route::get('/iletisim', 'contact')->name('site.contact');
+    Route::get('/blog', 'blogIndex')->name('site.blog');
+    Route::get('/blog/{slug}', 'blogShow')->where('slug', '[a-z0-9-]+')->name('site.blog.show');
+    Route::get('/yasal/{page}', 'legal')->where('page', '[a-z0-9-]+')->name('site.legal');
+    Route::get('/sitemap.xml', 'sitemap')->name('site.sitemap');
+});
 
 // ─────────────────────────────────────────────────────────── panel
 
