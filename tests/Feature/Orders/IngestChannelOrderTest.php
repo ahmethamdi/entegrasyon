@@ -302,6 +302,40 @@ final class IngestChannelOrderTest extends TestCase
         $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
     }
 
+    /**
+     * ⚠️ İADEDEN SONRA GELEN İPTAL KALANI GERİ GETİRİR.
+     *
+     * Kanal iptalde satırın TAM miktarını gönderir. 3 adetin 1'i iade
+     * edilmişken iptal 3 adet isterdi: 3 + 1 > 3, CHECK kısıtı patlar ve
+     * iptal HİÇ uygulanmazdı — kalan 2 adet stoğa geri gelmezdi.
+     */
+    #[Test]
+    public function a_cancellation_after_a_partial_return_restores_only_the_remainder(): void
+    {
+        [$tenant, $connection, $warehouseId, $variant] = $this->makeContext(stock: 10);
+
+        $order = $this->ingest($tenant, $connection, $warehouseId, [[$variant->id, 3]]);
+        $line = $this->asTenant($tenant, fn () => $order->lines()->firstOrFail());
+
+        $this->applyReturn($tenant, $order, [[$line->id, 1]], 'RET-1');
+        $this->assertSame(8, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        $this->asTenant($tenant, fn () => (new ApplyOrderCancellation)->run(new CancellationEvent(
+            orderId: $order->id,
+            externalRef: 'CAN-1',
+            lines: [new CancelledLine($line->id, 3)],
+        ), $warehouseId));
+
+        $this->assertSame(10, $this->onHand($tenant, $warehouseId, $variant->id), 'Kalan 2 adet geri gelmeli.');
+        $this->assertSame(2, $this->asTenant($tenant, fn () => $line->fresh()->quantity_cancelled));
+
+        // İptalden SONRA gelen iade de taşmaz.
+        $this->applyReturn($tenant, $order, [[$line->id, 2]], 'RET-2');
+        $this->assertSame(10, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
     /** İptal fazla satışı düzeltir — bakiye 0'a döner. */
     #[Test]
     public function cancellation_recovers_from_oversold(): void

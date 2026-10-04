@@ -154,16 +154,36 @@ final class ApplyOrderCancellation
             ->get()
             ->keyBy('id');
 
-        $resolved = [];
+        // Satır başına TOPLANIR: iki ham kalem aynı satıra eşleşebilir ve
+        // kırpma toplam üzerinden yapılmalıdır.
+        $requested = [];
 
         foreach ($event->lines as $cancelled) {
-            $line = $lines->get($cancelled->orderLineId);
+            $requested[$cancelled->orderLineId] = ($requested[$cancelled->orderLineId] ?? 0) + $cancelled->quantity;
+        }
+
+        $resolved = [];
+
+        foreach ($requested as $lineId => $quantity) {
+            $line = $lines->get($lineId);
 
             if ($line === null || ! $line->isStockable()) {
                 continue;
             }
 
-            $resolved[] = ['line' => $line, 'quantity' => $cancelled->quantity];
+            // ⚠️ İPTAL "SİPARİŞİN GERİ KALANI"DIR — KALANA KIRPILIR.
+            //
+            // Kanal iptalde satırın TAM miktarını gönderir (Shopify
+            // `orders/cancelled` → `line_items.quantity`). Önce 1 adet iade
+            // edilmiş 3 adetlik satırda iptal 3 adet isterdi: 3 + 1 > 3,
+            // CHECK kısıtı patlar, iptal HİÇ uygulanmaz ve kalan 2 adet
+            // stoğa geri gelmezdi.
+            $room = $line->quantity - $line->quantity_cancelled - $line->quantity_returned;
+            $quantity = min($quantity, $room);
+
+            if ($quantity > 0) {
+                $resolved[] = ['line' => $line, 'quantity' => $quantity];
+            }
         }
 
         return $resolved;

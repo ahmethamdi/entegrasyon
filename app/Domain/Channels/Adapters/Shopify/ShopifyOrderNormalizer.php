@@ -274,6 +274,14 @@ final class ShopifyOrderNormalizer
                 continue;
             }
 
+            // ⚠️ "STOĞA GERİ KOYMA" DENMİŞ KALEM STOK ÜRETMEZ.
+            // Satıcı iadeyi `no_restock` ile yaptıysa (hasarlı, kayıp ürün)
+            // mal fiziksel olarak rafa dönmemiştir; eklenseydi bakiye
+            // olmayan stoğu gösterir ve fazla satış doğardı.
+            if (($item['restock_type'] ?? null) === 'no_restock') {
+                continue;
+            }
+
             /** @var array<string, mixed> $lineItem */
             $lineItem = is_array($item['line_item'] ?? null) ? $item['line_item'] : [];
 

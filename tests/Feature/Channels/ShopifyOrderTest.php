@@ -279,6 +279,34 @@ final class ShopifyOrderTest extends TestCase
         );
     }
 
+    /**
+     * ⚠️ `no_restock` İADESİ STOK ÜRETMEZ.
+     *
+     * Satıcı iadeyi "stoğa geri koyma" ile yaptıysa (hasarlı, kayıp ürün)
+     * mal rafa dönmemiştir. Önceden her iade kalemi stoğa ekleniyordu:
+     * bakiye olmayan stoğu gösterir ve fazla satış doğardı.
+     */
+    #[Test]
+    public function a_no_restock_refund_line_is_not_restocked(): void
+    {
+        $event = ShopifyOrderNormalizer::normalize($this->message('refunds/create', [
+            'id' => 4243,
+            'order_id' => 9001,
+            'refund_line_items' => [
+                ['id' => 1, 'quantity' => 1, 'line_item_id' => 555, 'restock_type' => 'no_restock',
+                    'line_item' => ['id' => 555, 'sku' => 'A']],
+                ['id' => 2, 'quantity' => 2, 'line_item_id' => 556, 'restock_type' => 'return',
+                    'line_item' => ['id' => 556, 'sku' => 'B']],
+            ],
+        ]));
+
+        $lines = $event?->payload['lines'] ?? [];
+
+        $this->assertCount(1, $lines, 'Stoğa geri konmayan kalem iade satırı olmamalı.');
+        $this->assertSame('556', $lines[0]['external_line_id']);
+        $this->assertSame(2, $lines[0]['quantity']);
+    }
+
     // ──────────────────────────────────────────────────────────────── toplam
 
     /**

@@ -196,17 +196,30 @@ final class ApplyOrderReturn
             return $this->resolveCumulative($event, $lines);
         }
 
-        $resolved = [];
+        $requested = [];
 
         foreach ($event->lines as $returned) {
             /** @var ReturnedLine $returned */
-            $line = $lines->get($returned->orderLineId);
+            $requested[$returned->orderLineId] = ($requested[$returned->orderLineId] ?? 0) + $returned->quantity;
+        }
+
+        $resolved = [];
+
+        foreach ($requested as $lineId => $quantity) {
+            $line = $lines->get($lineId);
 
             if ($line === null || ! $line->isStockable()) {
                 continue;                       // eşleşmemiş SKU — stok yok
             }
 
-            $resolved[] = ['line' => $line, 'quantity' => $returned->quantity];
+            // Kalana KIRPILIR: taşan iade (iptalden sonra gelen iade, kanalın
+            // fazla bildirmesi) CHECK kısıtını patlatıp olaydaki ÖTEKİ
+            // kalemleri de geri alırdı.
+            $quantity = min($quantity, $line->quantity - $line->quantity_cancelled - $line->quantity_returned);
+
+            if ($quantity > 0) {
+                $resolved[] = ['line' => $line, 'quantity' => $quantity];
+            }
         }
 
         return $resolved;
