@@ -15,10 +15,12 @@ use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Support\Logging\PayloadRedactor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
@@ -522,6 +524,139 @@ final class ShopifyAdapterTest extends TestCase
             ErrorClass::NETWORK,
             $this->adapter()->classifyError(new ConnectionException('timeout')),
         );
+    }
+
+    // ─────────────────────────────────────────── hız sınırı (maliyet kovası)
+
+    /**
+     * ⚠️ GRAPHQL'DE HIZ SINIRI 200 İLE GELİR VE GEÇİCİDİR.
+     *
+     * `errors[].extensions.code = THROTTLED`. Önceden her taşıma hatası
+     * gibi VALIDATION (kalıcı) sayılıyordu: toplu bir stok/fiyat turu
+     * kovayı boşaltınca yüzlerce listing "düzeltilemez" damgasıyla ölürdü.
+     *
+     * Shopify `Retry-After` göndermez; süre gövdeden hesaplanır:
+     * (istenen 100 − kalan 20) / saniyede 50 → 2 sn.
+     */
+    #[Test]
+    public function a_throttled_200_response_is_rate_limited_with_a_computed_wait(): void
+    {
+        Http::fake(['*' => Http::response([
+            'errors' => [['message' => 'Throttled', 'extensions' => ['code' => 'THROTTLED']]],
+            'extensions' => ['cost' => [
+                'requestedQueryCost' => 100,
+                'actualQueryCost' => null,
+                'throttleStatus' => ['maximumAvailable' => 1000.0, 'currentlyAvailable' => 20, 'restoreRate' => 50.0],
+            ]],
+        ], 200)]);
+
+        $adapter = $this->adapter();
+
+        try {
+            $adapter->gql('mutation { x }', operation: 'productVariantsBulkUpdate');
+            $this->fail('THROTTLED başarı sayılmamalı.');
+        } catch (ShopifyGraphqlException $e) {
+            $this->assertSame(ErrorClass::RATE_LIMITED, $adapter->classifyError($e));
+            $this->assertSame(2, $e->retryAfterSeconds());
+            $this->assertSame(2, AdapterReportedFailure::retryAfterOf($e), 'Çekirdek süreyi arayüzden okumalı.');
+        }
+    }
+
+    /** Gövdedeki INTERNAL_SERVER_ERROR Shopify tarafıdır — geçici. */
+    #[Test]
+    public function an_internal_server_error_in_the_body_is_transient(): void
+    {
+        $e = new ShopifyGraphqlException('q', [['message' => 'Internal error', 'extensions' => ['code' => 'INTERNAL_SERVER_ERROR']]]);
+
+        $this->assertSame(ErrorClass::SERVER_ERROR, $this->adapter()->classifyError($e));
+    }
+
+    /**
+     * Diğer taşıma hataları KALICI kalır; `userErrors` kodu ne olursa olsun
+     * kalıcıdır — iş kuralı ihlali beklemekle düzelmez.
+     */
+    #[Test]
+    public function other_transport_errors_and_user_errors_stay_permanent(): void
+    {
+        $adapter = $this->adapter();
+
+        $this->assertSame(ErrorClass::VALIDATION, $adapter->classifyError(
+            new ShopifyGraphqlException('q', [['message' => 'Access denied', 'extensions' => ['code' => 'ACCESS_DENIED']]]),
+        ));
+        $this->assertSame(ErrorClass::VALIDATION, $adapter->classifyError(
+            new ShopifyGraphqlException('m', [['message' => 'x', 'extensions' => ['code' => 'THROTTLED']]], isUserError: true),
+        ));
+    }
+
+    /**
+     * ⚠️ KOVA ÖNCEDEN GÖZETİLİR: kalan puan son çağrının maliyetini
+     * karşılamıyorsa bir sonraki çağrıdan önce kısa süre beklenir.
+     *
+     * 250 ayrı ürünlü bir fiyat turu tek işte 250 mutation atar; beklemeden
+     * atılsaydı kova ortada boşalır ve tur THROTTLED ile yarıda kalırdı.
+     * (30 − 10) / 50 → 1 sn.
+     */
+    #[Test]
+    public function the_adapter_waits_for_the_bucket_before_the_next_call(): void
+    {
+        Sleep::fake();
+
+        Http::fake(['*' => Http::sequence()
+            ->push($this->okWithBucket(available: 10, cost: 30))
+            ->push($this->okWithBucket(available: 500, cost: 30))
+            ->push($this->okWithBucket(available: 470, cost: 30)),
+        ]);
+
+        $adapter = $this->adapter();
+
+        $adapter->gql('query { a }');
+        $adapter->gql('query { b }');
+        Sleep::assertSleptTimes(1);
+        Sleep::assertSequence([Sleep::for(1)->seconds()]);
+
+        // Kova doluyken bekleme YOK.
+        $adapter->gql('query { c }');
+        Sleep::assertSleptTimes(1);
+    }
+
+    /**
+     * Bekleme uzunsa istek HİÇ ATILMAZ — THROTTLED fırlatılır ve iş
+     * hesaplanan süre sonra yeniden denenir. Worker 60 sn'lik zaman aşımına
+     * karşı boşuna tutulmaz. (500 − 0) / 50 → 10 sn > 5 sn.
+     */
+    #[Test]
+    public function a_long_wait_releases_the_job_instead_of_sleeping(): void
+    {
+        Sleep::fake();
+
+        Http::fake(['*' => Http::response($this->okWithBucket(available: 0, cost: 500), 200)]);
+
+        $adapter = $this->adapter();
+        $adapter->gql('query { a }');
+
+        try {
+            $adapter->gql('query { b }', operation: 'productVariantsBulkUpdate');
+            $this->fail('Uzun bekleme iş içinde yapılmamalı.');
+        } catch (ShopifyGraphqlException $e) {
+            $this->assertSame(ErrorClass::RATE_LIMITED, $adapter->classifyError($e));
+            $this->assertSame(10, $e->retryAfterSeconds());
+        }
+
+        Http::assertSentCount(1);
+        Sleep::assertNeverSlept();
+    }
+
+    /** @return array<string, mixed> */
+    private function okWithBucket(int $available, int $cost): array
+    {
+        return [
+            'data' => ['shop' => ['id' => 'gid://shopify/Shop/1']],
+            'extensions' => ['cost' => [
+                'requestedQueryCost' => $cost,
+                'actualQueryCost' => $cost,
+                'throttleStatus' => ['maximumAvailable' => 1000.0, 'currentlyAvailable' => $available, 'restoreRate' => 50.0],
+            ]],
+        ];
     }
 
     // ─────────────────────────────────────────────────── yardımcılar

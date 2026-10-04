@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Shopify;
 
+use App\Domain\Channels\Contracts\CarriesRetryAfter;
 use RuntimeException;
 
 /**
@@ -33,17 +34,31 @@ use RuntimeException;
  * bir İŞ KURALI ihlalidir ve `VALIDATION` yani KALICIDIR — yeniden denemek
  * aynı sonucu verir ve kotayı boşa harcar.
  */
-final class ShopifyGraphqlException extends RuntimeException
+final class ShopifyGraphqlException extends RuntimeException implements CarriesRetryAfter
 {
+    /**
+     * Shopify'ın 200 gövdesinde GEÇİCİ olduğunu bildirdiği taşıma hataları.
+     *
+     * ⚠️ GRAPHQL'DE HIZ SINIRI DA 200 DÖNER: `errors[].extensions.code =
+     * THROTTLED`. Bu kodlar tanınmasaydı her taşıma hatası gibi KALICI
+     * (`VALIDATION`) sayılır ve toplu bir stok/fiyat turunda yüzlerce
+     * listing yalnızca kova boşaldı diye "düzeltilemez" damgasıyla ölürdü.
+     */
+    public const THROTTLED = 'THROTTLED';
+
+    public const INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR';
+
     /**
      * @param  string  $operation  Hangi mutation/query — hata mesajında görünür
      * @param  list<array<string, mixed>>  $errors  Kanalın döndürdüğü ham hata listesi
      * @param  bool  $isUserError  true → iş kuralı (`userErrors`), false → taşıma (`errors`)
+     * @param  int|null  $retryAfter  Kova dolana kadar beklenecek saniye (yalnızca THROTTLED)
      */
     public function __construct(
         public readonly string $operation,
         public readonly array $errors,
         public readonly bool $isUserError = false,
+        public readonly ?int $retryAfter = null,
     ) {
         parent::__construct(sprintf(
             'Shopify GraphQL %s başarısız (%s): %s',
@@ -51,6 +66,27 @@ final class ShopifyGraphqlException extends RuntimeException
             $isUserError ? 'userErrors' : 'errors',
             self::summarize($errors),
         ));
+    }
+
+    public function retryAfterSeconds(): ?int
+    {
+        return $this->retryAfter;
+    }
+
+    /** Taşıma hatası bu koda sahip mi? `userErrors` hiçbir zaman eşleşmez. */
+    public function hasCode(string $code): bool
+    {
+        if ($this->isUserError) {
+            return false;
+        }
+
+        foreach ($this->errors as $error) {
+            if (($error['extensions']['code'] ?? null) === $code) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

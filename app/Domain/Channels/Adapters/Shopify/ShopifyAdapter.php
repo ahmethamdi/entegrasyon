@@ -38,6 +38,7 @@ use Carbon\CarbonInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Sleep;
 use RuntimeException;
 use Throwable;
 
@@ -154,6 +155,22 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
      */
     private const MAX_PRICE_BATCH = 250;
 
+    /**
+     * Son yanıtın bildirdiği kova durumu — bir sonraki çağrının kararı.
+     *
+     * @var array{available: float, restoreRate: float, lastCost: float}|null
+     */
+    private ?array $bucket = null;
+
+    /**
+     * Bu süreden uzun bekleme İŞ İÇİNDE yapılmaz; iş kuyruğa geri bırakılır.
+     *
+     * İş zaman aşımı 60 sn'dir (`config/horizon.php`); 250 kalemlik bir
+     * fiyat turu birkaç kısa bekleme yapabilir ama tek bir uzun bekleme
+     * worker'ı boşuna tutar.
+     */
+    private const MAX_INLINE_WAIT_SECONDS = 5;
+
     public function __construct(
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,
@@ -247,13 +264,22 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
      *
      * ⚠️ `userErrors` KALICIDIR (`VALIDATION`): iş kuralı ihlalidir ve
      * yeniden denemek AYNI sonucu verir — yalnızca kotayı harcar. Taşıma
-     * hatası (`errors`) ise şema/sorgu sorunudur ve o da kalıcıdır;
-     * ikisi de düzeltme ister, yeniden deneme değil.
+     * hatası (`errors`) ise çoğunlukla şema/sorgu sorunudur ve o da
+     * kalıcıdır; ikisi de düzeltme ister, yeniden deneme değil.
+     *
+     * ⚠️ İKİ TAŞIMA HATASI İSTİSNADIR ve 200 gövdesinde gelir: `THROTTLED`
+     * (kova boş — bekle) ve `INTERNAL_SERVER_ERROR` (Shopify tarafı).
+     * Önceden ikisi de VALIDATION sayılıyordu: toplu bir tur kovayı
+     * boşaltınca yüzlerce listing kalıcı hataya düşerdi.
      */
     public function classifyError(Throwable $e): ErrorClass
     {
         if ($e instanceof ShopifyGraphqlException) {
-            return ErrorClass::VALIDATION;
+            return match (true) {
+                $e->hasCode(ShopifyGraphqlException::THROTTLED) => ErrorClass::RATE_LIMITED,
+                $e->hasCode(ShopifyGraphqlException::INTERNAL_SERVER_ERROR) => ErrorClass::SERVER_ERROR,
+                default => ErrorClass::VALIDATION,
+            };
         }
 
         if ($e instanceof ConnectionException) {
@@ -377,6 +403,8 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
         ?string $userErrorPath = null,
         ?string $attemptId = null,
     ): array {
+        $this->waitForBucket($operation);
+
         $response = $this->client->post(
             endpoint: ShopifyEndpoints::graphql($this->shopDomain()),
             body: array_filter([
@@ -391,7 +419,92 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
         // ulaşmaz ve gövdesi `errors` taşımaz.
         $response->throw();
 
+        $this->rememberBucket($response);
+
         return $this->assertNoGraphqlErrors($response, $operation, $userErrorPath);
+    }
+
+    /**
+     * ⚠️ KOVA ÖNCEDEN GÖZETİLİR — Shopify'ın önerdiği istemci davranışı.
+     *
+     * Sınır istek sayısı değil SORGU MALİYETİDİR (§06.8) ve `ChannelRateLimiter`
+     * iş başına tek jeton düşer: 250 ayrı ürünlü bir fiyat turu tek işte 250
+     * mutation atar. Kova durumu her yanıtın gövdesinde gelir
+     * (`extensions.cost.throttleStatus`); son çağrının maliyeti kalan
+     * puanı aşıyorsa yenilenene kadar KISA bir süre beklenir. Gerçek kova
+     * boyutu da buradan okunduğu için Plus mağazasının 2.000 puanı kendiliğinden
+     * kullanılır.
+     *
+     * Bekleme uzunsa istek HİÇ ATILMAZ: THROTTLED fırlatılır, sınıfı
+     * RATE_LIMITED'dır ve iş hesaplanan süre sonra yeniden denenir —
+     * kovayı boşaltıp 200 içinde THROTTLED almaktan iyidir.
+     */
+    private function waitForBucket(string $operation): void
+    {
+        if ($this->bucket === null || $this->bucket['available'] >= $this->bucket['lastCost']) {
+            return;
+        }
+
+        $seconds = (int) ceil(
+            ($this->bucket['lastCost'] - $this->bucket['available']) / max($this->bucket['restoreRate'], 1.0)
+        );
+
+        if ($seconds > self::MAX_INLINE_WAIT_SECONDS) {
+            throw new ShopifyGraphqlException(
+                $operation,
+                [['message' => 'Maliyet kovası boş — istek atılmadı.', 'extensions' => ['code' => ShopifyGraphqlException::THROTTLED]]],
+                retryAfter: $seconds,
+            );
+        }
+
+        Sleep::for($seconds)->seconds();
+
+        // Bekleme boyunca kova dolmuştur; yeni yanıt gerçek değeri yazar.
+        $this->bucket['available'] += $seconds * $this->bucket['restoreRate'];
+    }
+
+    private function rememberBucket(Response $response): void
+    {
+        $cost = $response->json('extensions.cost');
+
+        if (! is_array($cost)) {
+            return;
+        }
+
+        $available = $cost['throttleStatus']['currentlyAvailable'] ?? null;
+        $restore = $cost['throttleStatus']['restoreRate'] ?? null;
+        $spent = $cost['actualQueryCost'] ?? $cost['requestedQueryCost'] ?? null;
+
+        // SAYI OLMAYAN DEĞER YOK SAYILIR (`learnedRateLimit` kuralı).
+        if (! is_numeric($available) || ! is_numeric($restore) || ! is_numeric($spent)) {
+            return;
+        }
+
+        $this->bucket = [
+            'available' => (float) $available,
+            'restoreRate' => (float) $restore,
+            'lastCost' => (float) $spent,
+        ];
+    }
+
+    /**
+     * THROTTLED yanıtında kovanın istenen maliyeti karşılamasına kalan süre.
+     *
+     * Shopify `Retry-After` GÖNDERMEZ; süre gövdeden hesaplanır (§06.8).
+     *
+     * @param  array<string, mixed>  $body
+     */
+    private static function secondsUntilAffordable(array $body): ?int
+    {
+        $requested = $body['extensions']['cost']['requestedQueryCost'] ?? null;
+        $available = $body['extensions']['cost']['throttleStatus']['currentlyAvailable'] ?? null;
+        $restore = $body['extensions']['cost']['throttleStatus']['restoreRate'] ?? null;
+
+        if (! is_numeric($requested) || ! is_numeric($available) || ! is_numeric($restore) || $restore <= 0) {
+            return null;
+        }
+
+        return max(1, (int) ceil(((float) $requested - (float) $available) / (float) $restore));
     }
 
     /**
@@ -423,7 +536,11 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
 
         if (is_array($errors) && $errors !== []) {
             /** @var list<array<string, mixed>> $errors */
-            throw new ShopifyGraphqlException($operation, array_values($errors));
+            throw new ShopifyGraphqlException(
+                $operation,
+                array_values($errors),
+                retryAfter: self::secondsUntilAffordable($body),
+            );
         }
 
         /** @var array<string, mixed> $data */

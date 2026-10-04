@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Support;
 
 use App\Domain\Channels\Contracts\AdapterResult;
+use App\Domain\Channels\Contracts\CarriesRetryAfter;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Sync\Enums\ErrorClass;
 use RuntimeException;
@@ -36,7 +37,7 @@ use Throwable;
  * görür ve çoğu adapter onu `NETWORK` (geçici) sayar — kalıcı bir
  * VALIDATION hatası boşuna beş kez denenirdi.
  */
-final class AdapterReportedFailure extends RuntimeException
+final class AdapterReportedFailure extends RuntimeException implements CarriesRetryAfter
 {
     private function __construct(
         public readonly ErrorClass $errorClass,
@@ -79,9 +80,17 @@ final class AdapterReportedFailure extends RuntimeException
         return $e instanceof self ? $e->errorClass : $adapter->classifyError($e);
     }
 
-    /** Kanalın bildirdiği bekleme süresi — yalnızca dönen sonuçta bilinir. */
+    public function retryAfterSeconds(): ?int
+    {
+        return $this->retryAfter;
+    }
+
+    /**
+     * Kanalın bildirdiği bekleme süresi — dönen sonuçtan VEYA bekleme
+     * süresi taşıyan adapter istisnasından ({@see CarriesRetryAfter}).
+     */
     public static function retryAfterOf(Throwable $e): ?int
     {
-        return $e instanceof self ? $e->retryAfter : null;
+        return $e instanceof CarriesRetryAfter ? $e->retryAfterSeconds() : null;
     }
 }
