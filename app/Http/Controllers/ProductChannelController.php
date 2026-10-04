@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Catalog\Actions\SetImageChannelExclusion;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductImage;
+use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Sync\Actions\PublishListing;
@@ -16,6 +19,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -65,7 +69,42 @@ final class ProductChannelController extends Controller
                 'contentVersion' => $model->content_version,
             ],
             'channels' => $this->channelsFor($model),
+            'images' => $this->imagesFor($model),
+            'imageChannels' => $this->imageChannels(),
         ]);
+    }
+
+    /**
+     * Görseli bir kanal türüne gönder / gönderme (A15).
+     *
+     * Kanal türü, bu kiracının GÖNDERİLEBİLİR bağlantılarından biri
+     * olmalıdır: serbest metin kabul edilseydi `excluded_channels`'a
+     * anlamsız değerler yazılırdı.
+     */
+    public function updateImageChannel(
+        Request $request,
+        string $product,
+        string $image,
+        SetImageChannelExclusion $setExclusion,
+    ): RedirectResponse {
+        $model = Product::query()->findOrFail($product);
+
+        // Görsel BU ürüne ait olmalı — başka ürünün kimliği 404.
+        $imageModel = ProductImage::query()
+            ->where('product_id', $model->id)
+            ->findOrFail($image);
+
+        $validated = $request->validate([
+            'channel_type_code' => ['required', 'string', Rule::in(array_column($this->imageChannels(), 'code'))],
+            'excluded' => ['required', 'boolean'],
+        ]);
+
+        $setExclusion->run($imageModel, $validated['channel_type_code'], (bool) $validated['excluded']);
+
+        return redirect("/products/{$model->id}/channels")->with(
+            'success',
+            'Görsel seçimi kaydedildi. Kanalda görünmesi için ürünü yeniden gönder.',
+        );
     }
 
     /** Ürünü seçilen kanala gönderir. */
@@ -115,6 +154,70 @@ final class ProductChannelController extends Controller
     }
 
     // ─────────────────────────────────────────────────── yardımcılar
+
+    /**
+     * Ürünün görselleri, sırasıyla — panelde kanal seçimiyle birlikte.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function imagesFor(Product $product): array
+    {
+        return ProductImage::query()
+            ->where('product_id', $product->id)
+            ->orderByRaw('CASE WHEN variant_id IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('position')
+            ->get()
+            ->map(fn (ProductImage $image): array => [
+                'id' => $image->id,
+                'url' => $image->publicUrl(),
+                // HTTPS olmayan görsel hiçbir kanala gitmez; panel bunu
+                // söylemeli, yoksa satıcı neden gitmediğini bilemez.
+                'path' => $image->storage_path,
+                'excludedChannels' => $image->excluded_channels ?? [],
+                'imported' => $image->source_connection_id !== null,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Görsel seçiminde gösterilecek kanal TÜRLERİ — bağlantı başına değil.
+     *
+     * İki Trendyol mağazası aynı görsel kuralını paylaşır; bağlantı başına
+     * seçim satıcıya aynı soruyu iki kez sorardı. Sınır yetenek arayüzünden
+     * okunur (`DeclaresImageLimit`), kanal adı kontrol edilmez.
+     *
+     * @return list<array{code: string, name: string, maxImages: int|null}>
+     */
+    private function imageChannels(): array
+    {
+        $types = [];
+
+        foreach ($this->publishableConnections() as $connection) {
+            $code = $connection->channel_type_code;
+
+            if (isset($types[$code])) {
+                continue;
+            }
+
+            $maxImages = null;
+
+            try {
+                $adapter = $this->registry->for($connection);
+                $maxImages = $adapter instanceof DeclaresImageLimit ? $adapter->maxImages() : null;
+            } catch (Throwable) {
+                // Adapter kurulamıyorsa sınır bilinmez; kanal yine listelenir.
+            }
+
+            $types[$code] = [
+                'code' => $code,
+                'name' => $connection->channelType?->name ?? $code,
+                'maxImages' => $maxImages,
+            ];
+        }
+
+        return array_values($types);
+    }
 
     /**
      * Gönderilebilir bağlantı: kiracıya ait, aktif ve KATALOG yeteneği olan.

@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Adapters\Ebay;
 use App\Domain\Channels\Adapters\Ebay\Taxonomy\EbayTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
@@ -99,7 +100,7 @@ use Throwable;
  * okur; `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
  * GELMEZDİ.
  */
-final class EbayAdapter implements ChannelAdapter, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EbayAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -196,6 +197,12 @@ final class EbayAdapter implements ChannelAdapter, SupportsInventory, SupportsOf
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,
     ) {}
+
+    /** eBay: ilan başına en fazla 24 görsel. */
+    public function maxImages(): int
+    {
+        return 24;
+    }
 
     public function connection(): ChannelConnection
     {

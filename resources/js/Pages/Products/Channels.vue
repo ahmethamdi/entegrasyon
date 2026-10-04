@@ -7,7 +7,48 @@ import PanelLayout from '../../Layouts/PanelLayout.vue';
 const props = defineProps({
     product: { type: Object, required: true },
     channels: { type: Array, default: () => [] },
+    images: { type: Array, default: () => [] },
+    imageChannels: { type: Array, default: () => [] },
 });
+
+/** Görsel–kanal seçimi kaydedilirken o kutu kilitlenir. */
+const savingImage = ref(null);
+
+function goesTo(image, code) {
+    return image.url !== null && !image.excludedChannels.includes(code);
+}
+
+function toggleImage(image, code) {
+    savingImage.value = `${image.id}:${code}`;
+
+    router.post(
+        `/products/${props.product.id}/images/${image.id}/channels`,
+        { channel_type_code: code, excluded: goesTo(image, code) },
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                savingImage.value = null;
+            },
+        },
+    );
+}
+
+/**
+ * KANAL BAŞINA ÖZET — sınırı aşan görsel SESSİZCE düşmez.
+ *
+ * Satıcı "Trendyol'a ilk 8 görsel gider, 3'ü dışarıda" bilgisini görmezse
+ * en iyi fotoğrafının neden kanalda olmadığını anlayamaz.
+ */
+const imageSummary = computed(() =>
+    props.imageChannels.map((channel) => {
+        const count = props.images.filter((image) => goesTo(image, channel.code)).length;
+        const overflow = channel.maxImages !== null ? Math.max(0, count - channel.maxImages) : 0;
+
+        return { ...channel, count, overflow };
+    }),
+);
+
+const insecureCount = computed(() => props.images.filter((image) => image.url === null).length);
 
 const page = usePage();
 
@@ -153,6 +194,81 @@ function send(connectionId) {
         >
             {{ connectionError }}
         </div>
+
+        <!--
+            GÖRSELLER (A15): her görsel varsayılan olarak her kanala gider;
+            satıcı bir görseli belirli bir kanaldan çıkarabilir.
+        -->
+        <section v-if="imageChannels.length" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <h2 class="text-sm font-medium text-stone-900">Görseller</h2>
+
+            <p v-if="!images.length" class="mt-2 text-sm text-amber-900">
+                Bu üründe görsel yok. Görselsiz ürünü çoğu pazaryeri kabul etmez; ürünü kanaldan
+                içe aktararak görsellerini getirebilirsin.
+            </p>
+
+            <template v-else>
+                <ul class="mt-3 space-y-1 text-xs">
+                    <li v-for="channel in imageSummary" :key="channel.code">
+                        <span class="font-medium text-stone-900">{{ channel.name }}:</span>
+                        <span v-if="channel.count === 0" class="text-red-800">
+                            hiç görsel gitmeyecek — ürün reddedilebilir.
+                        </span>
+                        <span v-else-if="channel.overflow > 0" class="text-amber-900">
+                            ilk {{ channel.maxImages }} görsel gider, {{ channel.overflow }} görsel dışarıda kalır.
+                        </span>
+                        <span v-else class="text-stone-600">{{ channel.count }} görsel gider.</span>
+                    </li>
+                    <li v-if="insecureCount" class="text-amber-900">
+                        {{ insecureCount }} görselin adresi HTTPS değil; hiçbir kanala gitmez.
+                    </li>
+                </ul>
+
+                <ul class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                    <li
+                        v-for="(image, index) in images"
+                        :key="image.id"
+                        class="rounded-md border border-stone-200 p-2"
+                    >
+                        <img
+                            v-if="image.url"
+                            :src="image.url"
+                            :alt="`Görsel ${index + 1}`"
+                            loading="lazy"
+                            class="aspect-square w-full rounded object-cover"
+                        >
+                        <div
+                            v-else
+                            class="flex aspect-square w-full items-center justify-center rounded bg-stone-100 p-2 text-center text-[10px] text-stone-500"
+                        >
+                            HTTPS değil
+                        </div>
+
+                        <p class="mt-1 font-mono text-[10px] text-stone-500">
+                            {{ index + 1 }}. görsel{{ image.imported ? ' · içe aktarıldı' : '' }}
+                        </p>
+
+                        <fieldset class="mt-2 space-y-1">
+                            <legend class="sr-only">{{ index + 1 }}. görselin gideceği kanallar</legend>
+                            <label
+                                v-for="channel in imageChannels"
+                                :key="channel.code"
+                                class="flex items-center gap-2 text-xs text-stone-700"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :checked="goesTo(image, channel.code)"
+                                    :disabled="image.url === null || savingImage === `${image.id}:${channel.code}`"
+                                    class="rounded border-stone-300"
+                                    @change="toggleImage(image, channel.code)"
+                                >
+                                {{ channel.name }}
+                            </label>
+                        </fieldset>
+                    </li>
+                </ul>
+            </template>
+        </section>
 
         <!--
             Gönderilebilir kanal yoksa kullanıcıyı kanal bağlamaya yönlendir:

@@ -122,6 +122,8 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
         ->name('products.channels.index');
     Route::post('/products/{product}/channels', [ProductChannelController::class, 'store'])
         ->name('products.channels.store');
+    Route::post('/products/{product}/images/{image}/channels', [ProductChannelController::class, 'updateImageChannel'])
+        ->name('products.images.channels');
 
     // Kategori ve öznitelik eşleştirme (§13 · Faz 2). Katalog aktarımının
     // ön koşulu: §14'ün `PrerequisiteGate`'i buradaki kararları okur.

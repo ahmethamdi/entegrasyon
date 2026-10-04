@@ -13,7 +13,6 @@ use App\Domain\Channels\Models\AttributeValueMapping;
 use App\Domain\Channels\Models\CategoryMapping;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Sync\Support\ListingPayload;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Kanonik içerik yükünü Trendyol'un ürün formatına çevirir.
@@ -200,12 +199,12 @@ final class ListingMapper
             ->forChannel('trendyol')
             ->orderByRaw('CASE WHEN variant_id IS NULL THEN 1 ELSE 0 END')
             ->orderBy('position')
-            ->get(['storage_path']);
+            ->get(['id', 'storage_path']);
 
         $urls = [];
 
         foreach ($images as $image) {
-            $url = $this->publicUrl((string) $image->storage_path);
+            $url = $image->publicUrl();
 
             if ($url !== null) {
                 $urls[] = $url;
@@ -222,16 +221,6 @@ final class ListingMapper
         }
 
         return array_slice($urls, 0, self::MAX_IMAGES);
-    }
-
-    /** Kayıtlı yol zaten tam adresse o, değilse genel diskteki adresi. */
-    private function publicUrl(string $path): ?string
-    {
-        $url = preg_match('#^https?://#i', $path) === 1
-            ? $path
-            : Storage::disk('public')->url($path);
-
-        return str_starts_with(strtolower($url), 'https://') ? $url : null;
     }
 
     /**

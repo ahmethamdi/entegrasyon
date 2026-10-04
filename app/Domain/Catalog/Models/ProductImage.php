@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Ürün görseli.
@@ -65,6 +66,21 @@ class ProductImage extends Model
             ->whereNull('excluded_channels')
             // `@>` kullanılır: jsonb `?` operatörü PDO yer tutucusuyla çakışır.
             ->orWhereJsonDoesntContain('excluded_channels', $channelTypeCode));
+    }
+
+    /**
+     * Herkese açık adres — içe aktarılan görselde kanalın adresi, yüklenende
+     * genel diskteki adres. HTTPS değilse null: kanallar onu indirmez.
+     */
+    public function publicUrl(): ?string
+    {
+        $path = (string) $this->storage_path;
+
+        $url = preg_match('#^https?://#i', $path) === 1
+            ? $path
+            : Storage::disk('public')->url($path);
+
+        return str_starts_with(strtolower($url), 'https://') ? $url : null;
     }
 
     public function isExcludedFrom(string $channelTypeCode): bool

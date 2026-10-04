@@ -10,6 +10,7 @@ use App\Domain\Channels\Adapters\Trendyol\Catalog\ListingMapper;
 use App\Domain\Channels\Adapters\Trendyol\Taxonomy\TaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
@@ -89,7 +90,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     use DeclaresRequestQuota;
 
@@ -187,6 +188,12 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,
     ) {}
+
+    /** Trendyol: barkod başına en fazla 8 görsel. */
+    public function maxImages(): int
+    {
+        return ListingMapper::MAX_IMAGES;
+    }
 
     public function connection(): ChannelConnection
     {

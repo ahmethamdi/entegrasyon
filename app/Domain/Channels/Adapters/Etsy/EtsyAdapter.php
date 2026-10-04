@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Adapters\Etsy\Taxonomy\EtsyTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
@@ -91,7 +92,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -189,6 +190,12 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,
     ) {}
+
+    /** Etsy: ilan başına en fazla 10 görsel. */
+    public function maxImages(): int
+    {
+        return 10;
+    }
 
     public function connection(): ChannelConnection
     {

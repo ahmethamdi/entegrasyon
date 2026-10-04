@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Adapters\Shopify;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
@@ -105,7 +106,7 @@ use Throwable;
  * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
  * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
+final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
 {
     use DeclaresRequestQuota;
 
@@ -175,6 +176,12 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,
     ) {}
+
+    /** Shopify: ürün başına en fazla 250 medya. */
+    public function maxImages(): int
+    {
+        return 250;
+    }
 
     public function connection(): ChannelConnection
     {
