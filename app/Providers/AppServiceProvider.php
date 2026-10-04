@@ -8,8 +8,11 @@ use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Support\StripePaymentGateway;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Support\Logging\PayloadRedactor;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
@@ -48,6 +51,16 @@ class AppServiceProvider extends ServiceProvider
                 default => 'App\\Domain\\Catalog\\Models\\'.$base,
             };
         });
+
+        // KİMLİK UÇLARI HIZ SINIRI (B4) — IP başına.
+        //
+        // Kayıt sınırsızken tek betik binlerce kiracı (ve her biri için
+        // varsayılan depo, ücretsiz plan kotası) açabiliyordu. Parola
+        // sıfırlama sınırsızken aynı adrese posta bombası atılabilirdi;
+        // broker'ın kendi 60 sn'lik e-posta başına sınırı FARKLI adresleri
+        // denemeyi durdurmaz.
+        RateLimiter::for('register', static fn (Request $request): Limit => Limit::perHour(5)->by($request->ip()));
+        RateLimiter::for('password-reset', static fn (Request $request): Limit => Limit::perMinutes(15, 5)->by($request->ip()));
 
         // Üretimde beklenmeyen lazy loading sessiz N+1 üretir; geliştirmede
         // erken yakalanır.

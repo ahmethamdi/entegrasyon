@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BillingController;
@@ -40,7 +41,18 @@ Route::middleware('guest')->group(function (): void {
     Route::post('/login', [SessionController::class, 'store']);
 
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
-    Route::post('/register', [RegisteredUserController::class, 'store']);
+    Route::post('/register', [RegisteredUserController::class, 'store'])->middleware('throttle:register');
+
+    // Parola sıfırlama (B4). Yanıt e-postanın kayıtlı olup olmadığını
+    // SÖYLEMEZ — gerekçe denetleyicide.
+    Route::get('/forgot-password', [PasswordResetController::class, 'request'])->name('password.request');
+    Route::post('/forgot-password', [PasswordResetController::class, 'email'])
+        ->middleware('throttle:password-reset')
+        ->name('password.email');
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'update'])
+        ->middleware('throttle:password-reset')
+        ->name('password.update');
 });
 
 // ─────────────────────────────────────────────────────────── panel
