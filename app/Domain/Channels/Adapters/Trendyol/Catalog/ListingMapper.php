@@ -196,6 +196,8 @@ final class ListingMapper
         $images = ProductImage::query()
             ->where('product_id', $variant->product_id)
             ->where(fn ($q) => $q->whereNull('variant_id')->orWhere('variant_id', $variant->id))
+            // Satıcı bu görseli Trendyol'dan hariç tuttuysa gitmez (A15).
+            ->forChannel('trendyol')
             ->orderByRaw('CASE WHEN variant_id IS NULL THEN 1 ELSE 0 END')
             ->orderBy('position')
             ->get(['storage_path']);

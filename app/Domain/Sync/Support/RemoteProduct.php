@@ -40,6 +40,14 @@ final readonly class RemoteProduct
         public ?string $brand = null,
         public ?string $barcode = null,
         public ?string $status = null,
+        /**
+         * Kanaldaki görsel adresleri, SIRALI (ilki ana görsel). Varyantın
+         * kendi görseli varsa başta gelir. Kanal adresi herkese açıktır ve
+         * öteki kanallar onu doğrudan indirebilir (A15).
+         *
+         * @var list<string>
+         */
+        public array $images = [],
         public array $raw = [],
     ) {}
 

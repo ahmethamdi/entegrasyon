@@ -6,6 +6,7 @@ namespace Tests\Feature\Catalog;
 
 use App\Domain\Catalog\Actions\ImportProductsFromChannel;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Actions\CreateTenant;
@@ -15,6 +16,7 @@ use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Models\InventoryMovement;
 use App\Domain\Sync\Support\RemoteProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\AssertsLedgerIntegrity;
 use Tests\Support\Channels\ProgrammableCatalogAdapter;
@@ -347,13 +349,94 @@ final class ChannelProductImportTest extends TestCase
         );
     }
 
+    // ---------------------------------------------------------------- görsel (A15)
+
+    /** Kanal görselleri sırasıyla ve kaynağıyla yazılır. */
+    #[Test]
+    public function imported_images_are_stored_in_order_with_their_source(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: 'K-1', images: ['https://cdn.x/a.jpg', 'https://cdn.x/b.jpg', 'ftp://bozuk', 'https://cdn.x/a.jpg']),
+        ]);
+
+        $this->import($tenant, $connection);
+
+        $images = $this->imagesOf($tenant, 'K-1');
+
+        $this->assertSame(['https://cdn.x/a.jpg', 'https://cdn.x/b.jpg'], $images->pluck('storage_path')->all());
+        $this->assertSame([0, 1], $images->pluck('position')->all());
+        $this->assertSame([$connection->id, $connection->id], $images->pluck('source_connection_id')->all());
+    }
+
+    /**
+     * ⚠️ YENİDEN İÇE AKTARMA SATICININ SEÇİMİNİ VE ELLE EKLENENİ KORUR.
+     *
+     * Kaynakta silinen görsel silinir; kalan görselin "Trendyol'a gitmesin"
+     * seçimi KORUNUR; elle eklenen görsele dokunulmaz. Kanal hiç görsel
+     * döndürmezse hiçbir şey SİLİNMEZ.
+     */
+    #[Test]
+    public function reimport_keeps_exclusions_and_foreign_images(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: 'K-1', images: ['https://cdn.x/a.jpg', 'https://cdn.x/b.jpg']),
+        ]);
+        $this->import($tenant, $connection);
+
+        $this->asTenant($tenant, function () use ($tenant): void {
+            $product = Product::query()->where('sku', 'K-1')->firstOrFail();
+
+            ProductImage::query()->where('storage_path', 'https://cdn.x/b.jpg')
+                ->update(['excluded_channels' => json_encode(['trendyol'])]);
+
+            ProductImage::query()->create([
+                'tenant_id' => $tenant->id,
+                'product_id' => $product->id,
+                'storage_path' => 'https://elle.x/manuel.jpg',
+                'position' => 9,
+            ]);
+        });
+
+        // Kaynakta a.jpg silindi, b.jpg başa geçti.
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: 'K-1', images: ['https://cdn.x/b.jpg']),
+        ]);
+        $this->import($tenant, $connection);
+
+        $images = $this->imagesOf($tenant, 'K-1')->keyBy('storage_path');
+
+        $this->assertFalse($images->has('https://cdn.x/a.jpg'), 'Kaynakta silinen görsel silinmeli.');
+        $this->assertSame(['trendyol'], $images['https://cdn.x/b.jpg']->excluded_channels, 'Kanal seçimi korunmalı.');
+        $this->assertSame(0, $images['https://cdn.x/b.jpg']->position);
+        $this->assertTrue($images->has('https://elle.x/manuel.jpg'), 'Elle eklenen görsele dokunulmamalı.');
+
+        // Kanal görsel döndürmedi: hiçbir şey silinmez.
+        ProgrammableImportAdapter::returns('woocommerce', [$this->remote(sku: 'K-1')]);
+        $this->import($tenant, $connection);
+
+        $this->assertCount(2, $this->imagesOf($tenant, 'K-1'));
+    }
+
     // ---------------------------------------------------------------- yardımcı
+
+    private function imagesOf(Tenant $tenant, string $sku): Collection
+    {
+        return $this->asTenant($tenant, fn () => ProductImage::query()
+            ->whereHas('product', fn ($q) => $q->where('sku', $sku))
+            ->orderBy('position')
+            ->get());
+    }
 
     private function remote(
         ?string $sku = 'SKU',
         ?string $title = 'Ürün',
         ?string $price = '10.00',
         ?int $quantity = 0,
+        array $images = [],
     ): RemoteProduct {
         return new RemoteProduct(
             externalId: '900',
@@ -361,6 +444,7 @@ final class ChannelProductImportTest extends TestCase
             title: $title,
             price: $price,
             quantity: $quantity,
+            images: $images,
         );
     }
 

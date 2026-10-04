@@ -67,6 +67,7 @@ final class ImportProductsFromChannel
         private readonly AdapterRegistry $registry,
         private readonly CreateProduct $createProduct,
         private readonly UpdateProduct $updateProduct,
+        private readonly SyncImportedImages $syncImages,
     ) {}
 
     public function run(ChannelConnection $connection, string $warehouseId): ChannelImportResult
@@ -141,13 +142,18 @@ final class ImportProductsFromChannel
 
                     if ($existing !== null) {
                         $this->applyUpdate($existing, $product);
+                        $this->syncImages->run($existing, $connection->id, $product->images);
                         $updated++;
 
                         continue;
                     }
 
-                    $this->applyCreate($product, $warehouseId);
+                    $new = $this->applyCreate($product, $warehouseId);
                     $created++;
+
+                    // Görsel hatası ürünü geri almaz: ürün yazıldı ve
+                    // sayıldı, görsel hatası raporda ayrıca görünür.
+                    $this->syncImages->run($new, $connection->id, $product->images);
                 } catch (Throwable $e) {
                     // SESSİZCE YUTULMAZ — tur devam eder, ürün rapora girer.
                     $errors[] = [
@@ -212,9 +218,9 @@ final class ImportProductsFromChannel
      * Kanala giden yol ayrıca `lifecycle_status = 'live'` kapısından geçer,
      * yani 0 fiyat kazara kanala gitmez.
      */
-    private function applyCreate(RemoteProduct $product, string $warehouseId): void
+    private function applyCreate(RemoteProduct $product, string $warehouseId): Product
     {
-        $this->createProduct->run(
+        return $this->createProduct->run(
             sku: (string) $product->sku,
             title: $product->title ?? (string) $product->sku,
             price: (float) ($product->price ?? 0),

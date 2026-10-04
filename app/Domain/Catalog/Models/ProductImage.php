@@ -6,6 +6,7 @@ namespace App\Domain\Catalog\Models;
 
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property string $id
  * @property string $storage_path
+ * @property list<string>|null $excluded_channels Görselin GİTMEYECEĞİ kanal türleri
  */
 class ProductImage extends Model
 {
@@ -28,6 +30,7 @@ class ProductImage extends Model
         'tenant_id',
         'product_id',
         'variant_id',
+        'source_connection_id',
         'storage_path',
         'width',
         'height',
@@ -35,6 +38,7 @@ class ProductImage extends Model
         'checksum',
         'position',
         'alt',
+        'excluded_channels',
     ];
 
     protected function casts(): array
@@ -44,7 +48,28 @@ class ProductImage extends Model
             'height' => 'integer',
             'bytes' => 'integer',
             'position' => 'integer',
+            'excluded_channels' => 'array',
         ];
+    }
+
+    /**
+     * Bu kanal türüne gidebilecek görseller — hariç tutulanlar düşer.
+     *
+     * Varsayılan NULL = her kanala gider (migration notu).
+     *
+     * @param  Builder<ProductImage>  $query
+     */
+    public function scopeForChannel(Builder $query, string $channelTypeCode): void
+    {
+        $query->where(fn (Builder $q) => $q
+            ->whereNull('excluded_channels')
+            // `@>` kullanılır: jsonb `?` operatörü PDO yer tutucusuyla çakışır.
+            ->orWhereJsonDoesntContain('excluded_channels', $channelTypeCode));
+    }
+
+    public function isExcludedFrom(string $channelTypeCode): bool
+    {
+        return in_array($channelTypeCode, $this->excluded_channels ?? [], true);
     }
 
     public function product(): BelongsTo

@@ -143,6 +143,35 @@ final class TrendyolCatalogTest extends TestCase
     }
 
     /**
+     * SATICININ TRENDYOL'DAN HARİÇ TUTTUĞU GÖRSEL GİTMEZ (A15); başka
+     * kanaldan hariç tutulan görsel gider.
+     */
+    #[Test]
+    public function an_image_excluded_from_trendyol_is_not_sent(): void
+    {
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 77, 'name' => 'Marka-A']], 200),
+            '*' => Http::response(['batchRequestId' => 'b-1'], 200),
+        ]);
+
+        [$tenant, $connection, $listing] = $this->scenario();
+
+        $this->asTenant($tenant, function (): void {
+            ProductImage::query()->where('storage_path', 'https://cdn.example.com/kirmizi.jpg')
+                ->update(['excluded_channels' => json_encode(['trendyol'])]);
+            ProductImage::query()->where('storage_path', 'https://cdn.example.com/ortak.jpg')
+                ->update(['excluded_channels' => json_encode(['ebay'])]);
+        });
+
+        $payload = $this->asTenant($tenant, fn () => app(ListingPayloadBuilder::class)->build($listing, 1));
+
+        $this->asTenant($tenant, fn () => $this->adapter($connection)->createListing($payload));
+
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/v2/products')
+            && ($request->data()['items'][0]['images'] ?? null) === [['url' => 'https://cdn.example.com/ortak.jpg']]);
+    }
+
+    /**
      * ONAYSIZ (bekleyen/reddedilmiş) ÜRÜN `unapproved-bulk-update` ile
      * güncellenir — yaratma uç noktasına ikinci kez GİTMEZ (A11 ④b).
      */

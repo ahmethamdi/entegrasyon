@@ -96,8 +96,27 @@ final class WooProductMapper
             brand: self::firstBrandName($product),
             barcode: null,
             status: isset($product['status']) ? (string) $product['status'] : null,
+            images: self::imageUrls($product),
             raw: $product,
         );
+    }
+
+    /**
+     * Woo `images[]` — `position` sırasıyla, yalnızca `src` dolu olanlar.
+     *
+     * @param  array<string, mixed>  $product
+     * @return list<string>
+     */
+    private static function imageUrls(array $product): array
+    {
+        $images = array_values(array_filter(
+            (array) ($product['images'] ?? []),
+            static fn (mixed $image): bool => is_array($image) && is_string($image['src'] ?? null) && trim($image['src']) !== '',
+        ));
+
+        usort($images, static fn (array $a, array $b): int => (int) ($a['position'] ?? 0) <=> (int) ($b['position'] ?? 0));
+
+        return array_values(array_unique(array_map(static fn (array $image): string => trim($image['src']), $images)));
     }
 
     /**

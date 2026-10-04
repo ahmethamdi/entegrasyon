@@ -249,8 +249,35 @@ final class ShopifyProductMapper
             brand: self::nonEmptyString($product['vendor'] ?? null),
             barcode: self::nonEmptyString($variant['barcode'] ?? null),
             status: isset($product['status']) ? (string) $product['status'] : null,
+            // Varyantın kendi görseli ÖNCE: kırmızı tişörtün ilk görseli
+            // kırmızı olmalı.
+            images: array_values(array_unique([
+                ...self::mediaUrls($variant['media'] ?? null),
+                ...self::mediaUrls($product['media'] ?? null),
+            ])),
             raw: $variant,
         );
+    }
+
+    /**
+     * `media.nodes[].image.url` — video ve 3B model düğümlerinde `image`
+     * yoktur ve atlanır.
+     *
+     * @return list<string>
+     */
+    private static function mediaUrls(mixed $media): array
+    {
+        $urls = [];
+
+        foreach ((array) (is_array($media) ? ($media['nodes'] ?? []) : []) as $node) {
+            $url = is_array($node) ? self::nonEmptyString($node['image']['url'] ?? null) : null;
+
+            if ($url !== null) {
+                $urls[] = $url;
+            }
+        }
+
+        return $urls;
     }
 
     private static function nonEmptyString(mixed $value): ?string

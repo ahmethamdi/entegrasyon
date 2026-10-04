@@ -1610,6 +1610,12 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
      * onu YORUMLAMAZ; sayı varsayılsaydı bu kanal eklenirken kırılırdı
      * (`OrderPage` ile aynı kural).
      *
+     * ⚠️ SAYFA 50 VARYANT — görsel alanları yüzünden (A15). Sorgu maliyeti
+     * varyant × görsel sayısıyla büyür; 100 × 10 görsel Shopify'ın tek
+     * sorgu sınırını (1000) aşar ve sorgu `MAX_COST_EXCEEDED` ile reddedilir.
+     * `Product.images`/`ProductVariant.image` 2026-01'de kullanımdan
+     * kalktığı için `media` okunur.
+     *
      * ⚠️ `hasMore` `nextCursor !== null` İLE AYNI ŞEY DEĞİLDİR. Shopify son
      * sayfada bile `endCursor` döndürür; turu durduran `hasNextPage`'dir.
      * İmlece bakılsaydı tur sonsuza kadar boş sayfa çeker ve kotayı yakardı.
@@ -1619,11 +1625,15 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
         $data = $this->gql(
             <<<'GQL'
             query ImportVariants($cursor: String) {
-              productVariants(first: 100, after: $cursor) {
+              productVariants(first: 50, after: $cursor) {
                 nodes {
                   id sku barcode price inventoryQuantity
                   inventoryItem { id }
-                  product { id title status vendor descriptionHtml }
+                  media(first: 1) { nodes { ... on MediaImage { image { url } } } }
+                  product {
+                    id title status vendor descriptionHtml
+                    media(first: 10) { nodes { ... on MediaImage { image { url } } } }
+                  }
                 }
                 pageInfo { hasNextPage endCursor }
               }
@@ -1659,7 +1669,9 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
     }
 
     /**
-     * Tur başına en fazla 50 sayfa — 100'lük sayfayla 5.000 varyant.
+     * Tur başına en fazla 100 sayfa — 50'lik sayfayla 5.000 varyant.
+     * Sayfa görseller yüzünden 50'ye indi (A15); sınır iki katına
+     * çıkmasaydı bir turda okunan katalog sessizce YARIYA düşerdi.
      *
      * SINIR KOTA DEĞİL EMNİYETTİR: `hasNextPage` sonsuza kadar `true`
      * dönen bozuk bir kanalda tur hiç bitmez ve worker'ı süresiz meşgul
@@ -1669,7 +1681,7 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
      */
     public function maxImportPages(): int
     {
-        return 50;
+        return 100;
     }
 
     // ------------------------------------------------------------------- iç
