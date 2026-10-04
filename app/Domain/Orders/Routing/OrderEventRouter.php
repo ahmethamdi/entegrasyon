@@ -38,11 +38,12 @@ use RuntimeException;
  *
  *   Bedeli burada açık tip dağıtımı yapmaktır; kabul edilmiştir.
  *
- * SIRA BAĞIMSIZLIĞI: güncelleme olayı, oluşturma olayından ÖNCE gelebilir
- * (kanal sırayı garanti etmez). resolveOrder() siparişi bulamazsa olay
- * yoksayılmaz — ileride kanaldan tam sipariş çekilip önce alınması gerekir.
- * O yol adapter'ın fetchOrder yeteneğine bağlı olduğu için şimdilik açıkça
- * ertelenmiş durumda ve log'a düşer.
+ * SIRA BAĞIMSIZLIĞI (A14): güncelleme veya kargo olayı, oluşturma
+ * olayından ÖNCE gelebilir — webhook kanalı sırayı garanti etmez, yoklama
+ * kanalı (Trendyol) siparişi ilk kez "Picking"/"Shipped" durumunda
+ * görebilir. Önceden bu olay log'a düşüp SESSİZCE kayboluyordu: sipariş
+ * hiç yaratılmaz, stok hiç düşmezdi. Artık kaçırılan yaratma TAMAMLANIR
+ * (`adoptMissedOrder`) — ama yalnızca bağlantıdan SONRA verilmiş siparişte.
  */
 final class OrderEventRouter
 {
@@ -197,6 +198,60 @@ final class OrderEventRouter
      * sipariş çekme yeteneğine bağlı ve henüz yazılmadı. Olay SESSİZCE
      * yutulmuyor — uyarı düşüyor ki eksik görünür kalsın.
      */
+    /**
+     * Sipariş bizde yoksa ve kaçırıldıysa YARATIR; aksi hâlde null (A14).
+     *
+     * ⚠️ YALNIZCA BAĞLANTIDAN SONRA VERİLEN SİPARİŞ. Bağlantıdan önce
+     * verilmiş sipariş, kanaldan içe aktarılan açılış stoğuna ZATEN
+     * yansımıştır; onu şimdi yaratmak aynı satışı İKİNCİ kez düşerdi.
+     * Ölçüt olayın `occurredAt`'idir — bütün normalizer'lar onu siparişin
+     * YARATILMA tarihinden doldurur (güncellenme tarihinden değil).
+     * Tarih ya da bağlantı zamanı bilinmiyorsa YARATILMAZ: emin
+     * olunamayan durumda çift düşüş, kaçırılan düşüşten kötüdür.
+     *
+     * KALEMSİZ GÖVDEDEN SİPARİŞ YARATILMAZ: bazı kanallar durum
+     * güncellemesinde kalemleri taşımaz; boş sipariş stok düşmez ve
+     * sonraki tam olayın yaratmasını "zaten alınmış" diye engellerdi.
+     *
+     * Yaratma idempotenttir: asıl `created` olayı sonra gelirse
+     * `IngestChannelOrder` siparişi bulur ve stoğu ikinci kez düşmez.
+     */
+    private function adoptMissedOrder(NormalizedOrderEvent $normalized, InboxMessage $message): ?Order
+    {
+        $existing = Order::query()
+            ->where('channel_connection_id', $message->channel_connection_id)
+            ->where('external_id', $normalized->externalOrderId)
+            ->exists();
+
+        if ($existing) {
+            return null;
+        }
+
+        $connectedAt = $message->connection?->connected_at;
+        $placedAt = $normalized->occurredAt;
+
+        if ($connectedAt === null || $placedAt === null || $placedAt < $connectedAt->toDateTimeImmutable()) {
+            return null;
+        }
+
+        if (! is_array($normalized->payload['lines'] ?? null) || $normalized->payload['lines'] === []) {
+            return null;
+        }
+
+        Log::info('inbox.missed_order_adopted', [
+            'message' => $message->id,
+            'external_order_id' => $normalized->externalOrderId,
+            'type' => $normalized->type,
+        ]);
+
+        $this->handleCreated($normalized, $message);
+
+        return Order::query()
+            ->where('channel_connection_id', $message->channel_connection_id)
+            ->where('external_id', $normalized->externalOrderId)
+            ->first();
+    }
+
     private function resolveOrder(NormalizedOrderEvent $normalized, InboxMessage $message): ?Order
     {
         $order = Order::query()
@@ -223,7 +278,7 @@ final class OrderEventRouter
      */
     private function handleUpdated(NormalizedOrderEvent $normalized, InboxMessage $message): void
     {
-        $order = $this->resolveOrder($normalized, $message);
+        $order = $this->adoptMissedOrder($normalized, $message) ?? $this->resolveOrder($normalized, $message);
 
         if ($order === null) {
             return;
@@ -251,7 +306,7 @@ final class OrderEventRouter
      */
     private function handleFulfilled(NormalizedOrderEvent $normalized, InboxMessage $message): void
     {
-        $order = $this->resolveOrder($normalized, $message);
+        $order = $this->adoptMissedOrder($normalized, $message) ?? $this->resolveOrder($normalized, $message);
 
         if ($order === null) {
             return;

@@ -245,6 +245,85 @@ final class TrendyolOrderSliceTest extends TestCase
     }
 
     /**
+     * ⚠️ İLK KEZ "PICKING" GÖRÜLEN SİPARİŞ KAYBOLMAZ (A14).
+     *
+     * Yoklama arası kısa sürede satıcı paketi işleme alırsa sipariş bize
+     * hiç "Created" olarak gelmez. Önceden olay log'a düşer, sipariş hiç
+     * yaratılmaz ve stok DÜŞMEZDİ — fazla satış. Sonradan "Created" gelse
+     * bile stok ikinci kez düşmez.
+     */
+    #[Test]
+    public function an_order_first_seen_while_picking_still_reduces_stock(): void
+    {
+        [$tenant, $connection] = $this->setUpConnection();
+        $this->connectedAt($tenant, $connection, '-1 day');
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        $package = fn (string $status): array => [
+            'shipmentPackageId' => 5001, 'orderNumber' => 'TY-50',
+            'shipmentPackageStatus' => $status,
+            'orderDate' => now()->subHour()->getTimestampMs(),
+            'lines' => [['lineId' => 1, 'barcode' => 'BARKOD-A', 'quantity' => 3]],
+        ];
+
+        Http::fake(['*' => Http::sequence()
+            ->push(['content' => [$package('Picking')], 'totalPages' => 1], 200)
+            ->push(['content' => [$package('Created')], 'totalPages' => 1], 200),
+        ]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(7, $this->availableFor($tenant, $variant), 'Kaçırılan yaratma tamamlanmalı.');
+
+        $status = $this->asTenant($tenant, fn () => Order::query()->where('external_id', '5001')->value('status'));
+        $this->assertSame('Picking', $status);
+
+        // Geç gelen "Created" stoğu İKİNCİ kez düşürmez.
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(7, $this->availableFor($tenant, $variant));
+        $this->assertLedgerMatchesProjection($tenant->id, $this->warehouse($tenant)->id, $variant->id);
+    }
+
+    /**
+     * ⚠️ BAĞLANTIDAN ÖNCE VERİLMİŞ SİPARİŞ YARATILMAZ (A14).
+     *
+     * O satış kanaldan içe aktarılan açılış stoğuna zaten yansımıştır;
+     * yaratılsaydı aynı satış İKİNCİ kez düşerdi.
+     */
+    #[Test]
+    public function an_order_placed_before_the_connection_is_not_adopted(): void
+    {
+        [$tenant, $connection] = $this->setUpConnection();
+        $this->connectedAt($tenant, $connection, '-1 hour');
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        Http::fake(['*' => Http::response(['content' => [[
+            'shipmentPackageId' => 5002, 'orderNumber' => 'TY-51',
+            'shipmentPackageStatus' => 'Shipped',
+            'orderDate' => now()->subDays(3)->getTimestampMs(),
+            'lines' => [['lineId' => 1, 'barcode' => 'BARKOD-A', 'quantity' => 3]],
+        ]], 'totalPages' => 1], 200)]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(10, $this->availableFor($tenant, $variant));
+        $this->assertNull($this->asTenant($tenant, fn () => Order::query()->where('external_id', '5002')->first()));
+    }
+
+    private function connectedAt(Tenant $tenant, ChannelConnection $connection, string $when): void
+    {
+        $this->asTenant($tenant, fn () => $connection->forceFill(['connected_at' => now()->modify($when)])->save());
+    }
+
+    /**
      * İPTAL STOĞU GERİ EKLER — ve `created` sanılmaz.
      *
      * Bu, Karar 24'ün en pahalı hata biçiminin testidir: kimlik yalnızca
