@@ -9,6 +9,7 @@ use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
 use App\Domain\Orders\Console\PollChannelOrdersCommand;
+use App\Domain\Orders\Console\ResolveUnmatchedOrderLinesCommand;
 use App\Domain\Reconciliation\Console\ReconcileColdCommand;
 use App\Domain\Reconciliation\Console\ReconcileHotCommand;
 use App\Domain\Reconciliation\Console\ReconcilePricesCommand;
@@ -62,6 +63,8 @@ return Application::configure(basePath: dirname(__DIR__))
         TrackApprovalStatusCommand::class,
         // §13 · Faz 2 · sipariş yoklaması. Zamanlaması routes/console.php.
         PollChannelOrdersCommand::class,
+        // A12 · eşleşmemiş sipariş satırları. Zamanlaması routes/console.php.
+        ResolveUnmatchedOrderLinesCommand::class,
         // §13 · Faz 3 · api_calls saklama. Zamanlaması routes/console.php.
         PruneApiCallsCommand::class,
         // V3.0 · §03 · Delta 3 · token yenileme. Zamanlaması routes/console.php.

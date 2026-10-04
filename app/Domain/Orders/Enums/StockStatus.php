@@ -24,6 +24,17 @@ enum StockStatus: string
     /** Stok düşüldü ama bakiye yetmiyordu — fazla satış. */
     case OVERSOLD = 'OVERSOLD';
 
+    /**
+     * Satır SONRADAN eşleşti ama stok bilerek DÜŞÜLMEDİ. İki sebep:
+     *   - satış, varyant kataloğa girmeden ÖNCE olmuştu: açılış stoğunda
+     *     zaten sayılmıştır (kanaldan içe aktarılan stok o kanalın satışını
+     *     çoktan düşmüştür) — düşülseydi aynı satış iki kez sayılırdı;
+     *   - satır eşleşmeden önce tamamen iptal/iade edilmişti.
+     * İptal/iade bu satıra stok GERİ VERMEZ — hiç almadığımız stoğu geri
+     * veremeyiz (ResolveUnmatchedOrderLines).
+     */
+    case SKIPPED = 'SKIPPED';
+
     /** Bakiyeye göre uygun durumu seçer. */
     public static function forAvailability(int $availableBefore, int $quantity): self
     {
@@ -33,5 +44,11 @@ enum StockStatus: string
     public function isOversold(): bool
     {
         return $this === self::OVERSOLD;
+    }
+
+    /** Bu satır için gerçekten SALE hareketi yazıldı mı. */
+    public function wasDeducted(): bool
+    {
+        return $this === self::APPLIED || $this === self::OVERSOLD;
     }
 }

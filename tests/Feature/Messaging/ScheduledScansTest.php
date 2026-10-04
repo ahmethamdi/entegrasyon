@@ -63,6 +63,9 @@ final class ScheduledScansTest extends TestCase
             // bu turla gelir. Zamanlanmazsa hiçbir Trendyol siparişi
             // alınmaz ve eksiklik panelde "sipariş yok" gibi görünür.
             'orders:poll',
+            // A12 — SKU sonradan kataloğa girdiğinde eşleşmemiş sipariş
+            // satırını bağlayan TEK yol. Zamanlanmazsa stok hiç düşmez.
+            'orders:resolve-unmatched',
             // §13 · Faz 3 — api_calls saklama. Zamanlanmazsa `expires_at`
             // yalnızca bir niyet olarak kalır ve en çok yazılan tablo
             // sınırsız büyür.
@@ -133,6 +136,11 @@ final class ScheduledScansTest extends TestCase
         // TEK giriş yolu budur; dakikalık koşmak kotayı beş katına çıkarır
         // ve düşük seviyeli satıcıyı 429'a sokardı.
         $this->assertSame('*/5 * * * *', $commands['orders:poll']);
+
+        // Eşleşmemiş satır taraması: beş dakikalık. Kanala gitmez, yalnız
+        // DB okur; gecikme = satıcı SKU'yu düzelttikten sonra fazla stoğun
+        // kanalda kaldığı süre.
+        $this->assertSame('*/5 * * * *', $commands['orders:resolve-unmatched']);
 
         // api_calls saklama: GÜNLÜK, 04:00. Saklama süreleri gün
         // ölçeğindedir; saatlik koşmak aynı işi 24 kez yapar. 03:00
@@ -211,6 +219,7 @@ final class ScheduledScansTest extends TestCase
             'reconcile:cold',
             'reconcile:prices',
             'orders:poll',
+            'orders:resolve-unmatched',
             'api-calls:prune',
             'metrics:capture',
             'alerts:dispatch',

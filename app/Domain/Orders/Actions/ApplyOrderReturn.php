@@ -66,18 +66,21 @@ final class ApplyOrderReturn
             $lines = $this->resolveLines($event, $order);
 
             if ($lines === []) {
-                return $orderEvent;             // eşleşen stoklanabilir satır yok
+                return $orderEvent;             // ilerletilecek satır yok
             }
 
-            $warehouse = $warehouseId ?? $this->defaultWarehouseId($tenantId);
-
-            // (2) TÜM varyantlar TEK sorguda, sabit sırada kilitlenir.
+            // (2) TÜM varyantlar TEK sorguda, sabit sırada kilitlenir. Yalnız
+            //     stoğu DÜŞÜLMÜŞ satırlar: eşleşmemiş veya açılış stoğunda
+            //     sayılmış satıra stok geri verilmez, yalnız sayacı ilerler.
             $variantIds = array_values(array_unique(array_map(
                 static fn (array $pair): string => $pair['line']->variant_id,
-                $lines,
+                array_filter($lines, static fn (array $pair): bool => $pair['line']->stockWasDeducted()),
             )));
 
-            $this->lockInventoryRows->run($warehouse, $variantIds);
+            if ($variantIds !== []) {
+                $warehouse = $warehouseId ?? $this->defaultWarehouseId($tenantId);
+                $this->lockInventoryRows->run($warehouse, $variantIds);
+            }
 
             // (3) Satır başına hareket. Anahtar OLAY + SATIR kimliğinden türer:
             //     tek olayda birden fazla kalem iade edilebilir ve her biri
@@ -86,6 +89,16 @@ final class ApplyOrderReturn
                 /** @var OrderLine $line */
                 $line = $pair['line'];
                 $quantity = $pair['quantity'];
+
+                // ⚠️ EŞLEŞMEMİŞ SATIRIN SAYACI DA İLERLER — iptaldeki gerekçe:
+                // sonradan eşleşen satırda iade edilmiş adet satış sayılmasın.
+                if (! $line->stockWasDeducted()) {
+                    $line->forceFill([
+                        'quantity_returned' => $line->quantity_returned + $quantity,
+                    ])->save();
+
+                    continue;
+                }
 
                 $this->applyMovement->run(
                     warehouseId: $warehouse,
@@ -133,7 +146,9 @@ final class ApplyOrderReturn
 
         $now = now();
 
-        DB::table('order_events')->insertOrIgnore([
+        // EKLENDİ Mİ, sayıyla bilinir — ApplyOrderCancellation::recordEvent
+        // ile aynı gerekçe: yalnız sayaç ilerleten iade hareket bırakmaz.
+        $inserted = DB::table('order_events')->insertOrIgnore([
             'id' => OrderEvent::generateUuidV7(),
             'tenant_id' => $tenantId,
             'order_id' => $order->id,
@@ -147,19 +162,15 @@ final class ApplyOrderReturn
             'updated_at' => $now,
         ]);
 
-        $existing = OrderEvent::query()
+        if ($inserted === 0) {
+            return null;
+        }
+
+        return OrderEvent::query()
             ->where('order_id', $order->id)
             ->where('type', OrderEventType::RETURNED->value)
             ->where('external_ref', $event->externalRef)
             ->firstOrFail();
-
-        // Hareketleri zaten yazılmışsa ikinci kez uygulanmaz.
-        $alreadyApplied = DB::table('inventory_movements')
-            ->where('tenant_id', $tenantId)
-            ->where('source_id', $existing->id)
-            ->exists();
-
-        return $alreadyApplied ? null : $existing;
     }
 
     /**
@@ -186,9 +197,13 @@ final class ApplyOrderReturn
 
     private function resolveLines(ReturnEvent $event, Order $order): array
     {
+        // Satırlar stok satırlarından ÖNCE kilitlenir — ApplyOrderCancellation
+        // ve ResolveUnmatchedOrderLines ile aynı sıra.
         $lines = OrderLine::query()
             ->where('order_id', $order->id)
             ->whereIn('id', $event->orderLineIds())
+            ->orderBy('id')
+            ->lockForUpdate()
             ->get()
             ->keyBy('id');
 
@@ -208,8 +223,8 @@ final class ApplyOrderReturn
         foreach ($requested as $lineId => $quantity) {
             $line = $lines->get($lineId);
 
-            if ($line === null || ! $line->isStockable()) {
-                continue;                       // eşleşmemiş SKU — stok yok
+            if ($line === null) {
+                continue;
             }
 
             // Kalana KIRPILIR: taşan iade (iptalden sonra gelen iade, kanalın
@@ -248,7 +263,7 @@ final class ApplyOrderReturn
         foreach ($targets as $lineId => $target) {
             $line = $lines->get($lineId);
 
-            if ($line === null || ! $line->isStockable()) {
+            if ($line === null) {
                 continue;
             }
 

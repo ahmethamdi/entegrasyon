@@ -162,6 +162,14 @@ Schedule::command('orders:poll')
     ->onOneServer()
     ->withoutOverlapping();
 
+// A12 · EŞLEŞMEMİŞ SİPARİŞ SATIRLARI — SKU sonradan kataloğa girince stok
+// düşülür. Zamanlanmazsa satır sonsuza kadar PENDING kalır, bakiye satılmış
+// adet kadar fazla görünür ve kanallara FAZLA STOK gider.
+Schedule::command('orders:resolve-unmatched')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // §13 · Faz 3 · api_calls SAKLAMA — GÜNLÜK, gece 04:00.
 //
 // api_calls en çok yazılan tablodur ve `expires_at` ilk günden beri

@@ -470,8 +470,12 @@ final class IngestChannelOrderTest extends TestCase
             static fn (string $sql): bool => str_contains(strtolower($sql), 'for update'),
         ));
 
-        $this->assertCount(1, $locking, 'İade kilidi TEK sorguda almalı.');
-        $this->assertStringContainsString('order by', strtolower($locking[0]));
+        // İki kilit, SABİT SIRA: önce sipariş satırları, sonra stok satırları
+        // (A12 · ResolveUnmatchedOrderLines ve iptal de aynı sırayı izler).
+        $this->assertCount(2, $locking, 'İade: satır kilidi + TEK stok kilidi.');
+        $this->assertStringContainsString('"order_lines"', $locking[0]);
+        $this->assertStringContainsString('"inventory_levels"', $locking[1]);
+        $this->assertStringContainsString('order by', strtolower($locking[1]));
     }
 
     /** Kiracı bağlamı yokken sipariş alınamaz. */

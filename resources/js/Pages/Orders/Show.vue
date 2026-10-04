@@ -11,6 +11,9 @@ const lineBadges = {
     OVERSOLD: { text: 'FAZLA SATIŞ', class: 'bg-red-50 text-red-800 border-red-200' },
     PENDING: { text: 'BEKLİYOR', class: 'bg-sky-50 text-sky-800 border-sky-200' },
     APPLIED: { text: 'STOK DÜŞÜLDÜ', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    // Sonradan eşleşti; satış açılış stoğundan önceydi veya satır tamamen
+    // iptal edilmişti — stok bilerek düşülmedi.
+    SKIPPED: { text: 'STOK DÜŞÜLMEDİ', class: 'bg-slate-50 text-slate-700 border-slate-200' },
 };
 
 /**

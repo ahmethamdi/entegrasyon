@@ -83,6 +83,18 @@ class OrderLine extends Model
         return $this->variant_id !== null;
     }
 
+    /**
+     * İptal/iade stok GERİ VERİR mi — yalnız stoğu gerçekten düşülmüş satır.
+     *
+     * `isStockable()` YETMEZ: sonradan eşleşip stoğu bilerek düşülmeyen satır
+     * (SKIPPED) varyant taşır ama SALE hareketi yoktur; iptali stok
+     * üretirdi.
+     */
+    public function stockWasDeducted(): bool
+    {
+        return $this->variant_id !== null && $this->stock_status->wasDeducted();
+    }
+
     /** İptal ve iade sonrası kalan geçerli miktar. */
     public function effectiveQuantity(): int
     {

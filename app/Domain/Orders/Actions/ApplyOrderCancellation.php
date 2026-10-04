@@ -59,21 +59,35 @@ final class ApplyOrderCancellation
                 return $orderEvent;
             }
 
-            $warehouse = $warehouseId ?? $this->defaultWarehouseId($tenantId);
-
-            // (2) TÜM varyantlar TEK sorguda, sabit sırada.
+            // (2) TÜM varyantlar TEK sorguda, sabit sırada. Yalnız stoğu
+            //     DÜŞÜLMÜŞ satırlar: eşleşmemiş veya açılış stoğunda sayılmış
+            //     satıra stok geri verilmez, yalnız sayacı ilerler.
             $variantIds = array_values(array_unique(array_map(
                 static fn (array $pair): string => $pair['line']->variant_id,
-                $lines,
+                array_filter($lines, static fn (array $pair): bool => $pair['line']->stockWasDeducted()),
             )));
 
-            $this->lockInventoryRows->run($warehouse, $variantIds);
+            if ($variantIds !== []) {
+                $warehouse = $warehouseId ?? $this->defaultWarehouseId($tenantId);
+                $this->lockInventoryRows->run($warehouse, $variantIds);
+            }
 
             // (3) Satır başına hareket; anahtar OLAY + SATIR kimliğinden.
             foreach ($lines as $pair) {
                 /** @var OrderLine $line */
                 $line = $pair['line'];
                 $quantity = $pair['quantity'];
+
+                // ⚠️ EŞLEŞMEMİŞ SATIRIN SAYACI DA İLERLER. İlerlemeseydi satır
+                // sonradan eşleştiğinde (ResolveUnmatchedOrderLines) iptal
+                // edilmiş adet de satış diye düşülürdü.
+                if (! $line->stockWasDeducted()) {
+                    $line->forceFill([
+                        'quantity_cancelled' => $line->quantity_cancelled + $quantity,
+                    ])->save();
+
+                    continue;
+                }
 
                 $this->applyMovement->run(
                     warehouseId: $warehouse,
@@ -112,7 +126,12 @@ final class ApplyOrderCancellation
 
         $now = now();
 
-        DB::table('order_events')->insertOrIgnore([
+        // EKLENDİ Mİ, sayıyla bilinir. Olay ile etkisi AYNI transaction'dadır:
+        // satır zaten varsa önceki çağrı commit etmiştir, etkisi de yazılmıştır.
+        // Hareket varlığına bakmak YETMEZ — yalnız sayaç ilerleten (eşleşmemiş
+        // satır) iptal hareket bırakmaz ve tekrar gelişi sayacı ikinci kez
+        // ilerletirdi.
+        $inserted = DB::table('order_events')->insertOrIgnore([
             'id' => OrderEvent::generateUuidV7(),
             'tenant_id' => $tenantId,
             'order_id' => $order->id,
@@ -126,18 +145,15 @@ final class ApplyOrderCancellation
             'updated_at' => $now,
         ]);
 
-        $existing = OrderEvent::query()
+        if ($inserted === 0) {
+            return null;
+        }
+
+        return OrderEvent::query()
             ->where('order_id', $order->id)
             ->where('type', OrderEventType::CANCELLED->value)
             ->where('external_ref', $event->externalRef)
             ->firstOrFail();
-
-        $alreadyApplied = DB::table('inventory_movements')
-            ->where('tenant_id', $tenantId)
-            ->where('source_id', $existing->id)
-            ->exists();
-
-        return $alreadyApplied ? null : $existing;
     }
 
     /** @return list<array{line: OrderLine, quantity: int}> */
@@ -148,9 +164,14 @@ final class ApplyOrderCancellation
             $event->lines,
         );
 
+        // Satırlar KİLİTLENİR (stok satırlarından ÖNCE — ResolveUnmatchedOrderLines
+        // ile aynı sıra): eşzamanlı eşleştirme satırı okuyup iptali görmeden
+        // tam miktarı düşemesin.
         $lines = OrderLine::query()
             ->where('order_id', $order->id)
             ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->lockForUpdate()
             ->get()
             ->keyBy('id');
 
@@ -167,7 +188,7 @@ final class ApplyOrderCancellation
         foreach ($requested as $lineId => $quantity) {
             $line = $lines->get($lineId);
 
-            if ($line === null || ! $line->isStockable()) {
+            if ($line === null) {
                 continue;
             }
 
