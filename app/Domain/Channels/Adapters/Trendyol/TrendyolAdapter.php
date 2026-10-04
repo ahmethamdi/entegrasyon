@@ -96,6 +96,18 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      */
     public const SELLER_ID_KEY = 'supplier_id';
 
+    /**
+     * `User-Agent`'taki entegratör adının `settings` içindeki yeri.
+     * Boşsa {@see DEFAULT_INTEGRATOR_NAME}.
+     */
+    public const INTEGRATOR_NAME_KEY = 'integrator_name';
+
+    /**
+     * Kendi entegrasyonunu yazan satıcının adı (Trendyol dokümanı).
+     * Kayıtlı entegratör olunca firma adı formdan girilir.
+     */
+    public const DEFAULT_INTEGRATOR_NAME = 'SelfIntegration';
+
     /** Trendyol sınırı dakika penceresinde bildirir. */
     private const RATE_LIMIT_WINDOW_SECONDS = 60;
 
@@ -154,7 +166,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         $startedAt = hrtime(true);
 
         try {
-            $response = $this->client->get($this->supplierPath('addresses'));
+            $response = $this->get($this->supplierPath('addresses'));
 
             $latency = (int) round((hrtime(true) - $startedAt) / 1_000_000);
 
@@ -367,7 +379,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
             $batch->toArray(),
         );
 
-        $response = $this->client->post(
+        $response = $this->post(
             $this->supplierPath('v2/products/price-and-inventory'),
             ['items' => $items],
         );
@@ -462,7 +474,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
             $batch->items,
         );
 
-        $response = $this->client->post(
+        $response = $this->post(
             $this->supplierPath('v2/products/price-and-inventory'),
             ['items' => $items],
         );
@@ -534,7 +546,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
         $barcodes = array_values(array_unique($barcodes));
 
-        $response = $this->client->get($this->supplierPath('products'), [
+        $response = $this->get($this->supplierPath('products'), [
             'barcode' => implode(',', $barcodes),
             'size' => count($barcodes),
         ]);
@@ -566,7 +578,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     {
         $item = (new ListingMapper)->toChannelItem($payload);
 
-        $response = $this->client->post(
+        $response = $this->post(
             $this->supplierPath('v2/products'),
             ['items' => [$item]],
         );
@@ -592,7 +604,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     {
         $item = (new ListingMapper)->toChannelItem($payload);
 
-        $response = $this->client->post(
+        $response = $this->post(
             $this->supplierPath('v2/products'),
             ['items' => [$item]],
         );
@@ -625,7 +637,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
             return null;
         }
 
-        $response = $this->client->get(
+        $response = $this->get(
             $this->supplierPath('products'),
             ['barcode' => $barcode],
         );
@@ -679,7 +691,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     {
         $page = $cursor === null ? 0 : max(0, (int) $cursor);
 
-        $response = $this->client->get($this->supplierPath('orders'), [
+        $response = $this->get($this->supplierPath('orders'), [
             // MİLİSANİYE — saniye değil.
             'startDate' => $since->getTimestampMs(),
             'page' => $page,
@@ -930,7 +942,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
             return new ApprovalStatusBatch([]);
         }
 
-        $response = $this->client->get(
+        $response = $this->get(
             $this->supplierPath('products'),
             ['barcode' => implode(',', array_unique($barcodes)), 'size' => count($barcodes)],
         );
@@ -1030,20 +1042,59 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      */
     private function taxonomy(): TaxonomyClient
     {
-        return new TaxonomyClient($this->client);
+        return new TaxonomyClient($this->client, $this->defaultHeaders());
     }
 
-    private function supplierPath(string $endpoint): string
+    /**
+     * Her isteğe eklenen başlıklar.
+     *
+     * ⚠️ `User-Agent` ZORUNLUDUR: Trendyol başlıksız ya da biçimsiz
+     * isteği 403 ile reddeder — anahtar DOĞRU olsa bile. 403 bizde
+     * `AUTHENTICATION` sayılır ve KALICIDIR: satıcı "anahtarın yanlış"
+     * uyarısıyla anahtarını defalarca yeniden girer, hiçbiri işe yaramaz
+     * (`97a7eb7` hata biçimi). Biçim: `{satıcı ID} - {entegratör adı}`.
+     *
+     * İstekler YALNIZCA `get()`/`post()` üzerinden gider; doğrudan
+     * `$this->client` çağrısı başlığı atlardı.
+     *
+     * @return array<string, string>
+     */
+    private function defaultHeaders(): array
     {
-        $supplierId = (string) ($this->connection->settings[self::SELLER_ID_KEY] ?? '');
+        $name = trim((string) ($this->connection->settings[self::INTEGRATOR_NAME_KEY] ?? ''));
 
-        if ($supplierId === '') {
+        return ['User-Agent' => $this->sellerId().' - '.($name !== '' ? $name : self::DEFAULT_INTEGRATOR_NAME)];
+    }
+
+    /** @param array<string, mixed> $query */
+    private function get(string $endpoint, array $query = []): Response
+    {
+        return $this->client->get($endpoint, $query, headers: $this->defaultHeaders());
+    }
+
+    /** @param array<string, mixed> $body */
+    private function post(string $endpoint, array $body): Response
+    {
+        return $this->client->post($endpoint, $body, headers: $this->defaultHeaders());
+    }
+
+    /** Satıcı kimliği; yoksa istisna — kimliksiz istek 403 alırdı. */
+    private function sellerId(): string
+    {
+        $sellerId = (string) ($this->connection->settings[self::SELLER_ID_KEY] ?? '');
+
+        if ($sellerId === '') {
             throw new RuntimeException(
                 "Trendyol bağlantısında satıcı kimliği yok: {$this->connection->id}"
             );
         }
 
-        return "suppliers/{$supplierId}/".ltrim($endpoint, '/');
+        return $sellerId;
+    }
+
+    private function supplierPath(string $endpoint): string
+    {
+        return "suppliers/{$this->sellerId()}/".ltrim($endpoint, '/');
     }
 
     /**

@@ -30,8 +30,13 @@ final readonly class TaxonomyClient
     /** Kategori ağacı — satıcıdan bağımsız uç nokta. */
     private const CATEGORY_TREE_ENDPOINT = 'product-categories';
 
+    /**
+     * @param  array<string, string>  $headers  Adapter'ın zorunlu başlıkları
+     *                                          (`User-Agent`); eksikse 403
+     */
     public function __construct(
         private ChannelHttpClient $client,
+        private array $headers = [],
     ) {}
 
     /**
@@ -39,7 +44,7 @@ final readonly class TaxonomyClient
      */
     public function fetchTree(): CategoryTreeSnapshot
     {
-        $response = $this->client->get(self::CATEGORY_TREE_ENDPOINT);
+        $response = $this->client->get(self::CATEGORY_TREE_ENDPOINT, headers: $this->headers);
 
         // BAŞARISIZ YANIT SESSİZCE BOŞ AĞACA DÖNÜŞMEZ.
         //
@@ -76,7 +81,7 @@ final readonly class TaxonomyClient
      */
     public function fetchAttributes(string $categoryId): array
     {
-        $response = $this->client->get("product-categories/{$categoryId}/attributes");
+        $response = $this->client->get("product-categories/{$categoryId}/attributes", headers: $this->headers);
 
         // Ağaçtaki ile aynı gerekçe: başarısız yanıt "bu kategoride zorunlu
         // öznitelik yok" anlamına GELMEZ. Sessizce boş dönseydi ön koşul

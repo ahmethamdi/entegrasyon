@@ -862,6 +862,52 @@ final class ChannelConnectFormTest extends TestCase
         Http::assertNothingSent();
     }
 
+    /**
+     * Entegratör adı İSTEĞE BAĞLIDIR; girilirse `settings`'e yazılır,
+     * başlık enjeksiyonu taşıyabilecek değer reddedilir.
+     */
+    #[Test]
+    public function the_integrator_name_is_optional_and_validated(): void
+    {
+        [$user] = $this->tenantWithChannels();
+
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $payload = [
+            'channel_type_code' => 'trendyol',
+            'label' => 'Trendyol',
+            'api_key' => 'k',
+            'api_secret' => 's',
+            TrendyolAdapter::SELLER_ID_KEY => '321',
+        ];
+
+        $this->actingAs($user)->post('/channels', [
+            ...$payload,
+            TrendyolAdapter::INTEGRATOR_NAME_KEY => "Firma\r\nX-Header: 1",
+        ])->assertSessionHasErrors(TrendyolAdapter::INTEGRATOR_NAME_KEY);
+
+        // Boş bırakılabilir — adapter varsayılanı kullanır.
+        $this->actingAs($user)->post('/channels', [
+            ...$payload,
+            TrendyolAdapter::INTEGRATOR_NAME_KEY => '',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertArrayNotHasKey(
+            TrendyolAdapter::INTEGRATOR_NAME_KEY,
+            $this->connectionFor('trendyol')->settings,
+        );
+
+        $this->actingAs($user)->post('/channels', [
+            ...$payload,
+            TrendyolAdapter::INTEGRATOR_NAME_KEY => 'Firma34',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(
+            'Firma34',
+            $this->connectionFor('trendyol')->settings[TrendyolAdapter::INTEGRATOR_NAME_KEY] ?? null,
+        );
+    }
+
     /** Ekran Trendyol'da adres sormaz, öteki kanallarda sorar. */
     #[Test]
     public function only_address_based_channels_ask_for_a_store_url(): void

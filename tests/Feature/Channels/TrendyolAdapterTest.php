@@ -207,6 +207,61 @@ final class TrendyolAdapterTest extends TestCase
     }
 
     /**
+     * ⚠️ HER İSTEK `User-Agent: {satıcı ID} - {ad}` TAŞIR.
+     *
+     * Trendyol başlıksız isteği anahtar doğru olsa bile 403 ile reddeder;
+     * 403 bizde `AUTHENTICATION` ve KALICIDIR. Başlık hiç gönderilmiyordu
+     * ve testler Http::fake ile koştuğu için görmedi. Taksonomi ayrı bir
+     * istemciden gider — o yol da sınanır.
+     */
+    #[Test]
+    public function every_request_carries_the_trendyol_user_agent(): void
+    {
+        Http::fake(['*' => Http::response(['content' => [], 'categories' => [], 'totalPages' => 1], 200)]);
+
+        $adapter = $this->adapter(supplierId: '123456');
+
+        $adapter->healthCheck();
+        $adapter->fetchCategoryTree();
+        $adapter->fetchCategoryAttributes('42');
+        $adapter->fetchOrders(now()->subHour());
+
+        $recorded = Http::recorded();
+
+        $this->assertCount(4, $recorded);
+
+        foreach ($recorded as [$request]) {
+            $this->assertSame(
+                ['123456 - SelfIntegration'],
+                $request->header('User-Agent'),
+                "User-Agent eksik: {$request->url()}",
+            );
+        }
+    }
+
+    /** Kayıtlı entegratör adı girildiyse varsayılanın yerine o gider. */
+    #[Test]
+    public function a_registered_integrator_name_replaces_the_default(): void
+    {
+        Http::fake(['*' => Http::response([], 200)]);
+
+        [$tenant] = $this->makeTenant();
+
+        $adapter = $this->asTenant($tenant, function (): TrendyolAdapter {
+            $connection = $this->connection('777');
+            $connection->forceFill([
+                'settings' => [...$connection->settings, TrendyolAdapter::INTEGRATOR_NAME_KEY => 'Firma34'],
+            ])->save();
+
+            return $this->adapterFor($connection);
+        });
+
+        $adapter->healthCheck();
+
+        Http::assertSent(fn (Request $request): bool => $request->header('User-Agent') === ['777 - Firma34']);
+    }
+
+    /**
      * KİMLİK BİLGİSİ KİRACI BAĞLAMI OLMADAN DA GÖNDERİLİR.
      *
      * `channel_credentials` kiracıya göre kapsanır ve istemci bağlam

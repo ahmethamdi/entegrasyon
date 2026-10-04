@@ -479,12 +479,13 @@ final class TaxonomySyncTest extends TestCase
             ]);
         });
 
-        // İlk bağlantı 500 alır, ikinci bağlantı ağacı getirir.
-        Http::fake(['*' => Http::sequence()
-            ->push(['errors' => [['message' => 'boom']]], 500)
-            ->push($this->trendyolTree(), 200)]);
+        // Bozuk bağlantı İSTEK ATMADAN düşer (satıcı kimliği yoksa
+        // `User-Agent` kurulamaz — A11); ağacı sağlam olan getirir.
+        Http::fake(['*' => Http::response($this->trendyolTree(), 200)]);
 
         $synced = app(SyncTaxonomyForChannels::class)->sweep();
+
+        Http::assertSentCount(1);
 
         $this->assertSame(
             1,

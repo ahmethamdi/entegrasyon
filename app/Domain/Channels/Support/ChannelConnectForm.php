@@ -71,7 +71,7 @@ final class ChannelConnectForm
      *
      * @var array<string, array{
      *     secrets: array<int, array{name: string, label: string, hint?: string, masked?: bool, placeholder?: string}>,
-     *     identity: array<int, array{name: string, label: string, hint?: string, placeholder?: string, rules?: list<string>}>,
+     *     identity: array<int, array{name: string, label: string, hint?: string, placeholder?: string, rules?: list<string>, optional?: bool}>,
      *     account?: string,
      *     oauth: bool,
      *     help?: string,
@@ -105,6 +105,18 @@ final class ChannelConnectForm
                     'rules' => ['regex:/^[0-9]+$/'],
                     'hint' => 'Aynı sayfadaki "Satıcı ID" değeri. Bütün '
                         .'Trendyol çağrıları bu kimlik üzerinden yapılır.',
+                ],
+                [
+                    'name' => TrendyolAdapter::INTEGRATOR_NAME_KEY,
+                    'label' => 'Entegratör adı (isteğe bağlı)',
+                    'placeholder' => TrendyolAdapter::DEFAULT_INTEGRATOR_NAME,
+                    'optional' => true,
+                    // ⚠️ Değer `User-Agent` başlığına girer; satır sonu
+                    // ya da denetim karakteri başlık enjeksiyonu olurdu.
+                    'rules' => ['regex:/^[A-Za-z0-9]{1,30}$/'],
+                    'hint' => 'Boş bırakırsan "SelfIntegration" gönderilir. '
+                        .'Trendyol\'a kayıtlı bir entegratör firmasıysan '
+                        .'kayıtlı adını yaz; yanlış ad 403 ile reddedilir.',
                 ],
             ],
             // ⚠️ HESAP KİMLİĞİ SATICI ID'SİDİR — MAĞAZA ADRESİ SORULMAZ.
@@ -398,7 +410,12 @@ final class ChannelConnectForm
         }
 
         foreach (self::identityFields($channelTypeCode) as $field) {
-            $rules[$field['name']] = ['required', 'string', 'max:255', ...$field['rules'] ?? []];
+            $rules[$field['name']] = [
+                // İsteğe bağlı alan boş gelirse `pick()` onu ATLAR ve
+                // adapter varsayılanı kullanır.
+                ($field['optional'] ?? false) ? 'nullable' : 'required',
+                'string', 'max:255', ...$field['rules'] ?? [],
+            ];
         }
 
         return $rules;

@@ -207,7 +207,7 @@ function submit() {
                             v-model="form[field.name]"
                             :type="field.masked ? 'password' : 'text'"
                             :placeholder="field.placeholder ?? ''"
-                            required
+                            :required="!field.optional"
                             autocomplete="off"
                             spellcheck="false"
                             class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
