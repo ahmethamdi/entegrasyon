@@ -9,6 +9,7 @@ use App\Domain\Sync\Actions\OpenSyncOperation;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Jobs\PushInventory;
+use App\Domain\Sync\Jobs\PushPrices;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\ContentPushDispatcher;
@@ -95,9 +96,11 @@ final class ListingResyncRequestedConsumer
      * yükü gönderir, sessizce yutmak operasyonu sonsuza kadar takılı bırakır.
      * `DetectStuckSyncOperations` ile aynı davranış biçimi.
      *
-     * PRICE burada YOK çünkü çekirdekte fiyat itme yolu (PushPrices) hiç
-     * yazılmadı — adapter gövdeleri hazır ama çağıranı yok. Davranış dürüst:
-     * operasyon açılır, iş atılmaz ve uyarı yazılır.
+     * PRICE kuyruğu `VariantPriceChangedConsumer` ile AYNIDIR (`price:high`).
+     * Önceden bu dal yoktu ("PushPrices hiç yazılmadı" notuyla — oysa
+     * yazılmıştı): fiyat resync'i operasyon açıyor ama iş atmıyordu ve
+     * satıcının "bizimki gitsin" kararı ancak 5 dakika sonra takılı iş
+     * taramasıyla kanala gidiyordu.
      */
     private function dispatchFor(SyncOperation $operation, SyncDomain $domain, string $tenantId): void
     {
@@ -116,6 +119,9 @@ final class ListingResyncRequestedConsumer
 
             SyncDomain::INVENTORY => PushInventory::dispatch($operation->id, $tenantId)
                 ->onQueue('inventory:high'),
+
+            SyncDomain::PRICE => PushPrices::dispatch($operation->id, $tenantId)
+                ->onQueue('price:high'),
 
             default => Log::warning('sync.resync_no_job_for_domain', [
                 'operation' => $operation->id,

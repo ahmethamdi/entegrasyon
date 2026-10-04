@@ -136,6 +136,14 @@ final class RequestResync
      * CONTENT sürümü ürünün `content_version`'ından, stok sürümü projeksiyonun
      * `version`'ından gelir; uydurma bir sayaç panelde "senkron" görünen
      * ürünün kanala hiç gitmemesine yol açardı.
+     *
+     * ⚠️ FİYAT SÜRÜMÜ VARYANTTAN OKUNUR, ÜRÜNDEN DEĞİL. Normal fiyat olayı
+     * `variants.content_version` taşır (`UpdateProduct`); burada ürünün
+     * sürümü okunuyordu. Ürün sürümü HER kayıtta artar, varyantınki yalnızca
+     * fiyat değişince: başlığı beş kez düzenlenmiş bir üründe (ürün=6,
+     * varyant=1) "bizimki gitsin" demek PRICE `synced_version`'ını 6'ya
+     * çıkarır, sonraki fiyat değişikliği (varyant=2) sürüm kapısında
+     * `6 >= 2` diye ELENİR — fiyat kanala gitmez ve satır "senkron" kalırdı.
      */
     private function currentVersionFor(Listing $listing, SyncDomain $domain): int
     {
@@ -144,6 +152,13 @@ final class RequestResync
                 ->where('tenant_id', $listing->tenant_id)
                 ->where('variant_id', $listing->variant_id)
                 ->value('version') ?? 0);
+        }
+
+        if ($domain === SyncDomain::PRICE) {
+            return (int) (DB::table('variants')
+                ->where('id', $listing->variant_id)
+                ->where('tenant_id', $listing->tenant_id)
+                ->value('content_version') ?? 0);
         }
 
         return (int) (DB::table('products')

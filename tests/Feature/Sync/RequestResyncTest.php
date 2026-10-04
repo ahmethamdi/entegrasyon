@@ -17,6 +17,7 @@ use App\Domain\Messaging\Jobs\ConsumeOutboxEvent;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Actions\RequestResync;
 use App\Domain\Sync\Enums\SyncDomain;
+use App\Domain\Sync\Jobs\PushPrices;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
@@ -199,6 +200,43 @@ final class RequestResyncTest extends TestCase
             $count,
             'sürüm kapısı resync operasyonunu eledi — kullanıcının "yeniden dene"si sessizce hiçbir şey yapmaz.',
         );
+    }
+
+    /**
+     * ⚠️ FİYAT RESYNC'İ VARYANTIN SÜRÜMÜNÜ TAŞIR VE FİYAT İŞİNİ ATAR.
+     *
+     * Normal fiyat olayı `variants.content_version` taşır. Resync ürünün
+     * sürümünü kullanıyordu: başlığı birkaç kez düzenlenmiş üründe (ürün=5,
+     * varyant=1) PRICE `synced_version`'ı 5'e çıkar, sonraki fiyat
+     * değişikliği (varyant=2) sürüm kapısında `5 >= 2` diye elenirdi —
+     * fiyat kanala gitmez, satır "senkron" kalırdı.
+     *
+     * Tüketici PRICE için iş de atmıyordu; satıcının kararı 5 dk sonra
+     * takılı iş taramasıyla gidiyordu.
+     */
+    #[Test]
+    public function a_price_resync_carries_the_variant_version_and_dispatches_the_price_job(): void
+    {
+        [$tenant, $listing] = $this->makeListing();
+
+        $this->asTenant($tenant, fn () => Variant::query()->whereKey($listing->variant_id)->update(['content_version' => 1]));
+
+        $this->asTenant($tenant, fn () => app(RequestResync::class)->run($listing, SyncDomain::PRICE, 'price_conflict_push_ours'));
+
+        $event = $this->asTenant($tenant, fn () => OutboxEvent::query()
+            ->where('event_type', 'ListingResyncRequested')
+            ->firstOrFail());
+
+        $this->asTenant($tenant, fn () => app(ListingResyncRequestedConsumer::class)->handle($event));
+
+        $operation = $this->asTenant($tenant, fn () => SyncOperation::query()
+            ->where('entity_id', $listing->id)
+            ->where('operation_type', SyncDomain::PRICE->operationType())
+            ->firstOrFail());
+
+        $this->assertSame(1, (int) $operation->entity_version, 'Fiyat sürümü VARYANTTAN okunmalı (ürün=5, varyant=1).');
+
+        Queue::assertPushed(PushPrices::class, fn (PushPrices $job): bool => $job->queue === 'price:high');
     }
 
     /**
