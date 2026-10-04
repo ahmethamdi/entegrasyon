@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Identity\Models;
 
 use App\Domain\Identity\Notifications\ResetPasswordNotification;
+use App\Domain\Identity\Notifications\VerifyEmailNotification;
 use App\Support\Uuid\HasUuidV7;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -21,7 +23,7 @@ use Illuminate\Notifications\Notifiable;
  * @property string $id
  * @property string $email
  */
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
     use HasFactory;
     use HasUuidV7;
@@ -46,6 +48,12 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    /** Türkçe doğrulama e-postası — gerekçe bildirim sınıfında. */
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new VerifyEmailNotification);
     }
 
     /** Türkçe sıfırlama e-postası — gerekçe bildirim sınıfında. */
