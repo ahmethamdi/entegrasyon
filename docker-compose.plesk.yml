@@ -1,0 +1,18 @@
+# Plesk sunucusu için üst katman — docker-compose.prod.yml'nin ÜSTÜNE biner:
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.plesk.yml --env-file .env.production up -d
+#
+# Fark tek: 80/443'ü Plesk'in web sunucusu tutar. Caddy yalnız yerel
+# 8090'dan düz HTTP dinler; alan adı, SSL ve yönlendirme Plesk'tedir.
+# Kurulum: docs/URETIM-PLESK.md
+services:
+  web:
+    # `!override`: liste BİRLEŞTİRİLMEZ, değiştirilir. Birleşseydi 80/443
+    # yine istenir ve Plesk'le çakışırdı.
+    ports: !override
+      - "127.0.0.1:${WEB_PORT:-8090}:80"
+    environment: !override
+      APP_DOMAIN: localhost
+      ACME_EMAIL: none@localhost
+    volumes: !override
+      - ./docker/prod/Caddyfile.plesk:/etc/caddy/Caddyfile:ro

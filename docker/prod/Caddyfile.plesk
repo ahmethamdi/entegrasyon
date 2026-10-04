@@ -1,0 +1,46 @@
+# Plesk arkasında — TLS'i Plesk (Let's Encrypt) sonlandırır, bu Caddy
+# yalnız 127.0.0.1:8090'dan düz HTTP dinler (docker-compose.plesk.yml).
+#
+# ⚠️ trusted_proxies ŞART: Caddy güvenmediği kaynaktan gelen
+# X-Forwarded-* başlıklarını kendi değeriyle EZER. Ezilseydi Laravel
+# isteği "http" sanır, https bağlantı yerine http üretir ve e-posta
+# doğrulama gibi imzalı bağlantılar "geçersiz imza" verirdi. Plesk'in
+# nginx'i Docker köprüsünden (özel adres aralığı) gelir.
+{
+	auto_https off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	root * /var/www/html/public
+
+	@webhooks path /webhooks/*
+	request_body @webhooks {
+		max_size 1MB
+	}
+	request_body {
+		max_size 21MB
+	}
+
+	# HSTS'i Plesk ekler; burada ikinci kez yazılmaz.
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	@hidden {
+		path */.*
+		not path /.well-known/*
+	}
+	respond @hidden 404
+
+	encode zstd gzip
+	php_fastcgi app:9000 {
+		root /var/www/html/public
+	}
+	file_server
+}

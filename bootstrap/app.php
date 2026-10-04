@@ -25,6 +25,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -90,6 +91,19 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'tenant' => EstablishTenantContext::class,
         ]);
+
+        // VEKİL SUNUCUYA GÜVEN. Üretimde istek Plesk (nginx) → Caddy →
+        // php-fpm zinciriyle gelir; php-fpm'e yalnız aynı Docker ağındaki
+        // Caddy ulaşabilir. Güvenilmeseydi Laravel isteği "http" sanır,
+        // https yerine http bağlantı üretir ve imzalı bağlantılar (e-posta
+        // doğrulama) "geçersiz imza" verirdi.
+        $middleware->trustProxies(
+            at: '*',
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO,
+        );
 
         // Giriş yapmamış ziyaretçi panel yerine giriş ekranına gider.
         $middleware->redirectGuestsTo(fn () => route('login'));

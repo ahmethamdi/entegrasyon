@@ -15,7 +15,15 @@ if [[ ! -f .env.production ]]; then
     exit 1
 fi
 
+# Plesk sunucusunda (80/443 Plesk'te) üst katman eklenir:
+#   DEPLOY_TARGET=plesk ./deploy.sh   (ya da .env.production'da DEPLOY_TARGET=plesk)
+DEPLOY_TARGET="${DEPLOY_TARGET:-$(grep -E '^DEPLOY_TARGET=' .env.production | cut -d= -f2 || true)}"
+
 COMPOSE=(docker compose -f docker-compose.prod.yml --env-file .env.production)
+
+if [[ "${DEPLOY_TARGET}" == "plesk" ]]; then
+    COMPOSE=(docker compose -f docker-compose.prod.yml -f docker-compose.plesk.yml --env-file .env.production)
+fi
 
 echo "→ Kod güncelleniyor"
 git pull --ff-only
