@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests;
 
 use App\Domain\Billing\Contracts\PaymentGateway;
+use App\Domain\Channels\Support\OutboundUrlGuard;
 use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -34,6 +35,11 @@ abstract class TestCase extends BaseTestCase
         // Aynı gerekçe, ödeme tarafı: Stripe SDK'sı curl kullanır ve
         // yukarıdaki kural onu YAKALAMAZ. Test ödeme sağlayıcısına çıkmaz.
         $this->app->instance(PaymentGateway::class, $this->payments = new FakePaymentGateway);
+
+        // SSRF koruması istek anında DNS çözer; test ağa ÇIKMAZ. Her ad
+        // genel bir adrese çözülür — iç ağ senaryosunu sınayan test kendi
+        // çözümleyicisini bağlar.
+        $this->app->instance(OutboundUrlGuard::class, new OutboundUrlGuard(static fn (): array => ['93.184.216.34']));
     }
 
     protected function tearDown(): void

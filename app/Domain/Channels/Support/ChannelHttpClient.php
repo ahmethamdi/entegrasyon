@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Support;
 
+use App\Domain\Channels\Exceptions\BlockedDestinationException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Support\Logging\PayloadRedactor;
@@ -101,6 +102,26 @@ final class ChannelHttpClient
 
         $startedAt = hrtime(true);
 
+        // ⚠️ İÇ AĞA İSTEK GİTMEZ (B3 · SSRF) — gerekçe OutboundUrlGuard'da.
+        // Engellenen istek de api_calls'a yazılır: "neden hiç gitmedi"
+        // sorusunun cevabı orada durmalı.
+        try {
+            $pin = $this->pinDestination($url);
+        } catch (BlockedDestinationException $e) {
+            $this->record(
+                method: $method,
+                url: $url,
+                body: $body,
+                response: null,
+                durationMs: $this->elapsedMs($startedAt),
+                attemptId: $attemptId,
+                errorClass: ErrorClass::VALIDATION,
+                errorText: $e->getMessage(),
+            );
+
+            throw $e;
+        }
+
         try {
             // GÖVDE ANAHTARI BİÇİME GÖRE DEĞİŞİR: Guzzle `json` ile `form_params`
             // arasında AYRIM yapar ve yanlış anahtar gövdeyi SESSİZCE yanlış
@@ -108,7 +129,7 @@ final class ChannelHttpClient
             // "invalid_request" döner; sebebi de gövdede görünmez.
             $bodyKey = $asForm ? 'form_params' : 'json';
 
-            $response = $this->pendingRequest($headers, $asForm)->send($method, $url, array_filter([
+            $response = $this->pendingRequest($headers, $asForm)->withOptions($pin)->send($method, $url, array_filter([
                 'query' => $query,
                 $bodyKey => $body,
             ], static fn (mixed $v): bool => $v !== null && $v !== []));
@@ -182,6 +203,41 @@ final class ChannelHttpClient
     }
 
     // ---------------------------------------------------------------- iç
+
+    /**
+     * Hedefi denetler ve bağlantıyı denetlenen IP'ye SABİTLER.
+     *
+     * YÖNLENDİRME KAPALI: genel bir adres `302 → http://169.254.169.254/`
+     * dönebilir ve Guzzle onu varsayılan olarak izlerdi — sabitleme yalnız
+     * ilk ana makineyi kapsar. Kanal API'leri yönlendirme gerektirmez;
+     * Woo'da `www`'suz adres yönlendirme alıyorsa satıcı doğru adresi girer.
+     *
+     * @return array<string, mixed> Guzzle seçenekleri
+     */
+    private function pinDestination(string $url): array
+    {
+        $parts = parse_url($url);
+        $host = (string) ($parts['host'] ?? '');
+        $port = isset($parts['port']) ? (int) $parts['port'] : null;
+
+        // Ana makinesiz (göreli) adres ağa ÇIKAMAZ — Guzzle onu kendisi
+        // reddeder; sabitlenecek bir hedef yoktur.
+        if ($host === '') {
+            return ['allow_redirects' => false];
+        }
+
+        $ip = app(OutboundUrlGuard::class)->resolve($host, $port);
+
+        $pinnedIp = str_contains($ip, ':') ? '['.$ip.']' : $ip;
+        $bareHost = trim($host, '[]');
+
+        return [
+            'allow_redirects' => false,
+            'curl' => [
+                CURLOPT_RESOLVE => [sprintf('%s:%d:%s', $bareHost, $port ?? 443, $pinnedIp)],
+            ],
+        ];
+    }
 
     /**
      * @param  array<string, string>  $headers  Adapter'ın eklediği başlıklar

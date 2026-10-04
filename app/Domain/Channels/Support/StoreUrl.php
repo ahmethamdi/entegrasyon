@@ -18,6 +18,8 @@ use InvalidArgumentException;
  * ve normalleştirilmezse aynı mağaza farklı kimliklerle iki kez bağlanır.
  * O noktada kısıt hâlâ "geçerlidir" ama hiçbir şey korumaz.
  *
+ * İÇ AĞ REDDEDİLİR: `OutboundUrlGuard` — gerekçe orada.
+ *
  * HTTPS VARSAYILIR: WooCommerce anahtar çiftini Basic auth ile taşır ve
  * düz HTTP üzerinde anahtar her istekte ağda açık gider.
  */
@@ -55,6 +57,12 @@ final readonly class StoreUrl
         }
 
         $host = strtolower($parts['host']);
+
+        // İÇ AĞ HEDEFİ KAYIT ANINDA REDDEDİLİR (B3 · SSRF). İstek anında
+        // ChannelHttpClient DNS'i de kontrol eder; bu katman yazım hatası
+        // gibi görünen saldırıyı (`127.0.0.1`, `postgres`) form hatası olarak
+        // hemen geri verir.
+        (new OutboundUrlGuard)->assertAllowedHost($host, isset($parts['port']) ? (int) $parts['port'] : null);
 
         // Woo alt dizinde kurulu olabilir: example.com/magaza. Yol korunur
         // ama sondaki eğik çizgi ve API kökü tekrarları atılır.
