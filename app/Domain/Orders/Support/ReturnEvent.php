@@ -12,6 +12,15 @@ namespace App\Domain\Orders\Support;
  * externalRef KANALIN OLAY KİMLİĞİDİR ve idempotency çıpasıdır: aynı iade
  * ikinci kez geldiğinde order_events satırı çakışır ve hiçbir hareket
  * oluşmaz. Farklı iki kısmi iade farklı externalRef taşır ve ayrışır.
+ *
+ * KÜMÜLATİF MOD — kanal "bu satırdan TOPLAM şu kadar iade edildi" der:
+ *   Bazı kanallar (Woo) iadeyi tek tek olay olarak değil, siparişin
+ *   o anki durumu olarak gönderir: her güncelleme TÜM iadeleri taşır.
+ *   Artımlı okunsaydı her sipariş güncellemesi aynı iadeyi yeniden
+ *   stoğa eklerdi. Kümülatif modda miktar HEDEFTİR ve yalnızca
+ *   şimdiye kadar uygulanandan FARKI hareket üretir — tekrar gelen
+ *   mesaj sıfır fark üretir, kaçırılmış bir iade sonraki mesajda
+ *   yakalanır.
  */
 final readonly class ReturnEvent
 {
@@ -26,6 +35,7 @@ final readonly class ReturnEvent
         public array $payload = [],
         public ?\DateTimeInterface $occurredAt = null,
         public ?string $inboxMessageId = null,
+        public bool $cumulative = false,
     ) {}
 
     /** @return list<string> */

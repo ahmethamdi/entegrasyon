@@ -266,6 +266,42 @@ final class IngestChannelOrderTest extends TestCase
         $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
     }
 
+    /**
+     * KÜMÜLATİF İADE — miktar HEDEFTİR, yalnızca fark uygulanır.
+     *
+     * Woo iadeyi siparişin DURUMU olarak gönderir. Aynı satıra eşleşen iki
+     * ham kalem (biri satır kimliğiyle, biri SKU ile) hedefleri TOPLANARAK
+     * okunur; fark kalem başına alınsaydı ikisi de aynı eski sayaçtan
+     * hesaplanır ve satır iki kez ilerlerdi.
+     */
+    #[Test]
+    public function cumulative_return_applies_only_the_difference_towards_the_summed_target(): void
+    {
+        [$tenant, $connection, $warehouseId, $variant] = $this->makeContext(stock: 10);
+
+        $order = $this->ingest($tenant, $connection, $warehouseId, [[$variant->id, 5]]);
+        $line = $this->asTenant($tenant, fn () => $order->lines()->firstOrFail());
+
+        // Hedef 1 + 1 = 2.
+        $this->applyReturn($tenant, $order, [[$line->id, 1], [$line->id, 1]], 'RET-1', cumulative: true);
+        $this->assertSame(7, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        // Aynı hedef, farklı çıpa: fark SIFIR.
+        $this->applyReturn($tenant, $order, [[$line->id, 2]], 'RET-2', cumulative: true);
+        $this->assertSame(7, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        // Hedef 4: yalnızca 2 eklenir.
+        $this->applyReturn($tenant, $order, [[$line->id, 4]], 'RET-3', cumulative: true);
+        $this->assertSame(9, $this->onHand($tenant, $warehouseId, $variant->id));
+        $this->assertSame(4, $this->asTenant($tenant, fn () => $line->fresh()->quantity_returned));
+
+        // Hedef satır miktarını aşarsa kırpılır, DB hatası olmaz.
+        $this->applyReturn($tenant, $order, [[$line->id, 9]], 'RET-4', cumulative: true);
+        $this->assertSame(5, $this->asTenant($tenant, fn () => $line->fresh()->quantity_returned));
+
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
     /** İptal fazla satışı düzeltir — bakiye 0'a döner. */
     #[Test]
     public function cancellation_recovers_from_oversold(): void
@@ -507,6 +543,7 @@ final class IngestChannelOrderTest extends TestCase
         Order $order,
         array $lines,
         ?string $externalRef = null,
+        bool $cumulative = false,
     ): ?OrderEvent {
         $event = new ReturnEvent(
             orderId: $order->id,
@@ -515,6 +552,7 @@ final class IngestChannelOrderTest extends TestCase
                 static fn (array $pair): ReturnedLine => new ReturnedLine($pair[0], $pair[1]),
                 $lines,
             ),
+            cumulative: $cumulative,
         );
 
         return $this->asTenant($tenant, fn () => (new ApplyOrderReturn)->run($event));

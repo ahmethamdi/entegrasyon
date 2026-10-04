@@ -183,6 +183,9 @@ final class OrderEventRouter
             payload: $normalized->payload,
             occurredAt: $normalized->occurredAt,
             inboxMessageId: $message->id,
+            // Miktarın HEDEF mi ARTIŞ mı olduğu kanalın ŞEKLİDİR ve
+            // normalizer söyler — `if ($channel === 'woocommerce')` YAZILMAZ.
+            cumulative: (bool) ($normalized->payload['returned_quantities_cumulative'] ?? false),
         ));
     }
 

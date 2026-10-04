@@ -41,10 +41,20 @@ final class WooOrderNormalizer
         'failed' => 'updated',
     ];
 
-    public static function normalize(InboxMessage $message): ?NormalizedOrderEvent
+    /**
+     * @param  list<array<string, mixed>>|null  $refundDetails  `orders/{id}/refunds`
+     *                                                          yanıtı — sipariş gövdesindeki
+     *                                                          `refunds[]` kalem taşımaz (bkz.
+     *                                                          {@see needsRefundDetails()})
+     */
+    public static function normalize(InboxMessage $message, ?array $refundDetails = null): ?NormalizedOrderEvent
     {
         /** @var array<string, mixed> $payload */
         $payload = is_array($message->payload) ? $message->payload : [];
+
+        if ($refundDetails !== null) {
+            $payload['refunds'] = $refundDetails;
+        }
 
         $externalOrderId = $payload['id'] ?? null;
 
@@ -55,17 +65,77 @@ final class WooOrderNormalizer
         }
 
         $type = self::resolveType($message, $payload);
+        $canonical = self::toCanonicalPayload($payload, $type);
 
         return new NormalizedOrderEvent(
             type: $type,
             externalOrderId: (string) $externalOrderId,
-            // Olay çıpası: teslim kimliği varsa o, yoksa durum+kimlik bileşimi.
-            // Yalnızca sipariş kimliğine bağlansaydı aynı siparişin iptali ve
-            // iadesi çakışır, ikincisi sessizce yutulurdu.
-            externalRef: $message->external_event_id ?? "{$externalOrderId}:{$type}",
-            payload: self::toCanonicalPayload($payload, $type),
+            externalRef: $type === 'returned'
+                ? self::returnRef((string) $externalOrderId, $canonical['lines'])
+                // Olay çıpası: teslim kimliği varsa o, yoksa durum+kimlik
+                // bileşimi. Yalnızca sipariş kimliğine bağlansaydı aynı
+                // siparişin iptali ve iadesi çakışır, ikincisi yutulurdu.
+                : ($message->external_event_id ?? "{$externalOrderId}:{$type}"),
+            payload: $canonical,
             occurredAt: self::parseDate($payload),
         );
+    }
+
+    /**
+     * Sipariş gövdesindeki iadeler kalem taşımıyor mu — adapter ayrıca okumalı mı?
+     *
+     * ⚠️ WC REST v3 SİPARİŞ GÖVDESİNDE `refunds[]` YALNIZCA `{id, reason,
+     * total}` TAŞIR, KALEM TAŞIMAZ. Kalemler `orders/{id}/refunds` ucundadır.
+     * Önceden kalem bulunamayınca "tüm sipariş iade edildi" sayılıyordu:
+     * 5 TL'lik bir para iadesi bile siparişin TÜM kalemlerini stoğa geri
+     * eklerdi.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function needsRefundDetails(array $payload): bool
+    {
+        $refunds = $payload['refunds'] ?? null;
+
+        if (! is_array($refunds) || $refunds === []) {
+            return false;
+        }
+
+        // Tam iade ve iptal kendi yolundan gider; kalem detayı gerekmez.
+        $status = mb_strtolower((string) ($payload['status'] ?? ''));
+
+        if ($status === 'refunded' || $status === 'cancelled') {
+            return false;
+        }
+
+        foreach ($refunds as $refund) {
+            if (is_array($refund) && array_key_exists('line_items', $refund)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * İade çıpası — iade DURUMUNUN parmak izi.
+     *
+     * Woo her sipariş güncellemesinde TÜM iadeleri yeniden gönderir. Teslim
+     * kimliğine bağlansaydı her güncelleme yeni bir iade olayı açardı.
+     * Kümülatif hedefler aynı kaldıkça çıpa aynıdır ve olay bir kez yazılır;
+     * yeni bir iade hedefi değiştirir, yeni çıpa doğar ve yalnızca FARK
+     * uygulanır (`ReturnEvent::$cumulative`).
+     *
+     * @param  list<array<string, mixed>>  $lines
+     */
+    private static function returnRef(string $externalOrderId, array $lines): string
+    {
+        $targets = array_map(
+            static fn (array $line): string => ($line['external_line_id'] ?? '').'|'.($line['sku'] ?? '').'|'.$line['quantity'],
+            $lines,
+        );
+        sort($targets);
+
+        return "{$externalOrderId}:returned:".substr(hash('sha256', implode(',', $targets)), 0, 16);
     }
 
     /**
@@ -83,8 +153,10 @@ final class WooOrderNormalizer
             return self::STATUS_TO_TYPE[$status];
         }
 
-        // Kısmi iade: refunds dizisi doluysa iade yoludur.
-        if (is_array($payload['refunds'] ?? null) && $payload['refunds'] !== []) {
+        // Kısmi iade: ancak KALEM iade edildiyse iade yoludur. Yalnızca para
+        // iadesi (kargo, indirim, fiyat farkı) stok hareketi DEĞİLDİR ve
+        // güncelleme olarak işlenir.
+        if (self::refundLines($payload) !== []) {
             return 'returned';
         }
 
@@ -114,9 +186,15 @@ final class WooOrderNormalizer
      */
     private static function toCanonicalPayload(array $payload, string $type): array
     {
-        $lines = $type === 'returned'
-            ? self::refundLines($payload)
-            : self::orderLines($payload);
+        $fullRefund = mb_strtolower((string) ($payload['status'] ?? '')) === 'refunded';
+
+        $lines = match (true) {
+            // Tam iade: hedef satırın TAMAMI. Önceki kısmi iadeler
+            // kümülatif farkla düşülür, iki kez eklenmez.
+            $type === 'returned' && $fullRefund => self::orderLines($payload),
+            $type === 'returned' => self::refundLines($payload),
+            default => self::orderLines($payload),
+        };
 
         return [
             'type' => $type,
@@ -129,6 +207,9 @@ final class WooOrderNormalizer
             'tax_total' => (string) ($payload['total_tax'] ?? '0'),
             'grand_total' => (string) ($payload['total'] ?? '0'),
             'lines' => $lines,
+            // Woo iadeyi siparişin DURUMU olarak gönderir — miktarlar
+            // HEDEFTİR, artış değil (`ReturnEvent::$cumulative`).
+            'returned_quantities_cumulative' => $type === 'returned',
             // Kişisel veri taşınmaz; yalnızca referans. PayloadRedactor
             // e-posta ve adı zaten maskeler, ama kanonik yükte hiç tutmamak
             // daha güvenlidir.
@@ -171,11 +252,19 @@ final class WooOrderNormalizer
     }
 
     /**
-     * İade kalemleri — Woo iade miktarlarını NEGATİF gönderir.
+     * İade kalemleri — TÜM iadelerin satır başına TOPLAMI (kümülatif hedef).
      *
-     * Mutlak değere çevrilir: ApplyMovement daima POZİTİF miktar bekler ve
-     * yönü hareket TÜRÜNDEN türetir. Çağıranın işaret hesaplaması gerekmez,
-     * böylece "eksi mi artı mı" hatası imkânsızlaşır.
+     * Woo iade miktarlarını NEGATİF gönderir; mutlak değere çevrilir:
+     * ApplyMovement daima POZİTİF miktar bekler ve yönü hareket TÜRÜNDEN
+     * türetir.
+     *
+     * ⚠️ İADE KALEMİNİN KİMLİĞİ ORİJİNAL SATIRIN KİMLİĞİ DEĞİLDİR. Woo iade
+     * için yeni kalemler yaratır; orijinal satır `_refunded_item_id`
+     * meta'sındadır. O yoksa SKU ile eşlenir (`OrderPayloadMapper`).
+     *
+     * ⚠️ KALEM YOKSA SİPARİŞ SATIRLARINA DÜŞÜLMEZ. Önceden "kalem bazlı
+     * iade yoksa tüm sipariş iade edildi" sayılıyordu — oysa kalemsiz iade
+     * bir PARA iadesidir (kargo, indirim) ve stok geri gelmez.
      *
      * @param  array<string, mixed>  $payload
      * @return list<array<string, mixed>>
@@ -200,20 +289,44 @@ final class WooOrderNormalizer
                     continue;
                 }
 
-                $lines[] = [
-                    'external_line_id' => (string) ($item['id'] ?? ''),
-                    'sku' => (string) ($item['sku'] ?? ''),
+                $originalId = self::refundedItemId($item);
+                $sku = (string) ($item['sku'] ?? '');
+                $key = $originalId !== null ? "id:{$originalId}" : "sku:{$sku}";
+
+                if (isset($lines[$key])) {
+                    $lines[$key]['quantity'] += $quantity;
+
+                    continue;
+                }
+
+                $lines[$key] = array_filter([
+                    'external_line_id' => $originalId,
+                    'sku' => $sku,
                     'title' => (string) ($item['name'] ?? ''),
                     'quantity' => $quantity,
                     'unit_price' => (string) ($item['price'] ?? '0'),
                     'line_total' => (string) abs((float) ($item['total'] ?? 0)),
-                ];
+                ], static fn (mixed $value): bool => $value !== null);
             }
         }
 
-        // Kalem bazlı iade yoksa tüm siparişin iadesi: kalemler sipariş
-        // satırlarından alınır.
-        return $lines === [] ? self::orderLines($payload) : $lines;
+        return array_values($lines);
+    }
+
+    /**
+     * İade kaleminin bağlı olduğu ORİJİNAL sipariş satırı.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private static function refundedItemId(array $item): ?string
+    {
+        foreach ((array) ($item['meta_data'] ?? []) as $meta) {
+            if (is_array($meta) && ($meta['key'] ?? null) === '_refunded_item_id' && ($meta['value'] ?? '') !== '') {
+                return (string) $meta['value'];
+            }
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $payload */

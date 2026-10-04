@@ -458,9 +458,34 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
         return $status === '' ? (string) $id : "{$id}:{$status}";
     }
 
+    /**
+     * ⚠️ KISMİ İADEDE KALEMLER AYRI UÇTAN OKUNUR.
+     *
+     * Sipariş gövdesindeki `refunds[]` yalnızca `{id, reason, total}` taşır.
+     * Hangi kalemin kaç adet iade edildiği `orders/{id}/refunds` ucundadır;
+     * okunmasaydı iade ya hiç görülmez ya da (eski davranış) tüm sipariş
+     * stoğa geri eklenirdi.
+     *
+     * Bu bir OKUMADIR — adapter yine yan etkisizdir. Okuma patlarsa istisna
+     * yükselir ve gelen mesaj bütçesi dahilinde yeniden denenir; sessizce
+     * "iade yok" sayılmaz.
+     */
     public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
     {
-        return WooOrderNormalizer::normalize($message);
+        $payload = is_array($message->payload) ? $message->payload : [];
+
+        if (! WooOrderNormalizer::needsRefundDetails($payload) || ! isset($payload['id'])) {
+            return WooOrderNormalizer::normalize($message);
+        }
+
+        // `throw()` ŞART: istemci 4xx/5xx'te kendiliğinden fırlatmaz ve
+        // hata gövdesi "iade kalemi yok" diye okunurdu.
+        $refunds = $this->client->get("orders/{$payload['id']}/refunds")->throw()->json();
+
+        return WooOrderNormalizer::normalize(
+            $message,
+            refundDetails: is_array($refunds) ? array_values(array_filter($refunds, 'is_array')) : [],
+        );
     }
 
     public function acknowledgeOrder(Order $order): AdapterResult

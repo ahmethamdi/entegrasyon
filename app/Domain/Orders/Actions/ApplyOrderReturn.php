@@ -15,6 +15,7 @@ use App\Domain\Orders\Models\OrderLine;
 use App\Domain\Orders\Support\ReturnedLine;
 use App\Domain\Orders\Support\ReturnEvent;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -166,6 +167,23 @@ final class ApplyOrderReturn
      *
      * @return list<array{line: OrderLine, quantity: int}>
      */
+    /**
+     * Kümülatif hedefe ulaşmak için uygulanacak FARK.
+     *
+     * Satır `findOrFail` ile transaction içinde okunduğu için sayaç günceldir;
+     * eşzamanlı iki iade aynı satırı kilit sırasıyla ilerletir.
+     *
+     * İptal edilmiş adet de düşülür: iade + iptal toplamı satır miktarını
+     * aşamaz (CHECK kısıtı) — aşan fark DB hatası yerine kırpılır.
+     */
+    private function remainingTowards(OrderLine $line, int $target): int
+    {
+        $diff = $target - $line->quantity_returned;
+        $room = $line->quantity - $line->quantity_cancelled - $line->quantity_returned;
+
+        return min($diff, $room);
+    }
+
     private function resolveLines(ReturnEvent $event, Order $order): array
     {
         $lines = OrderLine::query()
@@ -173,6 +191,10 @@ final class ApplyOrderReturn
             ->whereIn('id', $event->orderLineIds())
             ->get()
             ->keyBy('id');
+
+        if ($event->cumulative) {
+            return $this->resolveCumulative($event, $lines);
+        }
 
         $resolved = [];
 
@@ -185,6 +207,43 @@ final class ApplyOrderReturn
             }
 
             $resolved[] = ['line' => $line, 'quantity' => $returned->quantity];
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * Kümülatif mod — hedefler SATIR BAŞINA toplanır, sonra fark alınır.
+     *
+     * ⚠️ TOPLAMA FARKTAN ÖNCE: iki ham kalem aynı satıra eşleşebilir (biri
+     * satır kimliğiyle, biri SKU ile). Fark kalem başına alınsaydı ikisi de
+     * AYNI eski sayaçtan hesaplanır ve satır iki kez ilerlerdi.
+     *
+     * @param  Collection<string, OrderLine>  $lines
+     * @return list<array{line: OrderLine, quantity: int}>
+     */
+    private function resolveCumulative(ReturnEvent $event, $lines): array
+    {
+        $targets = [];
+
+        foreach ($event->lines as $returned) {
+            $targets[$returned->orderLineId] = ($targets[$returned->orderLineId] ?? 0) + $returned->quantity;
+        }
+
+        $resolved = [];
+
+        foreach ($targets as $lineId => $target) {
+            $line = $lines->get($lineId);
+
+            if ($line === null || ! $line->isStockable()) {
+                continue;
+            }
+
+            $quantity = $this->remainingTowards($line, $target);
+
+            if ($quantity > 0) {
+                $resolved[] = ['line' => $line, 'quantity' => $quantity];
+            }
         }
 
         return $resolved;
