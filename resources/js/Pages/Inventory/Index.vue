@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { money as formatMoney } from '../../lib/format.js';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
@@ -65,8 +66,7 @@ function submitAdjust() {
 }
 
 function money(row) {
-    if (row.price === null || row.price === undefined) return '—';
-    return `${row.price} ${row.currency ?? ''}`.trim();
+    return formatMoney(row.price, row.currency);
 }
 </script>
 
@@ -86,7 +86,7 @@ function money(row) {
             Eksik miktar gizlenmez; kırpma yalnızca kanala giden yükte meşru.
         -->
         <div class="mt-6 grid gap-4 sm:grid-cols-3">
-            <StatCard label="Varyant" :value="summary.variantCount" />
+            <StatCard label="Ürün" :value="summary.variantCount" />
 
             <StatCard
                 label="Fazla satılan"
@@ -131,7 +131,7 @@ function money(row) {
                 <input
                     v-model="search"
                     type="search"
-                    placeholder="SKU ara"
+                    placeholder="Ürün adı veya stok kodu"
                     class="w-56 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <button
@@ -170,9 +170,9 @@ function money(row) {
                         >
                             <td class="px-4 py-3">
                                 <!-- SKU bir KİMLİKTİR; kelime ortasından bölünürse okunmaz. -->
-                                <p class="font-mono text-xs whitespace-nowrap text-stone-900">{{ row.sku }}</p>
+                                <p class="text-stone-900">{{ row.title ?? row.sku }}</p>
                                 <p class="mt-0.5 text-xs text-stone-500">
-                                    {{ money(row) }} · {{ row.warehouse ?? '—' }}
+                                    <span class="font-mono whitespace-nowrap">{{ row.sku }}</span> · {{ money(row) }}
                                 </p>
                             </td>
 

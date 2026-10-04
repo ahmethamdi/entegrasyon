@@ -39,7 +39,7 @@ final class CreateTenantTest extends TestCase
         $this->assertTrue($warehouses->first()->is_default);
         $this->assertTrue($warehouses->first()->is_active);
         $this->assertSame(CreateTenant::DEFAULT_WAREHOUSE_CODE, $warehouses->first()->code);
-        $this->assertSame('Default Warehouse', $warehouses->first()->name);
+        $this->assertSame('Ana depo', $warehouses->first()->name);
     }
 
     #[Test]
@@ -91,7 +91,7 @@ final class CreateTenantTest extends TestCase
         $this->asSystem(function () use ($tenant): void {
             Warehouse::firstOrCreate(
                 ['tenant_id' => $tenant->id, 'code' => CreateTenant::DEFAULT_WAREHOUSE_CODE],
-                ['name' => 'Default Warehouse', 'is_default' => true, 'is_active' => true],
+                ['name' => 'Ana depo', 'is_default' => true, 'is_active' => true],
             );
         });
 

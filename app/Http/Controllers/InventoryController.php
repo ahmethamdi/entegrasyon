@@ -110,7 +110,7 @@ final class InventoryController extends Controller
     {
         $query = InventoryLevel::query()
             ->join('variants', 'variants.id', '=', 'inventory_levels.variant_id')
-            ->with(['variant:id,sku,product_id,price,currency', 'warehouse:id,name'])
+            ->with(['variant:id,sku,product_id,price,currency', 'variant.product:id,title', 'warehouse:id,name'])
             ->select('inventory_levels.*');
 
         if ($filter === 'oversold') {
@@ -118,7 +118,16 @@ final class InventoryController extends Controller
         }
 
         if ($search !== '') {
-            $query->whereRaw('variants.sku ILIKE ?', ['%'.$search.'%']);
+            $needle = '%'.$search.'%';
+
+            // Ad da aranır: satıcı "kupa" yazar, stok kodunu ezbere bilmez.
+            $query->where(function (Builder $outer) use ($needle): void {
+                $outer->whereRaw('variants.sku ILIKE ?', [$needle])
+                    ->orWhereExists(fn ($sub) => $sub->selectRaw('1')
+                        ->from('products')
+                        ->whereColumn('products.id', 'variants.product_id')
+                        ->whereRaw('products.title ILIKE ?', [$needle]));
+            });
         }
 
         return $query;
@@ -210,6 +219,8 @@ final class InventoryController extends Controller
             'levelId' => $level->id,
             'variantId' => $level->variant_id,
             'sku' => $level->variant?->sku,
+            // Satıcı ürünü ADIYLA tanır; stok kodu ikincil satırdadır.
+            'title' => $level->variant?->product?->title,
             'price' => $level->variant?->price,
             'currency' => $level->variant?->currency,
             'warehouse' => $level->warehouse?->name,

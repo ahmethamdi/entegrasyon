@@ -66,7 +66,7 @@ final class CreateTenant
                         'code' => self::DEFAULT_WAREHOUSE_CODE,
                     ],
                     [
-                        'name' => 'Default Warehouse',
+                        'name' => 'Ana depo',
                         'is_default' => true,
                         'is_active' => true,
                         'priority' => 0,

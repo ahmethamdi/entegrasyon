@@ -33,7 +33,7 @@ class WarehouseFactory extends Factory
     {
         return $this->state(fn (array $attributes): array => [
             'code' => 'default',
-            'name' => 'Default Warehouse',
+            'name' => 'Ana depo',
             'is_default' => true,
         ]);
     }
