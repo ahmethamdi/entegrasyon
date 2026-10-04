@@ -7,6 +7,7 @@ namespace Tests\Feature\Channels;
 use App\Domain\Catalog\Models\OptionDefinition;
 use App\Domain\Catalog\Models\OptionValue;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Models\VariantOption;
 use App\Domain\Channels\Actions\SaveAttributeMapping;
@@ -59,7 +60,10 @@ final class TrendyolCatalogTest extends TestCase
     #[Test]
     public function the_payload_is_mapped_to_the_channel_format(): void
     {
-        Http::fake(['*' => Http::response(['batchRequestId' => 'b-1'], 200)]);
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 77, 'name' => 'Marka-A'], ['id' => 78, 'name' => 'Marka-A Kids']], 200),
+            '*' => Http::response(['batchRequestId' => 'b-1'], 200),
+        ]);
 
         [$tenant, $connection, $listing] = $this->scenario();
 
@@ -72,6 +76,10 @@ final class TrendyolCatalogTest extends TestCase
         $this->assertTrue($result->successful);
 
         Http::assertSent(function ($request): bool {
+            if (! str_contains($request->url(), '/product/sellers/12345/v2/products')) {
+                return false;
+            }
+
             $item = $request->data()['items'][0] ?? [];
 
             // İÇ kategori adı DEĞİL, kanalın sayısal kimliği gitmeli.
@@ -80,6 +88,18 @@ final class TrendyolCatalogTest extends TestCase
 
             $this->assertSame('SKU-1', $item['barcode'] ?? null);
             $this->assertSame('Yazlık Elbise', $item['title'] ?? null);
+
+            // V2 zorunluları (A11 ④b): eksikse kanal toplu işte reddeder.
+            $this->assertSame(77, $item['brandId'] ?? null, 'Marka TAM eşleşmeyle seçilmeli (Kids değil).');
+            $this->assertSame('SKU-1', $item['productMainId'] ?? null);
+            $this->assertSame(20, $item['vatRate'] ?? null);
+            $this->assertSame(1.0, $item['dimensionalWeight'] ?? null);
+            $this->assertSame([
+                ['url' => 'https://cdn.example.com/kirmizi.jpg'],
+                ['url' => 'https://cdn.example.com/ortak.jpg'],
+            ], $item['images'] ?? null, 'Varyant görseli önce, başka varyantınki hiç.');
+            $this->assertArrayNotHasKey('currencyType', $item);
+            $this->assertArrayNotHasKey('shipmentAddressId', $item);
 
             return true;
         });
@@ -95,7 +115,10 @@ final class TrendyolCatalogTest extends TestCase
     #[Test]
     public function required_attributes_are_translated_from_the_mappings(): void
     {
-        Http::fake(['*' => Http::response(['batchRequestId' => 'b-1'], 200)]);
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 77, 'name' => 'Marka-A'], ['id' => 78, 'name' => 'Marka-A Kids']], 200),
+            '*' => Http::response(['batchRequestId' => 'b-1'], 200),
+        ]);
 
         [$tenant, $connection, $listing] = $this->scenario(withAttributes: true);
 
@@ -105,14 +128,47 @@ final class TrendyolCatalogTest extends TestCase
         $this->asTenant($tenant, fn () => $this->adapter($connection)->createListing($payload));
 
         Http::assertSent(function ($request): bool {
+            if (! str_contains($request->url(), '/v2/products')) {
+                return false;
+            }
+
             $attributes = $request->data()['items'][0]['attributes'] ?? [];
 
             $this->assertSame([
-                ['attributeId' => 'attr-size', 'attributeValueId' => 'v-small'],
+                ['attributeId' => 293, 'attributeValueId' => 4602],
             ], $attributes, 'Öznitelik ve değer KANAL kimlikleriyle gitmeli.');
 
             return true;
         });
+    }
+
+    /**
+     * ONAYSIZ (bekleyen/reddedilmiş) ÜRÜN `unapproved-bulk-update` ile
+     * güncellenir — yaratma uç noktasına ikinci kez GİTMEZ (A11 ④b).
+     */
+    #[Test]
+    public function an_unapproved_product_is_updated_through_its_own_endpoint(): void
+    {
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 77, 'name' => 'Marka-A']], 200),
+            '*/products/approved*' => Http::response(['content' => [], 'totalPages' => 1], 200),
+            '*/products/unapproved-bulk-update' => Http::response(['batchRequestId' => 'u-1'], 200),
+        ]);
+
+        [$tenant, $connection, $listing] = $this->scenario();
+
+        $this->asTenant($tenant, fn () => $listing->forceFill(['external_id' => 'SKU-1'])->save());
+
+        $payload = $this->asTenant($tenant, fn () => app(ListingPayloadBuilder::class)->build($listing, 2));
+
+        $result = $this->asTenant($tenant, fn () => $this->adapter($connection)->updateListing($payload));
+
+        $this->assertSame(['u-1'], $result->data['channel_metadata']['batch_request_ids']);
+
+        Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/products/unapproved-bulk-update')
+            && ($request->data()['items'][0]['barcode'] ?? null) === 'SKU-1'
+            && ($request->data()['items'][0]['brandId'] ?? null) === 77);
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/v2/products'));
     }
 
     /**
@@ -285,6 +341,7 @@ final class TrendyolCatalogTest extends TestCase
                 'tenant_id' => $tenant->id,
                 'sku' => 'SKU-1',
                 'title' => 'Yazlık Elbise',
+                'brand' => 'Marka-A',
                 'internal_category_id' => 'kadin-elbise',
             ]);
 
@@ -295,19 +352,42 @@ final class TrendyolCatalogTest extends TestCase
                 'barcode' => 'SKU-1',
             ]);
 
+            $other = Variant::factory()->create([
+                'tenant_id' => $tenant->id,
+                'product_id' => $product->id,
+                'sku' => 'SKU-2',
+            ]);
+
+            // Ortak görsel, bu varyantın görseli, başka varyantın görseli
+            // ve HTTPS olmayan bir adres.
+            foreach ([
+                ['https://cdn.example.com/ortak.jpg', null, 0],
+                ['https://cdn.example.com/kirmizi.jpg', $variant->id, 5],
+                ['https://cdn.example.com/mavi.jpg', $other->id, 0],
+                ['http://cdn.example.com/guvensiz.jpg', null, 1],
+            ] as [$path, $variantId, $position]) {
+                ProductImage::query()->create([
+                    'tenant_id' => $tenant->id,
+                    'product_id' => $product->id,
+                    'variant_id' => $variantId,
+                    'storage_path' => $path,
+                    'position' => $position,
+                ]);
+            }
+
             if ($withCategoryMapping) {
                 app(SaveCategoryMapping::class)->run('kadin-elbise', $dress);
             }
 
             if ($withAttributes) {
                 $this->asSystem(fn () => ChannelCategoryAttribute::query()->updateOrCreate(
-                    ['channel_category_id' => $dress->id, 'external_attribute_id' => 'attr-size'],
+                    ['channel_category_id' => $dress->id, 'external_attribute_id' => '293'],
                     [
                         'name' => 'Beden',
                         'is_required' => true,
                         'is_variant_defining' => true,
                         'data_type' => 'string',
-                        'allowed_values' => [['id' => 'v-small', 'label' => 'SMALL']],
+                        'allowed_values' => [['id' => '4602', 'label' => 'SMALL']],
                     ],
                 ));
 
@@ -329,11 +409,11 @@ final class TrendyolCatalogTest extends TestCase
                     'option_value_id' => $value->id,
                 ]);
 
-                app(SaveAttributeMapping::class)->run($definition, $dress, 'attr-size');
+                app(SaveAttributeMapping::class)->run($definition, $dress, '293');
                 app(SaveAttributeValueMapping::class)->run(
                     optionValue: $value,
-                    externalAttributeId: 'attr-size',
-                    externalValueId: 'v-small',
+                    externalAttributeId: '293',
+                    externalValueId: '4602',
                     externalValueLabel: 'SMALL',
                 );
             }

@@ -267,7 +267,16 @@ final class PushListing implements ShouldQueue
             return;
         }
 
-        $awaitsApproval = $adapter instanceof SupportsApprovalWorkflow;
+        // ⚠️ ZATEN CANLI SATIR GÜNCELLEMEDE CANLI KALIR (A11 ④b).
+        //
+        // Onaylı bir Trendyol ürününün içeriği güncellenince ürün kanalda
+        // satışta KALIR. Satır `pending_approval`'a düşürülseydi fan-out
+        // hedefinden çıkar ve onay takibi onu yeniden "onaylı" görene kadar
+        // stok GİTMEZDİ — o arada satılan ürün kanalda eski stokla kalır,
+        // fazla satış olurdu. Reddedilmiş ya da bekleyen satır ise yeniden
+        // gönderimde onay beklemeye döner.
+        $awaitsApproval = $adapter instanceof SupportsApprovalWorkflow
+            && $listing->lifecycle_status !== 'live';
 
         $attributes = array_filter([
             'external_id' => (string) $externalId,

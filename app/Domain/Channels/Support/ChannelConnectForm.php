@@ -118,6 +118,41 @@ final class ChannelConnectForm
                         .'Trendyol\'a kayıtlı bir entegratör firmasıysan '
                         .'kayıtlı adını yaz; yanlış ad 403 ile reddedilir.',
                 ],
+                [
+                    'name' => TrendyolAdapter::VAT_RATE_KEY,
+                    'label' => 'Varsayılan KDV oranı (isteğe bağlı)',
+                    'placeholder' => '20',
+                    'optional' => true,
+                    // Trendyol'un kabul ettiği oranlar; başka değer kalıcı
+                    // `VALIDATION` ile reddedilir.
+                    'rules' => ['in:0,1,10,20'],
+                    'hint' => 'Boş bırakırsan %20. Trendyol 0, 1, 10 ve 20 kabul eder.',
+                ],
+                [
+                    'name' => TrendyolAdapter::DIMENSIONAL_WEIGHT_KEY,
+                    'label' => 'Varsayılan desi (isteğe bağlı)',
+                    'placeholder' => '1',
+                    'optional' => true,
+                    'rules' => ['regex:/^[0-9]{1,4}([.,][0-9]{1,2})?$/'],
+                    'hint' => 'Boş bırakırsan 1. Desi hacimden hesaplanır (en × boy × '
+                        .'yükseklik / 3000), ağırlık değildir; kargo ücretini belirler.',
+                ],
+                [
+                    'name' => TrendyolAdapter::SHIPMENT_ADDRESS_KEY,
+                    'label' => 'Sevkiyat adresi kimliği (isteğe bağlı)',
+                    'placeholder' => '',
+                    'optional' => true,
+                    'rules' => ['regex:/^[0-9]+$/'],
+                    'hint' => 'Boş bırakırsan Trendyol\'daki varsayılan sevkiyat adresin kullanılır.',
+                ],
+                [
+                    'name' => TrendyolAdapter::RETURNING_ADDRESS_KEY,
+                    'label' => 'İade adresi kimliği (isteğe bağlı)',
+                    'placeholder' => '',
+                    'optional' => true,
+                    'rules' => ['regex:/^[0-9]+$/'],
+                    'hint' => 'Boş bırakırsan Trendyol\'daki varsayılan iade adresin kullanılır.',
+                ],
             ],
             // ⚠️ HESAP KİMLİĞİ SATICI ID'SİDİR — MAĞAZA ADRESİ SORULMAZ.
             //

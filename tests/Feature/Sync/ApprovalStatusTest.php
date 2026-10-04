@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Sync;
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Actions\SaveCategoryMapping;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
@@ -249,34 +250,18 @@ final class ApprovalStatusTest extends TestCase
                 $tenant, $connection, 'SKU-1', externalId: null, lifecycle: 'draft',
             );
 
-            $listing->variant->product->forceFill([
-                'internal_category_id' => 'kadin-elbise',
-            ])->save();
-
-            app(SaveCategoryMapping::class)->run('kadin-elbise', $dress);
+            $this->makePublishable($tenant, $listing, $dress);
 
             return $listing;
         });
 
-        // GERÇEK İŞ çalıştırılır: özel metoda reflection ile girmek
-        // davranışı değil implementasyonu sınardı.
-        $operation = $this->asTenant($tenant, fn () => app(OpenSyncOperation::class)->run(
-            listing: $listing,
-            domain: SyncDomain::CONTENT,
-            eventVersion: 1,
-        ));
-
         // Kanal ürünü kabul eder ve kimlik döner.
-        Http::fake(['*' => Http::response(['barcode' => 'SKU-1', 'batchRequestId' => 'b-1'], 200)]);
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 77, 'name' => 'Marka-A']], 200),
+            '*' => Http::response(['batchRequestId' => 'b-1'], 200),
+        ]);
 
-        $this->asTenant($tenant, fn () => app(PushListing::class, [
-            'operationId' => $operation->id,
-            'tenantId' => $tenant->id,
-        ])->handle(
-            app(ListingPayloadBuilder::class),
-            app(SyncResultRecorder::class),
-            app(AdapterRegistry::class),
-        ));
+        $this->push($tenant, $listing);
 
         $raw = DB::table('listings')->where('id', $listing->id)->first();
 
@@ -290,6 +275,134 @@ final class ApprovalStatusTest extends TestCase
         $this->assertSame('pending_approval', $raw->lifecycle_status);
         $this->assertNull($raw->listed_at,
             'Yayına giriş tarihi ancak gerçekten yayındayken yazılır.');
+
+        // Toplu iş kimliği SAKLANDI — red ancak onunla okunabilir.
+        $this->assertSame(['b-1'], json_decode($raw->channel_metadata, true)['batch_request_ids'] ?? null);
+    }
+
+    /**
+     * ⚠️ CANLI ÜRÜNÜN GÜNCELLEMESİ ONU CANLIDAN DÜŞÜRMEZ (A11 ④b).
+     *
+     * Düşürseydi onay takibi yeniden "onaylı" görene kadar stok gitmez ve
+     * o arada satılan ürün kanalda eski stokla kalırdı. Onaylı ürün
+     * içerik + varyant uç noktalarından güncellenir (yaratma değil).
+     */
+    #[Test]
+    public function updating_a_live_listing_keeps_it_live(): void
+    {
+        [$tenant] = $this->makeTenant();
+        $connection = $this->connection($tenant);
+        $dress = $this->dressCategory();
+
+        $listing = $this->asTenant($tenant, function () use ($tenant, $connection, $dress): Listing {
+            $listing = $this->listing($tenant, $connection, 'SKU-1', externalId: 'SKU-1', lifecycle: 'live');
+            $this->makePublishable($tenant, $listing, $dress);
+
+            return $listing;
+        });
+
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 77, 'name' => 'Marka-A']], 200),
+            '*/products/approved*' => Http::response(['content' => [[
+                'contentId' => 555, 'variants' => [['barcode' => 'SKU-1', 'onSale' => true]],
+            ]], 'totalPages' => 1], 200),
+            '*/content-bulk-update' => Http::response(['batchRequestId' => 'c-1'], 200),
+            '*/variant-bulk-update' => Http::response(['batchRequestId' => 'v-1'], 200),
+            '*' => Http::response(['errors' => [['message' => 'beklenmeyen uç nokta']]], 400),
+        ]);
+
+        $this->push($tenant, $listing);
+
+        $raw = DB::table('listings')->where('id', $listing->id)->first();
+        $attempt = DB::table('sync_attempts')->orderByDesc('id')->first();
+
+        $this->assertNull($attempt->error_message ?? null, 'Gönderim hata aldı: '.($attempt->error_message ?? ''));
+        $this->assertSame('live', $raw->lifecycle_status);
+
+        Http::assertSent(fn ($request): bool => str_ends_with($request->url(), '/content-bulk-update')
+            && ($request->data()['items'][0]['contentId'] ?? null) === 555);
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/v2/products'));
+
+        $metadata = json_decode($raw->channel_metadata, true);
+        $this->assertSame(['c-1', 'v-1'], $metadata['batch_request_ids'] ?? null);
+    }
+
+    /**
+     * ⚠️ EKSİK VERİ YENİDEN DENENMEZ VE SEBEBİ GÖRÜNÜR.
+     *
+     * Marka Trendyol'da yoksa iş düz `RuntimeException` olsaydı `NETWORK`
+     * sayılır ve 24 saat boyunca boşuna denenirdi.
+     */
+    #[Test]
+    public function a_missing_brand_fails_permanently_with_a_visible_reason(): void
+    {
+        [$tenant] = $this->makeTenant();
+        $connection = $this->connection($tenant);
+        $dress = $this->dressCategory();
+
+        $listing = $this->asTenant($tenant, function () use ($tenant, $connection, $dress): Listing {
+            $listing = $this->listing($tenant, $connection, 'SKU-1', externalId: null, lifecycle: 'draft');
+            $this->makePublishable($tenant, $listing, $dress);
+
+            return $listing;
+        });
+
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 9, 'name' => 'Marka-A Kids']], 200),
+            '*/products/*' => Http::response(['content' => [], 'totalPages' => 1], 200),
+        ]);
+
+        $this->push($tenant, $listing);
+
+        $attempt = DB::table('sync_attempts')->orderByDesc('id')->first();
+        $operation = DB::table('sync_operations')->orderByDesc('id')->first();
+
+        $this->assertStringContainsString('Marka-A Kids', (string) $attempt->error_message);
+        $this->assertSame('dead', $operation->status, 'Eksik veri yeniden denenmemeli.');
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), '/v2/products'));
+    }
+
+    /**
+     * ⚠️ TOPLU İŞTE REDDEDİLEN ÜRÜN "REDDEDİLDİ" GÖRÜNÜR (A11 ④b).
+     *
+     * Kalem hiç ürün olmadığı için iki filtrede de yoktur; toplu iş
+     * sonucu okunmasaydı sonsuza dek "onay bekliyor" kalırdı.
+     */
+    #[Test]
+    public function a_failed_batch_item_is_reported_as_rejected(): void
+    {
+        [$tenant] = $this->makeTenant();
+        $connection = $this->connection($tenant);
+
+        $listings = $this->asTenant($tenant, function () use ($tenant, $connection): array {
+            $failed = $this->listing($tenant, $connection, 'SKU-1', externalId: 'SKU-1', lifecycle: 'pending_approval');
+            $failed->forceFill(['channel_metadata' => ['batch_request_ids' => ['b-fail']]])->save();
+
+            $running = $this->listing($tenant, $connection, 'SKU-2', externalId: 'SKU-2', lifecycle: 'pending_approval');
+            $running->forceFill(['channel_metadata' => ['batch_request_ids' => ['b-run']]])->save();
+
+            $expired = $this->listing($tenant, $connection, 'SKU-3', externalId: 'SKU-3', lifecycle: 'pending_approval');
+            $expired->forceFill(['channel_metadata' => ['batch_request_ids' => ['b-old']]])->save();
+
+            return [$failed, $running, $expired];
+        });
+
+        Http::fake([
+            '*/products/approved*' => Http::response(['content' => [], 'totalPages' => 1], 200),
+            '*/products/unapproved*' => Http::response(['content' => [], 'totalPages' => 1], 200),
+            '*/batch-requests/b-fail' => Http::response(['status' => 'COMPLETED', 'items' => [
+                ['status' => 'FAILED', 'failureReasons' => ['Görsel 1200x1800 olmalı', 'Menşei zorunlu']],
+            ]], 200),
+            '*/batch-requests/b-run' => Http::response(['status' => 'IN_PROGRESS', 'items' => []], 200),
+            '*/batch-requests/b-old' => Http::response([], 404),
+        ]);
+
+        $batch = $this->adapter($connection)->fetchApprovalStatus($listings);
+
+        $this->assertSame('rejected', $batch->statusFor('SKU-1')['status']);
+        $this->assertSame('Görsel 1200x1800 olmalı · Menşei zorunlu', $batch->statusFor('SKU-1')['reason']);
+        $this->assertNull($batch->statusFor('SKU-2'), 'Süren iş için durum uydurulmamalı.');
+        $this->assertNull($batch->statusFor('SKU-3'), 'Süresi dolan iş red sayılmamalı.');
     }
 
     // ═══════════════════════════════════════════════ durum yazımı
@@ -651,6 +764,50 @@ final class ApprovalStatusTest extends TestCase
             'lifecycle_status' => $lifecycle,
             'approval_rejection_reason' => $rejectionReason,
         ]);
+    }
+
+    private function dressCategory(): ChannelCategory
+    {
+        return $this->asSystem(fn () => ChannelCategory::query()->updateOrCreate(
+            ['channel_type_code' => 'trendyol', 'taxonomy_version' => 'v1', 'external_id' => '11'],
+            ['name' => 'Elbise', 'path' => 'Giyim > Elbise', 'is_leaf' => true],
+        ));
+    }
+
+    /** Ürünü gönderilebilir yapar: kategori eşleştirmesi, marka, görsel. */
+    private function makePublishable(Tenant $tenant, Listing $listing, ChannelCategory $category): void
+    {
+        $product = $listing->variant->product;
+
+        $product->forceFill(['internal_category_id' => 'kadin-elbise', 'brand' => 'Marka-A'])->save();
+
+        ProductImage::query()->create([
+            'tenant_id' => $tenant->id,
+            'product_id' => $product->id,
+            'storage_path' => 'https://cdn.example.com/1.jpg',
+            'position' => 0,
+        ]);
+
+        app(SaveCategoryMapping::class)->run('kadin-elbise', $category);
+    }
+
+    /** GERÇEK İŞ çalıştırılır — özel metoda girmek implementasyonu sınardı. */
+    private function push(Tenant $tenant, Listing $listing): void
+    {
+        $operation = $this->asTenant($tenant, fn () => app(OpenSyncOperation::class)->run(
+            listing: $listing,
+            domain: SyncDomain::CONTENT,
+            eventVersion: 1,
+        ));
+
+        $this->asTenant($tenant, fn () => app(PushListing::class, [
+            'operationId' => $operation->id,
+            'tenantId' => $tenant->id,
+        ])->handle(
+            app(ListingPayloadBuilder::class),
+            app(SyncResultRecorder::class),
+            app(AdapterRegistry::class),
+        ));
     }
 
     /**

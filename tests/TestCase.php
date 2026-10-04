@@ -7,6 +7,7 @@ namespace Tests;
 use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -17,6 +18,14 @@ abstract class TestCase extends BaseTestCase
         // Her test temiz bağlamla başlar. TenantContext statik olduğu için
         // testler arası sızıntı da bir risktir.
         TenantContext::clear();
+
+        // ⚠️ TEST GERÇEK KANALA İSTEK ATAMAZ (A11 ④b'de bulundu).
+        //
+        // Sahte yanıt tanımı bir uç noktayı kapsamayınca istek SESSİZCE
+        // gerçek `apigw.trendyol.com`'a gitmiş ve 401 almıştı. Hem dışarıya
+        // anahtar sızdırma riski hem de ağa bağlı, kırılgan test demekti.
+        // Eşleşmeyen istek artık testi düşürür.
+        Http::preventStrayRequests();
     }
 
     protected function tearDown(): void

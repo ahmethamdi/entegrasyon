@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Trendyol;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\Trendyol\Catalog\ListingContext;
 use App\Domain\Channels\Adapters\Trendyol\Catalog\ListingMapper;
 use App\Domain\Channels\Adapters\Trendyol\Taxonomy\TaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
@@ -18,6 +19,7 @@ use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
+use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Messaging\Models\InboxMessage;
@@ -39,6 +41,7 @@ use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 use Throwable;
 
@@ -107,6 +110,27 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      * Kayıtlı entegratör olunca firma adı formdan girilir.
      */
     public const DEFAULT_INTEGRATOR_NAME = 'SelfIntegration';
+
+    /** KDV oranı ayarı (%); Trendyol 0, 1, 10, 20 kabul eder. */
+    public const VAT_RATE_KEY = 'vat_rate';
+
+    public const DEFAULT_VAT_RATE = 20;
+
+    /** Desi ayarı — hacimsel ağırlık, gerçek ağırlık DEĞİL. */
+    public const DIMENSIONAL_WEIGHT_KEY = 'dimensional_weight';
+
+    public const DEFAULT_DIMENSIONAL_WEIGHT = 1.0;
+
+    /**
+     * Sevkiyat / iade adresi kimlikleri. Boşsa GÖNDERİLMEZ ve Trendyol
+     * satıcının varsayılan adresini kullanır (gerçek hesapta doğrulanacak).
+     */
+    public const SHIPMENT_ADDRESS_KEY = 'shipment_address_id';
+
+    public const RETURNING_ADDRESS_KEY = 'returning_address_id';
+
+    /** Marka kimliği önbelleği — markalar nadiren değişir. */
+    private const BRAND_CACHE_SECONDS = 86_400;
 
     /** Üretim entegrasyon adresi (apigw). Eski `sapigw` kapatıldı. */
     public const BASE_URL = 'https://apigw.trendyol.com/integration';
@@ -284,6 +308,12 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         // sürüme ve dile göre değişir ve ikisi aynı politikaya tabidir).
         if ($e instanceof ConnectionException) {
             return ErrorClass::NETWORK;
+        }
+
+        // Eksik VERİ (marka yok, görsel yok, kategori eşleşmemiş): satıcı
+        // düzeltene kadar yeniden denemek boşunadır ve sebebi geciktirir.
+        if ($e instanceof ListingNotPublishable) {
+            return ErrorClass::VALIDATION;
         }
 
         if (! $e instanceof RequestException) {
@@ -681,59 +711,169 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     // ------------------------------------------------------------- katalog
 
     /**
-     * Ürünü kanala aktarır.
+     * Ürünü kanala aktarır — Product V2 `v2/products`.
      *
      * TRENDYOL ÜRÜN YARATMAYI ASENKRON YAPAR: yanıt `batchRequestId`
      * döner, ürün kimliği DEĞİL. Kimlik BARKODDUR ve onu biz belirleriz —
-     * bu yüzden `external_id` yükten okunur, yanıttan değil. Batch
-     * kimliğini `external_id` sanmak, sonraki güncellemede var olmayan bir
-     * ürünü aramak demekti.
+     * bu yüzden `external_id` yükten okunur, yanıttan değil.
      *
-     * BAŞARISIZLIKTA İSTİSNA FIRLATILIR, `failure()` DÖNMEZ (§7):
-     *   sınıflandırma ve yeniden deneme kararı `PushListing`'deki tek
-     *   try/catch'te toplanır.
+     * ⚠️ TOPLU İŞ KİMLİĞİ SAKLANIR (`channel_metadata.batch_request_ids`).
+     * Kanal kalemi toplu işin İÇİNDE reddederse HTTP yanıtı yine 200'dür;
+     * kimlik saklanmasaydı red hiçbir yerde görünmez ve ürün sonsuza dek
+     * "onay bekliyor" kalırdı. Onay takibi bu kimlikle sonucu okur.
+     *
+     * BAŞARISIZLIKTA İSTİSNA FIRLATILIR, `failure()` DÖNMEZ (§7).
      */
     public function createListing(ListingPayload $payload): AdapterResult
     {
-        $item = (new ListingMapper)->toChannelItem($payload);
+        $mapper = new ListingMapper;
+        $item = $mapper->toChannelItem($payload, $this->listingContext($payload, $mapper));
 
-        $response = $this->post(
-            $this->sellerUrl('product', 'v2/products'),
-            ['items' => [$item]],
-        );
+        $response = $this->post($this->sellerUrl('product', 'v2/products'), ['items' => [$item]]);
 
         $response->throw();
 
+        return $this->batchResult($item['barcode'], [$response->json('batchRequestId')]);
+    }
+
+    /**
+     * Var olan ürünü günceller — ürünün DURUMUNA göre farklı uç nokta.
+     *
+     * Onaylı ürün: içerik `content-bulk-update` (contentId ile) + varyant
+     * alanları `variant-bulk-update` (barkod ile). Onaysız (bekleyen ya da
+     * reddedilmiş) ürün: `unapproved-bulk-update`, yaratmayla aynı gövde.
+     *
+     * V1 kodu güncellemeyi YARATMA uç noktasına yolluyordu; V2'de aynı
+     * barkodla ikinci yaratma kalıcı hata verir.
+     */
+    public function updateListing(ListingPayload $payload): AdapterResult
+    {
+        $mapper = new ListingMapper;
+        $context = $this->listingContext($payload, $mapper);
+        $variantItem = $mapper->toVariantUpdate($payload, $context);
+        $barcode = (string) ($payload->listing->external_id ?? $variantItem['barcode']);
+
+        $approved = $this->approvedVariants([$barcode])[$barcode] ?? null;
+
+        if ($approved !== null && $approved['content_id'] !== null) {
+            $content = $this->post(
+                $this->sellerUrl('product', 'products/content-bulk-update'),
+                ['items' => [$mapper->toContentUpdate($payload, (int) $approved['content_id'])]],
+            );
+            $content->throw();
+
+            $variant = $this->post(
+                $this->sellerUrl('product', 'products/variant-bulk-update'),
+                ['items' => [[...$variantItem, 'barcode' => $barcode]]],
+            );
+            $variant->throw();
+
+            return $this->batchResult(
+                $barcode,
+                [$content->json('batchRequestId'), $variant->json('batchRequestId')],
+                ['content_id' => $approved['content_id']],
+            );
+        }
+
+        $item = [...$mapper->toChannelItem($payload, $context), 'barcode' => $barcode];
+
+        $response = $this->post($this->sellerUrl('product', 'products/unapproved-bulk-update'), ['items' => [$item]]);
+
+        $response->throw();
+
+        return $this->batchResult($barcode, [$response->json('batchRequestId')]);
+    }
+
+    /**
+     * @param  list<mixed>  $batchIds
+     * @param  array<string, mixed>  $metadata
+     */
+    private function batchResult(string $barcode, array $batchIds, array $metadata = []): AdapterResult
+    {
+        $batchIds = array_values(array_filter(
+            array_map(static fn (mixed $id): string => is_scalar($id) ? (string) $id : '', $batchIds),
+            static fn (string $id): bool => $id !== '',
+        ));
+
         return AdapterResult::success([
             // Kimlik BARKODDUR — yanıttaki batch kimliği değil.
-            'external_id' => $item['barcode'],
-            'batch_request_id' => $response->json('batchRequestId'),
+            'external_id' => $barcode,
+            'batch_request_id' => $batchIds[0] ?? null,
+            // SON gönderimin toplu işleri: eski kimlikler EZİLİR, çünkü
+            // onay takibi yalnızca güncel gönderimin sonucunu sormalı.
+            'channel_metadata' => [...$metadata, 'batch_request_ids' => $batchIds],
         ]);
     }
 
     /**
-     * Var olan ürünü günceller.
-     *
-     * Trendyol'da güncelleme AYRI bir uç noktadır (`v2/products` PUT
-     * değil, `v2/products/price-and-inventory` de değil): içerik
-     * güncellemesi `v2/products` üzerinden aynı barkodla yapılır ve kanal
-     * onu güncelleme sayar.
+     * Ürün yükünün katalog dışı kısmı: kanaldaki marka kimliği ve bağlantı
+     * ayarları (KDV, desi, adresler).
      */
-    public function updateListing(ListingPayload $payload): AdapterResult
+    private function listingContext(ListingPayload $payload, ListingMapper $mapper): ListingContext
     {
-        $item = (new ListingMapper)->toChannelItem($payload);
+        $settings = $this->connection->settings ?? [];
 
-        $response = $this->post(
-            $this->sellerUrl('product', 'v2/products'),
-            ['items' => [$item]],
+        $vatRate = $settings[self::VAT_RATE_KEY] ?? null;
+        // Türkçe ondalık virgülü: "1,5" sessizce varsayılana düşmemeli.
+        $weight = str_replace(',', '.', (string) ($settings[self::DIMENSIONAL_WEIGHT_KEY] ?? ''));
+        $shipment = $settings[self::SHIPMENT_ADDRESS_KEY] ?? null;
+        $returning = $settings[self::RETURNING_ADDRESS_KEY] ?? null;
+
+        return new ListingContext(
+            brandId: $this->brandId($mapper->brandName($payload)),
+            vatRate: is_numeric($vatRate) ? (int) $vatRate : self::DEFAULT_VAT_RATE,
+            dimensionalWeight: is_numeric($weight) && (float) $weight > 0
+                ? (float) $weight
+                : self::DEFAULT_DIMENSIONAL_WEIGHT,
+            shipmentAddressId: is_numeric($shipment) ? (int) $shipment : null,
+            returningAddressId: is_numeric($returning) ? (int) $returning : null,
         );
+    }
+
+    /**
+     * Marka ADINDAN Trendyol marka kimliği (`product/brands/by-name`).
+     *
+     * ⚠️ TAM EŞLEŞME, harf duyarlı (kanal da öyle arar). "Nike" için
+     * "Nike Kids" seçilseydi ürün YANLIŞ markayla açılır ve marka
+     * onaydan sonra değiştirilemez. Bulunamazsa ürün durur ve satıcı
+     * kanaldaki adayları görür.
+     *
+     * Yalnızca BULUNAN kimlik önbelleğe alınır: "yok" önbelleklenseydi
+     * satıcı markayı Trendyol'a başvurup açtırdıktan sonra bir gün boyunca
+     * hâlâ "yok" görürdü.
+     */
+    private function brandId(string $name): int
+    {
+        $cacheKey = 'trendyol:brand:'.sha1($name);
+        $cached = Cache::get($cacheKey);
+
+        if (is_int($cached)) {
+            return $cached;
+        }
+
+        $response = $this->get(self::baseUrl().'/product/brands/by-name', ['name' => $name]);
 
         $response->throw();
 
-        return AdapterResult::success([
-            'external_id' => $payload->listing->external_id ?? $item['barcode'],
-            'batch_request_id' => $response->json('batchRequestId'),
-        ]);
+        $candidates = [];
+
+        foreach ((array) $response->json() as $brand) {
+            if (! is_array($brand) || ! isset($brand['id'], $brand['name'])) {
+                continue;
+            }
+
+            if ((string) $brand['name'] === $name) {
+                Cache::put($cacheKey, (int) $brand['id'], self::BRAND_CACHE_SECONDS);
+
+                return (int) $brand['id'];
+            }
+
+            $candidates[] = (string) $brand['name'];
+        }
+
+        throw new ListingNotPublishable($candidates === []
+            ? "\"{$name}\" markası Trendyol'da yok; markayı Trendyol satıcı panelinden açtırmanız gerekir."
+            : "\"{$name}\" markası Trendyol'da birebir bulunamadı. Benzerleri: ".implode(', ', array_slice($candidates, 0, 5)).'. Üründeki marka adını bunlardan biriyle aynı yazın.');
     }
 
     public function delist(Listing $listing): AdapterResult
@@ -1117,7 +1257,75 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
             }
         }
 
+        // ⚠️ TOPLU İŞTE REDDEDİLEN KALEM ÜRÜN OLARAK HİÇ OLUŞMAZ ve iki
+        // filtrede de görünmez. Sonucu okunmasaydı satıcı "onay bekliyor"
+        // yazısına sonsuza dek bakardı (A11 ④b).
+        foreach ($listings as $listing) {
+            $barcode = (string) $listing->external_id;
+
+            if ($barcode === '' || isset($statuses[$barcode])) {
+                continue;
+            }
+
+            $failure = $this->batchFailure((array) ($listing->channel_metadata['batch_request_ids'] ?? []));
+
+            if ($failure !== null) {
+                $statuses[$barcode] = ['status' => 'rejected', 'reason' => $failure];
+            }
+        }
+
         return new ApprovalStatusBatch($statuses, new DateTimeImmutable);
+    }
+
+    /**
+     * Toplu işlerin başarısız kalem sebepleri; hepsi başarılı ya da henüz
+     * bitmemişse null.
+     *
+     * Kanal sonucu sınırlı süre saklar (ürün işlerinde ~4 saat): süresi
+     * dolmuş iş 404 döner ve "bilinmiyor" sayılır — red UYDURULMAZ.
+     *
+     * @param  list<mixed>  $batchIds
+     */
+    private function batchFailure(array $batchIds): ?string
+    {
+        $reasons = [];
+
+        foreach ($batchIds as $batchId) {
+            if (! is_scalar($batchId) || (string) $batchId === '') {
+                continue;
+            }
+
+            $response = $this->get($this->sellerUrl('product', 'products/batch-requests/'.rawurlencode((string) $batchId)));
+
+            if ($response->status() === 404) {
+                continue;
+            }
+
+            $response->throw();
+
+            if ($response->json('status') !== 'COMPLETED') {
+                continue;
+            }
+
+            foreach ((array) ($response->json('items') ?? []) as $item) {
+                if (! is_array($item) || ($item['status'] ?? null) !== 'FAILED') {
+                    continue;
+                }
+
+                foreach ((array) ($item['failureReasons'] ?? []) as $reason) {
+                    if (is_string($reason) && $reason !== '') {
+                        $reasons[] = $reason;
+                    }
+                }
+
+                // Sebepsiz başarısızlık da başarısızlıktır.
+                if ($reasons === []) {
+                    $reasons[] = 'Trendyol toplu işi kalemi reddetti (sebep belirtilmedi).';
+                }
+            }
+        }
+
+        return $reasons === [] ? null : implode(' · ', array_unique($reasons));
     }
 
     /**
