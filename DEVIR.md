@@ -1,3 +1,52 @@
+# Devir Notu — 4 Ekim 2026 (YAYIN ÖNCESİ DÜZELTMELER · A1–A10 KAPANDI)
+
+Kullanıcı kararı: **önce bu proje yayına, sonra Peaksite.** Kod denetiminde
+testlerin göremediği "sessiz başarı" hataları bulundu ve kapatıldı. Her
+düzeltme ayrı commit, her yeni test mutasyonla doğrulandı. **1470 test yeşil.**
+
+| # | Ne | Commit |
+|---|---|---|
+| A1 | Adapter'ın DÖNDÜRDÜĞÜ failure() başarı sayılıyordu → `AdapterReportedFailure` | `7c82715` |
+| A2 | Hata alan inbox mesajı kayboluyordu → pending'e döner, takılı processing geri alınır, `inbox_failed` metriği | `55ce589` |
+| A3 | 401 devreyi sonsuza kadar açıyordu → `CredentialVault::store` + sağlık kontrolü sıfırlar | `30e3676` |
+| A4 | Woo kısmi iadesi tüm siparişi stoğa ekliyordu → `orders/{id}/refunds` + `ReturnEvent::$cumulative` | `69f059e` |
+| CI | Dependency audit: commonmark/flysystem/laravel/axios güncellendi | `577ffee` |
+| A5 | Shopify THROTTLED kalıcı sayılıyordu → geçici + `CarriesRetryAfter` + kova gözetimi | `7297de1` |
+| A6 | Shopify update `productSet` kardeş varyantları silecekti → `productUpdate` + `productVariantsBulkUpdate`; benimsemede üst kimlik (Etsy de) | `0e06a52` |
+| A7 | Woo `products/batch` kalem hataları okunmuyordu → partial | `0d4632d` |
+| A8 | Fiyat resync ürün sürümünü yazıyordu → varyant sürümü + PushPrices dispatch | `8710b5c` |
+| A9 | Ölen push işi operasyonu asılı bırakıyordu → `retryUntil` 24 sa + `failed()` → DEAD | `0b591e3` |
+| A10 | İptal/iade kalana kırpılmıyordu; Shopify `no_restock` stoğa ekleniyordu | `1eb64c5` |
+
+## 🌅 SIRADAKİ İŞ — A11 TRENDYOL (KULLANICI ONAYLADI)
+
+**Trendyol bugün HİÇ ÇALIŞMIYOR** (testler ayarları elle kurduğu için görünmedi):
+1. Panelden bağlanamaz: `ChannelConnectForm` Trendyol `identity: []` — `supplier_id` yok;
+   taban adres `StoreUrl::parse` ile üretiliyor ve sonuna `/wp-json/wc/v3` ekleniyor.
+2. `User-Agent` hiç gönderilmiyor → Trendyol 403. Biçim `{sellerId} - {ad}`;
+   ad AYARLANABİLİR olacak, varsayılan `SelfIntegration` (entegratör kaydı kullanıcıda).
+3. Yollar eski (`sapigw` + `suppliers/{id}/...`). Yeni taban `https://apigw.trendyol.com/integration`:
+   stok-fiyat `inventory/sellers/{id}/products/price-and-inventory` · ürün `product/sellers/{id}/...`
+   (V2: `v2/products`, `products/approved`, `content-bulk-update`, `variant-bulk-update`) ·
+   batch `product/sellers/{id}/products/batch-requests/{bid}` · kategori `product/product-categories`,
+   V2 öznitelik `product/categories/{id}/attributes` · adres `sellers/{id}/addresses` ·
+   sipariş `order/sellers/{id}/v2/orders` (size ≤ 200, `orderByField=PackageLastModifiedDate`,
+   alanlar `shipmentPackageId` / `lineId` / `stockCode`; olay kimliği PAKET bazlı olmalı).
+4. **Product V1 kapanıyor** (doküman 10 Ağu / 15 Eki 2026 diyor, çelişkili) → V2 göçü.
+
+Sıra: ① form + taban adres ② User-Agent ③ yollar + sipariş alanları ④ V1→V2.
+**Gerçek Trendyol API anahtarı kullanıcıdan istenecek** — doğrulama onsuz yapılamaz.
+
+## Sonraki maddeler
+- A12 eşleşmeyen sipariş satırları (SKU sonradan gelince stok hiç düşmüyor) · A13 `LockInventoryRows` insert sırası
+- B: Stripe yükseltmede çift abonelik · içe aktarma kotayı atlıyor · SSRF (StoreUrl iç ağ) ·
+  kayıt hız sınırı/e-posta doğrulama/şifre sıfırlama · **yerel `.env`'de sk_live — kullanıcı döndürmeli**
+- C: üretim altyapısı (worker/Horizon/scheduler, Redis parola, deploy) · D: gerçek hesap pilotu
+- Yan bulgu: `pushFulfillment` hiçbir akıştan çağrılmıyor (kargo bildirimi bağlı değil)
+- Shopify mutation biçimleri (A6) gerçek mağazada doğrulanmalı (dev store)
+
+---
+
 # Devir Notu — 29 Ağustos 2026 (V3.0 · **eBay 4.1–4.6 KAPANDI**)
 
 Kod tarafında yarım iş YOK; çalışma ağacı temiz.
