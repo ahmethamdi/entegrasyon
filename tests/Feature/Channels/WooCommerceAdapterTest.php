@@ -20,6 +20,7 @@ use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\InventoryPushItem;
 use App\Support\Logging\PayloadRedactor;
@@ -105,6 +106,44 @@ final class WooCommerceAdapterTest extends TestCase
 
             return true;
         });
+    }
+
+    /**
+     * ⚠️ TOPLU UÇ 200 DÖNSE DE KALEM HATASI OKUNUR.
+     *
+     * Woo `products/batch` her durumda 200 döner; silinmiş ürün
+     * `update[i].error` altında gelir. Önceden yanıta bakılmıyordu ve o
+     * kalem "senkron" damgası yiyordu. Eşleştirme KİMLİKLE yapılır:
+     * hata sırası gönderim sırasından farklı olsa da doğru operasyona yazılır.
+     */
+    #[Test]
+    public function an_item_error_in_a_200_batch_response_fails_only_that_operation(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        Http::fake(['*' => Http::response(['update' => [
+            ['id' => 202, 'error' => ['code' => 'woocommerce_rest_product_invalid_id', 'message' => 'Invalid ID.', 'data' => ['status' => 400]]],
+            ['id' => 101, 'stock_quantity' => 9],
+        ]], 200)]);
+
+        $operationA = (new SyncOperation)->forceFill(['id' => 'op-a', 'entity_id' => 'l1']);
+        $operationB = (new SyncOperation)->forceFill(['id' => 'op-b', 'entity_id' => 'l2']);
+
+        $batch = new InventoryPushBatch(
+            channelConnectionId: $connection->id,
+            items: [
+                new InventoryPushItem('l1', '101', 'SKU-A', quantity: 9, version: 1),
+                new InventoryPushItem('l2', '202', 'SKU-B', quantity: 4, version: 1),
+            ],
+            operations: [$operationA, $operationB],
+        );
+
+        $result = $this->asTenant($tenant, fn () => $this->adapterFor($connection)->pushInventory($batch));
+
+        $this->assertTrue($result->successful, 'Kanal cevap verdi — sonuç kısmi başarıdır, devre açılmamalı.');
+        $this->assertSame(['op-b'], array_keys($result->failedOperations));
+        $this->assertStringContainsString('invalid_id', $result->failedOperations['op-b']);
+        $this->assertSame(ErrorClass::VALIDATION, $result->errorClass);
     }
 
     /**

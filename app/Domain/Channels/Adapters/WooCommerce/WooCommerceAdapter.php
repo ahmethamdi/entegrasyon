@@ -24,6 +24,7 @@ use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
@@ -39,6 +40,7 @@ use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Throwable;
 
 /**
@@ -136,10 +138,7 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
         // deneme kararı iş tarafındaki tek try/catch'te toplanır (§12).
         $response->throw();
 
-        return AdapterResult::success([
-            'pushed' => $batch->count(),
-            'updated' => count((array) $response->json('update', [])),
-        ]);
+        return $this->batchResult($response, $batch->toArray(), $batch->operations());
     }
 
     /**
@@ -205,7 +204,79 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
 
         $response->throw();
 
-        return AdapterResult::success(['pushed' => $batch->count()]);
+        return $this->batchResult($response, $batch->items, $batch->operations());
+    }
+
+    /**
+     * `products/batch` yanıtını KALEM KALEM okur.
+     *
+     * ⚠️ WOO TOPLU UÇ NOKTASI HER DURUMDA 200 DÖNER. Hatalı kalem
+     * `update[i].error` altında gelir (`woocommerce_rest_product_invalid_id`
+     * — ürün silinmiş, kimlik yanlış). Önceden yanıta hiç bakılmıyordu:
+     * kanala gitmeyen kalem "senkron" damgası yer, `synced_version`
+     * ilerlerdi (Shopify P0-1'in Woo karşılığı).
+     *
+     * EŞLEŞTİRME KİMLİKLEDİR, SIRAYLA DEĞİL (§13.4): Woo hatalı kalemde de
+     * `id`'yi geri yazar; o kimlik yükteki `external_id` → listing →
+     * operasyon zinciriyle bağlanır.
+     *
+     * @param  list<array<string, mixed>>  $items  Yük kalemleri (`external_id`, `listing_id`)
+     * @param  list<SyncOperation>  $operations
+     */
+    private function batchResult(Response $response, array $items, array $operations): AdapterResult
+    {
+        $operationByListing = [];
+
+        foreach ($operations as $operation) {
+            $operationByListing[(string) $operation->entity_id] = $operation;
+        }
+
+        $operationByExternalId = [];
+
+        foreach ($items as $item) {
+            $operation = $operationByListing[(string) ($item['listing_id'] ?? '')] ?? null;
+
+            if ($operation !== null) {
+                $operationByExternalId[(string) (int) $item['external_id']] = $operation;
+            }
+        }
+
+        $failed = [];
+
+        foreach ((array) $response->json('update', []) as $entry) {
+            if (! is_array($entry) || ! isset($entry['error'])) {
+                continue;
+            }
+
+            $operation = $operationByExternalId[(string) (int) ($entry['id'] ?? 0)] ?? null;
+
+            if ($operation === null) {
+                continue;               // yükte olmayan kimliğe dokunulmaz
+            }
+
+            $error = is_array($entry['error']) ? $entry['error'] : [];
+
+            $failed[$operation->id] = trim(sprintf(
+                'Woo ürün %s: %s %s',
+                (string) ($entry['id'] ?? '?'),
+                (string) ($error['code'] ?? ''),
+                (string) ($error['message'] ?? 'kalem reddedildi'),
+            ));
+        }
+
+        $sent = count($items);
+
+        if ($failed === []) {
+            return AdapterResult::success(['pushed' => $sent]);
+        }
+
+        return AdapterResult::partial(
+            failedOperations: $failed,
+            data: ['pushed' => $sent - count($failed)],
+            // Kalem hatası (silinmiş ürün, geçersiz kimlik) yeniden denemeyle
+            // DÜZELMEZ — eBay'deki kuralın aynısı.
+            errorClass: ErrorClass::VALIDATION,
+        );
     }
 
     /** @param list<Listing> $listings */

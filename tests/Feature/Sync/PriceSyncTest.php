@@ -636,6 +636,41 @@ final class PriceSyncTest extends TestCase
     }
 
     /**
+     * GERÇEK Woo adapter'ı: toplu yanıttaki kalem hatası YALNIZCA o
+     * operasyonu öldürür, öteki tamamlanır ve sürümü ilerler.
+     */
+    #[Test]
+    public function a_woo_batch_item_error_kills_only_its_own_operation(): void
+    {
+        [$tenant, $product, $variant] = $this->makeProduct(price: 100.00, withVariant: true);
+
+        $other = $this->asTenant($tenant, fn () => Variant::factory()->create([
+            'product_id' => $product->id, 'price' => 50.00, 'content_version' => 1,
+        ]));
+
+        Http::fake(['*products/batch*' => Http::response(['update' => [
+            ['id' => 11, 'regular_price' => '100.00'],
+            ['id' => 12, 'error' => ['code' => 'woocommerce_rest_product_invalid_id', 'message' => 'Invalid ID.']],
+        ]], 200)]);
+
+        [$okId, $badId] = $this->asTenant($tenant, function () use ($tenant, $variant, $other): array {
+            $connectionId = ChannelConnection::factory()->create()->id;
+
+            $ok = $this->openPriceOperation($tenant, $this->listingFor($variant, externalId: '11', connectionId: $connectionId));
+            $bad = $this->openPriceOperation($tenant, $this->listingFor($other, externalId: '12', connectionId: $connectionId));
+
+            return [$ok->id, $bad->id];
+        });
+
+        $this->runPriceJob($tenant, $okId);
+
+        $status = fn (string $id): SyncOperationStatus => $this->asTenant($tenant, fn () => SyncOperation::query()->findOrFail($id))->status;
+
+        $this->assertSame(SyncOperationStatus::COMPLETED, $status($okId));
+        $this->assertSame(SyncOperationStatus::DEAD, $status($badId), 'Silinmiş ürün senkron sayılmamalı.');
+    }
+
+    /**
      * FİYAT İŞİ HORIZON'UN DİNLEDİĞİ KUYRUĞA ATILIR.
      *
      * BU TESTİN VARLIK NEDENİ: kuyruk adı uydurulursa iş Redis'e yazılır ve
