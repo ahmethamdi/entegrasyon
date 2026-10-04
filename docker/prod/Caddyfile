@@ -1,0 +1,42 @@
+# Üretim web sunucusu — TLS sertifikasını Caddy kendisi alır ve yeniler
+# (Let's Encrypt). APP_DOMAIN alan adının A kaydı sunucuya bakmalıdır.
+{
+	email {$ACME_EMAIL}
+}
+
+{$APP_DOMAIN} {
+	root * /var/www/html/public
+
+	# GÖVDE SINIRI YOLA GÖRE (§11): webhook'lar 1 MB, panel (CSV içe
+	# aktarma) 20 MB. Tek bir 1 MB sınırı CSV yüklemesini PHP'ye ulaşmadan
+	# 413 ile düşürüyordu.
+	@webhooks path /webhooks/*
+	request_body @webhooks {
+		max_size 1MB
+	}
+	request_body {
+		max_size 21MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Gizli dosyalar (.env, .git) asla sunulmaz — .well-known hariç (ACME).
+	# Go regexp'i lookahead desteklemez; `not` ile yazılır.
+	@hidden {
+		path */.*
+		not path /.well-known/*
+	}
+	respond @hidden 404
+
+	encode zstd gzip
+	php_fastcgi app:9000 {
+		root /var/www/html/public
+	}
+	file_server
+}

@@ -1,0 +1,118 @@
+# Üretim — tek sunucu, Docker Compose. Sağlayıcıdan bağımsız (Hetzner,
+# DigitalOcean veya herhangi bir Linux VPS). Kurulum: docs/URETIM-KURULUM.md
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# SÜREÇLER (§12, §15):
+#   web        Caddy — TLS, statik dosyalar, PHP'ye aktarma
+#   app        php-fpm — panel ve webhook'lar
+#   horizon    kuyruk işçileri (config/horizon.php havuzları)
+#   scheduler  zamanlanmış taramalar (routes/console.php)
+#   relay      outbox:relay — SÜREKLİ süreç; zamanlanmaz (routes/console.php)
+#   postgres, redis — DIŞARIYA PORT AÇILMAZ
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: docker/prod/Dockerfile
+    target: app
+  image: entegrasyon-app:latest
+  restart: unless-stopped
+  env_file: .env.production
+  volumes:
+    - storage:/var/www/html/storage
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  networks: [internal]
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: docker/prod/Dockerfile
+      target: web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN gerekli}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL gerekli}
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [app]
+    networks: [internal]
+
+  app:
+    <<: *app
+
+  horizon:
+    <<: *app
+    command: ["php", "artisan", "horizon"]
+    # Horizon kendi işçilerini yönetir; dağıtımda `horizon:terminate`
+    # ile zarifçe yeniden başlar (deploy.sh).
+    stop_grace_period: 90s
+
+  scheduler:
+    <<: *app
+    command: ["php", "artisan", "schedule:work"]
+
+  relay:
+    <<: *app
+    command: ["php", "artisan", "outbox:relay"]
+    stop_grace_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-entegrasyon}
+      POSTGRES_USER: ${DB_USERNAME:-entegrasyon}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD gerekli}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-entegrasyon} -d ${DB_DATABASE:-entegrasyon}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Kuyruk işleri kalıcı: appendonly + noeviction (§15). Parola ZORUNLU
+    # (güvenlik listesi madde 10) ve port dışarı AÇILMAZ.
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD gerekli}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks: [internal]
+
+volumes:
+  storage:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:
+    driver: bridge

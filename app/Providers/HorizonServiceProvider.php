@@ -27,10 +27,19 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
      */
     protected function gate(): void
     {
-        Gate::define('viewHorizon', function ($user = null) {
-            return in_array(optional($user)->email, [
-                //
-            ]);
+        // Kuyruk paneli (/horizon) YALNIZ işletmeciye açıktır: iş yükleri
+        // kiracı kimliklerini ve hata metinlerini taşır. Liste ortamdan
+        // okunur (HORIZON_ADMIN_EMAILS, virgülle); boşsa kimse göremez —
+        // yerel ortamda Horizon kendisi herkese açar.
+        Gate::define('viewHorizon', function ($user = null): bool {
+            $admins = array_filter(array_map(
+                static fn (string $email): string => mb_strtolower(trim($email)),
+                explode(',', (string) config('entegrasyon.horizon_admin_emails', '')),
+            ));
+
+            return $user !== null
+                && $user->hasVerifiedEmail()
+                && in_array(mb_strtolower((string) $user->email), $admins, true);
         });
     }
 }

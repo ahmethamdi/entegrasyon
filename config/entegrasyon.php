@@ -83,4 +83,9 @@ return [
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+    /*
+    | Kuyruk paneli (/horizon) erişimi — virgülle ayrılmış e-postalar.
+    | Boşsa üretimde kimse göremez (HorizonServiceProvider).
+    */
+    'horizon_admin_emails' => env('HORIZON_ADMIN_EMAILS', ''),
 ];

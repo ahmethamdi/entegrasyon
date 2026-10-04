@@ -212,17 +212,20 @@ duruyorsa ikisini birden kaybetmek tek bir olaydır.
 
 ### 9 · PostgreSQL dışarıdan erişilemez
 
-- [ ] `listen_addresses = 'localhost'` (§15: yerel soket, aynı makine)
-- [ ] Güvenlik duvarında 5432 kapalı
-- [ ] `pg_hba.conf` yalnızca yerel bağlantılara izin veriyor
+- [x] Üretim compose'u (`docker-compose.prod.yml`) postgres için **port
+  yayınlamaz** — yalnız iç ağdaki `app`/`horizon`/`scheduler`/`relay` erişir
+  (4 Eki 2026, yerelde doğrulandı)
+- [ ] Sunucuda güvenlik duvarı: yalnız 22/80/443 (`docs/URETIM-KURULUM.md`)
 
 **Yerelde durum:** port `5433` host'a açık — geliştirme için gerekli,
 üretim yapılandırmasıyla **karıştırılmamalı**.
 
 ### 10 · Redis parola korumalı, dışarıdan erişilemez
 
-- [ ] `requirepass` tanımlı, `.env` → `REDIS_PASSWORD` yazılı
-- [ ] `bind 127.0.0.1`, güvenlik duvarında 6379 kapalı
+- [x] Üretim compose'unda `--requirepass ${REDIS_PASSWORD}` (boşsa compose
+  BAŞLAMAZ) ve port yayınlanmaz — parolasız `ping` → `NOAUTH` (4 Eki 2026,
+  yerelde doğrulandı)
+- [ ] Sunucuda `REDIS_PASSWORD` güçlü rastgele değerle dolduruldu
 
 **Yerelde durum:** parola yok, port `6380` host'a açık.
 
