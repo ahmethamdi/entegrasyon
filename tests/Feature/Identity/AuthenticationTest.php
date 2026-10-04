@@ -54,7 +54,7 @@ final class AuthenticationTest extends TestCase
             'company' => 'Yılmaz Ticaret',
         ]);
 
-        $response->assertRedirect('/');
+        $response->assertRedirect('/panel');
 
         $user = User::query()->where('email', 'ahmet@example.com')->firstOrFail();
 
@@ -129,7 +129,7 @@ final class AuthenticationTest extends TestCase
             'password' => 'gizli-parola-123',
         ]);
 
-        $response->assertRedirect('/');
+        $response->assertRedirect('/panel');
         $this->assertAuthenticatedAs($user);
     }
 
@@ -178,7 +178,7 @@ final class AuthenticationTest extends TestCase
         $this->post('/login', [
             'email' => $user->email,
             'password' => 'gizli-parola-123',
-        ])->assertRedirect('/');
+        ])->assertRedirect('/panel');
 
         $this->assertNotSame(
             $fixatedId,
@@ -209,7 +209,7 @@ final class AuthenticationTest extends TestCase
     {
         [$user, $tenant] = $this->makeUserWithTenant();
 
-        $this->actingAs($user)->get('/')->assertOk();
+        $this->actingAs($user)->get('/panel')->assertOk();
 
         // Rota içinde bağlamın kurulu olduğunu doğrula.
         $seen = null;
@@ -265,14 +265,14 @@ final class AuthenticationTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $this->actingAs($user)->get('/')->assertRedirect('/login');
+        $this->actingAs($user)->get('/panel')->assertRedirect('/login');
     }
 
     /** Giriş yapmamış ziyaretçi panele giremez. */
     #[Test]
     public function guest_is_redirected_to_login(): void
     {
-        $this->get('/')->assertRedirect('/login');
+        $this->get('/panel')->assertRedirect('/login');
     }
 
     /**
@@ -286,7 +286,7 @@ final class AuthenticationTest extends TestCase
     {
         [$user] = $this->makeUserWithTenant();
 
-        $this->actingAs($user)->get('/')->assertOk();
+        $this->actingAs($user)->get('/panel')->assertOk();
 
         $this->assertNull(
             TenantContext::id(),

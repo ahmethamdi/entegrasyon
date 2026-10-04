@@ -76,7 +76,7 @@ final class SessionController extends Controller
         // "gereksiz" diye silinirse gerçek korumanın nerede olduğu
         // kaybolur. Garantiyi AuthenticationTest doğruluyor.
 
-        return redirect()->intended('/');
+        return redirect()->intended(route('dashboard'));
     }
 
     public function destroy(Request $request): RedirectResponse

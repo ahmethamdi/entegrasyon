@@ -40,7 +40,7 @@ final class EmailVerificationTest extends TestCase
             return $n->toMail($user)->subject === 'E-posta adresinizi doğrulayın';
         });
 
-        $this->get('/')->assertRedirect('/email/verify');
+        $this->get('/panel')->assertRedirect('/email/verify');
         $this->get('/products')->assertRedirect('/email/verify');
         $this->get('/email/verify')->assertOk()
             ->assertInertia(fn ($page) => $page->component('Auth/VerifyEmail')->where('email', 'yeni@example.com'));
@@ -57,10 +57,10 @@ final class EmailVerificationTest extends TestCase
             'hash' => sha1($user->getEmailForVerification()),
         ]);
 
-        $this->actingAs($user)->get($url)->assertRedirect('/');
+        $this->actingAs($user)->get($url)->assertRedirect('/panel');
 
         $this->assertTrue($user->refresh()->hasVerifiedEmail());
-        $this->actingAs($user)->get('/')->assertOk();
+        $this->actingAs($user)->get('/panel')->assertOk();
     }
 
     /** İmzası bozuk bağlantı doğrulamaz. */
@@ -117,8 +117,8 @@ final class EmailVerificationTest extends TestCase
         $user = User::factory()->create();
         (new CreateTenant)->run(name: 'Doğrulanmış', owner: $user);
 
-        $this->actingAs($user)->get('/')->assertOk();
-        $this->actingAs($user)->get('/email/verify')->assertRedirect('/');
+        $this->actingAs($user)->get('/panel')->assertOk();
+        $this->actingAs($user)->get('/email/verify')->assertRedirect('/panel');
     }
 
     private function unverifiedUser(): User

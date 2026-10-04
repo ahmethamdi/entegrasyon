@@ -81,7 +81,7 @@ final class PasswordResetTest extends TestCase
         $this->assertNotSame('eski-jeton', $user->remember_token, 'Açık "beni hatırla" oturumları ölmeli.');
 
         $this->post('/login', ['email' => 'satici@example.com', 'password' => 'yepyeni-parola-123'])
-            ->assertRedirect('/');
+            ->assertRedirect('/panel');
     }
 
     /** Sahte jeton parolayı değiştirmez. */

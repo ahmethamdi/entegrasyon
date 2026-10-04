@@ -29,7 +29,7 @@ const navGroups = [
     {
         heading: 'İşleyiş',
         items: [
-            { href: '/', label: 'Özet' },
+            { href: '/panel', label: 'Özet' },
             { href: '/orders', label: 'Siparişler' },
             { href: '/inventory', label: 'Stok' },
         ],
@@ -177,7 +177,7 @@ const doneCount = computed(() => steps.value.filter((s) => s.isDone).length);
 const nextStep = computed(() => steps.value.find((s) => s.isNext) ?? null);
 
 function isActive(href) {
-    return href === '/' ? currentPath.value === '/' : currentPath.value.startsWith(href);
+    return href === '/panel' ? currentPath.value === '/panel' : currentPath.value.startsWith(href);
 }
 
 function logout() {

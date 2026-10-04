@@ -27,7 +27,7 @@ final class ExampleTest extends TestCase
     #[Test]
     public function guest_is_redirected_from_the_panel_to_login(): void
     {
-        $this->get('/')->assertRedirect('/login');
+        $this->get('/panel')->assertRedirect('/login');
     }
 
     /**

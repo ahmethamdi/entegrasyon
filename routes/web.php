@@ -21,6 +21,7 @@ use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SyncFailureController;
 use Illuminate\Support\Facades\Route;
 
@@ -69,12 +70,19 @@ Route::middleware('auth')->group(function (): void {
         ->name('verification.send');
 });
 
+// ─────────────────────────────────────────────────────────── tanıtım sitesi
+
+// Herkese açık: reklamdan gelen satıcı önce ürünü görür, sonra kayıt olur.
+// Giriş yapmış kullanıcı da görebilir (sayfada "Panele git" düğmesi var).
+Route::get('/', [SiteController::class, 'home'])->name('home');
+
 // ─────────────────────────────────────────────────────────── panel
 
 // `verified`: doğrulanmamış hesap panele giremez (B4) — gerekçe
 // EmailVerificationController'da.
 Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
-    Route::get('/', DashboardController::class)->name('dashboard');
+    // Panel `/panel`'de; `/` herkese açık tanıtım sitesidir (SiteController).
+    Route::get('/panel', DashboardController::class)->name('dashboard');
 
     // Kanal bağlama akışı (§13 · faz 1.4). Sağlık kontrolü POST'tur:
     // yan etkisi var (durum yazar) ve GET olsaydı tarayıcı ön yüklemesi

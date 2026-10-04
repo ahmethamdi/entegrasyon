@@ -24,7 +24,7 @@ final class EmailVerificationController extends Controller
     public function notice(Request $request): InertiaResponse|RedirectResponse
     {
         if ($request->user()?->hasVerifiedEmail()) {
-            return redirect()->intended('/');
+            return redirect()->intended(route('dashboard'));
         }
 
         return Inertia::render('Auth/VerifyEmail', [
@@ -38,13 +38,13 @@ final class EmailVerificationController extends Controller
     {
         $request->fulfill();
 
-        return redirect()->intended('/')->with('success', 'E-posta adresiniz doğrulandı.');
+        return redirect()->intended(route('dashboard'))->with('success', 'E-posta adresiniz doğrulandı.');
     }
 
     public function resend(Request $request): RedirectResponse
     {
         if ($request->user()?->hasVerifiedEmail()) {
-            return redirect()->intended('/');
+            return redirect()->intended(route('dashboard'));
         }
 
         $request->user()?->sendEmailVerificationNotification();

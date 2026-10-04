@@ -71,7 +71,7 @@ final class OnboardingProgressTest extends TestCase
     {
         [, $user] = $this->makeTenant();
 
-        $steps = $this->steps($this->actingAs($user)->get('/'));
+        $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
         $this->assertSame(
             ['account' => true, 'channel' => false, 'product' => false, 'sync' => false],
@@ -88,7 +88,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->connectionFor($tenant, status: 'active');
 
-        $steps = $this->steps($this->actingAs($user)->get('/'));
+        $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
         $this->assertTrue($steps['channel'], 'Aktif bağlantı kanal adımını kapatmalı.');
     }
@@ -107,7 +107,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->connectionFor($tenant, status: 'pending');
 
-        $steps = $this->steps($this->actingAs($user)->get('/'));
+        $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
         $this->assertFalse(
             $steps['channel'],
@@ -123,7 +123,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->productFor($tenant);
 
-        $steps = $this->steps($this->actingAs($user)->get('/'));
+        $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
         $this->assertTrue($steps['product'], 'Ürün varsa ürün adımı kapanmalı.');
     }
@@ -138,7 +138,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->operationFor($tenant, $connection, SyncOperationStatus::COMPLETED);
 
-        $steps = $this->steps($this->actingAs($user)->get('/'));
+        $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
         $this->assertTrue($steps['sync'], 'Tamamlanan operasyon senkron adımını kapatmalı.');
     }
@@ -158,7 +158,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->operationFor($tenant, $connection, SyncOperationStatus::PENDING);
 
-        $steps = $this->steps($this->actingAs($user)->get('/'));
+        $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
         $this->assertFalse($steps['sync'], 'Bekleyen operasyon senkron adımını kapatmamalı.');
     }
@@ -178,7 +178,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->operationFor($tenant, $connection, SyncOperationStatus::DEAD);
 
-        $steps = $this->steps($this->actingAs($user)->get('/'));
+        $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
         $this->assertFalse($steps['sync'], 'Ölü operasyon senkron adımını kapatmamalı.');
     }
@@ -195,7 +195,7 @@ final class OnboardingProgressTest extends TestCase
         $this->productFor($tenant);
         $this->operationFor($tenant, $connection, SyncOperationStatus::COMPLETED);
 
-        $onboarding = $this->onboarding($this->actingAs($user)->get('/'));
+        $onboarding = $this->onboarding($this->actingAs($user)->get('/panel'));
 
         $this->assertFalse(
             $onboarding['visible'],
@@ -213,7 +213,7 @@ final class OnboardingProgressTest extends TestCase
         $this->productFor($tenant);
         // İlk senkron YOK.
 
-        $onboarding = $this->onboarding($this->actingAs($user)->get('/'));
+        $onboarding = $this->onboarding($this->actingAs($user)->get('/panel'));
 
         $this->assertTrue($onboarding['visible'], 'Eksik adım varken şerit görünmeli.');
     }
@@ -231,7 +231,7 @@ final class OnboardingProgressTest extends TestCase
         $this->productFor($tenant);
         $this->operationFor($tenant, $connection, SyncOperationStatus::COMPLETED);
 
-        $this->assertFalse($this->onboarding($this->actingAs($user)->get('/'))['visible']);
+        $this->assertFalse($this->onboarding($this->actingAs($user)->get('/panel'))['visible']);
 
         // Bağlantı sağlıksızlığa düşüyor (§13 · faz 1.4: `active`'ten geri çekilir).
         TenantContext::runAsSystem(function () use ($connection): void {
@@ -240,7 +240,7 @@ final class OnboardingProgressTest extends TestCase
                 ->update(['status' => 'error']);
         });
 
-        $onboarding = $this->onboarding($this->actingAs($user)->get('/'));
+        $onboarding = $this->onboarding($this->actingAs($user)->get('/panel'));
 
         $this->assertTrue(
             $onboarding['visible'],
@@ -256,7 +256,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->connectionFor($tenant, status: 'active');
 
-        $onboarding = $this->onboarding($this->actingAs($user)->get('/'));
+        $onboarding = $this->onboarding($this->actingAs($user)->get('/panel'));
 
         $this->assertSame(
             'product',
@@ -283,7 +283,7 @@ final class OnboardingProgressTest extends TestCase
         $this->productFor($tenantB);
         $this->operationFor($tenantB, $connectionB, SyncOperationStatus::COMPLETED);
 
-        $steps = $this->steps($this->actingAs($userA)->get('/'));
+        $steps = $this->steps($this->actingAs($userA)->get('/panel'));
 
         $this->assertSame(
             ['account' => true, 'channel' => false, 'product' => false, 'sync' => false],
