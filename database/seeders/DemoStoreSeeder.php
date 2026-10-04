@@ -21,6 +21,7 @@ use App\Domain\Orders\Support\IncomingOrderLine;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Seeder;
@@ -205,6 +206,20 @@ final class DemoStoreSeeder extends Seeder
                 'status' => SyncOperationStatus::COMPLETED,
                 'attempt_count' => 1,
                 'completed_at' => now()->subMinutes(random_int(2, 90)),
+            ]);
+        }
+
+        // Kanal durumu: canlı ürünlerin stoğu kanallarla aynı. Bu satırlar
+        // olmasa stok ekranı her ürünü "listelenmedi" gösterirdi.
+        foreach (Listing::query()->where('lifecycle_status', 'live')->get() as $listing) {
+            ListingSyncState::query()->create([
+                'tenant_id' => $listing->tenant_id,
+                'listing_id' => $listing->id,
+                'domain' => 'INVENTORY',
+                'desired_version' => 1,
+                'synced_version' => 1,
+                'status' => 'synced',
+                'last_synced_at' => now()->subMinutes(random_int(2, 90)),
             ]);
         }
 
