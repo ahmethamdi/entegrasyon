@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Catalog\Actions;
 
+use App\Domain\Billing\Actions\EnforceQuota;
+use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Support\ChannelImportResult;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
@@ -68,6 +70,7 @@ final class ImportProductsFromChannel
         private readonly CreateProduct $createProduct,
         private readonly UpdateProduct $updateProduct,
         private readonly SyncImportedImages $syncImages,
+        private readonly EnforceQuota $quota,
     ) {}
 
     public function run(ChannelConnection $connection, string $warehouseId): ChannelImportResult
@@ -91,6 +94,11 @@ final class ImportProductsFromChannel
         $skipped = 0;
         $errors = [];
 
+        // ⚠️ KOTA BURADA DA GEÇERLİ (B2) — ImportProducts ile aynı kural:
+        // yalnız YENİ ürün sayılır, güncelleme serbest.
+        $remaining = $this->quota->remaining(QuotaMetric::PRODUCTS);
+        $quotaBlocked = 0;
+
         $cursor = null;
         $pagesRead = 0;
         $maxPages = $adapter->maxImportPages();
@@ -112,7 +120,7 @@ final class ImportProductsFromChannel
                     created: $created,
                     updated: $updated,
                     skipped: $skipped,
-                    errors: $errors,
+                    errors: $this->withQuotaNote($errors, $quotaBlocked),
                     stoppedEarly: true,
                     stopReason: $e->getMessage(),
                 );
@@ -148,8 +156,18 @@ final class ImportProductsFromChannel
                         continue;
                     }
 
+                    if ($remaining !== null && $remaining <= 0) {
+                        $quotaBlocked++;
+
+                        continue;
+                    }
+
                     $new = $this->applyCreate($product, $warehouseId);
                     $created++;
+
+                    if ($remaining !== null) {
+                        $remaining--;
+                    }
 
                     // Görsel hatası ürünü geri almaz: ürün yazıldı ve
                     // sayıldı, görsel hatası raporda ayrıca görünür.
@@ -182,7 +200,7 @@ final class ImportProductsFromChannel
             created: $created,
             updated: $updated,
             skipped: $skipped,
-            errors: $errors,
+            errors: $this->withQuotaNote($errors, $quotaBlocked),
             stoppedEarly: $hitPageCap,
             stopReason: $hitPageCap
                 ? sprintf(
@@ -194,6 +212,33 @@ final class ImportProductsFromChannel
     }
 
     // ---------------------------------------------------------------- iç
+
+    /**
+     * Kota yüzünden atlananlar TEK satırla raporlanır — sessizce düşseydi
+     * satıcı "kanalda 300 ürün var, 50'si geldi" der ve sebebi bulamazdı.
+     *
+     * @param  list<array{line: int, message: string}>  $errors
+     * @return list<array{line: int, message: string}>
+     */
+    private function withQuotaNote(array $errors, int $blocked): array
+    {
+        if ($blocked === 0) {
+            return $errors;
+        }
+
+        $limit = $this->quota->planForCurrentTenant()?->limitFor(QuotaMetric::PRODUCTS);
+
+        $errors[] = [
+            'line' => 0,
+            'message' => sprintf(
+                'Plan ürün sınırına ulaşıldı (%d ürün): kanaldaki %d yeni ürün içe aktarılmadı. Mevcut ürünlerin güncellemesi uygulandı. Daha fazla ürün için planınızı yükseltin.',
+                (int) $limit,
+                $blocked,
+            ),
+        ];
+
+        return $errors;
+    }
 
     /**
      * AYNI TURDA AYNI SKU İKİ KEZ GELİRSE İKİNCİSİ GÜNCELLEMEDİR.

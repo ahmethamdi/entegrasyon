@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Catalog\Actions;
 
+use App\Domain\Billing\Actions\EnforceQuota;
+use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Support\CsvProductParser;
 use App\Domain\Catalog\Support\ImportResult;
@@ -53,6 +55,7 @@ final class ImportProducts
         private readonly CsvProductParser $parser,
         private readonly CreateProduct $createProduct,
         private readonly UpdateProduct $updateProduct,
+        private readonly EnforceQuota $quota,
     ) {}
 
     public function run(string $csv, string $warehouseId): ImportResult
@@ -71,6 +74,14 @@ final class ImportProducts
         // "3. satırda SKU yok" ile "3. satır kaydedilemedi" aynı şeydir.
         $errors = $parsed->invalid;
 
+        // ⚠️ KOTA TOPLU YOLDA DA GEÇERLİ (B2). Önceden yalnız panel formu
+        // kotaya bakıyordu; 50 ürünlük plandaki kiracı CSV ile 5.000 ürün
+        // açabiliyordu. Yalnız YENİ ürün sayılır — güncelleme serbesttir
+        // (KOTA VAR OLANI SİLMEZ/DONDURMAZ).
+        $remaining = $this->quota->remaining(QuotaMetric::PRODUCTS);
+        $quotaBlocked = 0;
+        $firstBlockedLine = null;
+
         foreach ($parsed->valid as $row) {
             try {
                 $existing = $this->findBySku($tenantId, (string) $row['sku']);
@@ -82,8 +93,19 @@ final class ImportProducts
                     continue;
                 }
 
+                if ($remaining !== null && $remaining <= 0) {
+                    $quotaBlocked++;
+                    $firstBlockedLine ??= (int) ($row['line'] ?? 0);
+
+                    continue;
+                }
+
                 $this->applyCreate($row, $warehouseId);
                 $created++;
+
+                if ($remaining !== null) {
+                    $remaining--;
+                }
             } catch (Throwable $e) {
                 // SESSİZCE YUTULMAZ: satır rapora girer ve tur devam eder.
                 // Yutulsaydı içe aktarma "başarılı" görünürken satıcının
@@ -102,6 +124,16 @@ final class ImportProducts
             }
         }
 
+        // TEK özet satırı: aşan her satır için ayrı hata 2.000 satırlık
+        // raporu aynı cümleyle doldururdu. Satır numarası ilk atlananı
+        // gösterir — dosyanın oradan sonrası yaratılmadı.
+        if ($quotaBlocked > 0) {
+            $errors[] = [
+                'line' => (int) $firstBlockedLine,
+                'message' => $this->quotaMessage($quotaBlocked),
+            ];
+        }
+
         return new ImportResult(
             created: $created,
             updated: $updated,
@@ -110,6 +142,17 @@ final class ImportProducts
     }
 
     // ---------------------------------------------------------------- iç
+
+    private function quotaMessage(int $blocked): string
+    {
+        $limit = $this->quota->planForCurrentTenant()?->limitFor(QuotaMetric::PRODUCTS);
+
+        return sprintf(
+            'Plan ürün sınırına ulaşıldı (%d ürün): %d yeni ürün yaratılmadı. Mevcut ürünlerin güncellemesi uygulandı. Daha fazla ürün için planınızı yükseltin.',
+            (int) $limit,
+            $blocked,
+        );
+    }
 
     /**
      * AYNI DOSYADA AYNI SKU İKİ KEZ GEÇERSE İKİNCİSİ GÜNCELLEMEDİR.

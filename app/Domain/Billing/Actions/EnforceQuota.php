@@ -79,6 +79,25 @@ final class EnforceQuota
         }
     }
 
+    /**
+     * Kalan hak — toplu yollar için (null = sınırsız).
+     *
+     * İçe aktarma her satırda `check()` çağırsaydı 2.000 satırlık dosyada
+     * 2.000 sayım sorgusu olurdu; tur başında bir kez okunur ve yaratılan
+     * her üründe düşülür. Negatif dönmez: plan düşürülmüş kiracıda
+     * kullanım limitin üstünde olabilir (KOTA VAR OLANI SİLMEZ).
+     */
+    public function remaining(QuotaMetric $metric): ?int
+    {
+        $limit = $this->planForCurrentTenant()?->limitFor($metric);
+
+        if ($limit === null) {
+            return null;
+        }
+
+        return max(0, $limit - $this->currentUsage($metric));
+    }
+
     /** Kota dolu mu — istisna fırlatmadan sorar (panelde rozet için). */
     public function exceeds(QuotaMetric $metric): bool
     {
