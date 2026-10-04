@@ -10,36 +10,43 @@
         'Segoe UI Symbol', 'Noto Color Emoji';
 
     /*
-     * Marka rengi — YANIK TURUNCU (kullanıcı kararı, 21 Ağustos 2026).
+     * Marka rengi — 34PAZAR KIRMIZI-TURUNCU #CE310D (kullanıcı kararı,
+     * 4 Ekim 2026; logoyla AYNI ton). Önceki yanık turuncu #a8532b'ydi.
      *
-     * Çıpa `brand-600` = #a8532b — panelde zaten kullanılan Inertia
-     * ilerleme çubuğu rengiyle AYNI (`app.js` → #A8532B).
+     * Çıpa `brand-600` = #CE310D — Inertia ilerleme çubuğuyla AYNI
+     * (`app.js`). Beyaz üzerinde 5.2:1: düğme yazısı için ayrı koyu ton
+     * gerekmez.
      *
-     * DEĞİŞMEZ KURAL — MARKA RENGİ UYARI RENGİYLE KARIŞMAMALIDIR.
-     *   `amber-*` bu panelde ZATEN uyarı rengidir (bekleyen rozetler,
-     *   eşleşmemiş SKU satırları, onboarding şeridi — 13 dosya).
-     *   Marka tonu ondan İKİ ölçüde ayrılır:
-     *     marka  H=19  S=59%   (donuk, kiremit)
-     *     amber  H=32–38 S=92–95% (parlak, sarımsı)
-     *   Ayıran asıl şey HUE DEĞİL DOYGUNLUKTUR: 35 puanlık fark marka
-     *   tonunu "arayüz kromu", amber'ı "dikkat çeken uyarı" yapar.
+     * DEĞİŞMEZ KURAL — MARKA RENGİ DURUM ROZETİ OLARAK KULLANILMAZ.
+     *   Bu ton `red-*` (HATA) ailesine yakındır (H≈12, S≈88%). Marka
+     *   yalnız arayüz kromunda yaşar: odak halkası, etkin menü çizgisi,
+     *   ilerleme çubuğu, logo. Bir durumu (rozet, şerit) marka rengine
+     *   boyamak onu "hata" gibi okutur — mutabakattaki fiyat çakışması
+     *   bu yüzden `violet-*`'e taşındı.
      *
-     *   Bu yüzden Tailwind'in hazır `orange-*` ölçeği KULLANILMAZ:
-     *   `orange-600` H=21 (marka ile aynı aile) ama S=90% — yani
-     *   amber kadar parlaktır ve rozetlerle karışırdı.
-     *
-     *   `red-*` HATA rengidir; marka ölçeği ona da yaklaşmaz.
+     *   `amber-*` uyarı, `red-*` hata rengidir; Tailwind `orange-*`
+     *   ölçeği yine KULLANILMAZ.
      */
-    --color-brand-50: #fbf5f1;
-    --color-brand-100: #f5e6dc;
-    --color-brand-200: #e9cab5;
-    --color-brand-300: #dba687;
-    --color-brand-400: #c87c56;
-    --color-brand-500: #b56238;
-    --color-brand-600: #a8532b; /* çıpa — app.js ilerleme çubuğuyla AYNI */
-    --color-brand-700: #8a4324; /* metin için: beyaz üzerinde 7.1:1 */
-    --color-brand-800: #6f3720;
-    --color-brand-900: #5b2f1d;
+    --color-brand-50: #fdf3f0;
+    --color-brand-100: #fbe3dc;
+    --color-brand-200: #f6c3b4;
+    --color-brand-300: #ef9a82;
+    --color-brand-400: #e2603f;
+    --color-brand-500: #d6431f;
+    --color-brand-600: #ce310d; /* çıpa — logo ve app.js ilerleme çubuğuyla AYNI */
+    --color-brand-700: #a8280b; /* metin için */
+    --color-brand-800: #86200a;
+    --color-brand-900: #6b1a09;
+
+    /*
+     * ODAK HALKASI — marka DEĞİL, nötr koyu (stone-900).
+     *
+     * Marka #CE310D'ye geçince odaklanan her giriş kutusu kırmızı
+     * çerçeveyle "hatalı alan" gibi görünüyordu (giriş sayfasında ilk
+     * alan otomatik odaklandığı için ilk ekranda). Odak bir durum değil
+     * konumdur; hata rengine benzememeli. 95 kullanım bu tokendan okur.
+     */
+    --color-ring: #1c1917;
 }
 
 /*

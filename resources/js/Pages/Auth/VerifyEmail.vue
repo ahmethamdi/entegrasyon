@@ -1,4 +1,5 @@
 <script setup>
+import BrandMark from '../../Components/BrandMark.vue';
 import { router, useForm } from '@inertiajs/vue3';
 
 defineProps({
@@ -20,8 +21,8 @@ function logout() {
 <template>
     <div class="flex min-h-screen items-center justify-center bg-stone-50 px-6">
         <div class="w-full max-w-sm">
-            <p class="font-mono text-lg uppercase tracking-widest text-stone-900">
-                Entegrasyon
+            <p>
+                <BrandMark size="lg" />
             </p>
             <h1 class="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
                 E-postanı doğrula

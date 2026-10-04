@@ -132,7 +132,7 @@ function money(row) {
                     v-model="search"
                     type="search"
                     placeholder="SKU ara"
-                    class="w-56 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="w-56 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <button
                     type="submit"
@@ -244,7 +244,7 @@ function money(row) {
                                             type="number"
                                             min="1"
                                             required
-                                            class="mt-1 w-28 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                                            class="mt-1 w-28 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                                         >
                                     </div>
 
@@ -260,7 +260,7 @@ function money(row) {
                                             v-model="adjustForm.note"
                                             type="text"
                                             placeholder="Sayım farkı"
-                                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                                         >
                                     </div>
 

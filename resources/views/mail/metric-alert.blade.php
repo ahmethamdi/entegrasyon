@@ -31,6 +31,6 @@ Sistem sağlığını aç
 sistem sağlığı ekranından takip edebilirsiniz.</small>
 
 <x-mail::subcopy>
-Bu e-postayı Entegrasyon hesabınızın sistem uyarıları kapsamında aldınız.
+Bu e-postayı 34Pazar hesabınızın sistem uyarıları kapsamında aldınız.
 </x-mail::subcopy>
 </x-mail::message>

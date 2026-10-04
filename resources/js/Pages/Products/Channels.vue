@@ -161,7 +161,7 @@ function send(connectionId) {
             <template #actions>
                 <Link
                     :href="`/products/${product.id}/edit`"
-                    class="shrink-0 rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                    class="shrink-0 rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                     Ürünü düzenle
                 </Link>

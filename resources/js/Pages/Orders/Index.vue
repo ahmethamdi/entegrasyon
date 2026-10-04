@@ -120,7 +120,7 @@ function placedAt(row) {
                     v-model="search"
                     type="search"
                     placeholder="Sipariş no veya SKU ara"
-                    class="w-full min-w-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600 sm:w-64"
+                    class="w-full min-w-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring sm:w-64"
                 >
                 <button
                     type="submit"

@@ -4,7 +4,7 @@ import '../css/app.css';
 import { createApp, h } from 'vue';
 import { createInertiaApp } from '@inertiajs/vue3';
 
-const appName = import.meta.env.VITE_APP_NAME || 'Entegrasyon';
+const appName = import.meta.env.VITE_APP_NAME || '34Pazar';
 
 createInertiaApp({
     title: (title) => (title ? `${title} · ${appName}` : appName),
@@ -22,6 +22,6 @@ createInertiaApp({
     },
 
     progress: {
-        color: '#A8532B',
+        color: '#CE310D',
     },
 });

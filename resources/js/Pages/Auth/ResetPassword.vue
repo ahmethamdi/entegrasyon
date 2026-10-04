@@ -1,4 +1,5 @@
 <script setup>
+import BrandMark from '../../Components/BrandMark.vue';
 import { useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
@@ -23,8 +24,8 @@ function submit() {
 <template>
     <div class="flex min-h-screen items-center justify-center bg-stone-50 px-6">
         <div class="w-full max-w-sm">
-            <p class="font-mono text-lg uppercase tracking-widest text-stone-900">
-                Entegrasyon
+            <p>
+                <BrandMark size="lg" />
             </p>
             <h1 class="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
                 Yeni parola belirle
@@ -41,7 +42,7 @@ function submit() {
                         type="email"
                         autocomplete="email"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.email" class="mt-1 text-sm text-red-700">
                         {{ form.errors.email }}
@@ -59,7 +60,7 @@ function submit() {
                         autocomplete="new-password"
                         required
                         autofocus
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.password" class="mt-1 text-sm text-red-700">
                         {{ form.errors.password }}
@@ -76,7 +77,7 @@ function submit() {
                         type="password"
                         autocomplete="new-password"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                 </div>
 

@@ -99,7 +99,7 @@ function stamp(value) {
             <template #actions>
                 <Link
                     href="/orders"
-                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                     Listeye dön
                 </Link>
@@ -275,7 +275,7 @@ function stamp(value) {
                                 v-model="retryForm.carrier"
                                 type="text"
                                 list="carrier-suggestions"
-                                class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                                class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                         </div>
                         <div>
@@ -284,7 +284,7 @@ function stamp(value) {
                                 :id="`retry-tracking-${fulfillment.id}`"
                                 v-model="retryForm.tracking_number"
                                 type="text"
-                                class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                                class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                         </div>
                         <button
@@ -322,7 +322,7 @@ function stamp(value) {
                     type="text"
                     list="carrier-suggestions"
                     placeholder="Yurtiçi Kargo"
-                    class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
             </div>
             <div>
@@ -332,7 +332,7 @@ function stamp(value) {
                     v-model="shipForm.tracking_number"
                     type="text"
                     required
-                    class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
             </div>
             <button

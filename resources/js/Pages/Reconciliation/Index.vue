@@ -55,14 +55,13 @@ const badges = {
      * seçer"). `MANUAL_REVIEW` ile aynı kırmızıyı paylaşsaydı ikisi
      * "bozuk" gibi okunurdu — oysa çakışma bir ARIZA DEĞİL, bir SORUDUR.
      *
-     * Marka tonu (`brand-*`) burada MEŞRUDUR: paletteki hiçbir durum rengi
-     * "karar bekliyor" anlamını taşımıyor ve amber zaten uyarı, red zaten
-     * hata. Bu, marka renginin dolgu olarak DEĞİL, rozet zemini olarak
-     * kullanıldığı tek yer (ölçek en açık ton: 50/700/200).
+     * Mor (`violet-*`) "karar bekliyor" demektir: amber zaten uyarı, red
+     * zaten hata. Eskiden marka tonuydu; marka kırmızı-turuncuya (#CE310D)
+     * geçince bu rozet yanındaki kırmızı ELLE İNCELEME ile aynı görünecekti.
      */
     PRICE_CONFLICT: {
         text: 'FİYAT ÇAKIŞMASI',
-        class: 'bg-brand-50 text-brand-800 border-brand-300',
+        class: 'bg-violet-50 text-violet-800 border-violet-300',
     },
     MANUAL_REVIEW: {
         text: 'ELLE İNCELEME',
@@ -238,7 +237,7 @@ function isDeciding(row, decision) {
         -->
         <div
             v-if="summary.price_conflict > 0"
-            class="mt-6 rounded border border-brand-300 bg-brand-50 px-4 py-3 text-sm text-brand-900"
+            class="mt-6 rounded border border-violet-300 bg-violet-50 px-4 py-3 text-sm text-violet-900"
         >
             <span class="font-semibold">
                 {{ summary.price_conflict }} üründe kanaldaki fiyat sizinkinden farklı.
@@ -389,7 +388,7 @@ function isDeciding(row, decision) {
                             <div v-if="row.status === 'PRICE_CONFLICT'" class="flex flex-wrap gap-2">
                                 <button
                                     type="button"
-                                    class="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-xs text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50"
+                                    class="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-xs text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
                                     :disabled="deciding !== null"
                                     @click="decide(row, 'accept_channel')"
                                 >
@@ -397,7 +396,7 @@ function isDeciding(row, decision) {
                                 </button>
                                 <button
                                     type="button"
-                                    class="rounded-md bg-stone-900 px-2.5 py-1 text-xs text-white transition hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 disabled:opacity-50"
+                                    class="rounded-md bg-stone-900 px-2.5 py-1 text-xs text-white transition hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
                                     :disabled="deciding !== null"
                                     @click="decide(row, 'push_ours')"
                                 >

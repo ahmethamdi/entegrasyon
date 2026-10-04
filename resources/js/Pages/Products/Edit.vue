@@ -72,7 +72,7 @@ function submit() {
                     v-model="form.title"
                     type="text"
                     required
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p v-if="form.errors.title" class="mt-1 text-sm text-red-700">
                     {{ form.errors.title }}
@@ -90,7 +90,7 @@ function submit() {
                         type="number"
                         step="0.01"
                         min="0"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.price" class="mt-1 text-sm text-red-700">
                         {{ form.errors.price }}
@@ -104,7 +104,7 @@ function submit() {
                     <select
                         id="status"
                         v-model="form.status"
-                        class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                        class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                         <option value="active">Yayında</option>
                         <option value="draft">Taslak</option>
@@ -121,7 +121,7 @@ function submit() {
                     id="description"
                     v-model="form.description"
                     rows="4"
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 />
             </div>
 
@@ -133,7 +133,7 @@ function submit() {
                     id="brand"
                     v-model="form.brand"
                     type="text"
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
             </div>
 
@@ -150,7 +150,7 @@ function submit() {
                     v-model="form.internal_category_id"
                     type="text"
                     placeholder="Örn. kadin-elbise"
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Kendi kategori adınız. Ürünün kanalda hangi kategoriye açılacağı

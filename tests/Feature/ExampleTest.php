@@ -38,6 +38,6 @@ final class ExampleTest extends TestCase
     {
         $this->get('/login')
             ->assertOk()
-            ->assertSee('Entegrasyon', escape: false);
+            ->assertSee('34Pazar', escape: false);
     }
 }

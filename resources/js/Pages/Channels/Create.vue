@@ -121,7 +121,7 @@ function submit() {
                     id="channel_type_code"
                     v-model="form.channel_type_code"
                     required
-                    class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                     <option v-for="type in channelTypes" :key="type.code" :value="type.code">
                         {{ type.name }}
@@ -142,7 +142,7 @@ function submit() {
                     type="text"
                     required
                     placeholder="Ana Mağaza"
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Yalnızca senin göreceğin isim; birden fazla mağazayı ayırt etmek için.
@@ -162,7 +162,7 @@ function submit() {
                     type="text"
                     required
                     placeholder="magaza.example.com"
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     Bir mağaza yalnızca tek bir hesaba bağlanabilir. Bağlantı HTTPS üzerinden kurulur.
@@ -210,7 +210,7 @@ function submit() {
                             :required="!field.optional"
                             autocomplete="off"
                             spellcheck="false"
-                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         >
                         <p v-if="field.hint" class="mt-1 text-xs text-stone-500">
                             {{ field.hint }}

@@ -94,7 +94,7 @@ function applyFilter(patch) {
             </p>
             <Link
                 href="/channels"
-                class="mt-4 inline-block rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                class="mt-4 inline-block rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
                 Kanallara git
             </Link>
@@ -137,7 +137,7 @@ function applyFilter(patch) {
                 <div class="flex rounded-md border border-stone-300 bg-white p-0.5">
                     <button
                         type="button"
-                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         :class="!filters.status ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: undefined })"
                     >
@@ -145,7 +145,7 @@ function applyFilter(patch) {
                     </button>
                     <button
                         type="button"
-                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         :class="filters.status === 'rejected' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: 'rejected' })"
                     >
@@ -153,7 +153,7 @@ function applyFilter(patch) {
                     </button>
                     <button
                         type="button"
-                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         :class="filters.status === 'pending_approval' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: 'pending_approval' })"
                     >
@@ -164,7 +164,7 @@ function applyFilter(patch) {
                 <!-- Tek kanal varsa seçim sormak gereksiz bir karar yüküdür. -->
                 <select
                     v-if="connections.length > 1"
-                    class="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                    class="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     :value="filters.connection ?? ''"
                     @change="applyFilter({ connection: $event.target.value || undefined })"
                 >
@@ -210,7 +210,7 @@ function applyFilter(patch) {
                                 <Link
                                     v-if="row.productId"
                                     :href="`/products/${row.productId}/channels`"
-                                    class="text-stone-900 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                                    class="text-stone-900 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                                 >
                                     {{ row.title ?? '—' }}
                                 </Link>
@@ -228,7 +228,7 @@ function applyFilter(patch) {
                                     :href="row.externalUrl"
                                     target="_blank"
                                     rel="noopener"
-                                    class="block font-mono text-[11px] text-stone-500 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                                    class="block font-mono text-[11px] text-stone-500 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                                 >
                                     #{{ row.externalId }}
                                 </a>

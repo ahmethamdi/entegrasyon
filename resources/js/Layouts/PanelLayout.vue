@@ -1,4 +1,5 @@
 <script setup>
+import BrandMark from '../Components/BrandMark.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
@@ -221,8 +222,8 @@ function logout() {
         >
             <div class="flex items-start justify-between gap-2 border-b border-stone-200 px-5 py-4">
                 <div class="min-w-0">
-                    <p class="font-mono text-sm uppercase tracking-widest text-stone-900">
-                        Entegrasyon
+                    <p>
+                        <BrandMark size="md" />
                     </p>
                     <p class="mt-0.5 truncate text-xs font-medium text-stone-500">
                         {{ tenantName }}
@@ -236,7 +237,7 @@ function logout() {
                 -->
                 <button
                     type="button"
-                    class="-mr-1 shrink-0 rounded p-1 text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 lg:hidden"
+                    class="-mr-1 shrink-0 rounded p-1 text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden"
                     aria-label="Menüyü kapat"
                     @click="mobileMenuOpen = false"
                 >
@@ -276,7 +277,7 @@ function logout() {
                             <Link
                                 :href="item.href"
                                 :aria-current="isActive(item.href) ? 'page' : undefined"
-                                class="relative flex items-center rounded px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                                class="relative flex items-center rounded px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                                 :class="isActive(item.href)
                                     ? 'bg-stone-100 font-medium text-stone-900 before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-full before:bg-brand-600'
                                     : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
@@ -295,7 +296,7 @@ function logout() {
                         <Link
                             :href="item.href"
                             :aria-current="isActive(item.href) ? 'page' : undefined"
-                            class="relative flex items-center rounded px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                            class="relative flex items-center rounded px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                             :class="isActive(item.href)
                                 ? 'bg-stone-100 font-medium text-stone-900 before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-full before:bg-brand-600'
                                 : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
@@ -313,7 +314,7 @@ function logout() {
                 -->
                 <button
                     type="button"
-                    class="mt-1 w-full rounded px-3 py-2 text-left text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                    class="mt-1 w-full rounded px-3 py-2 text-left text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     @click="logout"
                 >
                     Çıkış
@@ -328,7 +329,7 @@ function logout() {
             >
                 <button
                     type="button"
-                    class="rounded-md border border-stone-300 p-2 text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                    class="rounded-md border border-stone-300 p-2 text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     aria-controls="panel-sidebar"
                     :aria-expanded="mobileMenuOpen"
                     aria-label="Menüyü aç"
@@ -340,8 +341,8 @@ function logout() {
                 </button>
 
                 <div class="min-w-0">
-                    <p class="font-mono text-xs uppercase tracking-widest text-stone-900">
-                        Entegrasyon
+                    <p>
+                        <BrandMark size="sm" />
                     </p>
                     <p class="truncate text-xs text-stone-500">{{ tenantName }}</p>
                 </div>

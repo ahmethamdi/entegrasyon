@@ -74,7 +74,7 @@ function statusClass(status) {
                 v-model="search"
                 type="search"
                 placeholder="SKU veya başlık ara"
-                class="w-72 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-brand-600 focus:outline-2 focus:outline-offset-0 focus:outline-brand-600"
+                class="w-72 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
             >
             <button
                 type="submit"
