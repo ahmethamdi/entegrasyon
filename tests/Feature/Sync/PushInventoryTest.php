@@ -21,6 +21,9 @@ use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Jobs\PushInventory;
+use App\Domain\Sync\Jobs\PushListing;
+use App\Domain\Sync\Jobs\PushOfferListing;
+use App\Domain\Sync\Jobs\PushPrices;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncAttempt;
@@ -292,6 +295,75 @@ final class PushInventoryTest extends TestCase
         $this->assertSame(SyncOperationStatus::RETRYING, $operation->status);
         $this->assertSame('error_transient', $this->syncState($tenant, $variant, 'shopify')->status);
         $this->assertSame(0, $this->syncState($tenant, $variant, 'shopify')->synced_version);
+    }
+
+    /**
+     * ⚠️ ÖLEN İŞ OPERASYONU GÖRÜNÜR ÖLÜ MEKTUBA DÜŞÜRÜR.
+     *
+     * Devre kesici/hız sınırı işi gün boyu erteleyip `retryUntil` dolduysa
+     * ya da iş beklenmeyen bir istisnayla düştüyse Laravel `failed()`
+     * çağırır. Önceden kanca yoktu: operasyon `retrying` kalır, seviye 2
+     * taraması onu görmez ve `/failures` ekranında da görünmezdi.
+     */
+    #[Test]
+    public function a_job_that_dies_dead_letters_its_operation(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $this->listVariantOn($tenant, $variant, ['shopify']);
+        ProgrammableInventoryAdapter::failOn('shopify', ErrorClass::SERVER_ERROR, '503');
+
+        $this->seedStock($tenant, $variant, 3);
+        $this->dispatchInventoryChange($tenant, $variant, version: 7);
+        $this->workQueue($tenant);
+
+        $operation = $this->operationsByChannel($tenant)['shopify'];
+        $this->assertSame(SyncOperationStatus::RETRYING, $operation->status, 'Ön koşul: geçici hata yeniden denemede.');
+
+        (new PushInventory($operation->id, $tenant->id))->failed(new \RuntimeException('MaxAttemptsExceeded'));
+
+        $operation = $this->operationsByChannel($tenant)['shopify'];
+        $this->assertSame(SyncOperationStatus::DEAD, $operation->status);
+        $this->assertStringContainsString('MaxAttemptsExceeded', (string) $this->syncState($tenant, $variant, 'shopify')->last_error);
+    }
+
+    /** Sonucu yazılmış operasyona ölen işin kancası DOKUNMAZ. */
+    #[Test]
+    public function a_dying_job_does_not_touch_a_completed_operation(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $this->listVariantOn($tenant, $variant, ['woocommerce']);
+        ProgrammableInventoryAdapter::succeedOn('woocommerce');
+
+        $this->seedStock($tenant, $variant, 3);
+        $this->dispatchInventoryChange($tenant, $variant, version: 7);
+        $this->workQueue($tenant);
+
+        $operation = $this->operationsByChannel($tenant)['woocommerce'];
+
+        (new PushInventory($operation->id, $tenant->id))->failed(new \RuntimeException('geç gelen ölüm'));
+
+        $this->assertSame(SyncOperationStatus::COMPLETED, $this->operationsByChannel($tenant)['woocommerce']->status);
+    }
+
+    /**
+     * ⚠️ PUSH İŞLERİ DENEME SAYISIYLA DEĞİL SÜREYLE ÖLÜR.
+     *
+     * Laravel her `release()`'i deneme sayar; devre kesici ertelemesi
+     * Horizon'un `tries` (4–5) bütçesini birkaç turda bitirirdi — kanal
+     * hiç denenmeden. `retryUntil` tanımlıysa `tries`'a bakılmaz.
+     */
+    #[Test]
+    public function every_push_job_expires_by_time_not_by_attempt_count(): void
+    {
+        foreach ([PushInventory::class, PushPrices::class, PushListing::class, PushOfferListing::class] as $class) {
+            $job = new $class('op', 'tenant');
+
+            $this->assertTrue(method_exists($job, 'retryUntil'), "{$class} retryUntil tanımlamalı.");
+            $this->assertTrue(method_exists($job, 'failed'), "{$class} failed() kancası tanımlamalı.");
+            $this->assertEqualsWithDelta(now()->addHours(24)->getTimestamp(), $job->retryUntil()->getTimestamp(), 5);
+        }
     }
 
     /**

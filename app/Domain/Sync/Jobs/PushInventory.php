@@ -11,6 +11,7 @@ use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncOperationStatus;
+use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Domain\Sync\Support\InventoryBatchBuilder;
@@ -60,6 +61,7 @@ use Throwable;
  */
 final class PushInventory implements ShouldQueue
 {
+    use DeadLettersWhenAbandoned;
     use Dispatchable;
     use InteractsWithQueue;
     use Queueable;

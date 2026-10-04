@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
+use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\AdapterReportedFailure;
@@ -63,6 +64,7 @@ use Throwable;
  */
 final class PushListing implements ShouldQueue
 {
+    use DeadLettersWhenAbandoned;
     use Dispatchable;
     use InteractsWithQueue;
     use Queueable;

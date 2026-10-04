@@ -212,6 +212,39 @@ final class SyncResultRecorder
      *
      * @param  list<SyncOperation>  $operations
      */
+    /**
+     * Kuyruk işinin KENDİSİ öldü — operasyon görünür ölü mektuba düşer.
+     *
+     * `failed()` kancasından çağrılır: iş `retryUntil` süresini doldurdu
+     * (devre kesici veya hız sınırı onu gün boyu erteledi) ya da beklenmeyen
+     * bir istisnayla düştü. Önceden hiçbir işte `failed()` yoktu: operasyon
+     * `retrying` / `pending` durumunda KALIR, seviye 2 taraması onu görmez
+     * (`attempt_count > 0`) ve `/failures` ekranında da GÖRÜNMEZDİ.
+     *
+     * Bitmiş operasyona dokunulmaz: iş, sonucu yazdıktan sonra da ölmüş
+     * olabilir.
+     */
+    public function markAbandoned(string $operationId, string $reason): void
+    {
+        DB::transaction(function () use ($operationId, $reason): void {
+            $operation = SyncOperation::query()->lockForUpdate()->find($operationId);
+
+            if ($operation === null
+                || $operation->status->isTerminal()
+                || $operation->status === SyncOperationStatus::DEAD) {
+                return;
+            }
+
+            $operation->forceFill([
+                'status' => SyncOperationStatus::DEAD->value,
+                'completed_at' => now(),
+                'last_error_class' => ErrorClass::SERVER_ERROR->value,
+            ])->save();
+
+            $this->markSyncStateFailed($operation, ErrorClass::SERVER_ERROR, mb_substr($reason, 0, 2000));
+        });
+    }
+
     public function markDead(array $operations, ErrorClass $class): void
     {
         DB::transaction(function () use ($operations, $class): void {
