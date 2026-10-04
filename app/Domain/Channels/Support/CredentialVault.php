@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Support;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelCredential;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -36,6 +37,43 @@ final class CredentialVault
         array $secrets,
         ?string $scope = null,
         ?\DateTimeInterface $expiresAt = null,
+    ): ChannelCredential {
+        $credential = $this->write($connection, $secrets, $scope, $expiresAt);
+
+        // ⚠️ YENİ KİMLİK = DEVRE KAPANIR (§12).
+        //
+        // AUTHENTICATION devreyi SÜRESİZ açar ve "kullanıcı kimlik
+        // bilgisini yenileyince reset() çağrılır" kuralı vardı — ama hiçbir
+        // yer çağırmıyordu. Tek bir 401 (ör. Etsy token'ı yenileme
+        // turundan önce doldu) bağlantıyı sonsuza kadar durdururdu: token
+        // yenilense de, satıcı OAuth'u baştan yapsa da push işleri her beş
+        // dakikada ertelenirdi.
+        //
+        // Kimliğin girdiği TEK kapı burası (bağlama formu, OAuth geri
+        // dönüşü, token yenileme) — reset'i çağıranlara dağıtmak birinin
+        // unutulması demekti.
+        //
+        // COMMIT'TEN SONRA: yazım geri alınırsa devre eski kimlikle açık
+        // kalmalı. Transaction yoksa hemen çalışır.
+        DB::afterCommit(fn () => app(CircuitBreaker::class)->reset($connection->id));
+
+        return $credential;
+    }
+
+    /**
+     * Şifreli yazımın kendisi — devreye DOKUNMAZ.
+     *
+     * Anahtar rotasyonu (`read()`) da buradan yazar: AYNI kimliği yeni
+     * anahtarla yeniden şifrelemek kimlik değişikliği DEĞİLDİR ve açık
+     * devreyi kapatmamalıdır.
+     *
+     * @param  array<string, mixed>  $secrets
+     */
+    private function write(
+        ChannelConnection $connection,
+        array $secrets,
+        ?string $scope,
+        ?\DateTimeInterface $expiresAt,
     ): ChannelCredential {
         $payload = json_encode($secrets, JSON_THROW_ON_ERROR);
 
@@ -94,7 +132,7 @@ final class CredentialVault
         $secrets = is_array($decoded) ? $decoded : [];
 
         if ($credential->key_version !== $this->currentKeyVersion()) {
-            $this->store($connection, $secrets, $credential->scope, $credential->expires_at);
+            $this->write($connection, $secrets, $credential->scope, $credential->expires_at);
         }
 
         return $secrets;

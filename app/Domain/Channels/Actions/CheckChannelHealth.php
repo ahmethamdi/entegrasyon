@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Actions;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Support\ChannelErrorText;
 use Throwable;
 
@@ -62,6 +63,11 @@ final class CheckChannelHealth
                 'last_error' => null,
                 'connected_at' => $connection->connected_at ?? now(),
             ])->save();
+
+            // Sağlık kontrolü GEÇTİ = kimlik çalışıyor. AUTHENTICATION'ın
+            // süresiz açtığı devre kapanır; açık kalsaydı satıcı panelde
+            // "sağlıklı" görürken hiçbir push işi koşmazdı.
+            app(CircuitBreaker::class)->reset($connection->id);
 
             return $connection;
         }

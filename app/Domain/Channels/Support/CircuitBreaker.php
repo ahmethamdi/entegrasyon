@@ -23,7 +23,9 @@ use Throwable;
  * DEĞİŞMEZ KURAL — AUTHENTICATION DEVREYİ SÜRESİZ AÇAR:
  *   Token geçersizse beklemekle düzelmez; kullanıcı müdahalesi gerekir.
  *   Süre koymak, her beş dakikada kesin başarısız olacak bir isteği tekrar
- *   denemek demektir. Kullanıcı kimlik bilgisini yenileyince reset() çağrılır.
+ *   denemek demektir. reset() İKİ kapıdan çağrılır: kasaya yeni kimlik
+ *   yazılınca (`CredentialVault::store` — bağlama formu, OAuth, token
+ *   yenileme) ve sağlık kontrolü geçince (`CheckChannelHealth`).
  *
  * SAYAÇ BAŞARIDA SIFIRLANIR: "ardışık" hata sayılır. Toplam sayılsaydı
  * günler içinde birikmiş dağınık hatalar sağlıklı bir kanalı keserdi.
