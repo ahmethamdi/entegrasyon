@@ -14,7 +14,7 @@ use DateTimeImmutable;
  * Mimari Karar Dokümanı v2.2 · §19 (`Taxonomy/ TaxonomyClient`), §14.
  *
  * TAKSONOMİ UÇ NOKTASI SATICIYA ÖZGÜ DEĞİLDİR: kategori ağacı tüm
- * satıcılar için aynıdır ve yol `/suppliers/{id}/` öneki taşımaz. Bu,
+ * satıcılar için aynıdır ve yol `/sellers/{id}/` öneki taşımaz. Bu,
  * ağacın neden kiracısız saklandığının da API tarafındaki karşılığıdır.
  *
  * AĞAÇ DÜZLEŞTİRİLİR: Trendyol `subCategories` ile iç içe döner; biz
@@ -28,7 +28,7 @@ use DateTimeImmutable;
 final readonly class TaxonomyClient
 {
     /** Kategori ağacı — satıcıdan bağımsız uç nokta. */
-    private const CATEGORY_TREE_ENDPOINT = 'product-categories';
+    private const CATEGORY_TREE_ENDPOINT = 'product/product-categories';
 
     /**
      * @param  array<string, string>  $headers  Adapter'ın zorunlu başlıkları
@@ -36,6 +36,7 @@ final readonly class TaxonomyClient
      */
     public function __construct(
         private ChannelHttpClient $client,
+        private string $baseUrl,
         private array $headers = [],
     ) {}
 
@@ -44,7 +45,7 @@ final readonly class TaxonomyClient
      */
     public function fetchTree(): CategoryTreeSnapshot
     {
-        $response = $this->client->get(self::CATEGORY_TREE_ENDPOINT, headers: $this->headers);
+        $response = $this->client->get($this->baseUrl.'/'.self::CATEGORY_TREE_ENDPOINT, headers: $this->headers);
 
         // BAŞARISIZ YANIT SESSİZCE BOŞ AĞACA DÖNÜŞMEZ.
         //
@@ -81,7 +82,7 @@ final readonly class TaxonomyClient
      */
     public function fetchAttributes(string $categoryId): array
     {
-        $response = $this->client->get("product-categories/{$categoryId}/attributes", headers: $this->headers);
+        $response = $this->client->get("{$this->baseUrl}/product/product-categories/{$categoryId}/attributes", headers: $this->headers);
 
         // Ağaçtaki ile aynı gerekçe: başarısız yanıt "bu kategoride zorunlu
         // öznitelik yok" anlamına GELMEZ. Sessizce boş dönseydi ön koşul

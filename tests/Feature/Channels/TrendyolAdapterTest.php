@@ -182,7 +182,7 @@ final class TrendyolAdapterTest extends TestCase
      * KİMLİK DOĞRULAMA BASIC AUTH + SATICI KİMLİĞİDİR.
      *
      * Trendyol API anahtar/şifre çiftini Basic auth ile taşır ve satıcı
-     * kimliği YOL üzerindedir (`/suppliers/{id}/...`). İkisi birden
+     * kimliği YOL üzerindedir (`.../sellers/{id}/...`). İkisi birden
      * gerekir: doğru anahtarla yanlış satıcı kimliği başka bir satıcının
      * kaynağını ister ve 403 alır.
      */
@@ -202,8 +202,47 @@ final class TrendyolAdapterTest extends TestCase
             // Satıcı kimliği YOL üzerindedir: doğru anahtarla yanlış kimlik
             // başka bir satıcının kaynağını ister ve 403 alır.
             return $sent === $expected
-                && str_contains($request->url(), '/suppliers/123456/');
+                && $request->url() === 'https://apigw.trendyol.com/integration/sellers/123456/addresses';
         });
+    }
+
+    /**
+     * ⚠️ TABAN ADRES `settings.base_url`'DEN OKUNMAZ (A11).
+     *
+     * Eski `sapigw/suppliers/...` yolları kapatıldı ve panelden kurulan
+     * bağlantının `base_url`'ü Woo ayrıştırıcısından geliyordu. Okunsaydı
+     * anahtarlar ayardaki herhangi bir adrese Basic auth ile giderdi.
+     */
+    #[Test]
+    public function the_base_url_setting_is_ignored_and_paths_follow_apigw(): void
+    {
+        Http::fake(['*' => Http::response(['content' => [], 'categories' => [], 'totalPages' => 1], 200)]);
+
+        [$tenant] = $this->makeTenant();
+
+        $adapter = $this->asTenant($tenant, function (): TrendyolAdapter {
+            $connection = $this->connection('123456');
+            $connection->forceFill([
+                'settings' => [...$connection->settings, 'base_url' => 'https://kotu.example/wp-json/wc/v3'],
+            ])->save();
+
+            return $this->adapterFor($connection);
+        });
+
+        $adapter->healthCheck();
+        $adapter->fetchCategoryTree();
+        $adapter->fetchOrders(now()->subHour());
+
+        $urls = array_map(
+            static fn (array $pair): string => strtok($pair[0]->url(), '?'),
+            Http::recorded()->all(),
+        );
+
+        $this->assertSame([
+            'https://apigw.trendyol.com/integration/sellers/123456/addresses',
+            'https://apigw.trendyol.com/integration/product/product-categories',
+            'https://apigw.trendyol.com/integration/order/sellers/123456/v2/orders',
+        ], $urls);
     }
 
     /**

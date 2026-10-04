@@ -69,7 +69,7 @@ final class TrendyolOrderPollingTest extends TestCase
         Http::assertSent(function (Request $request) use ($since): bool {
             $query = $request->data();
 
-            return str_contains($request->url(), '/suppliers/123456/orders')
+            return str_contains($request->url(), 'apigw.trendyol.com/integration/order/sellers/123456/v2/orders')
                 && (int) $query['startDate'] === $since->getTimestampMs();
         });
     }
@@ -85,8 +85,8 @@ final class TrendyolOrderPollingTest extends TestCase
     {
         Http::fake(['*' => Http::response([
             'content' => [
-                ['orderNumber' => 'TY-1', 'status' => 'Created'],
-                ['orderNumber' => 'TY-2', 'status' => 'Shipped'],
+                ['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created'],
+                ['shipmentPackageId' => 'PKG-2', 'orderNumber' => 'TY-2', 'status' => 'Shipped'],
             ],
             'totalPages' => 1,
         ], 200)]);
@@ -108,7 +108,7 @@ final class TrendyolOrderPollingTest extends TestCase
     public function pagination_is_reported_through_the_cursor(): void
     {
         Http::fake(['*' => Http::response([
-            'content' => [['orderNumber' => 'TY-1', 'status' => 'Created']],
+            'content' => [['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created']],
             'page' => 0,
             'totalPages' => 3,
         ], 200)]);
@@ -154,7 +154,7 @@ final class TrendyolOrderPollingTest extends TestCase
     public function a_created_order_is_normalized_with_its_lines(): void
     {
         $event = $this->adapter()->parseOrderEvent($this->inboxMessage([
-            'orderNumber' => 'TY-1',
+            'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1',
             'status' => 'Created',
             'grossAmount' => 250.0,
             'totalPrice' => 240.0,
@@ -172,13 +172,54 @@ final class TrendyolOrderPollingTest extends TestCase
 
         $this->assertNotNull($event);
         $this->assertSame('created', $event->type);
-        $this->assertSame('TY-1', $event->externalOrderId);
+        $this->assertSame('PKG-1', $event->externalOrderId);
+        $this->assertSame('TY-1', $event->payload['external_number']);
 
         $line = $event->payload['lines'][0];
 
         // SKU BARKODDUR: eşleştirme barkod üzerinden yapılır.
         $this->assertSame('BARKOD-A', $line['sku']);
         $this->assertSame(2, $line['quantity']);
+    }
+
+    /**
+     * v2 GÖVDESİ (`v2/orders`) okunur: paket durumu, paket tutarları ve
+     * `lineId`/`lineUnitPrice`/`lineGrossAmount`. Eski adlarla okunsaydı
+     * fiyatlar 0, satır kimlikleri boş kalırdı — hata vermeden.
+     */
+    #[Test]
+    public function a_v2_package_body_is_read_with_its_new_field_names(): void
+    {
+        $event = $this->adapter()->parseOrderEvent($this->inboxMessage([
+            'shipmentPackageId' => 3001,
+            'orderNumber' => 'TY-5',
+            'shipmentPackageStatus' => 'Created',
+            'packageTotalPrice' => 90.5,
+            'packageGrossAmount' => 100.5,
+            'currencyCode' => 'TRY',
+            'lines' => [[
+                'lineId' => 77,
+                'barcode' => 'BARKOD-A',
+                'stockCode' => 'STK-A',
+                'quantity' => 2,
+                'lineUnitPrice' => 50.25,
+                'lineGrossAmount' => 100.5,
+            ]],
+        ]));
+
+        $this->assertNotNull($event);
+        $this->assertSame('created', $event->type);
+        $this->assertSame('3001', $event->externalOrderId);
+        $this->assertSame('Created', $event->payload['status']);
+        $this->assertSame('90.5', $event->payload['subtotal']);
+        $this->assertSame('100.5', $event->payload['grand_total']);
+
+        $line = $event->payload['lines'][0];
+
+        $this->assertSame('77', $line['external_line_id']);
+        $this->assertSame('BARKOD-A', $line['sku']);
+        $this->assertSame('50.25', $line['unit_price']);
+        $this->assertSame('100.5', $line['line_total']);
     }
 
     /**
@@ -191,7 +232,7 @@ final class TrendyolOrderPollingTest extends TestCase
     public function a_cancelled_order_is_normalized_as_a_cancellation(): void
     {
         $event = $this->adapter()->parseOrderEvent($this->inboxMessage([
-            'orderNumber' => 'TY-1',
+            'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1',
             'status' => 'Cancelled',
             'lines' => [['id' => 9001, 'barcode' => 'BARKOD-A', 'quantity' => 1]],
         ]));
@@ -205,7 +246,7 @@ final class TrendyolOrderPollingTest extends TestCase
     public function a_returned_order_is_normalized_as_a_return(): void
     {
         $event = $this->adapter()->parseOrderEvent($this->inboxMessage([
-            'orderNumber' => 'TY-1',
+            'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1',
             'status' => 'Returned',
             'lines' => [['id' => 9001, 'barcode' => 'BARKOD-A', 'quantity' => 1]],
         ]));
@@ -230,12 +271,12 @@ final class TrendyolOrderPollingTest extends TestCase
         $adapter = $this->adapter();
 
         $cancelled = $adapter->parseOrderEvent($this->inboxMessage([
-            'orderNumber' => 'TY-1', 'status' => 'Cancelled', 'lines' => [],
+            'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Cancelled', 'lines' => [],
         ]));
 
         $returned = $adapter->parseOrderEvent($this->inboxMessage([
-            'orderNumber' => 'TY-1', 'status' => 'Returned', 'lines' => [],
-        ], externalEventId: 'TY-1:Returned'));
+            'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Returned', 'lines' => [],
+        ], externalEventId: 'PKG-1:Returned'));
 
         $this->assertNotSame(
             $cancelled->externalRef,
@@ -272,7 +313,7 @@ final class TrendyolOrderPollingTest extends TestCase
     public function an_unknown_status_falls_back_to_update(): void
     {
         $event = $this->adapter()->parseOrderEvent($this->inboxMessage([
-            'orderNumber' => 'TY-1',
+            'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1',
             'status' => 'AwaitingSomethingNew',
             'lines' => [],
         ]));

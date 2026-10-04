@@ -67,7 +67,7 @@ final class TrendyolOrderSliceTest extends TestCase
 
         Http::fake(['*' => Http::response([
             'content' => [[
-                'orderNumber' => 'TY-1',
+                'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1',
                 'status' => 'Created',
                 'grossAmount' => 240.0,
                 'totalPrice' => 240.0,
@@ -90,7 +90,7 @@ final class TrendyolOrderSliceTest extends TestCase
 
         // SİPARİŞ YAZILDI.
         $order = $this->asTenant($tenant, fn (): ?Order => Order::query()
-            ->where('external_id', 'TY-1')
+            ->where('external_id', 'PKG-1')
             ->first());
 
         $this->assertNotNull($order, 'Yoklanan sipariş kaydedilmeliydi.');
@@ -124,7 +124,7 @@ final class TrendyolOrderSliceTest extends TestCase
 
         Http::fake(['*' => Http::response([
             'content' => [[
-                'orderNumber' => 'TY-2',
+                'shipmentPackageId' => 'PKG-2', 'orderNumber' => 'TY-2',
                 'status' => 'Created',
                 'lines' => [[
                     'id' => 9002,
@@ -141,7 +141,7 @@ final class TrendyolOrderSliceTest extends TestCase
         $this->processInbox($tenant);
 
         $order = $this->asTenant($tenant, fn (): ?Order => Order::query()
-            ->where('external_id', 'TY-2')
+            ->where('external_id', 'PKG-2')
             ->first());
 
         // SİPARİŞ KAYBEDİLMEDİ.
@@ -156,6 +156,92 @@ final class TrendyolOrderSliceTest extends TestCase
 
         // STOĞA HİÇ DOKUNULMADI.
         $this->assertSame(10, $this->availableFor($tenant, $variant));
+    }
+
+    /**
+     * ⚠️ AYNI SİPARİŞİN İKİ PAKETİ İKİ AYRI SATIŞTIR (A11).
+     *
+     * Sipariş kimliği sipariş numarası olsaydı ikinci paketin `created`'ı
+     * "bu sipariş zaten alınmış" diye atlanır ve stoğu HİÇ düşmezdi.
+     * v2 gövdesi kalemleri paket başına taşır.
+     */
+    #[Test]
+    public function two_packages_of_one_order_both_reduce_stock(): void
+    {
+        [$tenant] = $this->setUpConnection();
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        Http::fake(['*' => Http::response([
+            'content' => [
+                [
+                    'shipmentPackageId' => 3001, 'orderNumber' => 'TY-7',
+                    'shipmentPackageStatus' => 'Created',
+                    'lines' => [['lineId' => 1, 'barcode' => 'BARKOD-A', 'quantity' => 2, 'lineUnitPrice' => 10, 'lineGrossAmount' => 20]],
+                ],
+                [
+                    'shipmentPackageId' => 3002, 'orderNumber' => 'TY-7',
+                    'shipmentPackageStatus' => 'Created',
+                    'lines' => [['lineId' => 2, 'barcode' => 'BARKOD-A', 'quantity' => 1, 'lineUnitPrice' => 10, 'lineGrossAmount' => 10]],
+                ],
+            ],
+            'totalPages' => 1,
+        ], 200)]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(7, $this->availableFor($tenant, $variant), 'İkinci paketin stoğu da düşmeliydi.');
+
+        $numbers = $this->asTenant($tenant, fn (): array => Order::query()
+            ->orderBy('external_id')->pluck('external_number', 'external_id')->all());
+
+        $this->assertSame(['3001' => 'TY-7', '3002' => 'TY-7'], $numbers);
+    }
+
+    /**
+     * ⚠️ BÖLÜNEN PAKET STOĞU İKİ KEZ DÜŞÜRMEZ (A11).
+     *
+     * Bölmede eski paket `UnPacked` olur, kalemler yeni kimlikli
+     * paketlerde `Created` olarak yeniden gelir. `UnPacked` güncelleme
+     * sayılsaydı aynı 3 adet iki kez düşerdi (10 → 4).
+     */
+    #[Test]
+    public function a_split_package_does_not_double_count(): void
+    {
+        [$tenant] = $this->setUpConnection();
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        $line = fn (int $id, int $qty): array => ['lineId' => $id, 'barcode' => 'BARKOD-A', 'quantity' => $qty];
+
+        Http::fake(['*' => Http::sequence()
+            ->push(['content' => [
+                ['shipmentPackageId' => 4001, 'orderNumber' => 'TY-8', 'shipmentPackageStatus' => 'Created', 'lines' => [$line(1, 3)]],
+            ], 'totalPages' => 1], 200)
+            ->push(['content' => [
+                ['shipmentPackageId' => 4001, 'orderNumber' => 'TY-8', 'shipmentPackageStatus' => 'UnPacked', 'lines' => [$line(1, 3)]],
+                ['shipmentPackageId' => 4002, 'orderNumber' => 'TY-8', 'shipmentPackageStatus' => 'Created', 'lines' => [$line(2, 2)]],
+                ['shipmentPackageId' => 4003, 'orderNumber' => 'TY-8', 'shipmentPackageStatus' => 'Created', 'lines' => [$line(3, 1)]],
+            ], 'totalPages' => 1], 200),
+        ]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+        $this->assertSame(7, $this->availableFor($tenant, $variant));
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(7, $this->availableFor($tenant, $variant), 'Bölme satışı ikinci kez düşürmemeli.');
+
+        $this->assertLedgerMatchesProjection(
+            $tenant->id,
+            $this->warehouse($tenant)->id,
+            $variant->id,
+        );
     }
 
     /**
@@ -183,10 +269,10 @@ final class TrendyolOrderSliceTest extends TestCase
 
         Http::fake(['*' => Http::sequence()
             ->push(['content' => [[
-                'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => [$line],
+                'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => [$line],
             ]], 'totalPages' => 1], 200)
             ->push(['content' => [[
-                'orderNumber' => 'TY-1', 'status' => 'Cancelled', 'lines' => [$line],
+                'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Cancelled', 'lines' => [$line],
             ]], 'totalPages' => 1], 200),
         ]);
 
@@ -240,10 +326,10 @@ final class TrendyolOrderSliceTest extends TestCase
 
         Http::fake(['*' => Http::sequence()
             ->push(['content' => [[
-                'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => [$line],
+                'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => [$line],
             ]], 'totalPages' => 1], 200)
             ->push(['content' => [[
-                'orderNumber' => 'TY-1', 'status' => 'Shipped', 'lines' => [$line],
+                'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Shipped', 'lines' => [$line],
             ]], 'totalPages' => 1], 200),
         ]);
 
@@ -256,7 +342,7 @@ final class TrendyolOrderSliceTest extends TestCase
         // HAM SATIR okunur.
         $status = $this->asTenant($tenant, fn () => DB::table('orders')
             ->where('tenant_id', $tenant->id)
-            ->where('external_id', 'TY-1')
+            ->where('external_id', 'PKG-1')
             ->value('status'));
 
         $this->assertSame('Shipped', $status, 'Durum değişimi siparişe YANSIMALI.');
@@ -288,7 +374,7 @@ final class TrendyolOrderSliceTest extends TestCase
 
         Http::fake(['*' => Http::response([
             'content' => [[
-                'orderNumber' => 'TY-1',
+                'shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1',
                 'status' => 'Created',
                 'lines' => [[
                     'id' => 9001, 'barcode' => 'BARKOD-A', 'quantity' => 3, 'amount' => 240.0,

@@ -39,7 +39,7 @@ use Tests\TestCase;
  *
  * DEĞİŞMEZ KURAL — TEK UÇ NOKTA, İKİ YETENEK:
  *   Woo'da stok ve fiyat `products/batch` üzerinden ayrı alanlarla gider.
- *   Trendyol'da ikisi de `v2/products/price-and-inventory` uç noktasıdır ve
+ *   Trendyol'da ikisi de `inventory/sellers/{id}/products/price-and-inventory` uç noktasıdır ve
  *   kalem KISMİ güncellemeyi destekler: yalnızca `quantity` göndermek fiyata
  *   DOKUNMAZ, yalnızca fiyat göndermek stoğa dokunmaz. İki yeteneğin aynı
  *   uç noktayı paylaşması onları birleştirmez — `PushInventory` stok
@@ -81,7 +81,8 @@ final class TrendyolInventoryPricingTest extends TestCase
         Http::assertSent(function (Request $request): bool {
             $items = $request->data()['items'] ?? [];
 
-            return str_contains($request->url(), 'v2/products/price-and-inventory')
+            return str_contains($request->url(), 'apigw.trendyol.com/integration/inventory/sellers/')
+                && str_contains($request->url(), '/products/price-and-inventory')
                 && $request->method() === 'POST'
                 && count($items) === 2
                 && $items[0]['barcode'] === 'BARKOD-A'
@@ -229,7 +230,8 @@ final class TrendyolInventoryPricingTest extends TestCase
         Http::assertSent(function (Request $request): bool {
             $item = $request->data()['items'][0] ?? [];
 
-            return str_contains($request->url(), 'v2/products/price-and-inventory')
+            return str_contains($request->url(), 'apigw.trendyol.com/integration/inventory/sellers/')
+                && str_contains($request->url(), '/products/price-and-inventory')
                 && $item['barcode'] === 'BARKOD-A'
                 && $item['salePrice'] === 149.90
                 && $item['listPrice'] === 199.90

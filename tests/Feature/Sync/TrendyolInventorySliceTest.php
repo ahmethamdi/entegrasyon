@@ -96,7 +96,8 @@ final class TrendyolInventorySliceTest extends TestCase
         Http::assertSent(function (Request $request): bool {
             $item = $request->data()['items'][0] ?? [];
 
-            return str_contains($request->url(), 'v2/products/price-and-inventory')
+            return str_contains($request->url(), 'apigw.trendyol.com/integration/inventory/sellers/')
+                && str_contains($request->url(), '/products/price-and-inventory')
                 && $item['barcode'] === 'BARKOD-1'
                 && $item['quantity'] === 17;
         });

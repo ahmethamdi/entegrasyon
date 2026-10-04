@@ -66,8 +66,8 @@ final class PollChannelOrdersTest extends TestCase
 
         Http::fake(['*' => Http::response([
             'content' => [
-                ['orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []],
-                ['orderNumber' => 'TY-2', 'status' => 'Created', 'lines' => []],
+                ['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []],
+                ['shipmentPackageId' => 'PKG-2', 'orderNumber' => 'TY-2', 'status' => 'Created', 'lines' => []],
             ],
             'totalPages' => 1,
         ], 200)]);
@@ -82,7 +82,7 @@ final class PollChannelOrdersTest extends TestCase
 
         $this->assertCount(2, $messages);
         $this->assertSame('polling', $messages[0]->source);
-        $this->assertSame('TY-1:Created', $messages[0]->external_event_id);
+        $this->assertSame('PKG-1:Created', $messages[0]->external_event_id);
     }
 
     /**
@@ -98,7 +98,7 @@ final class PollChannelOrdersTest extends TestCase
         $this->setUpConnection();
 
         Http::fake(['*' => Http::response([
-            'content' => [['orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []]],
+            'content' => [['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []]],
             'totalPages' => 1,
         ], 200)]);
 
@@ -121,7 +121,7 @@ final class PollChannelOrdersTest extends TestCase
         [$tenant] = $this->setUpConnection();
 
         Http::fake(['*' => Http::response([
-            'content' => [['orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []]],
+            'content' => [['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []]],
             'totalPages' => 1,
         ], 200)]);
 
@@ -151,10 +151,10 @@ final class PollChannelOrdersTest extends TestCase
 
         Http::fake(['*' => Http::sequence()
             ->push(['content' => [
-                ['orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []],
+                ['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []],
             ], 'totalPages' => 1], 200)
             ->push(['content' => [
-                ['orderNumber' => 'TY-1', 'status' => 'Cancelled', 'lines' => []],
+                ['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Cancelled', 'lines' => []],
             ], 'totalPages' => 1], 200),
         ]);
 
@@ -166,7 +166,7 @@ final class PollChannelOrdersTest extends TestCase
             ->pluck('external_event_id')
             ->all());
 
-        $this->assertSame(['TY-1:Cancelled', 'TY-1:Created'], $ids);
+        $this->assertSame(['PKG-1:Cancelled', 'PKG-1:Created'], $ids);
 
         // İKİ iş: iptal de işlenmeli.
         Queue::assertPushed(ProcessInboxMessage::class, 2);
@@ -185,7 +185,7 @@ final class PollChannelOrdersTest extends TestCase
         [$tenant, $connection] = $this->setUpConnection();
 
         Http::fake(['*' => Http::response([
-            'content' => [['orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []]],
+            'content' => [['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []]],
             'totalPages' => 1,
         ], 200)]);
 
@@ -253,9 +253,9 @@ final class PollChannelOrdersTest extends TestCase
         [$tenantB] = $this->setUpConnection(supplierId: '222');
 
         Http::fake([
-            '*/suppliers/111/*' => Http::response(['errors' => []], 500),
-            '*/suppliers/222/*' => Http::response([
-                'content' => [['orderNumber' => 'TY-9', 'status' => 'Created', 'lines' => []]],
+            '*/sellers/111/*' => Http::response(['errors' => []], 500),
+            '*/sellers/222/*' => Http::response([
+                'content' => [['shipmentPackageId' => 'PKG-9', 'orderNumber' => 'TY-9', 'status' => 'Created', 'lines' => []]],
                 'totalPages' => 1,
             ], 200),
         ]);
@@ -363,10 +363,10 @@ final class PollChannelOrdersTest extends TestCase
 
         Http::fake(['*' => Http::sequence()
             ->push(['content' => [
-                ['orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []],
+                ['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => []],
             ], 'page' => 0, 'totalPages' => 2], 200)
             ->push(['content' => [
-                ['orderNumber' => 'TY-2', 'status' => 'Created', 'lines' => []],
+                ['shipmentPackageId' => 'PKG-2', 'orderNumber' => 'TY-2', 'status' => 'Created', 'lines' => []],
             ], 'page' => 1, 'totalPages' => 2], 200),
         ]);
 

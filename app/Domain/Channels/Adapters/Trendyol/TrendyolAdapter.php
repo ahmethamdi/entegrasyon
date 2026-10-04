@@ -43,7 +43,7 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Trendyol kanal adapter'ı — sapigw REST API.
+ * Trendyol kanal adapter'ı — apigw entegrasyon API'si.
  *
  * Mimari Karar Dokümanı v2.2 · §14 · Trendyol, §7 · Adapter Architecture,
  * §13 · Faz 2 ilk maddesi ("Trendyol istemcisi, kimlik doğrulama, dinamik
@@ -108,6 +108,9 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      */
     public const DEFAULT_INTEGRATOR_NAME = 'SelfIntegration';
 
+    /** Üretim entegrasyon adresi (apigw). Eski `sapigw` kapatıldı. */
+    public const BASE_URL = 'https://apigw.trendyol.com/integration';
+
     /** Trendyol sınırı dakika penceresinde bildirir. */
     private const RATE_LIMIT_WINDOW_SECONDS = 60;
 
@@ -139,7 +142,12 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         'Cancelled' => 'cancelled',
         'UnDelivered' => 'updated',
         'Returned' => 'returned',
-        'UnPacked' => 'updated',
+        // ⚠️ BÖLÜNEN PAKET İPTAL SAYILIR. Paket bölünürse eskisi
+        // `UnPacked` olur ve kalemler YENİ `shipmentPackageId`'li paketlerde
+        // `Created` olarak yeniden gelir. Eski paket stoğu geri vermeseydi
+        // yeni paketler aynı satışı İKİNCİ kez düşerdi. Gerçek hesapta
+        // doğrulanmalı (A11 · gerçek hesap pilotu).
+        'UnPacked' => 'cancelled',
     ];
 
     public function __construct(
@@ -166,7 +174,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         $startedAt = hrtime(true);
 
         try {
-            $response = $this->get($this->supplierPath('addresses'));
+            $response = $this->get($this->sellerUrl('', 'addresses'));
 
             $latency = (int) round((hrtime(true) - $startedAt) / 1_000_000);
 
@@ -380,7 +388,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         );
 
         $response = $this->post(
-            $this->supplierPath('v2/products/price-and-inventory'),
+            $this->sellerUrl('inventory', 'products/price-and-inventory'),
             ['items' => $items],
         );
 
@@ -475,7 +483,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         );
 
         $response = $this->post(
-            $this->supplierPath('v2/products/price-and-inventory'),
+            $this->sellerUrl('inventory', 'products/price-and-inventory'),
             ['items' => $items],
         );
 
@@ -546,7 +554,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
         $barcodes = array_values(array_unique($barcodes));
 
-        $response = $this->get($this->supplierPath('products'), [
+        $response = $this->get($this->sellerUrl('product', 'products'), [
             'barcode' => implode(',', $barcodes),
             'size' => count($barcodes),
         ]);
@@ -579,7 +587,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         $item = (new ListingMapper)->toChannelItem($payload);
 
         $response = $this->post(
-            $this->supplierPath('v2/products'),
+            $this->sellerUrl('product', 'v2/products'),
             ['items' => [$item]],
         );
 
@@ -605,7 +613,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         $item = (new ListingMapper)->toChannelItem($payload);
 
         $response = $this->post(
-            $this->supplierPath('v2/products'),
+            $this->sellerUrl('product', 'v2/products'),
             ['items' => [$item]],
         );
 
@@ -638,7 +646,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         }
 
         $response = $this->get(
-            $this->supplierPath('products'),
+            $this->sellerUrl('product', 'products'),
             ['barcode' => $barcode],
         );
 
@@ -691,7 +699,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     {
         $page = $cursor === null ? 0 : max(0, (int) $cursor);
 
-        $response = $this->get($this->supplierPath('orders'), [
+        $response = $this->get($this->sellerUrl('order', 'v2/orders'), [
             // MİLİSANİYE — saniye değil.
             'startDate' => $since->getTimestampMs(),
             'page' => $page,
@@ -737,15 +745,15 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      */
     public function pollingEventIdFor(array $order): ?string
     {
-        $number = $order['orderNumber'] ?? $order['id'] ?? null;
+        $package = self::packageId($order);
 
-        if ($number === null || (string) $number === '') {
+        if ($package === null) {
             return null;
         }
 
-        $status = (string) ($order['status'] ?? '');
+        $status = self::packageStatus($order);
 
-        return $status === '' ? (string) $number : "{$number}:{$status}";
+        return $status === '' ? $package : "{$package}:{$status}";
     }
 
     /**
@@ -772,24 +780,29 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         /** @var array<string, mixed> $payload */
         $payload = is_array($message->payload) ? $message->payload : [];
 
-        $orderNumber = $payload['orderNumber'] ?? $payload['id'] ?? null;
+        $package = self::packageId($payload);
 
-        if ($orderNumber === null || (string) $orderNumber === '') {
+        if ($package === null) {
             // Kimliksiz gövdeden sipariş yaratılamaz; satır hata durumuna
             // düşer ve elle incelenir — sessizce yutulmaz.
             return null;
         }
 
-        $orderNumber = (string) $orderNumber;
-        $status = (string) ($payload['status'] ?? '');
+        $orderNumber = (string) ($payload['orderNumber'] ?? $package);
+        $status = self::packageStatus($payload);
         $type = self::STATUS_TO_TYPE[$status] ?? 'updated';
 
         return new NormalizedOrderEvent(
             type: $type,
-            externalOrderId: $orderNumber,
-            // Çıpa DURUMU taşır — aynı siparişin iki olayı çakışamaz.
-            externalRef: $message->external_event_id ?? "{$orderNumber}:{$status}",
-            payload: $this->toCanonicalOrderPayload($payload, $type, $orderNumber),
+            // ⚠️ SİPARİŞ BİRİMİ PAKETTİR, sipariş numarası DEĞİL. Bir
+            // sipariş birden çok pakete bölünebilir; numaraya bağlansaydı
+            // ikinci paketin `created`'ı "bu sipariş zaten alınmış" diye
+            // atlanır ve o paketin stoğu HİÇ düşmezdi. Numara
+            // `external_number` olarak görünür kalır.
+            externalOrderId: $package,
+            // Çıpa DURUMU taşır — aynı paketin iki olayı çakışamaz.
+            externalRef: $message->external_event_id ?? "{$package}:{$status}",
+            payload: $this->toCanonicalOrderPayload($payload, $type, $orderNumber, $status),
             occurredAt: $this->parseOrderDate($payload),
         );
     }
@@ -800,18 +813,21 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
-    private function toCanonicalOrderPayload(array $payload, string $type, string $orderNumber): array
+    private function toCanonicalOrderPayload(array $payload, string $type, string $orderNumber, string $status): array
     {
+        // v2 alanları `package*` önekini taşır; eski adlar geri düşüş.
+        $total = $payload['packageTotalPrice'] ?? $payload['totalPrice'] ?? '0';
+
         return [
             'type' => $type,
             'external_number' => $orderNumber,
-            'status' => (string) ($payload['status'] ?? 'pending'),
-            'financial_status' => ($payload['status'] ?? null) === 'Returned' ? 'refunded' : null,
+            'status' => $status !== '' ? $status : 'pending',
+            'financial_status' => $status === 'Returned' ? 'refunded' : null,
             'currency' => (string) ($payload['currencyCode'] ?? 'TRY'),
-            'subtotal' => (string) ($payload['totalPrice'] ?? '0'),
+            'subtotal' => (string) $total,
             'shipping_total' => (string) ($payload['totalShippingPrice'] ?? '0'),
             'tax_total' => '0',
-            'grand_total' => (string) ($payload['grossAmount'] ?? $payload['totalPrice'] ?? '0'),
+            'grand_total' => (string) ($payload['packageGrossAmount'] ?? $payload['grossAmount'] ?? $total),
             'lines' => $this->orderLines($payload),
             // Kişisel veri taşınmaz; yalnızca referans.
             'customer_ref' => array_filter([
@@ -844,17 +860,40 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
 
             $quantity = (int) ($item['quantity'] ?? 0);
 
+            // v2: `lineId`, `lineUnitPrice`, `lineGrossAmount`, `stockCode`.
             $lines[] = [
-                'external_line_id' => (string) ($item['id'] ?? ''),
-                'sku' => (string) ($item['barcode'] ?? $item['merchantSku'] ?? ''),
+                'external_line_id' => (string) ($item['lineId'] ?? $item['id'] ?? ''),
+                'sku' => (string) ($item['barcode'] ?? $item['stockCode'] ?? $item['merchantSku'] ?? ''),
                 'title' => (string) ($item['productName'] ?? $item['barcode'] ?? ''),
                 'quantity' => $quantity,
-                'unit_price' => (string) ($item['price'] ?? $item['amount'] ?? '0'),
-                'line_total' => (string) ($item['amount'] ?? '0'),
+                'unit_price' => (string) ($item['lineUnitPrice'] ?? $item['price'] ?? $item['amount'] ?? '0'),
+                'line_total' => (string) ($item['lineGrossAmount'] ?? $item['amount'] ?? '0'),
             ];
         }
 
         return $lines;
+    }
+
+    /**
+     * Paket kimliği — v2'de `shipmentPackageId`, eski gövdede `id`.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private static function packageId(array $payload): ?string
+    {
+        $id = $payload['shipmentPackageId'] ?? $payload['id'] ?? null;
+
+        return $id === null || (string) $id === '' ? null : (string) $id;
+    }
+
+    /**
+     * Paket durumu — v2'de `shipmentPackageStatus`, yoksa `status`.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private static function packageStatus(array $payload): string
+    {
+        return (string) ($payload['shipmentPackageStatus'] ?? $payload['status'] ?? '');
     }
 
     /** @param array<string, mixed> $payload */
@@ -943,7 +982,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         }
 
         $response = $this->get(
-            $this->supplierPath('products'),
+            $this->sellerUrl('product', 'products'),
             ['barcode' => implode(',', array_unique($barcodes)), 'size' => count($barcodes)],
         );
 
@@ -1028,13 +1067,6 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
     // ------------------------------------------------------------------ iç
 
     /**
-     * Satıcıya özgü yol.
-     *
-     * Satıcı kimliği YOL ÜZERİNDEDİR: doğru anahtarla yanlış kimlik başka
-     * bir satıcının kaynağını ister ve 403 alır. Kimlik `settings` içinde
-     * durur — sır değildir ve panelde görünür.
-     */
-    /**
      * Taksonomi istemcisi.
      *
      * Ağaç uç noktası satıcıya özgü DEĞİLDİR (kategori ağacı tüm satıcılar
@@ -1042,7 +1074,7 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
      */
     private function taxonomy(): TaxonomyClient
     {
-        return new TaxonomyClient($this->client, $this->defaultHeaders());
+        return new TaxonomyClient($this->client, self::baseUrl(), $this->defaultHeaders());
     }
 
     /**
@@ -1092,9 +1124,33 @@ final class TrendyolAdapter implements ChannelAdapter, SupportsApprovalWorkflow,
         return $sellerId;
     }
 
-    private function supplierPath(string $endpoint): string
+    /**
+     * Satıcıya özgü TAM adres: `{taban}/{servis}/sellers/{id}/{uç}`.
+     *
+     * Satıcı kimliği YOL ÜZERİNDEDİR: doğru anahtarla yanlış kimlik başka
+     * bir satıcının kaynağını ister ve 403 alır.
+     *
+     * ⚠️ ADRES TAM VERİLİR, `settings.base_url` OKUNMAZ. Eski yollar
+     * (`sapigw/suppliers/{id}/...`) Trendyol'da kapatıldı ve panelden
+     * kurulan bağlantının `base_url`'ü Woo ayrıştırıcısından
+     * geliyordu — taban adresi satıcı değil kanal belirler.
+     */
+    private function sellerUrl(string $service, string $endpoint): string
     {
-        return "suppliers/{$this->sellerId()}/".ltrim($endpoint, '/');
+        $service = $service === '' ? '' : trim($service, '/').'/';
+
+        return self::baseUrl()."/{$service}sellers/{$this->sellerId()}/".ltrim($endpoint, '/');
+    }
+
+    /**
+     * Entegrasyon taban adresi. Yalnızca `services.trendyol.base_url` ile
+     * (stage ortamı: `https://stageapigw.trendyol.com/integration`)
+     * değişir; satıcı formundan GELMEZ — gelseydi anahtarlar satıcının
+     * yazdığı herhangi bir adrese Basic auth ile gönderilirdi.
+     */
+    public static function baseUrl(): string
+    {
+        return rtrim((string) (config('services.trendyol.base_url') ?: self::BASE_URL), '/');
     }
 
     /**
