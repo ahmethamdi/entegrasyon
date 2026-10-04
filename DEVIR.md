@@ -40,8 +40,13 @@ Sıra: ① form + taban adres ② User-Agent ③ yollar + sipariş alanları ④
 ## Sonraki maddeler
 - ✅ A12 `e4068d0` · A13 `904e73f` · B1 `7865b9d` (Stripe çift abonelik) · B2 `03c2744` (içe aktarma kotası) ·
   B3 `f57903b` (SSRF) · B4a `1c6e8aa` (parola sıfırlama + hız sınırı) · B4b `717da6f` (e-posta doğrulama)
+- ✅ C0 `074cd45` **outbox:consume'u dinleyen Horizon havuzu YOKTU** (üretimde stok/fiyat kanala hiç gitmeyecekti) + HorizonQueueContractTest
+- ✅ C1 `6819382` sağlayıcıdan bağımsız üretim kurulumu — `docker-compose.prod.yml`, `docker/prod/`, `deploy.sh`,
+  `.env.production.example`, **`docs/URETIM-KURULUM.md`**; yerelde baştan sona doğrulandı (gerçek sunucuda DEĞİL)
 - **yerel `.env`'de sk_live — kullanıcı döndürmeli**
-- C: üretim altyapısı (worker/Horizon/scheduler, Redis parola, deploy) · D: gerçek hesap pilotu
+- ⏸️ KULLANICI KARARI: sunucu (Hetzner/DO/mevcut) + posta sağlayıcısı (Postmark/SES/Mailgun) → sonra
+  gerçek sunucuda kurulum + yedek (mimari: pgBackRest → Storage Box + WAL) · kargo takip no nereden girilecek
+- D: gerçek hesap pilotu (Shopify dev store; B1 plan değişikliği Stripe test anahtarıyla)
 - Yan bulgu: `pushFulfillment` hiçbir akıştan çağrılmıyor (kargo bildirimi bağlı değil)
 - Shopify mutation biçimleri (A6) gerçek mağazada doğrulanmalı (dev store)
 
