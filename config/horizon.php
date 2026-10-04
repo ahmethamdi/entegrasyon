@@ -199,7 +199,12 @@ return [
     'defaults' => [
         'critical' => [
             'connection' => 'redis',
-            'queue' => ['orders:high', 'inventory:high', 'inbox:process'],
+            // `outbox:consume` OLMADAN stok/fiyat değişikliği kanala HİÇ
+            // dağılmaz: OutboxRelay işi bu kuyruğa atar ve dinleyen havuz
+            // yoksa iş Redis'te sonsuza kadar bekler (4 Eki bulundu; testler
+            // işi senkron koştuğu için görmüyordu). HorizonQueueContractTest
+            // koddaki her kuyruğun burada olduğunu doğrular.
+            'queue' => ['orders:high', 'inventory:high', 'inbox:process', 'outbox:consume'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
             'maxProcesses' => 1,
