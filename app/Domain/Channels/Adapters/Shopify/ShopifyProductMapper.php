@@ -39,6 +39,37 @@ use DateTimeImmutable;
  */
 final class ShopifyProductMapper
 {
+    /** Shopify'ın tek varyantlı ürün varsayılanı. */
+    private const DEFAULT_OPTION_NAME = 'Title';
+
+    private const DEFAULT_OPTION_VALUE = 'Default Title';
+
+    /**
+     * `productUpdate` girdisi — YALNIZCA ürün alanları.
+     *
+     * ⚠️ GÜNCELLEME `productSet` İLE YAPILMAZ. `productSet` varyant
+     * listesini TAMAMEN yazar ve listede olmayan varyantları SİLER. Bizde
+     * listing varyant başınadır; satıcının Shopify'da açtığı üç varyantlı
+     * bir ürünü benimseyip tek varyantla `productSet` atmak öteki iki
+     * varyantı kanaldan SİLERDİ — sessiz ve geri alınamaz (Etsy'nin
+     * "tüm envanteri ezen PUT" tuzağının aynısı, §11.3).
+     *
+     * Durum (`status`) GÖNDERİLMEZ: içerik düzenlemesi, satıcının Shopify
+     * panelinde taslağa aldığı ürünü yeniden yayına sokmamalı.
+     *
+     * @return array<string, mixed>
+     */
+    public static function toProductUpdateInput(ListingPayload $payload, string $productGid): array
+    {
+        $input = ['id' => $productGid, 'title' => $payload->title];
+
+        if ($payload->description !== null) {
+            $input['descriptionHtml'] = $payload->description;
+        }
+
+        return $input;
+    }
+
     /**
      * `productSet` mutation'ının girdisi.
      *
@@ -65,18 +96,33 @@ final class ShopifyProductMapper
             $input['descriptionHtml'] = $payload->description;
         }
 
-        // Shopify'da kategori ZORUNLU DEĞİLDİR ve `product_type` serbest
-        // metindir; taksonomi arayüzü bu yüzden HİÇ uygulanmaz (§04).
-        // Satıcı bir iç kategori tanımladıysa olduğu gibi taşınır.
-        if ($payload->categoryId !== null) {
-            $input['productType'] = $payload->categoryId;
-        }
+        // ⚠️ `productType` GÖNDERİLMEZ. Önceden `categoryId` yazılıyordu —
+        // ama o alan iç kategorinin UUID'sidir (`internal_category_id`) ve
+        // Shopify panelinde ürün türü olarak anlamsız bir kimlik görünürdü.
+        // Shopify'da kategori ZORUNLU DEĞİLDİR (§04); ad taşınmadan bu alan
+        // boş kalır.
 
         if ($variant !== null) {
+            // ⚠️ SEÇENEK DEĞERİ ZORUNLUDUR. `productSet` her varyantta
+            // `optionValues` ister ve ürün seçenek tanımı (`productOptions`)
+            // olmadan varyant yaratılamaz. Bizde listing varyant başınadır
+            // ve tek varyant gönderilir: Shopify'ın kendi tek varyantlı
+            // ürün varsayılanı ("Title" / "Default Title") kullanılır.
+            // Gönderilmeseydi her yaratma şema hatası alır ve VALIDATION
+            // (kalıcı) sayılırdı. GERÇEK MAĞAZADA DOĞRULANMALI.
+            $input['productOptions'] = [[
+                'name' => self::DEFAULT_OPTION_NAME,
+                'values' => [['name' => self::DEFAULT_OPTION_VALUE]],
+            ]];
+
             // SKU VARYANTTA YAŞAR, üründe değil. Shopify'ın veri modelinde
             // satılabilir birim ProductVariant'tır ve stok/fiyat oraya
             // bağlanır.
             $input['variants'] = [[
+                'optionValues' => [[
+                    'optionName' => self::DEFAULT_OPTION_NAME,
+                    'name' => self::DEFAULT_OPTION_VALUE,
+                ]],
                 'sku' => $variant->sku,
                 // Fiyat STRING taşınır — para float taşımaz (yuvarlama
                 // kuruş kayması üretir). `decimal(12,2)` PHP'ye zaten
@@ -250,6 +296,8 @@ final class ShopifyProductMapper
                 : null,
             raw: $variant,
             observedAt: new DateTimeImmutable,
+            // Benimseme anında güncelleme yolunun hedefi (`productUpdate`).
+            parentExternalId: $productGid !== null && $productGid !== '' ? $productGid : null,
         );
     }
 

@@ -592,6 +592,11 @@ final class EtsyAdapter implements ChannelAdapter, SupportsCatalog, SupportsInve
             url: isset($listing['url']) ? (string) $listing['url'] : null,
             raw: $listing,
             observedAt: new DateTimeImmutable,
+            // ⚠️ İLAN KİMLİĞİ BENİMSEME İÇİN döner: `updateListing` hedefi
+            // `listing_id`'dir (`external_parent_id`). Alınmasaydı satıcının
+            // Etsy'de zaten açtığı her ilan "ilan bilinmiyor" ile kalıcı
+            // hataya düşerdi.
+            parentExternalId: isset($listing['listing_id']) ? (string) $listing['listing_id'] : null,
         );
     }
 

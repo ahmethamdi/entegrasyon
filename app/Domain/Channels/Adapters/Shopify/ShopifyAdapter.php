@@ -683,52 +683,82 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
     {
         $listing = $payload->listing;
         $productGid = $listing->external_parent_id;
+        $variantGid = $listing->external_id;
 
-        if ($productGid === null || $productGid === '') {
+        if ($productGid === null || $productGid === '' || $variantGid === null || $variantGid === '') {
             return AdapterResult::failure(
                 ErrorClass::VALIDATION,
-                'Güncellenecek Shopify ürünü bilinmiyor (external_parent_id boş).',
+                'Güncellenecek Shopify ürünü veya varyantı bilinmiyor (external_parent_id / external_id boş).',
             );
         }
 
-        $input = ShopifyProductMapper::toProductSetInput($payload);
-        $input['id'] = $productGid;
-
-        $data = $this->gql(
+        // ① ÜRÜN ALANLARI — `productUpdate`, `productSet` DEĞİL.
+        //
+        // ⚠️ `productSet` varyant listesini TAMAMEN yazar ve listede olmayan
+        // varyantları SİLER. Bizde listing varyant başınadır; satıcının
+        // Shopify'da açtığı çok varyantlı bir ürüne tek varyantla
+        // `productSet` atmak kardeş varyantları kanaldan silerdi
+        // (`ShopifyProductMapper::toProductUpdateInput`).
+        $this->gql(
             <<<'GQL'
-            mutation UpdateProduct($input: ProductSetInput!) {
-              productSet(synchronous: true, input: $input) {
-                product {
-                  id
-                  variants(first: 1) {
-                    nodes { id sku inventoryItem { id } }
-                  }
-                }
+            mutation UpdateProduct($product: ProductUpdateInput!) {
+              productUpdate(product: $product) {
+                product { id }
                 userErrors { field message code }
               }
             }
             GQL,
-            variables: ['input' => $input],
-            operation: 'productSet',
-            userErrorPath: 'productSet',
+            variables: ['product' => ShopifyProductMapper::toProductUpdateInput($payload, $productGid)],
+            operation: 'productUpdate',
+            userErrorPath: 'productUpdate',
         );
 
-        $product = $data['productSet']['product'] ?? null;
+        // ② YALNIZCA BU VARYANT — kardeşlere dokunulmaz.
+        //
+        // Fiyat burada GÖNDERİLMEZ: kendi domainindedir (`PushPrices`) ve
+        // içerik düzenlemesi kampanya fiyatını ezmemeli. Stok da aynı
+        // gerekçeyle yoktur.
+        $data = $this->gql(
+            <<<'GQL'
+            mutation UpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+              productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+                productVariants { id sku inventoryItem { id } }
+                userErrors { field message code }
+              }
+            }
+            GQL,
+            variables: [
+                'productId' => $productGid,
+                'variants' => [[
+                    'id' => $variantGid,
+                    'inventoryItem' => array_filter([
+                        'sku' => $listing->variant?->sku,
+                        'tracked' => true,
+                    ], static fn (mixed $v): bool => $v !== null),
+                ]],
+            ],
+            operation: 'productVariantsBulkUpdate',
+            userErrorPath: 'productVariantsBulkUpdate',
+        );
 
-        if (! is_array($product)) {
+        $variant = $data['productVariantsBulkUpdate']['productVariants'][0] ?? null;
+
+        if (! is_array($variant) || ! isset($variant['id'])) {
             return AdapterResult::failure(
                 ErrorClass::VALIDATION,
-                'Shopify productSet yanıtı ürün taşımıyor.',
+                'Shopify varyant güncelleme yanıtı varyant taşımıyor.',
             );
         }
 
-        // Kimlikler YENİDEN okunur: satıcı Shopify panelinden varyantı
-        // silip yeniden yaratmış olabilir ve o zaman inventory item gid
-        // DEĞİŞİR. Eski kimlikle stok yazmak sessizce YANLIŞ varyanta
+        // Kimlikler YENİDEN okunur — ve BU VARYANTTAN okunur. Satıcı
+        // varyantı silip yeniden yaratmışsa inventory item gid DEĞİŞİR;
+        // ürünün "ilk varyantından" okunsaydı çok varyantlı üründe BAŞKA
+        // varyantın stok hedefi yazılır ve stok sessizce yanlış varyanta
         // giderdi.
-        return AdapterResult::success(
-            ShopifyProductMapper::toIdentityResult($product, $this->shopDomain())
-        );
+        return AdapterResult::success(ShopifyProductMapper::toIdentityResult(
+            ['id' => $productGid, 'variants' => ['nodes' => [$variant]]],
+            $this->shopDomain(),
+        ));
     }
 
     /**
@@ -751,18 +781,21 @@ final class ShopifyAdapter implements ChannelAdapter, SupportsCatalog, SupportsC
             return AdapterResult::success(['already_absent' => true]);
         }
 
+        // `productUpdate` — `productSet` DEĞİL: yalnızca durum yazılır ve
+        // varyant listesine dokunan bir mutation burada riskten başka bir
+        // şey getirmez.
         $this->gql(
             <<<'GQL'
-            mutation ArchiveProduct($input: ProductSetInput!) {
-              productSet(synchronous: true, input: $input) {
+            mutation ArchiveProduct($product: ProductUpdateInput!) {
+              productUpdate(product: $product) {
                 product { id status }
                 userErrors { field message code }
               }
             }
             GQL,
-            variables: ['input' => ['id' => $productGid, 'status' => 'ARCHIVED']],
-            operation: 'productSet',
-            userErrorPath: 'productSet',
+            variables: ['product' => ['id' => $productGid, 'status' => 'ARCHIVED']],
+            operation: 'productUpdate',
+            userErrorPath: 'productUpdate',
         );
 
         return AdapterResult::success(['external_id' => $listing->external_id]);

@@ -183,6 +183,32 @@ final class PushListingTest extends TestCase
     }
 
     /**
+     * ⚠️ BENİMSEMEDE ÜST KİMLİK DE ALINIR.
+     *
+     * İki seviyeli kanalda (Shopify product → variant) yalnızca varyant
+     * kimliği benimsenseydi update yolu hangi ürünü yazacağını bilemez ve
+     * satıcının kanalda zaten açtığı HER ürün kalıcı hataya düşerdi.
+     */
+    #[Test]
+    public function adopting_an_existing_product_also_adopts_its_parent_identity(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        $listing = $this->draftListing($tenant, $variant, 'woocommerce');
+
+        ProgrammableCatalogAdapter::alreadyHas('woocommerce', $variant->sku, externalId: 'V-31', parentExternalId: 'P-7');
+
+        $operation = $this->openOperation($tenant, $listing, version: 1);
+
+        $this->runJob($tenant, $operation->id);
+
+        $fresh = $this->asTenant($tenant, fn () => $listing->fresh());
+
+        $this->assertSame('V-31', $fresh->external_id);
+        $this->assertSame('P-7', $fresh->external_parent_id, 'Üst ürün kimliği kalıcı yazılmalı.');
+    }
+
+    /**
      * Geçici hata: operasyon retrying kalır, listing TASLAK kalır.
      *
      * external_id yazılmamalıdır — kanal ürünü yaratmadı; yazmak sonraki

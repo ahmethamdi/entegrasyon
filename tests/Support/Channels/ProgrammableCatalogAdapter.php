@@ -47,6 +47,9 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
     /** Kanalda ZATEN var olan ürünler: kanal kodu → sku → external id. */
     private static array $existing = [];
 
+    /** Kanal kodu → sku → üst ürün kimliği (iki seviyeli kanallar). */
+    private static array $existingParent = [];
+
     /** Kanal kodu → yaratılan listing'e verilecek external id. */
     private static array $nextExternalId = [];
 
@@ -101,9 +104,14 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
     }
 
     /** Kanalda bu SKU zaten varmış gibi davran — kopya listeleme testi. */
-    public static function alreadyHas(string $channelTypeCode, string $sku, string $externalId): void
-    {
+    public static function alreadyHas(
+        string $channelTypeCode,
+        string $sku,
+        string $externalId,
+        ?string $parentExternalId = null,
+    ): void {
         self::$existing[$channelTypeCode][$sku] = $externalId;
+        self::$existingParent[$channelTypeCode][$sku] = $parentExternalId;
     }
 
     /**
@@ -121,6 +129,7 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
         self::$plan = [];
         self::$calls = [];
         self::$existing = [];
+        self::$existingParent = [];
         self::$nextExternalId = [];
         self::$extraIdentity = [];
         self::$resultFailure = [];
@@ -228,6 +237,7 @@ final class ProgrammableCatalogAdapter implements ChannelAdapter, SupportsCatalo
             url: null,
             raw: [],
             observedAt: new DateTimeImmutable,
+            parentExternalId: self::$existingParent[$this->code()][$variant->sku] ?? null,
         );
     }
 

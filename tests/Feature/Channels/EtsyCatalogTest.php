@@ -302,6 +302,9 @@ final class EtsyCatalogTest extends TestCase
         $this->assertNotNull($remote);
         $this->assertSame('5002', $remote->externalId);
         $this->assertSame('19.90', $remote->price);
+
+        // İlan kimliği benimseme için döner — `updateListing` hedefi odur.
+        $this->assertSame((string) $this->listingBody()['listing_id'], $remote->parentExternalId);
     }
 
     /** Eşleşme yoksa `null` döner — yanlış ilana bağlanmaz. */

@@ -207,6 +207,12 @@ final class PushListing implements ShouldQueue
                 // Kimlik BELLEKTE benimsenir; kalıcı yazma başarıdan sonra.
                 // Çağrı patlarsa satır dokunulmamış kalmalı.
                 $listing->external_id = $existing->externalId;
+
+                // ⚠️ ÜST KİMLİK DE BENİMSENİR. Alınmasaydı iki seviyeli
+                // kanalda (Shopify product → variant) update yolu hangi
+                // ürünü yazacağını bilemez ve satıcının kanalda zaten açtığı
+                // HER ürün kalıcı hataya düşerdi.
+                $listing->external_parent_id ??= $existing->parentExternalId;
             }
         }
 

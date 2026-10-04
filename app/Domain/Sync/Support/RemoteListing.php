@@ -25,5 +25,10 @@ final readonly class RemoteListing
         public ?string $url = null,
         public array $raw = [],
         public ?\DateTimeImmutable $observedAt = null,
+        // Üst ürün kimliği — kanal iki seviyeli kimlik taşıyorsa (Shopify
+        // product gid, Etsy listing_id). Benimseme anında `external_id`
+        // ile BİRLİKTE alınmazsa güncelleme yolu hangi ürünü yazacağını
+        // bilemez.
+        public ?string $parentExternalId = null,
     ) {}
 }

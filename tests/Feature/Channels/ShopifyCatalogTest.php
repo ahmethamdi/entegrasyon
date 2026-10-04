@@ -188,6 +188,47 @@ final class ShopifyCatalogTest extends TestCase
     }
 
     /**
+     * ⚠️ YARATMA YÜKÜ SEÇENEK DEĞERİ TAŞIR, KATEGORİ UUID'Sİ TAŞIMAZ.
+     *
+     * `productSet` her varyantta `optionValues` ve üründe `productOptions`
+     * ister; tek varyantlı ürünün varsayılanı "Title / Default Title".
+     * `productType` önceden iç kategorinin UUID'siyle doluyordu ve Shopify
+     * panelinde anlamsız bir kimlik görünürdü.
+     */
+    #[Test]
+    public function the_create_payload_carries_default_options_and_no_category_uuid(): void
+    {
+        Http::fake(['*' => Http::response([
+            'data' => ['productSet' => [
+                'product' => ['id' => 'gid://shopify/Product/1', 'variants' => ['nodes' => [[
+                    'id' => 'gid://shopify/ProductVariant/2',
+                    'inventoryItem' => ['id' => 'gid://shopify/InventoryItem/3'],
+                ]]]],
+                'userErrors' => [],
+            ]],
+        ], 200)]);
+
+        [$adapter, $listing] = $this->adapterWithListing(sku: 'SKU-1');
+
+        $adapter->createListing(new ListingPayload(
+            listing: $listing,
+            title: 'Test Ürünü',
+            description: null,
+            categoryId: '01a1044b-e836-70b8-b79e-c7e7da2905d5',
+            version: 1,
+        ));
+
+        Http::assertSent(function ($request): bool {
+            $input = $request->data()['variables']['input'] ?? [];
+
+            return ($input['productOptions'][0]['name'] ?? null) === 'Title'
+                && ($input['productOptions'][0]['values'][0]['name'] ?? null) === 'Default Title'
+                && ($input['variants'][0]['optionValues'][0] ?? null) === ['optionName' => 'Title', 'name' => 'Default Title']
+                && ! array_key_exists('productType', $input);
+        });
+    }
+
+    /**
      * ⚠️ İÇERİK YÜKÜ STOK TAŞIMAZ.
      *
      * v2.2 · katalog kuralı: içerik düzenlemesi stoğa DOKUNMAZ. Yükte stok
@@ -233,18 +274,17 @@ final class ShopifyCatalogTest extends TestCase
     #[Test]
     public function updating_targets_the_product_gid(): void
     {
-        Http::fake(['*' => Http::response([
-            'data' => ['productSet' => [
-                'product' => [
-                    'id' => 'gid://shopify/Product/123',
-                    'variants' => ['nodes' => [[
-                        'id' => 'gid://shopify/ProductVariant/456',
-                        'inventoryItem' => ['id' => 'gid://shopify/InventoryItem/789'],
-                    ]]],
-                ],
+        Http::fake(['*' => Http::sequence()
+            ->push(['data' => ['productUpdate' => ['product' => ['id' => 'gid://shopify/Product/123'], 'userErrors' => []]]])
+            ->push(['data' => ['productVariantsBulkUpdate' => [
+                'productVariants' => [[
+                    'id' => 'gid://shopify/ProductVariant/456',
+                    'sku' => 'SKU-1',
+                    'inventoryItem' => ['id' => 'gid://shopify/InventoryItem/789'],
+                ]],
                 'userErrors' => [],
-            ]],
-        ], 200)]);
+            ]]]),
+        ]);
 
         [$adapter, $listing] = $this->adapterWithListing(
             externalId: 'gid://shopify/ProductVariant/456',
@@ -254,11 +294,50 @@ final class ShopifyCatalogTest extends TestCase
         $result = $adapter->updateListing($this->payload($listing));
 
         $this->assertFalse($result->failed());
+        $this->assertSame('gid://shopify/InventoryItem/789', $result->data['channel_metadata']['inventory_item_gid'] ?? null);
 
+        Http::assertSent(fn ($request): bool => ($request->data()['variables']['product']['id'] ?? null) === 'gid://shopify/Product/123');
+        Http::assertSent(fn ($request): bool => ($request->data()['variables']['variants'][0]['id'] ?? null) === 'gid://shopify/ProductVariant/456');
+    }
+
+    /**
+     * ⚠️ GÜNCELLEME `productSet` İLE YAPILMAZ — kardeş varyantlar silinir.
+     *
+     * `productSet` varyant listesini TAMAMEN yazar ve listede olmayan
+     * varyantları SİLER. Satıcının Shopify'da açtığı üç varyantlı bir
+     * ürün SKU ile benimsenip tek varyantla `productSet` atılsaydı öteki
+     * iki varyant kanaldan silinirdi. Varyant isteği YALNIZCA bu varyantın
+     * kimliğini taşır; içerik isteği fiyat ve stok TAŞIMAZ.
+     */
+    #[Test]
+    public function updating_never_rewrites_the_variant_list(): void
+    {
+        Http::fake(['*' => Http::sequence()
+            ->push(['data' => ['productUpdate' => ['product' => ['id' => 'gid://shopify/Product/123'], 'userErrors' => []]]])
+            ->push(['data' => ['productVariantsBulkUpdate' => [
+                'productVariants' => [['id' => 'gid://shopify/ProductVariant/456', 'inventoryItem' => ['id' => 'gid://shopify/InventoryItem/789']]],
+                'userErrors' => [],
+            ]]]),
+        ]);
+
+        [$adapter, $listing] = $this->adapterWithListing(
+            externalId: 'gid://shopify/ProductVariant/456',
+            externalParentId: 'gid://shopify/Product/123',
+        );
+
+        $adapter->updateListing($this->payload($listing));
+
+        Http::assertSentCount(2);
+        Http::assertNotSent(fn ($request): bool => str_contains($request->body(), 'productSet'));
         Http::assertSent(function ($request): bool {
-            return ($request->data()['variables']['input']['id'] ?? null)
-                === 'gid://shopify/Product/123';
+            $variants = $request->data()['variables']['variants'] ?? null;
+
+            return is_array($variants)
+                && count($variants) === 1
+                && ! array_key_exists('price', $variants[0])
+                && ! array_key_exists('inventoryQuantities', $variants[0]);
         });
+        Http::assertNotSent(fn ($request): bool => array_key_exists('status', $request->data()['variables']['product'] ?? []));
     }
 
     /**
@@ -293,7 +372,7 @@ final class ShopifyCatalogTest extends TestCase
     public function delisting_archives_the_product_instead_of_deleting_it(): void
     {
         Http::fake(['*' => Http::response([
-            'data' => ['productSet' => [
+            'data' => ['productUpdate' => [
                 'product' => ['id' => 'gid://shopify/Product/123', 'status' => 'ARCHIVED'],
                 'userErrors' => [],
             ]],
@@ -307,10 +386,11 @@ final class ShopifyCatalogTest extends TestCase
         $adapter->delist($listing);
 
         Http::assertSent(function ($request): bool {
-            $input = $request->data()['variables']['input'] ?? [];
+            $input = $request->data()['variables']['product'] ?? [];
 
             return ($input['status'] ?? null) === 'ARCHIVED'
-                && ! str_contains($request->body(), 'productDelete');
+                && ! str_contains($request->body(), 'productDelete')
+                && ! str_contains($request->body(), 'productSet');
         });
     }
 
@@ -358,6 +438,10 @@ final class ShopifyCatalogTest extends TestCase
         $this->assertNotNull($remote);
         $this->assertSame('gid://shopify/ProductVariant/456', $remote->externalId);
         $this->assertSame('99.90', $remote->price);
+
+        // Üst ürün kimliği BENİMSEME İÇİN döner — yoksa update yolu hangi
+        // ürünü yazacağını bilemez ve listing kalıcı hataya düşer.
+        $this->assertSame('gid://shopify/Product/123', $remote->parentExternalId);
     }
 
     /**
