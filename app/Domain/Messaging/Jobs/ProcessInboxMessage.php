@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Messaging\Jobs;
 
+use App\Domain\Billing\Routing\ShopifyBillingRouter;
 use App\Domain\Channels\Routing\ChannelLifecycleRouter;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Routing\OrderEventRouter;
@@ -103,7 +104,10 @@ final class ProcessInboxMessage extends TenantAwareJob
             // hattından geldi, aynı tekilleştirmeden geçti ve aynı
             // `inbox:recover` onu kurtarır. Değişen tek şey, sipariş
             // router'ından ÖNCE sorulmasıdır.
-            $handled = app(ChannelLifecycleRouter::class)->route($message);
+            // FATURALAMA en önce (Shopify `app_subscriptions/update`;
+            // `app/uninstalled`'da yerel aboneliği kapatır ama TÜKETMEZ).
+            $handled = app(ShopifyBillingRouter::class)->route($message)
+                || app(ChannelLifecycleRouter::class)->route($message);
 
             if (! $handled) {
                 app(OrderEventRouter::class)->route($message);

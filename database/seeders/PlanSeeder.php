@@ -44,6 +44,8 @@ final class PlanSeeder extends Seeder
                 'code' => 'free',
                 'name' => 'Ücretsiz',
                 'price_monthly' => 0,
+                // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
+                'shopify_price_usd' => null,
                 // Denemek için yeterli, üretim için değil: satıcı ürünü
                 // gerçekten kanala gönderip akışı görebilmeli.
                 'limits' => [$products => 25, $channels => 1],
@@ -53,6 +55,8 @@ final class PlanSeeder extends Seeder
                 'code' => 'starter',
                 'name' => 'Başlangıç',
                 'price_monthly' => 499,
+                // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
+                'shopify_price_usd' => 9.99,
                 'limits' => [$products => 500, $channels => 2],
                 'is_public' => true,
             ],
@@ -60,6 +64,8 @@ final class PlanSeeder extends Seeder
                 'code' => 'pro',
                 'name' => 'Profesyonel',
                 'price_monthly' => 1499,
+                // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
+                'shopify_price_usd' => 29.99,
                 'limits' => [$products => 5000, $channels => 5],
                 'is_public' => true,
             ],
@@ -67,6 +73,8 @@ final class PlanSeeder extends Seeder
                 'code' => 'business',
                 'name' => 'Kurumsal',
                 'price_monthly' => 3999,
+                // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
+                'shopify_price_usd' => 79.99,
                 // Limit YOK = SINIRSIZ. `null` yerine anahtarı hiç
                 // yazmamak da aynı anlama gelir; burada NİYET açık
                 // olsun diye açıkça null yazılıyor.
@@ -82,6 +90,7 @@ final class PlanSeeder extends Seeder
                     'name' => $plan['name'],
                     'price_monthly' => $plan['price_monthly'],
                     'currency' => 'TRY',
+                    'shopify_price_usd' => $plan['shopify_price_usd'],
                     'limits' => $plan['limits'],
                     'is_public' => $plan['is_public'],
                 ],

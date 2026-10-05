@@ -42,6 +42,7 @@ final class Plan extends Model
         'name',
         'price_monthly',
         'currency',
+        'shopify_price_usd',
         'limits',
         'is_public',
     ];

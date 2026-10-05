@@ -415,11 +415,17 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
 
     /**
      * Uygulamanın dinlediği konular. Normalleştirici (`ShopifyOrderNormalizer`)
-     * sipariş konularını, yaşam döngüsü yönlendiricisi `app/uninstalled`'ı okur.
+     * sipariş konularını, yaşam döngüsü yönlendiricisi `app/uninstalled`'ı,
+     * abonelik yönlendiricisi `app_subscriptions/update`'i okur.
+     *
+     * SIRA BİLİNÇLİ: korumalı müşteri verisi İSTEMEYEN konular önce. Sipariş
+     * konuları Shopify'ın veri erişim onayı yoksa reddedilir; eskiden ilk
+     * ret bütün döngüyü keserdi ve kaldırma bildirimi hiç kurulmazdı.
      */
-    private const WEBHOOK_TOPICS = [
+    public const WEBHOOK_TOPICS = [
+        'APP_UNINSTALLED', 'APP_SUBSCRIPTIONS_UPDATE',
         'ORDERS_CREATE', 'ORDERS_UPDATED', 'ORDERS_CANCELLED', 'ORDERS_FULFILLED',
-        'ORDERS_PARTIALLY_FULFILLED', 'REFUNDS_CREATE', 'APP_UNINSTALLED',
+        'ORDERS_PARTIALLY_FULFILLED', 'REFUNDS_CREATE',
     ];
 
     /**
@@ -449,13 +455,18 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
         }
 
         $created = [];
+        $failed = [];
         foreach (self::WEBHOOK_TOPICS as $topic) {
             if (isset($existing[$topic])) {
                 continue;
             }
 
-            $this->gql(
-                <<<'GQL'
+            // KONULAR BİRBİRİNDEN BAĞIMSIZ: biri reddedilirse (korumalı
+            // veri onayı yok) diğerleri yine kurulur; reddedilen adıyla
+            // raporlanır ve sonraki "Tekrar dene"de yeniden denenir.
+            try {
+                $this->gql(
+                    <<<'GQL'
                 mutation WebhookCreate($topic: WebhookSubscriptionTopic!, $sub: WebhookSubscriptionInput!) {
                   webhookSubscriptionCreate(topic: $topic, webhookSubscription: $sub) {
                     webhookSubscription { id }
@@ -463,12 +474,26 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
                   }
                 }
                 GQL,
-                variables: ['topic' => $topic, 'sub' => ['uri' => $deliveryUrl]],
-                operation: 'WebhookCreate',
-                userErrorPath: 'webhookSubscriptionCreate',
-            );
+                    variables: ['topic' => $topic, 'sub' => ['uri' => $deliveryUrl]],
+                    operation: 'WebhookCreate',
+                    userErrorPath: 'webhookSubscriptionCreate',
+                );
 
-            $created[] = $topic;
+                $created[] = $topic;
+            } catch (Throwable $e) {
+                $failed[$topic] = $e->getMessage();
+            }
+        }
+
+        if ($failed !== []) {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Kurulamayan webhook konuları: '.implode('; ', array_map(
+                    static fn (string $topic, string $error): string => $topic.' ('.$error.')',
+                    array_keys($failed),
+                    $failed,
+                )),
+            );
         }
 
         return AdapterResult::success(['created' => $created, 'kept' => array_keys($existing)]);

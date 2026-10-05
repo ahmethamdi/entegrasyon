@@ -49,6 +49,8 @@ final class Subscription extends Model
     protected $fillable = [
         'tenant_id',
         'plan_code',
+        'provider',
+        'channel_connection_id',
         'status',
         'started_at',
         'current_period_end',

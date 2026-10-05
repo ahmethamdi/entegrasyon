@@ -304,6 +304,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     //
     // ABONELİK BURADA YAZILMAZ — webhook yazar (`/webhooks/stripe`).
     Route::get('/billing', [BillingController::class, 'index'])->name('billing.index');
+    // Shopify abonelik onayından dönüş — durum Shopify'dan okunur.
+    Route::get('/billing/shopify/return', [BillingController::class, 'shopifyReturn'])->name('billing.shopify.return');
     Route::post('/billing/checkout', [BillingController::class, 'checkout'])
         ->name('billing.checkout');
 

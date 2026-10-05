@@ -280,7 +280,9 @@ final class AdjustStockTest extends TestCase
         ])->assertRedirect()->assertSessionHasNoErrors();
 
         $movement = $this->asTenant($tenant, fn () => InventoryMovement::query()
-            ->where('variant_id', $variant->id)->latest('occurred_at')->firstOrFail());
+            ->where('variant_id', $variant->id)
+            // Açılış ve sayım aynı anda yazılabilir (eşit occurred_at) — kimlik UUIDv7, sırayı o bozmaz.
+            ->latest('occurred_at')->latest('id')->firstOrFail());
 
         $this->assertSame(MovementType::MANUAL_REDUCTION, $movement->type);
         $this->assertSame(-3, (int) $movement->on_hand_delta);

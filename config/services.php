@@ -42,6 +42,9 @@ return [
         'client_id' => env('SHOPIFY_CLIENT_ID'),
         'client_secret' => env('SHOPIFY_CLIENT_SECRET'),
         'scopes' => env('SHOPIFY_SCOPES'),
+        // true: bütün mağazalarda TEST aboneliği (canlı öncesi deneme).
+        // Geliştirme mağazası her durumda testtir (ShopifyBilling).
+        'billing_test' => (bool) env('SHOPIFY_BILLING_TEST', false),
     ],
 
 ];
