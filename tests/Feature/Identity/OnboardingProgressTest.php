@@ -300,7 +300,7 @@ final class OnboardingProgressTest extends TestCase
 
         $this->connectionFor($tenant, status: 'active');
 
-        foreach (['/products', '/orders', '/inventory', '/channels'] as $path) {
+        foreach (['/products', '/orders', '/channels'] as $path) {
             $onboarding = $this->onboarding($this->actingAs($user)->get($path));
 
             $this->assertTrue(

@@ -78,7 +78,7 @@ final class DashboardController extends Controller
                 'count' => InventoryLevel::query()->where('available', '<', 0)->count(),
                 'title' => 'ürünü elinde olandan fazla sattın',
                 'hint' => 'Stoğu düzelt ya da müşteriye haber ver.',
-                'href' => '/inventory?filter=oversold',
+                'href' => '/products?filter=out',
                 'tone' => 'urgent',
             ],
             [

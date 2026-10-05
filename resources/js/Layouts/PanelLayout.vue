@@ -21,8 +21,9 @@ const tenantName = computed(() => page.props.tenant?.name ?? '');
  * gruplama sayacı grup başına sıfırlar.
  *
  * SIRA KULLANIM SIKLIĞINA GÖRE: satıcı siparişi ve stoğu günde defalarca
- * açar, kataloğu haftada bir düzenler. Bu yüzden "Siparişler" ve "Stok"
- * "Ürünler"in ÜSTÜNDEDİR — alfabetik ya da CRUD sırası değil.
+ * açar. 5 Ekim'den beri stok AYRI EKRAN DEĞİL, Ürünler listesinde
+ * (kullanıcı kararı) — bu yüzden "Ürünler" günlük grupta, Siparişler'in
+ * hemen altında.
  *
  * "Abonelik" ve "Yardım" gezinme değil HESAP öğeleridir; sidebar
  * altında, ayrı bir bölümde yaşarlar (yerleşik SaaS konvansiyonu).
@@ -33,13 +34,12 @@ const navGroups = [
         items: [
             { href: '/panel', label: k('Ana sayfa') },
             { href: '/orders', label: k('Siparişler') },
-            { href: '/inventory', label: k('Stok') },
+            { href: '/products', label: k('Ürünler') },
         ],
     },
     {
         heading: k('Mağazam'),
         items: [
-            { href: '/products', label: k('Ürünler') },
             { href: '/channels', label: k('Kanallar') },
             /*
              * Onaylar GÜNLÜK işe yakındır (Trendyol reddettiği ürünün

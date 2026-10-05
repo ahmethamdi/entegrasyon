@@ -35,7 +35,7 @@ function submit() {
                     </p>
                     <Link
                         v-if="product.hasOversold"
-                        href="/inventory?filter=oversold"
+                        :href="`/products?filter=out&search=${encodeURIComponent(product.sku)}`"
                         class="text-[11px] text-red-700 underline"
                     >
                         fazla satış var
@@ -53,13 +53,13 @@ function submit() {
         <!--
             STOK BU EKRANDA DEĞİŞTİRİLMEZ. İçerik ve stok ayrı senkron
             alanlarıdır; başlık düzeltmesinin stok hareketi yaratması
-            ledger'ı kirletirdi. Stok düzeltmesi stok ekranındadır.
+            ledger'ı kirletirdi. Stok sayımı ürün listesindedir.
         -->
         <p class="mt-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
             Bu ekran yalnızca içeriği düzenler; stok değişmez.
-            Stok düzeltmesi için
-            <Link href="/inventory" class="font-medium text-stone-900 underline">stok ekranını</Link>
-            kullanın.
+            Stok sayımı
+            <Link :href="`/products?search=${encodeURIComponent(product.sku)}`" class="font-medium text-stone-900 underline">ürün listesinden</Link>
+            girilir.
         </p>
 
         <form class="mt-6 max-w-xl space-y-5" @submit.prevent="submit">
