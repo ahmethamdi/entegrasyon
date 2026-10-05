@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\Variant;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\IncomingOrder;
 use App\Domain\Orders\Support\IncomingOrderLine;
+use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 
 /**
@@ -47,10 +48,30 @@ final class OrderPayloadMapper
 
         $variantsBySku = self::resolveVariants($skus);
 
+        // SKU TUTMAYAN satır kanal varyant kimliğiyle denenir — YALNIZ bu
+        // bağlantının bağlarında (başka mağazanın aynı kimliği eşlenmez).
+        $variantsByExternalId = self::resolveListedVariants(
+            $channelConnectionId,
+            array_values(array_filter(array_map(
+                static fn (array $line): ?string => isset($variantsBySku[(string) ($line['sku'] ?? '')])
+                    ? null
+                    : ($line['external_variant_id'] ?? null),
+                $rawLines,
+            ))),
+        );
+
         $lines = [];
 
         foreach ($rawLines as $index => $line) {
             $sku = (string) ($line['sku'] ?? '');
+            $listed = $variantsByExternalId[(string) ($line['external_variant_id'] ?? '')] ?? null;
+            $variantId = $variantsBySku[$sku] ?? $listed['id'] ?? null;
+
+            // Kanal SKU göndermediyse satır BİZİM SKU'muzu taşır: sonraki
+            // iptal/iade SKU yedeğiyle de eşleşebilsin, panel boş göstermesin.
+            if ($sku === '' && $listed !== null) {
+                $sku = $listed['sku'];
+            }
 
             $lines[] = new IncomingOrderLine(
                 externalLineId: (string) ($line['external_line_id'] ?? $index),
@@ -58,7 +79,7 @@ final class OrderPayloadMapper
                 title: (string) ($line['title'] ?? $sku),
                 quantity: (int) ($line['quantity'] ?? 0),
                 // Eşleşmezse NULL — satır kaydedilir, stok düşülmez.
-                variantId: $variantsBySku[$sku] ?? null,
+                variantId: $variantId,
                 unitPrice: (string) ($line['unit_price'] ?? '0'),
                 lineTotal: (string) ($line['line_total'] ?? '0'),
             );
@@ -150,6 +171,30 @@ final class OrderPayloadMapper
         return Variant::query()
             ->whereIn('sku', array_unique($skus))
             ->pluck('id', 'sku')
+            ->all();
+    }
+
+    /**
+     * Kanal varyant kimliği → {id, sku}, bu bağlantının `Listing` bağlarından.
+     *
+     * @param  list<string>  $externalIds
+     * @return array<string, array{id: string, sku: string}>
+     */
+    private static function resolveListedVariants(string $channelConnectionId, array $externalIds): array
+    {
+        if ($externalIds === []) {
+            return [];
+        }
+
+        return Listing::query()
+            ->where('channel_connection_id', $channelConnectionId)
+            ->whereIn('external_id', array_unique($externalIds))
+            ->with('variant:id,sku')
+            ->get()
+            ->filter(static fn (Listing $listing): bool => $listing->variant !== null)
+            ->mapWithKeys(static fn (Listing $listing): array => [
+                (string) $listing->external_id => ['id' => $listing->variant->id, 'sku' => (string) $listing->variant->sku],
+            ])
             ->all();
     }
 }

@@ -11,9 +11,11 @@ use App\Domain\Catalog\Support\ChannelImportResult;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -129,9 +131,9 @@ final class ImportProductsFromChannel
             $pagesRead++;
 
             foreach ($page->products as $product) {
-                // SKU'SUZ ÜRÜN ATLANIR ama SAYILIR ve SEBEBİYLE raporlanır.
-                // Sessizce düşseydi satıcı "50 ürünüm vardı, 47'si geldi"
-                // der ve eksiğin nedenini hiçbir yerde bulamazdı.
+                // SKU'SUZ VE ADRESSİZ ÜRÜN ATLANIR ama SAYILIR ve SEBEBİYLE
+                // raporlanır. Sessizce düşseydi satıcı "50 ürünüm vardı,
+                // 47'si geldi" der ve eksiğin nedenini hiçbir yerde bulamazdı.
                 if (! $product->isImportable()) {
                     $skipped++;
                     $errors[] = [
@@ -145,12 +147,24 @@ final class ImportProductsFromChannel
                     continue;
                 }
 
+                // SKU'suz ürüne SKU ÜRETİLİR — yalnız kanal adresi biliniyorsa
+                // (`isImportable` bunu garanti eder). Eşleşme bundan sonra bu
+                // SKU'ya değil, aşağıda kurulan `Listing` bağına dayanır.
+                $sku = $product->hasSku()
+                    ? trim((string) $product->sku)
+                    : (string) $product->autoSku(substr($connection->channel_type_code, 0, 3));
+
                 try {
-                    $existing = $this->findBySku($tenantId, (string) $product->sku);
+                    // ÖNCE BAĞ, SONRA SKU: satıcı kanalda SKU'yu değiştirdiyse
+                    // (ya da sonradan girdiyse) SKU araması tutmaz ve ürün
+                    // ikinci kez açılırdı. Bağ kanal kimliğidir, değişmez.
+                    $existing = $this->findByListing($connection, $product)
+                        ?? $this->findBySku($tenantId, $sku);
 
                     if ($existing !== null) {
                         $this->applyUpdate($existing, $product);
                         $this->syncImages->run($existing, $connection->id, $product->images);
+                        $this->linkListing($connection, $existing, $product);
                         $updated++;
 
                         continue;
@@ -162,7 +176,7 @@ final class ImportProductsFromChannel
                         continue;
                     }
 
-                    $new = $this->applyCreate($product, $warehouseId);
+                    $new = $this->applyCreate($product, $sku, $warehouseId);
                     $created++;
 
                     if ($remaining !== null) {
@@ -172,17 +186,18 @@ final class ImportProductsFromChannel
                     // Görsel hatası ürünü geri almaz: ürün yazıldı ve
                     // sayıldı, görsel hatası raporda ayrıca görünür.
                     $this->syncImages->run($new, $connection->id, $product->images);
+                    $this->linkListing($connection, $new, $product);
                 } catch (Throwable $e) {
                     // SESSİZCE YUTULMAZ — tur devam eder, ürün rapora girer.
                     $errors[] = [
                         'line' => 0,
-                        'message' => sprintf('%s: %s', $product->sku, $e->getMessage()),
+                        'message' => sprintf('%s: %s', $sku, $e->getMessage()),
                     ];
 
                     Log::warning('catalog.channel_import_product_failed', [
                         'tenant' => $tenantId,
                         'connection' => $connection->id,
-                        'sku' => $product->sku,
+                        'sku' => $sku,
                         'error' => $e->getMessage(),
                     ]);
                 }
@@ -256,6 +271,71 @@ final class ImportProductsFromChannel
     }
 
     /**
+     * Bu bağlantıda bu kanal kimliğine bağlı ürün — yeniden içe aktarmada.
+     */
+    private function findByListing(ChannelConnection $connection, RemoteProduct $product): ?Product
+    {
+        $externalId = $product->listingIdentity['external_id'] ?? null;
+
+        if (! is_string($externalId) || $externalId === '') {
+            return null;
+        }
+
+        return Listing::query()
+            ->where('channel_connection_id', $connection->id)
+            ->where('external_id', $externalId)
+            ->first()?->variant?->product;
+    }
+
+    /**
+     * Ürünü kanaldaki karşılığına BAĞLAR: canlı `Listing`, kanal adresiyle.
+     *
+     * Ürün o kanaldan GELDİ — yani orada zaten satışta. Bağ kurulmasaydı:
+     * - stok değişince bu kanala hiç gitmezdi (fan-out yalnız canlı satıra),
+     * - satıcı ürünü kanala "eklediğinde" SKU araması tutmazsa (SKU'suz
+     *   ürün) kanalda KOPYA ürün yaratılırdı,
+     * - SKU'suz siparişin satırı hiçbir varyanta eşlenemezdi.
+     *
+     * VAR OLAN ADRES EZİLMEZ: satır başka bir kanal kaydına bağlıysa o bağ
+     * satıcının (ya da önceki gönderimin) kararıdır; sessizce çevirmek
+     * stoğu başka ürüne yazdırırdı. Raporlanır, dokunulmaz.
+     */
+    private function linkListing(ChannelConnection $connection, Product $product, RemoteProduct $remote): void
+    {
+        $identity = $remote->listingIdentity;
+        $externalId = $identity['external_id'] ?? null;
+        $variant = $product->variants()->first();
+
+        if (! is_string($externalId) || $externalId === '' || $variant === null) {
+            return;
+        }
+
+        $listing = Listing::query()->firstOrNew([
+            'channel_connection_id' => $connection->id,
+            'variant_id' => $variant->id,
+        ]);
+
+        if ($listing->external_id !== null && $listing->external_id !== $externalId) {
+            throw new RuntimeException(sprintf(
+                'ürün bu kanalda başka bir kayda bağlı (%s); bağ değiştirilmedi.',
+                $listing->external_id,
+            ));
+        }
+
+        $metadata = is_array($identity['channel_metadata'] ?? null) ? $identity['channel_metadata'] : [];
+
+        $listing->forceFill(array_filter([
+            'tenant_id' => $product->tenant_id,
+            'external_id' => $externalId,
+            'external_parent_id' => $identity['external_parent_id'] ?? $listing->external_parent_id,
+            'external_url' => $identity['external_url'] ?? $listing->external_url,
+            'channel_metadata' => [...($listing->channel_metadata ?? []), ...$metadata] ?: null,
+            'lifecycle_status' => 'live',
+            'listed_at' => $listing->listed_at ?? now(),
+        ], static fn (mixed $value): bool => $value !== null))->save();
+    }
+
+    /**
      * FİYATI OLMAYAN ÜRÜN 0 İLE AÇILIR.
      *
      * Reddetmek satıcının kanalda fiyatsız duran (taslak) ürününü
@@ -263,11 +343,11 @@ final class ImportProductsFromChannel
      * Kanala giden yol ayrıca `lifecycle_status = 'live'` kapısından geçer,
      * yani 0 fiyat kazara kanala gitmez.
      */
-    private function applyCreate(RemoteProduct $product, string $warehouseId): Product
+    private function applyCreate(RemoteProduct $product, string $sku, string $warehouseId): Product
     {
         return $this->createProduct->run(
-            sku: (string) $product->sku,
-            title: $product->title ?? (string) $product->sku,
+            sku: $sku,
+            title: $product->title ?? $sku,
             price: (float) ($product->price ?? 0),
             // Kanaldaki stok YALNIZCA burada kullanılır: yeni üründe
             // ezilecek kanonik bakiye YOKTUR. Negatif gelirse 0'a çekilir —

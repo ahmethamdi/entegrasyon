@@ -208,9 +208,10 @@ final class ShopifyOrderNormalizer
      * Sipariş kalemleri.
      *
      * ⚠️ SKU'SUZ KALEM DÜŞÜRÜLMEZ. Shopify'da SKU zorunlu DEĞİLDİR; kalem
-     * atılsaydı sipariş EKSİK kaydedilirdi. Boş SKU ile taşındığında
-     * `order_lines.variant_id` NULL kalır, satır PENDING olur ve stok
-     * düşülmez — SİPARİŞ KAYBETMEK STOK TUTARSIZLIĞINDAN KÖTÜDÜR
+     * atılsaydı sipariş EKSİK kaydedilirdi. Boş SKU ile taşınır ve
+     * `external_variant_id` ile içe aktarmanın kurduğu bağdan eşlenir;
+     * o da tutmazsa `order_lines.variant_id` NULL kalır, satır PENDING olur
+     * ve stok düşülmez — SİPARİŞ KAYBETMEK STOK TUTARSIZLIĞINDAN KÖTÜDÜR
      * (Karar 24).
      *
      * @param  array<string, mixed>  $payload
@@ -231,6 +232,12 @@ final class ShopifyOrderNormalizer
             $lines[] = [
                 'external_line_id' => (string) ($item['id'] ?? ''),
                 'sku' => (string) ($item['sku'] ?? ''),
+                // SKU'suz kalemin TEK eşleşme anahtarı: içe aktarma ürünü bu
+                // varyanta `Listing` ile bağlar ve `external_id` gid biçimindedir
+                // (REST yükü sayı taşır, GraphQL kimliği gid'dir).
+                'external_variant_id' => isset($item['variant_id']) && $item['variant_id'] !== null
+                    ? 'gid://shopify/ProductVariant/'.$item['variant_id']
+                    : null,
                 'title' => (string) ($item['title'] ?? ($item['name'] ?? ($item['sku'] ?? ''))),
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,

@@ -49,17 +49,59 @@ final readonly class RemoteProduct
          */
         public array $images = [],
         public array $raw = [],
+        /**
+         * Ürünün kanaldaki ADRESİ — içe aktarma bununla `Listing` bağı kurar.
+         *
+         * Anahtarlar `PushListing::adoptRemoteIdentity`'nin yazdıklarıyla
+         * aynıdır: `external_id` (zorunlu), `external_parent_id`,
+         * `external_url`, `channel_metadata`. Bağ kurulmasaydı ürün kanaldan
+         * GELDİĞİ hâlde kanala bağlı görünmez; satıcı onu kanala "eklediğinde"
+         * SKU araması tutmazsa kanalda KOPYA ürün yaratılırdı.
+         *
+         * Boş dizi = adapter adres vermiyor; bağ kurulmaz, SKU üretilmez.
+         *
+         * @var array<string, mixed>
+         */
+        public array $listingIdentity = [],
     ) {}
 
     /**
-     * SKU'su olmayan ürün içe aktarılamaz.
+     * SKU'su olan ürün doğrudan içe aktarılır.
+     */
+    public function hasSku(): bool
+    {
+        return $this->sku !== null && trim($this->sku) !== '';
+    }
+
+    /**
+     * SKU'su yoksa YALNIZCA kanal adresi biliniyorsa içe aktarılır.
      *
-     * Kanonik katalogda kimlik SKU'dur; uydurmak (örneğin kanal kimliğini
-     * SKU yapmak) satıcının kendi SKU'suyla aynı ürünü sonradan yüklemesi
-     * hâlinde KOPYA ürün üretirdi ve iki satır ayrı ayrı senkronlanırdı.
+     * O durumda SKU üretilir (`autoSku`) ve eşleşme SKU ile değil
+     * `Listing` bağıyla yürür: siparişler kanal varyant kimliğiyle,
+     * stok o bağın adresiyle gider. Adres yoksa üretilen SKU hiçbir
+     * kanal kaydına bağlanamaz — sipariş eşleşmez, gönderim kopya
+     * ürün yaratırdı; o ürün atlanır ve sebebiyle raporlanır.
      */
     public function isImportable(): bool
     {
-        return $this->sku !== null && trim($this->sku) !== '';
+        return $this->hasSku() || $this->autoSku('X') !== null;
+    }
+
+    /**
+     * Kanal kimliğinin sayısal kuyruğundan SKU: `SHO-48213…`.
+     *
+     * Kimlik kanalda değişmez ve bağlantı içinde tekildir; yeniden içe
+     * aktarma aynı SKU'yu üretir. Satıcı panelde değiştirebilir — eşleşme
+     * SKU'ya değil bağa dayanır.
+     */
+    public function autoSku(string $prefix): ?string
+    {
+        $externalId = (string) ($this->listingIdentity['external_id'] ?? '');
+
+        if (preg_match('/(\d+)$/', $externalId, $match) !== 1) {
+            return null;
+        }
+
+        return strtoupper($prefix).'-'.$match[1];
     }
 }

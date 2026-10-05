@@ -1909,7 +1909,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
 
         foreach (is_array($nodes) ? $nodes : [] as $node) {
             if (is_array($node)) {
-                $products[] = ShopifyProductMapper::toRemoteProduct($node);
+                $products[] = ShopifyProductMapper::toRemoteProduct($node, $this->shopDomain());
             }
         }
 

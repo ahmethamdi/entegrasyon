@@ -14,6 +14,7 @@ use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Models\InventoryMovement;
+use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\RemoteProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -236,6 +237,111 @@ final class ChannelProductImportTest extends TestCase
         $this->assertStringContainsString('SKU yok', $result->errors[0]['message']);
     }
 
+    // ---------------------------------------------------------------- kanal bağı
+
+    /**
+     * SKU'SUZ AMA ADRESLİ ÜRÜN GELİR: SKU adresten üretilir, ürün bağlanır.
+     *
+     * Shopify test mağazasında 26 varyantın 23'ü SKU'suzdu ve hepsi
+     * atlanıyordu — satıcının ilk deneyimi "17 üründen 3'ü geldi".
+     */
+    #[Test]
+    public function a_product_without_a_sku_is_created_with_a_generated_sku_and_linked(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: null, title: 'SKU yok', quantity: 4, externalId: 'gid://x/Variant/48213'),
+        ]);
+
+        $result = $this->import($tenant, $connection);
+
+        $this->assertSame(1, $result->created);
+        $this->assertSame(0, $result->skipped);
+        $this->assertSame([], $result->errors);
+
+        $listing = $this->listingOf($tenant, $connection, 'WOO-48213');
+
+        $this->assertNotNull($listing, 'Ürün kanaldaki karşılığına bağlanmadı.');
+        $this->assertSame('gid://x/Variant/48213', $listing->external_id);
+        $this->assertSame('P-gid://x/Variant/48213', $listing->external_parent_id);
+        $this->assertSame('INV-gid://x/Variant/48213', $listing->channel_metadata['inventory_item_gid']);
+        $this->assertSame('live', $listing->lifecycle_status, 'Bağ canlı değil — stok bu kanala hiç gitmez.');
+        $this->assertNotNull($listing->listed_at);
+    }
+
+    /**
+     * SKU'lu ürün de bağlanır: kanaldan GELDİ, yani orada zaten satışta.
+     */
+    #[Test]
+    public function a_product_with_a_sku_is_linked_to_its_channel_variant(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: 'K-BAG', externalId: 'V-1'),
+        ]);
+
+        $this->import($tenant, $connection);
+
+        $this->assertSame('V-1', $this->listingOf($tenant, $connection, 'K-BAG')?->external_id);
+    }
+
+    /**
+     * YENİDEN İÇE AKTARMADA EŞLEŞME BAĞDAN YÜRÜR, SKU'DAN DEĞİL.
+     *
+     * Satıcı SKU'yu kanalda sonradan girdi: SKU araması tutmaz ve bağa
+     * bakılmasaydı aynı ürün İKİNCİ KEZ açılırdı.
+     */
+    #[Test]
+    public function a_reimport_matches_through_the_link_when_the_sku_changed(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: null, title: 'İlk', externalId: 'V-7'),
+        ]);
+        $this->import($tenant, $connection);
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: 'YENI-SKU', title: 'Güncel', externalId: 'V-7'),
+        ]);
+        $result = $this->import($tenant, $connection);
+
+        $this->assertSame(0, $result->created, 'Aynı kanal ürünü ikinci kez açıldı.');
+        $this->assertSame(1, $result->updated);
+
+        $products = $this->asTenant($tenant, fn () => Product::query()->get());
+
+        $this->assertCount(1, $products);
+        $this->assertSame('Güncel', $products[0]->title);
+        $this->assertSame('WOO-7', $products[0]->sku, 'SKU değişmemeli — eşleşme bağdan yürür.');
+    }
+
+    /**
+     * VAR OLAN BAŞKA BAĞ EZİLMEZ: stok başka kanal ürününe yazılmaya başlardı.
+     */
+    #[Test]
+    public function an_existing_link_to_another_channel_item_is_not_overwritten(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: 'K-ESKI', externalId: 'V-ESKI'),
+        ]);
+        $this->import($tenant, $connection);
+
+        // Aynı SKU kanalda BAŞKA varyantta görünüyor.
+        ProgrammableImportAdapter::returns('woocommerce', [
+            $this->remote(sku: 'K-ESKI', externalId: 'V-YENI'),
+        ]);
+        $result = $this->import($tenant, $connection);
+
+        $this->assertSame('V-ESKI', $this->listingOf($tenant, $connection, 'K-ESKI')?->external_id);
+        $this->assertCount(1, $result->errors);
+        $this->assertStringContainsString('başka bir kayda bağlı', $result->errors[0]['message']);
+    }
+
     // ---------------------------------------------------------------- sayfalama
 
     #[Test]
@@ -437,15 +543,29 @@ final class ChannelProductImportTest extends TestCase
         ?string $price = '10.00',
         ?int $quantity = 0,
         array $images = [],
+        ?string $externalId = null,
     ): RemoteProduct {
         return new RemoteProduct(
-            externalId: '900',
+            externalId: $externalId ?? '900',
             sku: $sku,
             title: $title,
             price: $price,
             quantity: $quantity,
             images: $images,
+            listingIdentity: $externalId === null ? [] : [
+                'external_id' => $externalId,
+                'external_parent_id' => 'P-'.$externalId,
+                'channel_metadata' => ['inventory_item_gid' => 'INV-'.$externalId],
+            ],
         );
+    }
+
+    private function listingOf(Tenant $tenant, ChannelConnection $connection, string $sku): ?Listing
+    {
+        return $this->asTenant($tenant, fn () => Listing::query()
+            ->where('channel_connection_id', $connection->id)
+            ->whereHas('variant', fn ($q) => $q->where('sku', $sku))
+            ->first());
     }
 
     private function import(Tenant $tenant, ChannelConnection $connection)

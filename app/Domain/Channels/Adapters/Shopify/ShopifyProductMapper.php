@@ -209,11 +209,13 @@ final class ShopifyProductMapper
      * okunsaydı çok varyantlı bir Shopify ürünü tek bir kanonik ürüne
      * çökerdi ve varyantların SKU'ları KAYBOLURDU.
      *
-     * ⚠️ SKU BOŞSA `null` YAZILIR, UYDURULMAZ. Shopify'da SKU zorunlu
-     * DEĞİLDİR. Kanal kimliğini (gid) SKU yapmak, satıcı aynı ürünü kendi
-     * SKU'suyla yüklediğinde KOPYA ürün üretirdi ve iki satır ayrı ayrı
-     * senkronlanırdı. `RemoteProduct::isImportable()` bu satırı eler ve
-     * içe aktarma onu ADIYLA raporlar — sessizce düşmez (§13 · madde 5).
+     * ⚠️ SKU BOŞSA `null` YAZILIR, burada UYDURULMAZ. Shopify'da SKU zorunlu
+     * DEĞİLDİR (test mağazasında 26 varyantın 23'ü SKU'suzdu). SKU'yu içe
+     * aktarma üretir ve ürünü `listingIdentity` ile bu varyanta BAĞLAR —
+     * eşleşme o bağdan yürür, SKU'dan değil.
+     *
+     * `listingIdentity` `toIdentityResult()`'ın yazdığı anahtarların
+     * aynısıdır; `inventory_item_gid` olmadan stok bir daha gönderilemez.
      *
      * ⚠️ FİYAT VARYANTIN `price` ALANINDAN OKUNUR. Shopify'da
      * `compareAtPrice` üstü çizili fiyattır; `price` gerçek satış
@@ -223,10 +225,15 @@ final class ShopifyProductMapper
      *
      * @param  array<string, mixed>  $variant
      */
-    public static function toRemoteProduct(array $variant): RemoteProduct
+    public static function toRemoteProduct(array $variant, ?string $shopDomain = null): RemoteProduct
     {
         $sku = isset($variant['sku']) ? trim((string) $variant['sku']) : '';
         $product = is_array($variant['product'] ?? null) ? $variant['product'] : [];
+
+        $identity = self::toIdentityResult(
+            ['id' => $product['id'] ?? null, 'variants' => ['nodes' => [$variant]]],
+            $shopDomain,
+        );
 
         return new RemoteProduct(
             // Kanal kimliği VARYANT gid'idir — `external_id` ile aynı çıpa.
@@ -256,6 +263,7 @@ final class ShopifyProductMapper
                 ...self::mediaUrls($product['media'] ?? null),
             ])),
             raw: $variant,
+            listingIdentity: isset($identity['external_id']) ? $identity : [],
         );
     }
 

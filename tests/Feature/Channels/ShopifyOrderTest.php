@@ -242,7 +242,7 @@ final class ShopifyOrderTest extends TestCase
     {
         $event = $this->normalize('orders/create', [
             'line_items' => [
-                ['id' => 1, 'sku' => null, 'title' => 'SKU\'suz ürün', 'quantity' => 1, 'price' => '5.00'],
+                ['id' => 1, 'sku' => null, 'variant_id' => 48213, 'title' => 'SKU\'suz ürün', 'quantity' => 1, 'price' => '5.00'],
             ],
         ]);
 
@@ -250,6 +250,8 @@ final class ShopifyOrderTest extends TestCase
 
         $this->assertCount(1, $lines, 'SKU\'suz kalem düşürüldü — sipariş eksik kaydedilir.');
         $this->assertSame('', $lines[0]['sku']);
+        // İçe aktarmanın kurduğu bağ gid biçimindedir; REST yükü sayı taşır.
+        $this->assertSame('gid://shopify/ProductVariant/48213', $lines[0]['external_variant_id']);
     }
 
     /**

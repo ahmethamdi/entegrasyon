@@ -1,10 +1,10 @@
 <script setup>
-import { useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
+import { computed, onUnmounted, ref, watch } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 
-defineProps({
+const props = defineProps({
     rows: { type: Array, default: () => [] },
     columns: { type: Object, default: () => ({ required: [], optional: [] }) },
     // İçe aktarmayı DESTEKLEYEN aktif bağlantılar. Desteklemeyen kanal
@@ -75,6 +75,32 @@ const badges = {
 function badgeFor(status) {
     return badges[status] ?? { text: status, class: 'bg-stone-50 text-stone-600 border-stone-200' };
 }
+
+/**
+ * İş bitene kadar liste kendini tazeler.
+ *
+ * Tur arka planda koşar; tazeleme olmasaydı satıcı "Sırada" rozetine
+ * bakar ve neyin olduğunu bilemezdi. Yalnız `rows` istenir (formlar
+ * ve seçimler yerinde kalır); bekleyen tur kalmayınca durur.
+ */
+const inFlight = computed(() => props.rows.some((row) => row.status === 'pending' || row.status === 'running'));
+
+let pollTimer = null;
+
+function stopPolling() {
+    clearTimeout(pollTimer);
+    pollTimer = null;
+}
+
+function schedulePoll() {
+    stopPolling();
+    pollTimer = setTimeout(() => {
+        router.reload({ only: ['rows'], onFinish: () => inFlight.value && schedulePoll() });
+    }, 2000);
+}
+
+watch(inFlight, (busy) => (busy ? schedulePoll() : stopPolling()), { immediate: true });
+onUnmounted(stopPolling);
 
 const expanded = ref(null);
 
@@ -268,9 +294,14 @@ function toggleErrors(id) {
 
                             <td class="px-4 py-3">
                                 <span
-                                    class="inline-block rounded border px-2 py-0.5 text-[10px] font-medium tracking-wide"
+                                    class="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-medium tracking-wide"
                                     :class="badgeFor(row.status).class"
                                 >
+                                    <span
+                                        v-if="row.status === 'pending' || row.status === 'running'"
+                                        class="size-2.5 animate-spin rounded-full border border-current border-t-transparent"
+                                        aria-hidden="true"
+                                    />
                                     {{ badgeFor(row.status).text }}
                                 </span>
                                 <p v-if="row.lastError" class="mt-1 text-xs text-red-700">

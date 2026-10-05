@@ -108,25 +108,23 @@ final class ShopifyCatalogImportTest extends TestCase
     }
 
     /**
-     * ⚠️ SKU'SUZ VARYANT `null` SKU ile döner — UYDURULMAZ.
+     * ⚠️ SKU'SUZ VARYANT `null` SKU ile ama KANAL ADRESİYLE döner.
      *
-     * Shopify'da SKU zorunlu DEĞİLDİR. Kanal kimliğini (gid) SKU yapmak,
-     * satıcı aynı ürünü kendi SKU'suyla yüklediğinde KOPYA ürün üretirdi ve
-     * iki satır ayrı ayrı senkronlanırdı.
-     *
-     * Satır DÜŞÜRÜLMEZ, `isImportable()` false döner: içe aktarma onu SAYAR
-     * ve ADIYLA raporlar. Sessizce düşseydi satıcı "50 ürünüm vardı, 47'si
-     * geldi" der ve sebebini bulamazdı (§13 · madde 5).
+     * Shopify'da SKU zorunlu DEĞİLDİR (test mağazasında 26 varyantın 23'ü).
+     * SKU burada uydurulmaz; içe aktarma onu adresten üretir ve ürünü bu
+     * varyanta bağlar. Adres taşınmasaydı ürün ya atlanır ya da bağsız
+     * açılır ve gönderimde Shopify'da KOPYA ürün yaratılırdı.
      */
     #[Test]
-    public function a_variant_without_a_sku_is_returned_but_marked_unimportable(): void
+    public function a_variant_without_a_sku_carries_its_channel_identity(): void
     {
         Http::fake(['*' => Http::response([
             'data' => ['productVariants' => [
                 'nodes' => [[
-                    'id' => 'gid://shopify/ProductVariant/1',
+                    'id' => 'gid://shopify/ProductVariant/48213',
                     'sku' => '',
                     'price' => '10.00',
+                    'inventoryItem' => ['id' => 'gid://shopify/InventoryItem/777'],
                     'product' => ['id' => 'gid://shopify/Product/1', 'title' => 'SKU\'suz Ürün'],
                 ]],
                 'pageInfo' => ['hasNextPage' => false],
@@ -134,11 +132,19 @@ final class ShopifyCatalogImportTest extends TestCase
         ], 200)]);
 
         $page = $this->adapter()->fetchProductPage();
+        $product = $page->products[0];
 
         $this->assertCount(1, $page->products, 'Satır DÜŞÜRÜLDÜ — kullanıcı sebebini göremez.');
-        $this->assertNull($page->products[0]->sku);
-        $this->assertFalse($page->products[0]->isImportable());
-        $this->assertSame('SKU\'suz Ürün', $page->products[0]->title);
+        $this->assertNull($product->sku);
+        $this->assertTrue($product->isImportable());
+        $this->assertSame('SHO-48213', $product->autoSku('sho'));
+        $this->assertSame('gid://shopify/ProductVariant/48213', $product->listingIdentity['external_id']);
+        $this->assertSame('gid://shopify/Product/1', $product->listingIdentity['external_parent_id']);
+        $this->assertSame(
+            'gid://shopify/InventoryItem/777',
+            $product->listingIdentity['channel_metadata']['inventory_item_gid'],
+            'Stok kalemi taşınmadı — bağlı ürünün stoğu Shopify\'a hiç gidemez.',
+        );
     }
 
     /**
