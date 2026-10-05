@@ -5,6 +5,11 @@ import { computed } from 'vue';
 
 // Parola sıfırlandıktan sonra buraya yönlendirilir; mesaj gösterilmezse
 // satıcı sıfırlamanın işe yarayıp yaramadığını bilemez.
+defineProps({
+    // Shopify'dan kuruluyorsa mağaza bilgisi (anahtar yok).
+    shopifyInstall: { type: Object, default: null },
+});
+
 const page = usePage();
 const success = computed(() => page.props.flash?.success);
 
@@ -28,8 +33,18 @@ function submit() {
                 <BrandMark size="lg" />
             </p>
             <h1 class="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
-                Giriş yap
+                {{ $t('Giriş yap') }}
             </h1>
+
+            <!--
+                SHOPIFY'DAN KURULUM: mağaza onayı alındı, anahtar oturumda
+                bekliyor. Satıcı adres yazmaz; hesabı açınca bağlantı kendiliğinden
+                tamamlanır.
+            -->
+            <div v-if="shopifyInstall" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                <p class="font-medium">{{ $t(':shop onaylandı.', { shop: shopifyInstall.name ?? shopifyInstall.shop }) }}</p>
+                <p class="mt-1">{{ $t('Giriş yap, Shopify mağazan otomatik bağlansın. Hesabın yoksa kayıt ol.') }}</p>
+            </div>
 
             <p v-if="success" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 {{ success }}
@@ -38,7 +53,7 @@ function submit() {
             <form class="mt-8 space-y-4" @submit.prevent="submit">
                 <div>
                     <label for="email" class="block text-sm font-medium text-stone-700">
-                        E-posta
+                        {{ $t('E-posta') }}
                     </label>
                     <input
                         id="email"
@@ -56,7 +71,7 @@ function submit() {
 
                 <div>
                     <label for="password" class="block text-sm font-medium text-stone-700">
-                        Parola
+                        {{ $t('Parola') }}
                     </label>
                     <input
                         id="password"
@@ -74,10 +89,10 @@ function submit() {
                 <div class="flex items-center justify-between">
                     <label class="flex items-center gap-2 text-sm text-stone-700">
                         <input v-model="form.remember" type="checkbox" class="rounded border-stone-300">
-                        Beni hatırla
+                        {{ $t('Beni hatırla') }}
                     </label>
                     <Link href="/forgot-password" class="text-sm text-stone-600 underline hover:text-stone-900">
-                        Parolanı mı unuttun?
+                        {{ $t('Parolanı mı unuttun?') }}
                     </Link>
                 </div>
 
@@ -86,14 +101,14 @@ function submit() {
                     :disabled="form.processing"
                     class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    Giriş yap
+                    {{ $t('Giriş yap') }}
                 </button>
             </form>
 
             <p class="mt-6 text-sm text-stone-600">
-                Hesabın yok mu?
+                {{ $t('Hesabın yok mu?') }}
                 <Link href="/register" class="font-medium text-stone-900 underline">
-                    Kayıt ol
+                    {{ $t('Kayıt ol') }}
                 </Link>
             </p>
         </div>

@@ -147,6 +147,18 @@ final class ShopifyOAuthController extends Controller
             );
         }
 
+        return $this->complete($connection, $credentials);
+    }
+
+    /**
+     * Anahtar elde → kasaya yaz, konumu çöz, sağlık + webhook. Panelden
+     * başlayan akış ve Shopify'dan kurulum (`ShopifyInstallController`)
+     * AYNI yoldan biter; iki kopya zamanla ayrışırdı.
+     *
+     * @param  array{secrets: array<string, string>, expires_at: ?\DateTimeImmutable, refresh_expires_at: ?\DateTimeImmutable, scope: ?string}  $credentials
+     */
+    public function complete(ChannelConnection $connection, array $credentials): RedirectResponse
+    {
         DB::transaction(function () use ($connection, $credentials): void {
             $this->vault->store(
                 $connection,

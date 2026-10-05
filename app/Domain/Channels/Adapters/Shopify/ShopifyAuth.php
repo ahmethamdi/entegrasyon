@@ -129,6 +129,27 @@ final class ShopifyAuth
     }
 
     /**
+     * Uygulama adresine (App URL) Shopify'dan gelen istek — kurulumda ve
+     * mağaza yöneticisinde uygulama her açıldığında. Üç koşul: geçerli
+     * mağaza adresi, imza, TAZE zaman damgası (eski bir bağlantının
+     * yeniden oynatılması; bir gün pay saat kayması için).
+     *
+     * @param  array<string, mixed>  $query
+     */
+    public static function launchRequestValid(array $query, ?int $now = null): bool
+    {
+        $shop = $query['shop'] ?? null;
+        $timestamp = $query['timestamp'] ?? null;
+
+        return self::validShopDomain(is_string($shop) ? $shop : null)
+            && is_numeric($timestamp)
+            && abs(($now ?? time()) - (int) $timestamp) <= self::LAUNCH_MAX_AGE
+            && self::callbackHmacValid($query);
+    }
+
+    public const LAUNCH_MAX_AGE = 86400;
+
+    /**
      * Webhook gövdesi imzası — uygulama webhook'ları (sipariş, app/uninstalled,
      * zorunlu gizlilik konuları) İSTEMCİ SIRRIYLA imzalanır (base64).
      */

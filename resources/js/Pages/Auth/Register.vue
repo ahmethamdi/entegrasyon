@@ -2,10 +2,15 @@
 import BrandMark from '../../Components/BrandMark.vue';
 import { Link, useForm } from '@inertiajs/vue3';
 
+const props = defineProps({
+    // Shopify'dan kuruluyorsa mağaza adı ve sahibinin e-postası (anahtar yok).
+    shopifyInstall: { type: Object, default: null },
+});
+
 const form = useForm({
     name: '',
-    email: '',
-    company: '',
+    email: props.shopifyInstall?.email ?? '',
+    company: props.shopifyInstall?.name ?? '',
     password: '',
     password_confirmation: '',
 });
@@ -24,16 +29,26 @@ function submit() {
                 <BrandMark size="lg" />
             </p>
             <h1 class="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
-                Hesap oluştur
+                {{ $t('Hesap oluştur') }}
             </h1>
             <p class="mt-2 text-sm text-stone-600">
-                Şirketin için bir çalışma alanı açılır ve varsayılan depon hazırlanır.
+                {{ $t('Şirketin için bir çalışma alanı açılır ve varsayılan depon hazırlanır.') }}
             </p>
+
+            <!--
+                SHOPIFY'DAN KURULUM: mağaza onayı alındı, anahtar oturumda
+                bekliyor. Satıcı adres yazmaz; hesabı açınca bağlantı kendiliğinden
+                tamamlanır.
+            -->
+            <div v-if="shopifyInstall" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                <p class="font-medium">{{ $t(':shop onaylandı.', { shop: shopifyInstall.name ?? shopifyInstall.shop }) }}</p>
+                <p class="mt-1">{{ $t('34Pazar hesabını aç, Shopify mağazan otomatik bağlansın. Hesabın varsa giriş yap.') }}</p>
+            </div>
 
             <form class="mt-8 space-y-4" @submit.prevent="submit">
                 <div>
                     <label for="name" class="block text-sm font-medium text-stone-700">
-                        Ad soyad
+                        {{ $t('Ad soyad') }}
                     </label>
                     <input
                         id="name"
@@ -50,7 +65,7 @@ function submit() {
 
                 <div>
                     <label for="company" class="block text-sm font-medium text-stone-700">
-                        Şirket adı
+                        {{ $t('Şirket adı') }}
                     </label>
                     <input
                         id="company"
@@ -66,7 +81,7 @@ function submit() {
 
                 <div>
                     <label for="email" class="block text-sm font-medium text-stone-700">
-                        E-posta
+                        {{ $t('E-posta') }}
                     </label>
                     <input
                         id="email"
@@ -83,7 +98,7 @@ function submit() {
 
                 <div>
                     <label for="password" class="block text-sm font-medium text-stone-700">
-                        Parola
+                        {{ $t('Parola') }}
                     </label>
                     <input
                         id="password"
@@ -100,7 +115,7 @@ function submit() {
 
                 <div>
                     <label for="password_confirmation" class="block text-sm font-medium text-stone-700">
-                        Parola tekrar
+                        {{ $t('Parola tekrar') }}
                     </label>
                     <input
                         id="password_confirmation"
@@ -117,14 +132,14 @@ function submit() {
                     :disabled="form.processing"
                     class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    Hesap oluştur
+                    {{ $t('Hesap oluştur') }}
                 </button>
             </form>
 
             <p class="mt-6 text-sm text-stone-600">
-                Zaten hesabın var mı?
+                {{ $t('Zaten hesabın var mı?') }}
                 <Link href="/login" class="font-medium text-stone-900 underline">
-                    Giriş yap
+                    {{ $t('Giriş yap') }}
                 </Link>
             </p>
         </div>

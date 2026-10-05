@@ -22,6 +22,7 @@ use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\ShopifyInstallController;
 use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SyncFailureController;
@@ -100,6 +101,15 @@ Route::controller(SiteController::class)->withoutMiddleware(SetLocale::class)->g
     Route::get('/sitemap.xml', 'sitemap')->name('site.sitemap');
 });
 
+// ─────────────────────────────────────────────────────────── Shopify kurulumu
+//
+// Shopify'dan BAŞLAYAN kurulum (App URL). Oturum/kiracı İSTEMEZ: satıcının
+// henüz hesabı olmayabilir. Gerekçe ve sıra `ShopifyInstallController`'da.
+// Uygulama ayarlarında: App URL = https://APP_DOMAIN/shopify, izinli
+// yönlendirmeler = /channels/shopify/callback VE /shopify/auth/callback.
+Route::get('/shopify', [ShopifyInstallController::class, 'launch'])->name('shopify.install.launch');
+Route::get('/shopify/auth/callback', [ShopifyInstallController::class, 'callback'])->name('shopify.install.callback');
+
 // ─────────────────────────────────────────────────────────── panel
 
 // `verified`: doğrulanmamış hesap panele giremez (B4) — gerekçe
@@ -159,6 +169,9 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
 
     Route::get('/channels/shopify/callback', [ShopifyOAuthController::class, 'callback'])
         ->name('channels.shopify.callback');
+
+    // Shopify'dan başlayan kurulumun son adımı: kiracı bağlamında bağlantı.
+    Route::get('/shopify/finish', [ShopifyInstallController::class, 'finish'])->name('shopify.install.finish');
 
     // Birden fazla depolu mağazada stok konumu seçimi.
     Route::post('/channels/{connection}/shopify/location', [ShopifyOAuthController::class, 'chooseLocation'])

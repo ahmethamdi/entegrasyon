@@ -35,9 +35,11 @@ final class SessionController extends Controller
 
     private const DECAY_SECONDS = 60;
 
-    public function create(): InertiaResponse
+    public function create(Request $request): InertiaResponse
     {
-        return Inertia::render('Auth/Login');
+        return Inertia::render('Auth/Login', [
+            'shopifyInstall' => RegisteredUserController::shopifyPrefill($request),
+        ]);
     }
 
     public function store(Request $request): RedirectResponse

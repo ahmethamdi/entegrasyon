@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Auth;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\User;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\ShopifyInstallController;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,9 +32,28 @@ use Inertia\Response as InertiaResponse;
  */
 final class RegisteredUserController extends Controller
 {
-    public function create(): InertiaResponse
+    public function create(Request $request): InertiaResponse
     {
-        return Inertia::render('Auth/Register');
+        return Inertia::render('Auth/Register', [
+            'shopifyInstall' => self::shopifyPrefill($request),
+        ]);
+    }
+
+    /**
+     * Shopify'dan kuruluyorsa form mağaza bilgisiyle dolu gelir (satıcı
+     * adres ya da şirket adı yazmaz). Anahtar ve sır GÖNDERİLMEZ.
+     *
+     * @return array{shop: string, name: ?string, email: ?string}|null
+     */
+    public static function shopifyPrefill(Request $request): ?array
+    {
+        $pending = ShopifyInstallController::pending($request);
+
+        return $pending === null ? null : [
+            'shop' => $pending['shop'],
+            'name' => $pending['name'],
+            'email' => $pending['email'],
+        ];
     }
 
     public function store(Request $request): RedirectResponse
@@ -46,7 +66,7 @@ final class RegisteredUserController extends Controller
         ]);
 
         // Doğrulama YARATMADAN ÖNCE biter: yarım kiracı bırakılmaz.
-        $user = DB::transaction(function () use ($validated): User {
+        $user = DB::transaction(function () use ($validated, $request): User {
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
@@ -57,6 +77,16 @@ final class RegisteredUserController extends Controller
                 name: $validated['company'],
                 owner: $user,
             );
+
+            // SHOPIFY'IN DOĞRULADIĞI ADRES: kurulum sırasında mağaza
+            // sahibinin e-postasıyla kayıt olan kullanıcıya doğrulama
+            // postası gönderilmez — Shopify o adresi zaten doğruladı.
+            // Başka adresle kaydolan normal doğrulamadan geçer.
+            $shopEmail = self::shopifyPrefill($request)['email'] ?? null;
+
+            if ($shopEmail !== null && strcasecmp($shopEmail, $validated['email']) === 0) {
+                $user->markEmailAsVerified();
+            }
 
             return $user;
         });
