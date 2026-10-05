@@ -116,7 +116,7 @@ final class ShopifyOrderNormalizer
         // numarasıyla kurulur — satır yazılır ama İÇİ BOŞ olurdu ve satıcı
         // "kargolandı" görüp takip edemezdi.
         $fulfillment = $type === 'fulfilled'
-            ? ['fulfillment' => self::fulfillmentBlock($payload)]
+            ? ['fulfillment' => self::fulfillmentBlock(self::shipmentSource($payload))]
             : [];
 
         return [...$fulfillment, ...[
@@ -169,6 +169,47 @@ final class ShopifyOrderNormalizer
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
+    /**
+     * Kargo alanlarının okunacağı gövde.
+     *
+     * ⚠️ İKİ AİLE, İKİ KÖK. `fulfillments/*` gövdesinin kökü PAKETTİR
+     * (`id` paket, `order_id` sipariş). `orders/fulfilled` ve
+     * `orders/partially_fulfilled` — bağlarken KURDUĞUMUZ konular — kökü
+     * SİPARİŞTİR: `id` sipariş kimliğidir, takip bilgisi `fulfillments[]`
+     * içindedir. Kök okunsaydı paket kimliği yerine sipariş kimliği yazılır,
+     * panelden açılan paketle (paket gid'iyle kayıtlı) eşleşmez ve İKİNCİ,
+     * takip numarasız bir kargo satırı açılırdı (34pazar-test, 5 Ekim).
+     *
+     * Dizide birden çok paket varsa EN SON GÜNCELLENEN alınır: olay o
+     * değişiklik için gönderildi.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function shipmentSource(array $payload): array
+    {
+        if (isset($payload['order_id']) || ! is_array($payload['fulfillments'] ?? null)) {
+            return $payload;
+        }
+
+        $latest = null;
+
+        foreach ($payload['fulfillments'] as $candidate) {
+            if (! is_array($candidate)) {
+                continue;
+            }
+
+            $stamp = (string) ($candidate['updated_at'] ?? $candidate['created_at'] ?? '');
+
+            if ($latest === null || strcmp($stamp, (string) ($latest['updated_at'] ?? $latest['created_at'] ?? '')) >= 0) {
+                $latest = $candidate;
+            }
+        }
+
+        // Paket yoksa kimliksiz blok: sipariş kimliği paket kimliği SANILMAZ.
+        return $latest ?? [];
+    }
+
     private static function fulfillmentBlock(array $payload): array
     {
         $tracking = $payload['tracking_number'] ?? null;

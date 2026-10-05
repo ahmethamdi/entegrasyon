@@ -238,6 +238,30 @@ final class ShopifyOrderTest extends TestCase
      * (Karar 24).
      */
     /**
+     * `orders/fulfilled` GÖVDESİNİN KÖKÜ SİPARİŞTİR — paket `fulfillments[]`'te.
+     *
+     * Kök okunduğunda sipariş kimliği paket kimliği sanıldı; panelden
+     * açılan paketle eşleşmedi ve takip numarasız ikinci satır açıldı
+     * (34pazar-test, 5 Ekim).
+     */
+    #[Test]
+    public function an_order_level_fulfilled_topic_reads_the_latest_package(): void
+    {
+        $event = $this->normalize('orders/fulfilled', [
+            'fulfillments' => [
+                ['id' => 111, 'tracking_company' => 'Eski', 'tracking_number' => 'ESKI1', 'updated_at' => '2026-10-05T07:00:00-04:00'],
+                ['id' => 9268567146577, 'tracking_company' => 'Yurtiçi Kargo', 'tracking_number' => 'TEST123456', 'updated_at' => '2026-10-05T07:56:13-04:00'],
+            ],
+        ]);
+
+        $block = $event?->payload['fulfillment'] ?? [];
+
+        $this->assertSame('9268567146577', $block['external_id'] ?? null, 'Sipariş kimliği paket kimliği sanıldı.');
+        $this->assertSame('TEST123456', $block['tracking_number'] ?? null);
+        $this->assertSame('Yurtiçi Kargo', $block['carrier'] ?? null);
+    }
+
+    /**
      * MAĞAZA DİLİMİNDEKİ SAAT UTC'YE ÇEVRİLİR.
      *
      * Test mağazasında (New York, -04:00) 11:19 UTC'lik sipariş 07:19
