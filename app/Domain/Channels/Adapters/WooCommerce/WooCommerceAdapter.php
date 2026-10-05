@@ -17,6 +17,7 @@ use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsWebhookRegistration;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -73,8 +74,15 @@ use Throwable;
  * Webhook bir yetenek değil taşıma biçimidir — SupportsWebhooks arayüzü
  * YOKTUR. İmza doğrulama ve olay kimliği çıkarma ChannelAdapter'ın parçası.
  */
-final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
+final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsWebhookRegistration
 {
+    /**
+     * Sipariş akışının ihtiyaç duyduğu konular — `WooOrderNormalizer` üçünü
+     * de okur. İptal ve iade AYRI konu DEĞİLDİR: Woo onları `order.updated`
+     * ile, durum alanını değiştirerek gönderir.
+     */
+    private const WEBHOOK_TOPICS = ['order.created', 'order.updated', 'order.deleted'];
+
     use DeclaresRequestQuota;
 
     public function __construct(
@@ -672,6 +680,94 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
     {
         // Woo çekirdeğinde kargo firması listesi yoktur; eklentiye bağlıdır.
         return [];
+    }
+
+    // ---------------------------------------------------------------- webhook kurulumu
+
+    /**
+     * Sipariş webhook'larını Woo'da kurar; yeniden çağrılırsa kopya açmaz.
+     *
+     * Aboneliği ADRESİYLE tanırız (`delivery_url` = bu bağlantının alıcısı):
+     * Woo'da adımıza başka bir iz yok ve satıcının kendi webhook'larına
+     * (başka eklentiler) DOKUNULMAMALI.
+     *
+     * VAR OLAN ABONELİK YENİLENİR, YENİSİ AÇILMAZ: anahtar ve durum yeniden
+     * yazılır. Durum önemli — Woo art arda 5 teslim hatasında aboneliği
+     * kendiliğinden `disabled` yapar (sunucumuz bakımdayken olabilir) ve
+     * yeniden bağlama onu geri açmanın tek yolu olmalı.
+     *
+     * KOPYA SİLİNMEZ, KAPATILIR: aynı konuya ikinci abonelik her siparişi
+     * iki kez gönderir. Silmek yerine `disabled` — satıcı Woo panelinde ne
+     * olduğunu görebilir.
+     *
+     * Woo, abonelik açılırken adrese İMZASIZ bir "ping" (`webhook_id=…`)
+     * gönderir; alıcımız ona 401 döner. Zararsız: REST ile açılan
+     * abonelikte Woo ping sonucuna bakmaz (WC_REST_Webhooks_V1_Controller::
+     * create_item) ve ping teslim hatası sayılmaz.
+     */
+    public function registerWebhooks(string $deliveryUrl, string $secret): AdapterResult
+    {
+        $existing = [];
+
+        for ($page = 1; $page <= 10; $page++) {
+            $response = $this->client->get('webhooks', ['per_page' => 100, 'page' => $page]);
+            $response->throw();
+
+            $rows = $response->json();
+
+            if (! is_array($rows) || $rows === []) {
+                break;
+            }
+
+            foreach ($rows as $row) {
+                if (is_array($row) && ($row['delivery_url'] ?? null) === $deliveryUrl) {
+                    $existing[(string) ($row['topic'] ?? '')][] = (int) $row['id'];
+                }
+            }
+
+            if (count($rows) < 100) {
+                break;
+            }
+        }
+
+        $created = [];
+        $renewed = [];
+        $disabled = [];
+
+        foreach (self::WEBHOOK_TOPICS as $topic) {
+            $ids = $existing[$topic] ?? [];
+            $keep = array_shift($ids);
+
+            if ($keep === null) {
+                $this->client->post('webhooks', [
+                    'name' => "34Pazar · {$topic}",
+                    'topic' => $topic,
+                    'delivery_url' => $deliveryUrl,
+                    'secret' => $secret,
+                    'status' => 'active',
+                ])->throw();
+
+                $created[] = $topic;
+            } else {
+                $this->client->put("webhooks/{$keep}", [
+                    'secret' => $secret,
+                    'status' => 'active',
+                ])->throw();
+
+                $renewed[] = $topic;
+            }
+
+            foreach ($ids as $duplicate) {
+                $this->client->put("webhooks/{$duplicate}", ['status' => 'disabled'])->throw();
+                $disabled[] = $duplicate;
+            }
+        }
+
+        return AdapterResult::success([
+            'created' => $created,
+            'renewed' => $renewed,
+            'disabled_duplicates' => $disabled,
+        ]);
     }
 
     // ---------------------------------------------------------------- hata

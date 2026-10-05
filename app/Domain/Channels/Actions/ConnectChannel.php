@@ -46,6 +46,7 @@ final class ConnectChannel
         private readonly CredentialVault $vault,
         private readonly CheckChannelHealth $checkHealth,
         private readonly RecordAuditLog $audit,
+        private readonly RegisterChannelWebhooks $registerWebhooks,
     ) {}
 
     /**
@@ -145,7 +146,10 @@ final class ConnectChannel
             // `AUTHENTICATION` KALICI sayılır (`97a7eb7` hata biçimi).
             if ($secrets !== []) {
                 // Kimlik bilgisi kasaya yazılır — çağrıyı yapabilmek için zorunlu.
-                $this->vault->store($connection, $secrets);
+                $this->vault->store($connection, [
+                    ...$this->carriedOverSecrets($connection, $isNew),
+                    ...$secrets,
+                ]);
             }
 
             // DENETİM KAYDI (§11) — İKİ AYRI OLAY.
@@ -191,7 +195,40 @@ final class ConnectChannel
         }
 
         // Sağlık kontrolü commit'ten SONRA: ağ çağrısı transaction tutmaz.
-        return $this->checkHealth->run($connection);
+        $connection = $this->checkHealth->run($connection);
+
+        // Sipariş webhook'ları YALNIZ sağlıklı bağlantıda kurulur: anahtar
+        // yanlışsa kurulum da 401 alır ve `settings.webhooks` gereksiz bir
+        // ikinci hata taşırdı. Başarısızlık bağlantıyı BOZMAZ (bkz.
+        // `RegisterChannelWebhooks`). OAuth kanalında bu çağrıyı callback yapar.
+        if ($connection->status === 'active') {
+            $this->registerWebhooks->run($connection);
+        }
+
+        return $connection;
+    }
+
+    /**
+     * Yeniden bağlamada formdan GELMEYEN ama korunması gereken sırlar.
+     *
+     * `store()` kasadaki kaydın TAMAMINI yazar. `webhook_secret`'i biz
+     * üretiyoruz (`RegisterChannelWebhooks`) ve form onu hiç taşımaz; taşınmasaydı
+     * her anahtar yenilemede silinir, yenisi üretilirdi — kanalın kuyruğunda
+     * eski anahtarla imzalanmış bekleyen teslimler 401 alıp DÜŞERDİ (sipariş
+     * kaybı). Formdan gelen değer (Shopify formunda alan var) yine kazanır:
+     * çağıran onu bu dizinin ARKASINA yayar.
+     *
+     * @return array<string, mixed>
+     */
+    private function carriedOverSecrets(ChannelConnection $connection, bool $isNew): array
+    {
+        if ($isNew || $connection->activeCredential()->first() === null) {
+            return [];
+        }
+
+        $previous = $this->vault->read($connection);
+
+        return array_intersect_key($previous, ['webhook_secret' => true]);
     }
 
     /**

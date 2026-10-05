@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Channels\Console\PruneApiCallsCommand;
 use App\Domain\Channels\Console\RefreshExpiringTokensCommand;
+use App\Domain\Channels\Console\RegisterWebhooksCommand;
 use App\Domain\Channels\Console\SyncTaxonomyCommand;
 use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
@@ -60,6 +61,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ReconcilePricesCommand::class,
         // §13 · Faz 2 · taksonomi. Zamanlaması routes/console.php içinde.
         SyncTaxonomyCommand::class,
+        RegisterWebhooksCommand::class,
         // §13 · Faz 2 · onay durumu takibi. Zamanlaması routes/console.php.
         TrackApprovalStatusCommand::class,
         // §13 · Faz 2 · sipariş yoklaması. Zamanlaması routes/console.php.
