@@ -860,7 +860,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             mutation UpdateProduct($product: ProductUpdateInput!) {
               productUpdate(product: $product) {
                 product { id }
-                userErrors { field message code }
+                userErrors { field message }
               }
             }
             GQL,
@@ -1024,7 +1024,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             mutation ArchiveProduct($product: ProductUpdateInput!) {
               productUpdate(product: $product) {
                 product { id status }
-                userErrors { field message code }
+                userErrors { field message }
               }
             }
             GQL,
@@ -1720,7 +1720,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             mutation CreateFulfillment($fulfillment: FulfillmentV2Input!) {
               fulfillmentCreateV2(fulfillment: $fulfillment) {
                 fulfillment { id status }
-                userErrors { field message code }
+                userErrors { field message }
               }
             }
             GQL,
