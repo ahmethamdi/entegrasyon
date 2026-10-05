@@ -118,6 +118,12 @@ final class ChannelConnectionController extends Controller
                     if (is_string($value) && $value !== '' && ! ChannelConnectForm::isDefined($value)) {
                         $fail(__('Bu kanalın kimlik biçimi panelde tanımlı değil; şu an bağlanamıyor.'));
                     }
+
+                    // Shopify panelden bağlanmaz (App Store 2.3.1) — ekran
+                    // formu göstermiyor; doğrudan POST da kabul edilmez.
+                    if (is_string($value) && ChannelConnectForm::installOnly($value)) {
+                        $fail(__(':channel mağazası panelden değil, uygulama :channel üzerinden kurularak bağlanır.', ['channel' => 'Shopify']));
+                    }
                 },
             ],
             'label' => ['required', 'string', 'max:120'],

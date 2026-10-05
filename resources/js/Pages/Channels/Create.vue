@@ -62,6 +62,10 @@ const usesOauth = computed(() => selected.value?.oauth === true);
 // tek bir API adresi vardır ve satıcıyı satıcı ID'si ayırır.
 const asksStoreUrl = computed(() => selected.value?.asksStoreUrl !== false);
 
+// Panelden bağlanmayan kanal (Shopify): form yerine kurulum düğmesi.
+// App Store kuralı 2.3.1 mağaza adresinin elle sorulmasını yasaklar.
+const installUrl = computed(() => selected.value?.installUrl ?? null);
+
 // Kanal değişince ESKİ KANALIN ALANLARI BOŞALTILIR.
 //
 // ⚠️ Boşaltılmasaydı Woo'yu deneyip Shopify'a geçen satıcının `ck_...`
@@ -135,6 +139,32 @@ function submit() {
                 </p>
             </div>
 
+            <div
+                v-if="installUrl"
+                class="rounded-lg border border-stone-200 bg-white p-5"
+            >
+                <p class="text-sm font-medium text-stone-900">
+                    {{ t(':channel mağazanı uygulamayla bağla', { channel: selected?.name ?? '' }) }}
+                </p>
+                <p class="mt-1 text-sm text-stone-600">
+                    {{ t('34Pazar\'ı :channel App Store\'dan mağazana kur. Kurulumu onayladığında mağazan bu hesaba kendiliğinden bağlanır; adres ya da anahtar girmen gerekmez.', { channel: selected?.name ?? '' }) }}
+                </p>
+                <div class="mt-4 flex items-center gap-3">
+                    <a
+                        :href="installUrl"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                    >
+                        {{ t(':channel App Store\'da aç', { channel: selected?.name ?? '' }) }}
+                    </a>
+                    <Link href="/channels" class="text-sm text-stone-600 underline">
+                        {{ t('Vazgeç') }}
+                    </Link>
+                </div>
+            </div>
+
+            <template v-else>
             <div>
                 <label for="label" class="block text-sm font-medium text-stone-700">
                     {{ t('Etiket') }}
@@ -257,6 +287,7 @@ function submit() {
                     {{ t('Vazgeç') }}
                 </Link>
             </div>
+            </template>
         </form>
     </PanelLayout>
 </template>

@@ -244,7 +244,7 @@ function formatDate(iso) {
                     v-if="connection.lastError"
                     class="mt-3 rounded bg-red-50 px-3 py-2 font-mono text-xs text-red-900"
                 >
-                    {{ connection.lastError }}
+                    {{ t(connection.lastError) }}
                 </p>
 
                 <div

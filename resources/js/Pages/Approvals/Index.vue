@@ -258,7 +258,7 @@ function applyFilter(patch) {
                                 doğrudur — kanal henüz bir şey söylemedi.
                             -->
                             <td class="px-4 py-3 text-stone-700">
-                                <template v-if="row.reason">{{ row.reason }}</template>
+                                <template v-if="row.reason">{{ t(row.reason) }}</template>
                                 <span v-else-if="row.status === 'pending_approval'" class="text-stone-400">
                                     {{ t('Kanal henüz bir şey bildirmedi') }}
                                 </span>

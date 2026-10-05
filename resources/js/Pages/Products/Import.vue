@@ -362,7 +362,7 @@ function toggleErrors(id) {
                                     {{ t(badgeFor(row.status).text) }}
                                 </span>
                                 <p v-if="row.lastError" class="mt-1 text-xs text-red-700">
-                                    {{ row.lastError }}
+                                    {{ t(row.lastError) }}
                                 </p>
                             </td>
 

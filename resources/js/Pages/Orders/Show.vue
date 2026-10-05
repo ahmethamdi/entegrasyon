@@ -276,7 +276,7 @@ function stamp(value) {
 
                     <!-- Hata metni gizlenmez: satıcı neyi düzelteceğini buradan anlar. -->
                     <p v-if="fulfillment.pushError" class="mt-1.5 text-[11px] text-red-700">
-                        {{ fulfillment.pushError }}
+                        {{ t(fulfillment.pushError) }}
                     </p>
 
                     <form

@@ -336,7 +336,7 @@ function send(connectionId) {
                     v-if="channel.lastError"
                     class="mt-3 rounded bg-red-50 px-3 py-2 font-mono text-xs text-red-900"
                 >
-                    {{ channel.lastError }}
+                    {{ t(channel.lastError) }}
                 </p>
 
                 <!--

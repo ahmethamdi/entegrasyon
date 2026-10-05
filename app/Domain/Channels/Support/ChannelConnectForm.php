@@ -75,6 +75,7 @@ final class ChannelConnectForm
      *     account?: string,
      *     oauth: bool,
      *     help?: string,
+     *     install_only?: bool,
      * }>
      */
     private const CHANNELS = [
@@ -193,11 +194,17 @@ final class ChannelConnectForm
             // satıcı yalnız mağaza adresini yazar, Shopify'da onaylar;
             // anahtar (`ShopifyOAuthController`), konum ve webhook'lar
             // bizim işimiz.
+            //
+            // ⚠️ PANELDEN BAĞLANMAZ — YALNIZ SHOPIFY'DAN KURULUR (6 Eki 2026).
+            // App Store kuralı 2.3.1: "kurulum ya da yapılandırma akışında
+            // myshopify adresi veya mağaza alanı elle İSTENEMEZ". Adres
+            // soran bu form incelemede ret sebebiydi. Satıcı uygulamayı
+            // Shopify'dan kurar (`ShopifyInstallController`); mevcut
+            // bağlantının yeniden yetkilendirilmesi kayıtlı adresi kullanır.
             'secrets' => [],
             'identity' => [],
             'oauth' => true,
-            'help' => 'Mağaza adresini xxx.myshopify.com biçiminde yaz. Shopify '
-                .'onay ekranına yönlendirileceksin; izin verince bağlantı kurulur.',
+            'install_only' => true,
         ],
 
         'etsy' => [
@@ -397,6 +404,25 @@ final class ChannelConnectForm
     }
 
     /** Form mağaza adresi soruyor mu? Hesap kimliği bir alandan geliyorsa hayır. */
+    /** Kanal panelden değil, yalnız kendi platformundan kurularak bağlanır. */
+    public static function installOnly(string $channelTypeCode): bool
+    {
+        return self::isDefined($channelTypeCode)
+            && (self::definition($channelTypeCode)['install_only'] ?? false) === true;
+    }
+
+    /** Kurulum düğmesinin adresi; panelden bağlanan kanalda null. */
+    public static function installUrl(string $channelTypeCode): ?string
+    {
+        if (! self::installOnly($channelTypeCode)) {
+            return null;
+        }
+
+        $url = config("services.{$channelTypeCode}.install_url");
+
+        return is_string($url) && $url !== '' ? $url : null;
+    }
+
     public static function asksStoreUrl(string $channelTypeCode): bool
     {
         return self::accountField($channelTypeCode) === null;
@@ -483,6 +509,7 @@ final class ChannelConnectForm
             'help' => $help !== null ? __($help) : null,
             'asksStoreUrl' => self::asksStoreUrl($channelTypeCode),
             'connectable' => true,
+            'installUrl' => self::installUrl($channelTypeCode),
         ];
     }
 

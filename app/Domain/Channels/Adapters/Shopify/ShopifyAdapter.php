@@ -225,15 +225,13 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
 
             if (! isset($data['shop']['id'])) {
                 return HealthResult::unhealthy(
-                    'Shopify yanıtı mağaza bilgisi taşımıyor.'
+                    __('Shopify yanıtı mağaza bilgisi taşımıyor.')
                 );
             }
 
             if ($this->locationGid() === null) {
                 return HealthResult::unhealthy(
-                    'Stok konumu (location) seçilmedi. Konum seçilmeden stok '.
-                    'gönderilemez; varsayılanı sessizce seçmek çok depolu '.
-                    'mağazada stoğu yanlış depoya yazardı.'
+                    __('Stok konumu (location) seçilmedi. Konum seçilmeden stok gönderilemez; varsayılanı sessizce seçmek çok depolu mağazada stoğu yanlış depoya yazardı.')
                 );
             }
 
@@ -380,8 +378,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
 
         if (! is_string($refresh) || $refresh === '') {
             throw new RuntimeException(
-                'Shopify yenileme anahtarı yok — bağlantı elle açılmış özel '.
-                'uygulamayla kurulmuş olabilir; uygulama üzerinden yeniden bağlanmalı.'
+                __('Shopify yenileme anahtarı yok — bağlantı elle açılmış özel uygulamayla kurulmuş olabilir; uygulama üzerinden yeniden bağlanmalı.')
             );
         }
 
@@ -1213,8 +1210,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             // kurulurken yakalar (P1-5); buraya düşmesi bağlantının sonradan
             // bozulduğu anlamına gelir.
             throw new RuntimeException(
-                'Shopify stok konumu (location_gid) tanımsız — stok hangi '.
-                'depoya yazılacağı bilinmeden gönderilemez.'
+                __('Shopify stok konumu (location_gid) tanımsız — stok hangi depoya yazılacağı bilinmeden gönderilemez.')
             );
         }
 
@@ -1724,7 +1720,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             // `userErrors` döner ve o hata KALICIDIR.
             return AdapterResult::failure(
                 ErrorClass::VALIDATION,
-                'Kargo bildirimi için siparişin Shopify kimliği yok.',
+                __('Kargo bildirimi için siparişin Shopify kimliği yok.'),
             );
         }
 
@@ -1991,9 +1987,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
 
         if ($token === null || $token === '') {
             throw new RuntimeException(
-                'Shopify Admin API access token tanımsız — istek kimliksiz '.
-                'gider, kanal 401 döner ve listing "anahtarın yanlış" '.
-                'damgasıyla ölür.'
+                __('Shopify Admin API access token tanımsız — istek kimliksiz gider, kanal 401 döner ve listing "anahtarın yanlış" damgasıyla ölür.')
             );
         }
 
@@ -2014,8 +2008,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
 
         if (! is_string($domain) || $domain === '') {
             throw new RuntimeException(
-                'Shopify mağaza alan adı (external_account_id) tanımsız — '.
-                'istek atılacak adres bilinmiyor.'
+                __('Shopify mağaza alan adı (external_account_id) tanımsız — istek atılacak adres bilinmiyor.')
             );
         }
 

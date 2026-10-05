@@ -45,6 +45,9 @@ return [
         // true: bütün mağazalarda TEST aboneliği (canlı öncesi deneme).
         // Geliştirme mağazası her durumda testtir (ShopifyBilling).
         'billing_test' => (bool) env('SHOPIFY_BILLING_TEST', false),
+        // Panelde "Shopify'dan kur" düğmesinin adresi — App Store sayfası.
+        // Mağaza adresi panelde SORULAMAZ (App Store kuralı 2.3.1).
+        'install_url' => env('SHOPIFY_INSTALL_URL', 'https://apps.shopify.com/34pazar'),
     ],
 
 ];

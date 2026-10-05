@@ -226,7 +226,7 @@ function domainFor(domain) {
                             </span>
 
                             <p v-if="row.errorMessage" class="mt-1 max-w-md text-xs text-stone-600">
-                                {{ row.errorMessage }}
+                                {{ t(row.errorMessage) }}
                             </p>
 
                             <!--
