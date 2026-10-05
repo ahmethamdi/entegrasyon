@@ -6,15 +6,18 @@
  * dururdu.
  */
 
+import { intlLocale, k } from './i18n';
+
 const moneyFormatters = {};
 
-/** "1098.00" + "TRY" → "1.098,00 ₺". Para birimi bilinmiyorsa kodu yazılır. */
+/** "1098.00" + "TRY" → "1.098,00 ₺" (TR) / "₺1,098.00" (EN). Para birimi bilinmiyorsa kodu yazılır. */
 export function money(value, currency = 'TRY') {
     if (value === null || value === undefined || value === '') return '—';
     const code = currency || 'TRY';
     try {
-        moneyFormatters[code] ??= new Intl.NumberFormat('tr-TR', { style: 'currency', currency: code });
-        return moneyFormatters[code].format(Number(value));
+        const locale = intlLocale();
+        moneyFormatters[`${locale}:${code}`] ??= new Intl.NumberFormat(locale, { style: 'currency', currency: code });
+        return moneyFormatters[`${locale}:${code}`].format(Number(value));
     } catch {
         return `${value} ${code}`;
     }
@@ -53,12 +56,12 @@ const unpaid = ['pending', 'on-hold', 'authorized'];
 export function orderState(status, hasShipment = false) {
     const s = String(status ?? '').toLowerCase();
 
-    if (cancelled.includes(s)) return { text: 'İptal', tone: 'muted' };
-    if (returned.includes(s)) return { text: 'İade', tone: 'muted' };
-    if (delivered.includes(s)) return { text: 'Teslim edildi', tone: 'done' };
-    if (shipped.includes(s) || hasShipment) return { text: 'Kargoda', tone: 'done' };
-    if (awaiting.includes(s)) return { text: 'Kargo bekliyor', tone: 'todo' };
-    if (unpaid.includes(s)) return { text: 'Ödeme bekleniyor', tone: 'muted' };
+    if (cancelled.includes(s)) return { text: k('İptal'), tone: 'muted' };
+    if (returned.includes(s)) return { text: k('İade'), tone: 'muted' };
+    if (delivered.includes(s)) return { text: k('Teslim edildi'), tone: 'done' };
+    if (shipped.includes(s) || hasShipment) return { text: k('Kargoda'), tone: 'done' };
+    if (awaiting.includes(s)) return { text: k('Kargo bekliyor'), tone: 'todo' };
+    if (unpaid.includes(s)) return { text: k('Ödeme bekleniyor'), tone: 'muted' };
 
     return { text: status ?? '—', tone: 'muted' };
 }

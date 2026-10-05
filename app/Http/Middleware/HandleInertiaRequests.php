@@ -68,6 +68,15 @@ class HandleInertiaRequests extends Middleware
                 ],
             ],
 
+            // Panel dili ve sözlük. Anahtar Türkçe metnin KENDİSİDİR
+            // (Laravel JSON çevirisi): Türkçede sözlük gönderilmez,
+            // `t()` anahtarı aynen basar. Sözlük `lang/en.json` — sunucu
+            // tarafı `__()` ile AYNI dosya, metin bir kez çevrilir.
+            'locale' => fn (): string => app()->getLocale(),
+            'translations' => fn (): array => self::dictionary(app()->getLocale()),
+            // Dil anahtarı yalnız İngilizce panel açıkken görünür.
+            'localeSwitch' => (bool) config('app.english_panel'),
+
             // Tek seferlik bildirimler. `warning` sessiz başarısızlığın
             // panjurudur: kanal cevap vermediğinde kullanıcı bunu görmeli,
             // yoksa "kaydedildi" sanıp ürün göndermeye başlar.
@@ -98,5 +107,30 @@ class HandleInertiaRequests extends Middleware
                 ? null
                 : (new OnboardingProgress)->forCurrentTenant(),
         ];
+    }
+
+    /**
+     * Dilin sözlüğü — Türkçe için boş (anahtar = metin).
+     *
+     * İstek başına bir kez okunur; dosya küçük ve opcache'lenmiş JSON
+     * okuması önbellek katmanı gerektirmez.
+     *
+     * @return array<string, string>
+     */
+    public static function dictionary(string $locale): array
+    {
+        if ($locale === 'tr') {
+            return [];
+        }
+
+        $path = lang_path("{$locale}.json");
+
+        if (! is_file($path)) {
+            return [];
+        }
+
+        $decoded = json_decode((string) file_get_contents($path), true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

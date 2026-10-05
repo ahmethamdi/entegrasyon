@@ -15,6 +15,7 @@ use App\Http\Controllers\EbayOAuthController;
 use App\Http\Controllers\EtsyOAuthController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductChannelController;
@@ -24,6 +25,7 @@ use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SyncFailureController;
+use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -79,7 +81,12 @@ Route::middleware('auth')->group(function (): void {
 // BLADE İLE SUNUCUDA ÜRETİLİR, Inertia DEĞİL: arama motoru ve sosyal
 // önizleme botu sayfayı JavaScript çalıştırmadan okur. Panel Inertia
 // kalır; giriş arkasındaki ekranın dizine girmesi zaten istenmez.
-Route::controller(SiteController::class)->group(function (): void {
+// Panel dili (TR/EN) — giriş öncesi de seçilebilir (giriş/kayıt ekranları).
+Route::post('/locale', LocaleController::class)->name('locale.update');
+
+// Tanıtım sitesi Türkçe yazıldı; tarayıcı diline göre dil değiştirilseydi
+// Türkçe metnin içinde İngilizce tarih/ay adı basılırdı (blog).
+Route::controller(SiteController::class)->withoutMiddleware(SetLocale::class)->group(function (): void {
     Route::get('/', 'home')->name('home');
     Route::get('/ozellikler', 'features')->name('site.features');
     Route::get('/fiyatlar', 'pricing')->name('site.pricing');

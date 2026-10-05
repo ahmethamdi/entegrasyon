@@ -93,6 +93,14 @@ return [
      */
     'locale' => env('APP_LOCALE', 'tr'),
 
+    /*
+     * İNGİLİZCE PANEL ŞALTERİ (5 Ekim 2026). Kapalıyken panel HER ZAMAN
+     * Türkçedir ve dil anahtarı görünmez. Çeviri ekran ekran ilerlerken
+     * açık olsaydı İngilizce tarayıcılı satıcı yarı İngilizce yarı Türkçe
+     * panel görürdü. Bütün ekranlar `lang/en.json`'a girince açılır.
+     */
+    'english_panel' => (bool) env('ENGLISH_PANEL', false),
+
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'tr'),
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'tr_TR'),

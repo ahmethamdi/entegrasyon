@@ -24,6 +24,12 @@ abstract class TestCase extends BaseTestCase
         // testler arası sızıntı da bir risktir.
         TenantContext::clear();
 
+        // Symfony'nin test isteği varsayılan olarak `Accept-Language: en-us`
+        // taşır; panel dili tarayıcıdan türediği için (SetLocale) her test
+        // sessizce İngilizce panel görürdü. Varsayılan Türk satıcının
+        // tarayıcısı; İngilizce senaryo testi başlığı kendisi verir.
+        $this->withHeader('Accept-Language', 'tr-TR,tr;q=0.9');
+
         // ⚠️ TEST GERÇEK KANALA İSTEK ATAMAZ (A11 ④b'de bulundu).
         //
         // Sahte yanıt tanımı bir uç noktayı kapsamayınca istek SESSİZCE

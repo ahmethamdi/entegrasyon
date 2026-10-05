@@ -2,8 +2,10 @@
 import BrandMark from '../Components/BrandMark.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { k, switchLocale, useI18n } from '../lib/i18n';
 
 const page = usePage();
+const { t, locale } = useI18n();
 
 const tenantName = computed(() => page.props.tenant?.name ?? '');
 
@@ -29,23 +31,23 @@ const navGroups = [
     {
         heading: null,
         items: [
-            { href: '/panel', label: 'Ana sayfa' },
-            { href: '/orders', label: 'Siparişler' },
-            { href: '/inventory', label: 'Stok' },
+            { href: '/panel', label: k('Ana sayfa') },
+            { href: '/orders', label: k('Siparişler') },
+            { href: '/inventory', label: k('Stok') },
         ],
     },
     {
-        heading: 'Mağazam',
+        heading: k('Mağazam'),
         items: [
-            { href: '/products', label: 'Ürünler' },
-            { href: '/channels', label: 'Kanallarım' },
+            { href: '/products', label: k('Ürünler') },
+            { href: '/channels', label: k('Kanallar') },
             /*
              * Onaylar GÜNLÜK işe yakındır (Trendyol reddettiği ürünün
              * sebebini burada gösteriyoruz), bu yüzden "Gelişmiş"e
              * gömülmedi. Hata grubuna da konmaz: onay kanalın NORMAL
              * süreci, arıza değil.
              */
-            { href: '/approvals', label: 'Kanal onayları' },
+            { href: '/approvals', label: k('Kanal onayları') },
         ],
     },
     {
@@ -55,9 +57,14 @@ const navGroups = [
          * satıcı ürünün nereye gittiğini bilemez; tıklanabilir olsaydı
          * boş bir sayfaya düşerdi.
          */
-        heading: 'Modüller',
+        heading: k('Modüller'),
         items: [
-            { href: null, label: 'Muhasebe', soon: true },
+            /*
+             * Kampanyalar — fiyat kuralları modülü (kullanıcı kararı,
+             * 5 Ekim: panel yenilemesinden SONRA yazılacak).
+             */
+            { href: null, label: k('Kampanyalar'), soon: true },
+            { href: null, label: k('Muhasebe'), soon: true },
         ],
     },
     {
@@ -69,21 +76,35 @@ const navGroups = [
          * bir şey çıkarsa ana sayfadaki "Yapman gerekenler" oraya
          * bağlantı verir — satıcı menüyü karıştırmadan ulaşır.
          */
-        heading: 'Gelişmiş',
+        heading: k('Gelişmiş'),
         collapsible: true,
         items: [
-            { href: '/mappings', label: 'Kategori eşleştirme' },
-            { href: '/reconciliation', label: 'Fiyat ve stok kontrolü' },
-            { href: '/failures', label: 'Gönderilemeyenler' },
-            { href: '/metrics', label: 'Sistem durumu' },
+            { href: '/mappings', label: k('Kategori eşleştirme') },
+            { href: '/reconciliation', label: k('Fiyat ve stok kontrolü') },
+            { href: '/failures', label: k('Gönderilemeyenler') },
+            { href: '/metrics', label: k('Sistem durumu') },
         ],
     },
 ];
 
 /* Hesap öğeleri — gezinme listesinin dışında, sidebar altında. */
 const accountNav = [
-    { href: '/billing', label: 'Abonelik' },
-    { href: '/help', label: 'Yardım' },
+    { href: '/billing', label: k('Abonelik') },
+    { href: '/help', label: k('Yardım') },
+];
+
+/* Dil seçenekleri — her biri KENDİ dilinde yazılır. */
+const languages = [
+    { code: 'tr', label: 'TR · Türkçe' },
+    { code: 'en', label: 'EN · English' },
+];
+
+/* Telefon alt menüsü — sıklık sırası; ikonlar 20×20 çizgi. */
+const tabItems = [
+    { href: '/panel', label: k('Ana sayfa'), icon: 'M3 9l7-6 7 6v8H3z M8 17v-5h4v5' },
+    { href: '/orders', label: k('Siparişler'), icon: 'M4 4h12l-1 12H5z M7 4a3 3 0 016 0' },
+    { href: '/products', label: k('Ürünler'), icon: 'M3 6l7-3 7 3-7 3z M3 6v8l7 3 7-3V6 M10 9v8' },
+    { href: '/channels', label: k('Kanallar'), icon: 'M8 12l4-4 M6.5 9.5l-2 2a3 3 0 004 4l2-2 M13.5 10.5l2-2a3 3 0 00-4-4l-2 2' },
 ];
 
 const currentPath = computed(() => page.url.split('?')[0]);
@@ -160,35 +181,35 @@ const showOnboarding = computed(() => onboarding.value?.visible === true);
 const onboardingSteps = [
     {
         key: 'account',
-        label: 'Hesap oluştur',
-        done: 'Hesabın hazır.',
-        todo: 'Hesabını oluştur.',
+        label: k('Hesap oluştur'),
+        done: k('Hesabın hazır.'),
+        todo: k('Hesabını oluştur.'),
         href: null,
         action: null,
     },
     {
         key: 'channel',
-        label: 'Kanal bağla',
-        done: 'Kanalın bağlı ve sağlıklı.',
-        todo: 'Mağazanı bağla — sağlık kontrolü geçmeden kanal aktif olmaz.',
+        label: k('Kanal bağla'),
+        done: k('Kanalın bağlı ve çalışıyor.'),
+        todo: k('Mağazanı bağla. Bağlantı denenip çalıştığı görülünce kanal açılır.'),
         href: '/channels/create',
-        action: 'Kanal bağla',
+        action: k('Kanal bağla'),
     },
     {
         key: 'product',
-        label: 'Ürün aktar',
-        done: 'Ürünlerin sistemde.',
-        todo: 'Ürünlerini ekle ya da CSV/kanaldan içe aktar.',
+        label: k('Ürün aktar'),
+        done: k('Ürünlerin sistemde.'),
+        todo: k('Ürünlerini ekle ya da mağazandan / CSV dosyasından çek.'),
         href: '/products/import',
-        action: 'Ürün aktar',
+        action: k('Ürün aktar'),
     },
     {
         key: 'sync',
-        label: 'İlk gönderim',
-        done: 'İlk ürünün kanala ulaştı.',
-        todo: 'Bir ürünü kanala gönder; kanala ulaşınca kurulum biter.',
+        label: k('İlk gönderim'),
+        done: k('İlk ürünün kanala ulaştı.'),
+        todo: k('Bir ürünü kanala gönder. Kanala ulaşınca kurulum biter.'),
         href: '/products',
-        action: 'Ürüne git',
+        action: k('Ürüne git'),
     },
 ];
 
@@ -226,7 +247,7 @@ function logout() {
             href="#main"
             class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-60 focus:rounded focus:bg-stone-900 focus:px-3 focus:py-2 focus:text-sm focus:text-white"
         >
-            İçeriğe geç
+            {{ t('İçeriğe geç') }}
         </a>
 
         <!--
@@ -268,7 +289,7 @@ function logout() {
                 <button
                     type="button"
                     class="-mr-1 shrink-0 rounded p-1 text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:hidden"
-                    aria-label="Menüyü kapat"
+                    :aria-label="t('Menüyü kapat')"
                     @click="mobileMenuOpen = false"
                 >
                     <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -277,7 +298,7 @@ function logout() {
                 </button>
             </div>
 
-            <nav class="flex-1 overflow-y-auto px-2 py-2" aria-label="Ana menü">
+            <nav class="flex-1 overflow-y-auto px-2 py-2" :aria-label="t('Ana menü')">
                 <div v-for="(group, groupIndex) in navGroups" :key="group.heading ?? 'ana'">
                     <button
                         v-if="group.collapsible"
@@ -286,7 +307,7 @@ function logout() {
                         :aria-expanded="advancedOpen"
                         @click="advancedOpen = !advancedOpen"
                     >
-                        {{ group.heading }}
+                        {{ t(group.heading) }}
                         <span class="transition" :class="advancedOpen ? 'rotate-90' : ''" aria-hidden="true">›</span>
                     </button>
                     <p
@@ -294,7 +315,7 @@ function logout() {
                         class="px-3 pb-1.5 text-xs font-medium text-stone-500"
                         :class="groupIndex === 0 ? 'pt-2' : 'mt-3 border-t border-stone-200 pt-4'"
                     >
-                        {{ group.heading }}
+                        {{ t(group.heading) }}
                     </p>
 
                     <ul v-show="!group.collapsible || advancedOpen" :class="groupIndex === 0 ? 'pt-1' : ''">
@@ -304,8 +325,8 @@ function logout() {
                                 class="flex items-center justify-between rounded px-3 py-2 text-sm text-stone-400"
                                 aria-disabled="true"
                             >
-                                {{ item.label }}
-                                <span class="rounded-full border border-stone-200 px-2 py-0.5 text-[11px] text-stone-500">Yakında</span>
+                                {{ t(item.label) }}
+                                <span class="rounded-full border border-stone-200 px-2 py-0.5 text-[11px] text-stone-500">{{ t('Yakında') }}</span>
                             </span>
                             <!--
                                 AKTİF İŞARET 3px'LİK SOL ÇUBUKTUR, DOLGU
@@ -332,7 +353,7 @@ function logout() {
                                     ? 'bg-stone-100 font-medium text-stone-900 before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-full before:bg-brand-600'
                                     : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
                             >
-                                {{ item.label }}
+                                {{ t(item.label) }}
                             </Link>
                         </li>
                     </ul>
@@ -351,10 +372,30 @@ function logout() {
                                 ? 'bg-stone-100 font-medium text-stone-900 before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-full before:bg-brand-600'
                                 : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
                         >
-                            {{ item.label }}
+                            {{ t(item.label) }}
                         </Link>
                     </li>
                 </ul>
+
+                <!--
+                    DİL ANAHTARI — iki seçenek, ikisi de görünür. Açılır liste
+                    olsaydı İngilizce bilmeyen satıcı "Language"i, Türkçe
+                    bilmeyen inceleyici "Dil"i aramak zorunda kalırdı.
+                -->
+                <div v-if="page.props.localeSwitch" class="mt-1 flex items-center gap-1 px-3 py-1.5" role="group" :aria-label="t('Panel dili')">
+                    <button
+                        v-for="option in languages"
+                        :key="option.code"
+                        type="button"
+                        class="rounded px-2 py-0.5 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        :class="locale() === option.code ? 'bg-stone-900 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'"
+                        :aria-pressed="locale() === option.code"
+                        :lang="option.code"
+                        @click="locale() !== option.code && switchLocale(option.code)"
+                    >
+                        {{ option.label }}
+                    </button>
+                </div>
 
                 <!--
                     Çıkış gezinme listesine KONMAZ: sık tıklanan on bir
@@ -367,7 +408,7 @@ function logout() {
                     class="mt-1 w-full rounded px-3 py-2 text-left text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     @click="logout"
                 >
-                    Çıkış
+                    {{ t('Çıkış') }}
                 </button>
             </div>
         </aside>
@@ -382,7 +423,7 @@ function logout() {
                     class="rounded-md border border-stone-300 p-2 text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     aria-controls="panel-sidebar"
                     :aria-expanded="mobileMenuOpen"
-                    aria-label="Menüyü aç"
+                    :aria-label="t('Menüyü aç')"
                     @click="mobileMenuOpen = true"
                 >
                     <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -411,15 +452,15 @@ function logout() {
             <section
                 v-if="showOnboarding"
                 class="border-b border-amber-200 bg-amber-50"
-                aria-label="Kurulum adımları"
+                :aria-label="t('Kurulum adımları')"
             >
                 <div class="mx-auto max-w-5xl px-6 py-5 lg:px-8">
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <h2 class="text-sm font-semibold text-amber-900">
-                            Kurulumu tamamla
+                            {{ t('Kurulumu tamamla') }}
                         </h2>
                         <p class="text-sm tabular-nums text-amber-800">
-                            {{ doneCount }}/{{ steps.length }} adım
+                            {{ t(':done/:total adım', { done: doneCount, total: steps.length }) }}
                         </p>
                     </div>
 
@@ -447,12 +488,12 @@ function logout() {
                                     class="text-sm font-medium"
                                     :class="step.isDone ? 'text-stone-500' : 'text-stone-900'"
                                 >
-                                    {{ step.label }}
+                                    {{ t(step.label) }}
                                 </p>
                             </div>
 
                             <p class="mt-1.5 text-xs leading-relaxed text-stone-600">
-                                {{ step.isDone ? step.done : step.todo }}
+                                {{ t(step.isDone ? step.done : step.todo) }}
                             </p>
                         </li>
                     </ol>
@@ -467,15 +508,53 @@ function logout() {
                             :href="nextStep.href"
                             class="inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
                         >
-                            {{ nextStep.action }} →
+                            {{ t(nextStep.action) }} →
                         </Link>
                     </div>
                 </div>
             </section>
 
-            <main id="main" tabindex="-1" class="mx-auto max-w-5xl px-6 py-10 lg:px-8">
+            <!-- Alt menü yüksekliği kadar boşluk: son satır menünün altında kalmasın. -->
+            <main id="main" tabindex="-1" class="mx-auto max-w-5xl px-6 pb-28 pt-10 lg:px-8 lg:pb-10">
                 <slot />
             </main>
+
+            <!--
+                TELEFON ALT MENÜSÜ — en sık dört ekran başparmak altında.
+                Çekmece tek yol olsaydı siparişten stoğa geçmek iki dokunuş
+                ve bir kaydırma isterdi. "Menü" çekmeceyi açar; seyrek
+                ekranlar (Gelişmiş, Abonelik) orada kalır.
+            -->
+            <nav
+                class="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-stone-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
+                :aria-label="t('Hızlı menü')"
+            >
+                <Link
+                    v-for="item in tabItems"
+                    :key="item.href"
+                    :href="item.href"
+                    :aria-current="isActive(item.href) ? 'page' : undefined"
+                    class="flex flex-col items-center gap-1 py-2 text-[11px] transition focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                    :class="isActive(item.href) ? 'font-semibold text-brand-700' : 'text-stone-500'"
+                >
+                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path :d="item.icon" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                    {{ t(item.label) }}
+                </Link>
+                <button
+                    type="button"
+                    class="flex flex-col items-center gap-1 py-2 text-[11px] text-stone-500 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                    aria-controls="panel-sidebar"
+                    :aria-expanded="mobileMenuOpen"
+                    @click="mobileMenuOpen = true"
+                >
+                    <svg class="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path d="M3 5h14M3 10h14M3 15h14" stroke-linecap="round" />
+                    </svg>
+                    {{ t('Menü') }}
+                </button>
+            </nav>
         </div>
     </div>
 </template>

@@ -19,6 +19,7 @@ use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SetLocale;
 use App\Support\LoadTest\SyncLoadTestCommand;
 use App\Support\Observability\CaptureMetricsCommand;
 use App\Support\Observability\DispatchAlertsCommand;
@@ -83,6 +84,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ])
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
+            // Dil Inertia paylaşımından ÖNCE kurulur: `translations` prop'u
+            // hangi dilin dosyasını göndereceğini buradan okur.
+            SetLocale::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
