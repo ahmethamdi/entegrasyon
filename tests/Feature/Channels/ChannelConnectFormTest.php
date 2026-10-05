@@ -51,39 +51,19 @@ final class ChannelConnectFormTest extends TestCase
     // ══════════════════════════════════════════ sözleşme · alan tanımları
 
     /**
-     * ⚠️ FORM TANIMI GERÇEK ADAPTER'IN OKUDUĞU ANAHTARLARI ÜRETİR.
+     * ⚠️ SHOPIFY FORMDAN HİÇBİR ANAHTAR İSTEMEZ — 34Pazar uygulaması (OAuth).
      *
-     * Bu testin varlık sebebi `ChannelTypeSeeder`'ın yetenek sürüklenmesi
-     * hatasının (slice 3.8) aynısıdır: iki taraf da BEKLENEN METİNLE
-     * sınanmazsa bir yeniden adlandırma ikisini BİRLİKTE kaydırır ve
-     * davranış testleri yeşil kalır — ama kasaya `token` yazılırken
-     * adapter `access_token` okur ve istek SESSİZCE kimliksiz gider
-     * (`97a7eb7` hata biçimi: anahtar doğru, hiç gönderilmemiş).
+     * 1 Ocak 2026'dan beri Shopify yeni "özel uygulama" açtırmıyor; formun
+     * istediği `shpat_` anahtarını YENİ bir mağaza alamıyordu. Form yeniden
+     * anahtar sorarsa satıcı Shopify'da olmayan bir değeri arar.
      */
     #[Test]
-    public function the_shopify_form_asks_for_the_keys_the_adapter_reads(): void
+    public function the_shopify_form_asks_only_for_the_store_address(): void
     {
-        $secretFields = array_column(ChannelConnectForm::secretFields('shopify'), 'name');
-
-        $this->assertSame(['access_token', 'webhook_secret'], $secretFields);
-    }
-
-    /**
-     * ⚠️ SHOPIFY'IN KONUMU BİR *SIR* DEĞİL KİMLİKTİR — `settings`'e gider.
-     *
-     * Kasaya yazılsaydı adapter onu `settings[LOCATION_KEY]` üzerinden
-     * HİÇ bulamazdı ve sağlık kontrolü "konum seçilmedi" diyerek
-     * bağlantıyı sonsuza kadar `pending` bırakırdı. Kimlik ≠ sır
-     * (§19 · madde 4).
-     */
-    #[Test]
-    public function the_shopify_location_is_an_identity_field_not_a_secret(): void
-    {
-        $identity = array_column(ChannelConnectForm::identityFields('shopify'), 'name');
-        $secrets = array_column(ChannelConnectForm::secretFields('shopify'), 'name');
-
-        $this->assertContains(ShopifyAdapter::LOCATION_KEY, $identity);
-        $this->assertNotContains(ShopifyAdapter::LOCATION_KEY, $secrets);
+        $this->assertSame([], ChannelConnectForm::secretFields('shopify'));
+        $this->assertSame([], ChannelConnectForm::identityFields('shopify'));
+        $this->assertTrue(ChannelConnectForm::usesOauth('shopify'));
+        $this->assertTrue(ChannelConnectForm::asksStoreUrl('shopify'));
     }
 
     /**
@@ -285,81 +265,36 @@ final class ChannelConnectFormTest extends TestCase
     // ══════════════════════════════════════════════ A1 · Shopify bağlama
 
     /**
-     * Shopify TEK token + webhook sırrı + konum ile bağlanır ve sağlık
-     * kontrolü geçince AKTİF olur.
-     *
-     * ⚠️ İDDİA "YÖNLENDİRİLDİ" DEĞİL, KASANIN İÇERİĞİDİR. Yönlendirme
-     * iddiası kimlik bilgisi hiç yazılmasa bile yeşil kalırdı.
+     * Shopify formu bağlantıyı `pending` açar ve satıcıyı DOĞRUDAN Shopify
+     * onay ekranına gönderir; kasaya hiçbir şey yazılmaz (anahtarı callback
+     * yazar — `ShopifyOAuthFlowTest`).
      */
     #[Test]
-    public function shopify_connects_with_a_single_admin_api_token(): void
+    public function shopify_starts_the_app_authorization_instead_of_asking_for_a_token(): void
     {
         [$user] = $this->tenantWithChannels();
 
-        Http::fake(['*' => Http::response([
-            'data' => ['shop' => [
-                'id' => 'gid://shopify/Shop/1',
-                'name' => 'Mağaza',
-                'myshopifyDomain' => 'magaza.myshopify.com',
-            ]],
-        ], 200)]);
+        config()->set('services.shopify.client_id', 'istemci-123');
+        config()->set('services.shopify.client_secret', 'sir-456');
+        Http::fake();
 
-        $this->actingAs($user)->post('/channels', [
+        $response = $this->actingAs($user)->post('/channels', [
             'channel_type_code' => 'shopify',
             'label' => 'Shopify Mağazam',
-            'store_url' => 'magaza.myshopify.com',
-            'access_token' => 'shpat_gizli',
-            'webhook_secret' => 'whsec-gizli',
-            ShopifyAdapter::LOCATION_KEY => 'gid://shopify/Location/12',
-        ])->assertRedirect('/channels');
-
-        $connection = $this->connectionFor('shopify');
-
-        $this->assertNotNull($connection);
-        $this->assertSame('active', $connection->status);
-
-        $secrets = $this->storedSecrets($connection);
-
-        $this->assertSame('shpat_gizli', $secrets['access_token'] ?? null);
-        $this->assertSame('whsec-gizli', $secrets['webhook_secret'] ?? null);
-    }
-
-    /**
-     * ⚠️ KONUM `settings`'E YAZILIR VE SAĞLIK KONTROLÜ ONU GÖRÜR.
-     *
-     * Bu testin varlık sebebi: `location_gid` bugüne kadar HİÇBİR kod
-     * yolundan yazılmıyordu, yalnızca testlerde elle tohumlanıyordu.
-     * Yazılmasaydı sağlık kontrolü "konum seçilmedi" der, bağlantı
-     * `pending` kalır ve satıcı Shopify'a HİÇ ürün gönderemezdi —
-     * kanal 52/52 saat yazılmış olmasına rağmen.
-     */
-    #[Test]
-    public function the_shopify_location_reaches_the_settings_column(): void
-    {
-        [$user] = $this->tenantWithChannels();
-
-        Http::fake(['*' => Http::response([
-            'data' => ['shop' => ['id' => 'gid://shopify/Shop/1']],
-        ], 200)]);
-
-        $this->actingAs($user)->post('/channels', [
-            'channel_type_code' => 'shopify',
-            'label' => 'Shopify',
-            'store_url' => 'magaza.myshopify.com',
-            'access_token' => 'shpat_gizli',
-            'webhook_secret' => 'whsec',
-            ShopifyAdapter::LOCATION_KEY => 'gid://shopify/Location/99',
+            'store_url' => 'https://Magaza.myshopify.com/admin',
         ]);
 
+        $target = (string) $response->headers->get('Location');
+        $this->assertStringStartsWith('https://magaza.myshopify.com/admin/oauth/authorize?', $target);
+        $this->assertStringContainsString('client_id=istemci-123', $target);
+        $this->assertStringContainsString(urlencode(route('channels.shopify.callback')), $target);
+        $response->assertSessionHas('shopify.oauth.state');
+
         $connection = $this->connectionFor('shopify');
-
-        $this->assertSame(
-            'gid://shopify/Location/99',
-            $connection->settings[ShopifyAdapter::LOCATION_KEY] ?? null,
-        );
-
-        // Sağlık kontrolü konumu GÖRDÜ — yoksa `pending` kalırdı.
-        $this->assertSame('active', $connection->status);
+        $this->assertSame('pending', $connection->status);
+        $this->assertSame('magaza.myshopify.com', $connection->external_account_id);
+        $this->assertNull($this->storedSecrets($connection));
+        Http::assertNothingSent();
     }
 
     /**
@@ -400,14 +335,13 @@ final class ChannelConnectFormTest extends TestCase
     }
 
     /**
-     * ⚠️ EKSİK KONUM ALAN HATASIDIR, 500 DEĞİL — ve bağlantı AÇILMAZ.
+     * ⚠️ ÖZEL ALAN ADI (magazam.com) ALAN HATASIDIR — bağlantı AÇILMAZ.
      *
-     * Doğrulanmasaydı satır kurulur, sağlık kontrolü sağlıksız döner ve
-     * satıcı sebebini ancak bağlantı kartındaki uzun hata metninde
-     * bulurdu. Formda söylemek sonra söylemekten ucuzdur.
+     * OAuth yalnız `xxx.myshopify.com` ile çalışır. Kabul edilseydi satıcı
+     * Shopify'ın hata sayfasına gider ve geride yarım bir bağlantı kalırdı.
      */
     #[Test]
-    public function shopify_without_a_location_is_a_field_error(): void
+    public function a_custom_domain_is_a_field_error_for_shopify(): void
     {
         [$user] = $this->tenantWithChannels();
 
@@ -417,11 +351,9 @@ final class ChannelConnectFormTest extends TestCase
             ->post('/channels', [
                 'channel_type_code' => 'shopify',
                 'label' => 'Shopify',
-                'store_url' => 'magaza.myshopify.com',
-                'access_token' => 'shpat_gizli',
-                'webhook_secret' => 'whsec',
+                'store_url' => 'magazam.com',
             ])
-            ->assertSessionHasErrors(ShopifyAdapter::LOCATION_KEY);
+            ->assertSessionHasErrors('store_url');
 
         Http::assertNothingSent();
         $this->assertNull($this->connectionFor('shopify'));
@@ -430,9 +362,9 @@ final class ChannelConnectFormTest extends TestCase
     /**
      * ⚠️ BAŞKA KANALIN ALANLARI KABUL EDİLMEZ.
      *
-     * Shopify'a `consumer_key` gönderilirse istek REDDEDİLİR. Sessizce
-     * yok sayılsaydı `access_token` eksik kalır, kasaya boş bir kimlik
-     * yazılır ve her çağrı 401 alırdı — anahtar yanlış değil, HİÇ
+     * Woo'ya Shopify'ın eski `access_token`'ı gönderilirse istek REDDEDİLİR.
+     * Sessizce yok sayılsaydı `consumer_key` eksik kalır, kasaya boş bir
+     * kimlik yazılır ve her çağrı 401 alırdı — anahtar yanlış değil, HİÇ
      * gönderilmemiş olurdu.
      */
     #[Test]
@@ -444,16 +376,15 @@ final class ChannelConnectFormTest extends TestCase
 
         $this->actingAs($user)
             ->post('/channels', [
-                'channel_type_code' => 'shopify',
-                'label' => 'Shopify',
-                'store_url' => 'magaza.myshopify.com',
-                'consumer_key' => 'ck_yanlis',
-                'consumer_secret' => 'cs_yanlis',
+                'channel_type_code' => 'woocommerce',
+                'label' => 'Woo',
+                'store_url' => 'https://magaza.example.com',
+                'access_token' => 'shpat_yanlis',
             ])
-            ->assertSessionHasErrors('access_token');
+            ->assertSessionHasErrors('consumer_key');
 
         Http::assertNothingSent();
-        $this->assertNull($this->connectionFor('shopify'));
+        $this->assertNull($this->connectionFor('woocommerce'));
     }
 
     // ═════════════════════════════════════════════════ A2 · Etsy bağlama
@@ -694,45 +625,37 @@ final class ChannelConnectFormTest extends TestCase
      *
      * `ConnectChannel` `settings`'i BİRLEŞTİRİR (`PushListing::
      * adoptRemoteIdentity` kuralının aynısı). Ezseydi Shopify'ı yeniden
-     * bağlayan satıcı `location_gid`'ini kaybeder ve bağlantı bir daha
-     * asla sağlıklı olmazdı.
+     * yetkilendiren satıcı seçtiği depoyu (`location_gid`) kaybeder ve
+     * stok bir daha yazılamazdı.
      */
     #[Test]
     public function reconnecting_preserves_settings_the_form_did_not_send(): void
     {
         [$user, $tenant] = $this->tenantWithChannels();
 
-        Http::fake(['*' => Http::response([
-            'data' => ['shop' => ['id' => 'gid://shopify/Shop/1']],
-        ], 200)]);
-
-        $this->actingAs($user)->post('/channels', [
+        Http::fake();
+        $form = [
             'channel_type_code' => 'shopify',
             'label' => 'Shopify',
             'store_url' => 'magaza.myshopify.com',
-            'access_token' => 'shpat_1',
-            'webhook_secret' => 'whsec',
-            ShopifyAdapter::LOCATION_KEY => 'gid://shopify/Location/12',
-        ]);
+        ];
 
-        // Kanal başka bir ayarı sonradan yazmış olsun (örn. öğrenilmiş
-        // hız sınırı) — form onu HİÇ göndermez.
+        $this->actingAs($user)->post('/channels', $form);
+
+        // Depo seçildi ve kanal başka bir ayarı yazdı — form ikisini de göndermez.
         $this->asTenant($tenant, function (): void {
             $connection = ChannelConnection::query()
                 ->where('channel_type_code', 'shopify')->firstOrFail();
 
-            $connection->settings = [...$connection->settings, 'ogrenilmis' => 'deger'];
+            $connection->settings = [
+                ...$connection->settings,
+                ShopifyAdapter::LOCATION_KEY => 'gid://shopify/Location/12',
+                'ogrenilmis' => 'deger',
+            ];
             $connection->save();
         });
 
-        $this->actingAs($user)->post('/channels', [
-            'channel_type_code' => 'shopify',
-            'label' => 'Shopify',
-            'store_url' => 'magaza.myshopify.com',
-            'access_token' => 'shpat_2',
-            'webhook_secret' => 'whsec',
-            ShopifyAdapter::LOCATION_KEY => 'gid://shopify/Location/12',
-        ]);
+        $this->actingAs($user)->post('/channels', $form);
 
         $settings = $this->connectionFor('shopify')->settings;
 
@@ -948,9 +871,9 @@ final class ChannelConnectFormTest extends TestCase
 
                     return $shopify !== null
                         && $etsy !== null
-                        && array_column($shopify['secretFields'], 'name') === ['access_token', 'webhook_secret']
-                        // Etsy sır SORMAZ ama OAuth'a yönlendirir.
-                        && $shopify['oauth'] === false
+                        // İkisi de sır SORMAZ, OAuth'a yönlendirir.
+                        && $shopify['secretFields'] === []
+                        && $shopify['oauth'] === true
                         && $etsy['secretFields'] === []
                         && $etsy['oauth'] === true;
                 }),

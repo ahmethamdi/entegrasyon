@@ -35,6 +35,7 @@ class ChannelCredential extends Model
         'key_version',
         'scope',
         'expires_at',
+        'refresh_expires_at',
         'refreshed_at',
         'revoked_at',
     ];
@@ -47,6 +48,7 @@ class ChannelCredential extends Model
         return [
             'key_version' => 'integer',
             'expires_at' => 'datetime',
+            'refresh_expires_at' => 'datetime',
             'refreshed_at' => 'datetime',
             'revoked_at' => 'datetime',
         ];

@@ -9,6 +9,8 @@ use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Channels\Actions\CheckChannelHealth;
 use App\Domain\Channels\Actions\ConnectChannel;
+use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
+use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
@@ -62,7 +64,7 @@ final class ChannelConnectionController extends Controller
                 // YALNIZCA `expires_at` seçilir — şifreli gövde panele
                 // HİÇ gitmemelidir (§19 · madde 3). `id` seçilmek
                 // zorundadır, yoksa Eloquent ilişkiyi eşleyemez.
-                ->with('activeCredential:id,channel_connection_id,expires_at')
+                ->with('activeCredential:id,channel_connection_id,expires_at,refresh_expires_at')
                 ->orderBy('channel_type_code')
                 ->orderBy('label')
                 ->get()
@@ -144,6 +146,30 @@ final class ChannelConnectionController extends Controller
         // Hata, satıcının GÖRDÜĞÜ alana yazılır: adres sorulmayan kanalda
         // `store_url` hatası ekranda hiçbir yerde çıkmazdı.
         $errorKey = $accountField ?? 'store_url';
+
+        // Shopify'da hesap kimliği `xxx.myshopify.com`'dur; özel alan adı
+        // (magazam.com) OAuth'ta KULLANILAMAZ. Bağlantı açılmadan reddedilir —
+        // açılsaydı satıcı Shopify'ın hata sayfasına gider ve geride yarım
+        // bir `pending` bağlantı kalırdı.
+        if ($code === 'shopify') {
+            $host = strtolower((string) (parse_url(
+                str_contains((string) $storeUrl, '://') ? (string) $storeUrl : 'https://'.$storeUrl,
+                PHP_URL_HOST,
+            ) ?? ''));
+
+            if (! ShopifyAuth::validShopDomain($host)) {
+                throw ValidationException::withMessages([
+                    'store_url' => 'Shopify mağaza adresini xxx.myshopify.com biçiminde yaz. '
+                        .'Shopify yöneticisinde Ayarlar → Alan adları altında görünür.',
+                ]);
+            }
+
+            // Kimlik YALNIZ alan adıdır. `StoreUrl` Woo için yolu da kimliğe
+            // katar (alt klasöre kurulu Woo); satıcı adresi panelden
+            // kopyalarsa (`…myshopify.com/admin`) kimlik `…/admin` olur ve
+            // onay adresi `…/admin/admin/oauth/authorize`'a giderdi.
+            $storeUrl = $host;
+        }
 
         // Plan kotası (§13 · Faz 4) — YALNIZCA GERÇEKTEN YENİ mağazada.
         //
@@ -323,6 +349,7 @@ final class ChannelConnectionController extends Controller
         return match ($channelTypeCode) {
             'etsy' => app(EtsyOAuthController::class)->redirect($request, $connection->id),
             'ebay' => app(EbayOAuthController::class)->redirect($request, $connection->id),
+            'shopify' => app(ShopifyOAuthController::class)->redirect($request, $connection->id),
             default => throw new \LogicException(
                 "`{$channelTypeCode}` OAuth kullandığını bildiriyor ama "
                 .'yetkilendirme akışı tanımlı değil.'
@@ -358,7 +385,11 @@ final class ChannelConnectionController extends Controller
      */
     private function presentConnection(ChannelConnection $connection): array
     {
-        $expiresAt = $connection->activeCredential?->expires_at;
+        // Kendiliğinden yenilenen bağlantıda (Shopify uygulaması) satıcıyı
+        // ilgilendiren YENİLEME anahtarının bitişidir; erişim anahtarı 1 saatte
+        // dolar ve onu gösterseydik rozet hep "yakında dolacak" derdi.
+        $expiresAt = $connection->activeCredential?->refresh_expires_at
+            ?? $connection->activeCredential?->expires_at;
         $tokenStatus = TokenStatus::forExpiry($expiresAt);
 
         return [
@@ -374,6 +405,14 @@ final class ChannelConnectionController extends Controller
             'lastError' => $connection->last_error,
             'connectedAt' => $connection->connected_at?->toIso8601String(),
             'capabilities' => $this->capabilitiesOrEmpty($connection),
+
+            // Çok depolu Shopify mağazasında seçim bekleyen depolar (ad +
+            // kimlik — sır değil). Depo seçildiyse ya da kanal Shopify
+            // değilse boş: kartta seçim kutusu yalnız gerektiğinde çıkar.
+            'locationChoices' => $connection->channel_type_code === 'shopify'
+                && ! is_string($connection->settings[ShopifyAdapter::LOCATION_KEY] ?? null)
+                    ? array_values($connection->settings[ShopifyOAuthController::LOCATION_CHOICES_KEY] ?? [])
+                    : [],
 
             // §25 · TOKEN ROZETİ — `status`'tan AYRI bir sorudur.
             //

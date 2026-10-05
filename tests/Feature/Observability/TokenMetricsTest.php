@@ -200,6 +200,41 @@ final class TokenMetricsTest extends TestCase
      * sıfır arasında kaybolurdu (`RATE_LIMIT_HITS`'in kuralının
      * aynısı).
      */
+    /**
+     * ⚠️ SAATLİK ANAHTAR UYARI ÜRETMEZ — yenileme anahtarına bakılır.
+     *
+     * Shopify uygulamasının erişim anahtarı 1 saatte dolar ve kendiliğinden
+     * yenilenir (5 Eki 2026). Yalnız `expires_at`'e bakılsaydı her Shopify
+     * bağlantısı her saat bu uyarıyı üretirdi.
+     */
+    #[Test]
+    public function an_hourly_token_with_a_long_refresh_token_writes_no_row(): void
+    {
+        $connection = $this->connectionWithCredential(
+            'shopify',
+            expiresAt: now()->addHour(),
+            refreshExpiresAt: now()->addDays(90),
+        );
+
+        $this->capture();
+
+        $this->assertNull($this->snapshot(Metric::TOKEN_EXPIRING_SOON, MetricScope::connection($connection)));
+    }
+
+    #[Test]
+    public function a_refresh_token_close_to_expiry_is_measured(): void
+    {
+        $connection = $this->connectionWithCredential(
+            'shopify',
+            expiresAt: now()->addHour(),
+            refreshExpiresAt: now()->addDays(5),
+        );
+
+        $this->capture();
+
+        $this->assertNotNull($this->snapshot(Metric::TOKEN_EXPIRING_SOON, MetricScope::connection($connection)));
+    }
+
     #[Test]
     public function a_token_far_from_expiry_writes_no_row(): void
     {
@@ -526,6 +561,7 @@ final class TokenMetricsTest extends TestCase
         string $code,
         ?\DateTimeInterface $expiresAt,
         ?\DateTimeInterface $revokedAt = null,
+        ?\DateTimeInterface $refreshExpiresAt = null,
     ): string {
         $tenant = $this->makeTenant();
 
@@ -542,7 +578,7 @@ final class TokenMetricsTest extends TestCase
             ],
         ));
 
-        return $this->asTenant($tenant, function () use ($code, $expiresAt, $revokedAt, $tenant): string {
+        return $this->asTenant($tenant, function () use ($code, $expiresAt, $revokedAt, $refreshExpiresAt, $tenant): string {
             $connection = ChannelConnection::factory()->create([
                 'channel_type_code' => $code,
                 'external_account_id' => $code.'-'.uniqid(),
@@ -556,6 +592,7 @@ final class TokenMetricsTest extends TestCase
                 'encrypted_payload' => 'sahte',
                 'key_version' => 1,
                 'expires_at' => $expiresAt,
+                'refresh_expires_at' => $refreshExpiresAt,
                 'revoked_at' => $revokedAt,
                 'created_at' => now(),
                 'updated_at' => now(),

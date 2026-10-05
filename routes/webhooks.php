@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\ShopifyComplianceController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
@@ -30,6 +31,11 @@ use Illuminate\Support\Facades\Route;
 */
 Route::post('/webhooks/stripe', StripeWebhookController::class)
     ->name('webhooks.stripe');
+
+// Shopify zorunlu gizlilik webhook'ları — uygulama ayarlarında TEK adres.
+// Kanal rotasından önce: `shopify/compliance` uuid değil ama sıra kalıbı korunur.
+Route::post('/webhooks/shopify/compliance', ShopifyComplianceController::class)
+    ->name('webhooks.shopify.compliance');
 
 Route::post('/webhooks/{connectionId}', WebhookController::class)
     ->name('webhooks.receive')

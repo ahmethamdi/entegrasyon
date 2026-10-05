@@ -37,8 +37,9 @@ final class CredentialVault
         array $secrets,
         ?string $scope = null,
         ?\DateTimeInterface $expiresAt = null,
+        ?\DateTimeInterface $refreshExpiresAt = null,
     ): ChannelCredential {
-        $credential = $this->write($connection, $secrets, $scope, $expiresAt);
+        $credential = $this->write($connection, $secrets, $scope, $expiresAt, $refreshExpiresAt);
 
         // ⚠️ YENİ KİMLİK = DEVRE KAPANIR (§12).
         //
@@ -74,6 +75,7 @@ final class CredentialVault
         array $secrets,
         ?string $scope,
         ?\DateTimeInterface $expiresAt,
+        ?\DateTimeInterface $refreshExpiresAt = null,
     ): ChannelCredential {
         $payload = json_encode($secrets, JSON_THROW_ON_ERROR);
 
@@ -87,6 +89,14 @@ final class CredentialVault
             'expires_at' => $expiresAt,
             'refreshed_at' => now(),
         ];
+
+        // Yenileme anahtarının bitişi: null = DEĞİŞMEDİ (mevcut korunur).
+        // Kasaya yazan her yol (webhook sırrı, anahtar rotasyonu, yeniden
+        // bağlama) bunu bilmez; null "sil" anlamına gelseydi ilk yan yazım
+        // 90 günlük bilgiyi siler, rozet yine her saat "dolacak" derdi.
+        if ($refreshExpiresAt !== null) {
+            $attributes['refresh_expires_at'] = $refreshExpiresAt;
+        }
 
         if ($existing !== null) {
             $existing->forceFill($attributes)->save();

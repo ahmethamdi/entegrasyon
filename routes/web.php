@@ -21,6 +21,7 @@ use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SyncFailureController;
 use Illuminate\Support\Facades\Route;
@@ -141,6 +142,20 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
 
     Route::get('/channels/ebay/callback', [EbayOAuthController::class, 'callback'])
         ->name('channels.ebay.callback');
+
+    // Shopify — 34Pazar uygulaması (OAuth, authorization code grant).
+    // Etsy ile aynı iskelet ve aynı gerekçeler (POST başlatma, GET dönüş,
+    // `state` CSRF'in yerine). Dönüş adresi Shopify uygulamasında İZİNLİ
+    // yönlendirme olarak kayıtlı olmalı: https://APP_DOMAIN/channels/shopify/callback
+    Route::post('/channels/{connection}/shopify/authorize', [ShopifyOAuthController::class, 'redirect'])
+        ->name('channels.shopify.authorize');
+
+    Route::get('/channels/shopify/callback', [ShopifyOAuthController::class, 'callback'])
+        ->name('channels.shopify.callback');
+
+    // Birden fazla depolu mağazada stok konumu seçimi.
+    Route::post('/channels/{connection}/shopify/location', [ShopifyOAuthController::class, 'chooseLocation'])
+        ->name('channels.shopify.location');
 
     // Ürün yönetimi (§13 · faz 1.2 · "panelde ürün oluşturma, düzenleme").
     // Açılış stoğu ledger üzerinden girer; içerik düzenlemesi stoğa dokunmaz.

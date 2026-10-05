@@ -96,6 +96,25 @@ function activeCapabilities(capabilities) {
  */
 const checking = ref(null);
 
+// Çok depolu Shopify mağazasında stoğun yazılacağı depo. Varsayılan SEÇİLMEZ:
+// yanlış depo stoğu yanlış yere yazar (ShopifyAdapter::healthCheck).
+const chosenLocation = ref({});
+const savingLocation = ref(null);
+
+function saveLocation(id) {
+    const location = chosenLocation.value[id];
+    if (!location || savingLocation.value !== null) return;
+
+    savingLocation.value = id;
+
+    router.post(`/channels/${id}/shopify/location`, { location }, {
+        preserveScroll: true,
+        onFinish: () => {
+            savingLocation.value = null;
+        },
+    });
+}
+
 function recheck(id) {
     if (checking.value !== null) return;
 
@@ -218,6 +237,38 @@ function formatDate(iso) {
                 >
                     {{ connection.lastError }}
                 </p>
+
+                <div
+                    v-if="connection.locationChoices?.length"
+                    class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3"
+                >
+                    <label :for="`depo-${connection.id}`" class="block text-sm font-medium text-stone-900">
+                        Stok hangi depoya yazılsın?
+                    </label>
+                    <p class="mt-0.5 text-xs text-stone-600">
+                        Mağazanda birden fazla depo var. Seçtiğin depodaki stok 34Pazar'la eşitlenir.
+                    </p>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <select
+                            :id="`depo-${connection.id}`"
+                            v-model="chosenLocation[connection.id]"
+                            class="min-w-0 flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm"
+                        >
+                            <option :value="undefined" disabled>Depo seç…</option>
+                            <option v-for="location in connection.locationChoices" :key="location.id" :value="location.id">
+                                {{ location.name }}
+                            </option>
+                        </select>
+                        <button
+                            type="button"
+                            class="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                            :disabled="!chosenLocation[connection.id] || savingLocation !== null"
+                            @click="saveLocation(connection.id)"
+                        >
+                            {{ savingLocation === connection.id ? 'Kaydediliyor…' : 'Kaydet' }}
+                        </button>
+                    </div>
+                </div>
 
                 <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
                     <div>

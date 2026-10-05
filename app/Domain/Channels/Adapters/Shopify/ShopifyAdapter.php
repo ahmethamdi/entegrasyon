@@ -12,12 +12,15 @@ use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsTokenRefresh;
+use App\Domain\Channels\Contracts\SupportsWebhookRegistration;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -108,7 +111,7 @@ use Throwable;
  * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
  * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
+final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration
 {
     use DeclaresRequestQuota;
 
@@ -342,6 +345,15 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             return false;
         }
 
+        // UYGULAMA ÜZERİNDEN bağlanan mağazada Shopify gövdeyi 34Pazar
+        // uygulamasının İSTEMCİ SIRRIYLA imzalar — kasada mağazaya özel
+        // sır yoktur.
+        if (ShopifyAuth::webhookHmacValid($raw, $provided)) {
+            return true;
+        }
+
+        // Eski yol: elle açılmış özel uygulama (`shpat_`) + formdan girilen
+        // imza anahtarı. Uygulamaya geçmemiş bağlantılar için korunur.
         $secret = $this->webhookSecret();
 
         if ($secret === null || $secret === '') {
@@ -351,6 +363,141 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
         $expected = base64_encode(hash_hmac('sha256', $raw, $secret, true));
 
         return hash_equals($expected, $provided);
+    }
+
+    // ------------------------------------------------------------ uygulama (OAuth)
+
+    /**
+     * Süresi dolan erişim anahtarını yeniler (`credentials:refresh` turu).
+     *
+     * Shopify yeni anahtar verince ESKİSİNİ emekliye ayırır; yenileme
+     * anahtarı da DÖNER (90 gün) — dönmezse eskisi korunur.
+     */
+    public function refreshCredentials(): RefreshedCredentials
+    {
+        $secrets = $this->secrets();
+        $refresh = $secrets['refresh_token'] ?? null;
+
+        if (! is_string($refresh) || $refresh === '') {
+            throw new RuntimeException(
+                'Shopify yenileme anahtarı yok — bağlantı elle açılmış özel '.
+                'uygulamayla kurulmuş olabilir; uygulama üzerinden yeniden bağlanmalı.'
+            );
+        }
+
+        $response = $this->client->post(
+            endpoint: ShopifyAuth::tokenUrl($this->shopDomain()),
+            body: ShopifyAuth::refreshRequest($refresh),
+            asForm: true,
+        );
+
+        $response->throw();
+
+        $fresh = ShopifyAuth::credentialsFrom((array) $response->json(), $refresh);
+
+        return new RefreshedCredentials(
+            secrets: [...$secrets, ...$fresh['secrets']],
+            expiresAt: $fresh['expires_at'],
+            scope: $fresh['scope'],
+            refreshExpiresAt: $fresh['refresh_expires_at'],
+        );
+    }
+
+    /**
+     * Erişim anahtarı 1 SAAT yaşar, tur 15 dakikada bir koşar: 30 dakika
+     * önden yenilemek bir turun kaçmasına (sunucu yeniden başlıyor) yer
+     * bırakır. 15 dakika seçilseydi tek kaçan tur anahtarı öldürürdü.
+     */
+    public function refreshLeadSeconds(): int
+    {
+        return 1800;
+    }
+
+    /**
+     * Uygulamanın dinlediği konular. Normalleştirici (`ShopifyOrderNormalizer`)
+     * sipariş konularını, yaşam döngüsü yönlendiricisi `app/uninstalled`'ı okur.
+     */
+    private const WEBHOOK_TOPICS = [
+        'ORDERS_CREATE', 'ORDERS_UPDATED', 'ORDERS_CANCELLED', 'ORDERS_FULFILLED',
+        'ORDERS_PARTIALLY_FULFILLED', 'REFUNDS_CREATE', 'APP_UNINSTALLED',
+    ];
+
+    /**
+     * Webhook aboneliklerini mağazada kurar; yeniden çağrılırsa kopya açmaz.
+     *
+     * `$secret` YOK SAYILIR: Shopify uygulama webhook'larını uygulamanın
+     * istemci sırrıyla imzalar, abone başına sır kabul etmez.
+     * Abonelik ADRES + KONU ile tanınır; aynı uygulamanın başka adrese
+     * giden aboneliği (eski sunucu) dokunulmadan kalır.
+     */
+    public function registerWebhooks(string $deliveryUrl, string $secret): AdapterResult
+    {
+        $data = $this->gql(
+            <<<'GQL'
+            query WebhookList {
+              webhookSubscriptions(first: 100) { nodes { id topic uri } }
+            }
+            GQL,
+            operation: 'WebhookList',
+        );
+
+        $existing = [];
+        foreach ($data['webhookSubscriptions']['nodes'] ?? [] as $node) {
+            if (is_array($node) && ($node['uri'] ?? null) === $deliveryUrl) {
+                $existing[(string) ($node['topic'] ?? '')] = true;
+            }
+        }
+
+        $created = [];
+        foreach (self::WEBHOOK_TOPICS as $topic) {
+            if (isset($existing[$topic])) {
+                continue;
+            }
+
+            $this->gql(
+                <<<'GQL'
+                mutation WebhookCreate($topic: WebhookSubscriptionTopic!, $sub: WebhookSubscriptionInput!) {
+                  webhookSubscriptionCreate(topic: $topic, webhookSubscription: $sub) {
+                    webhookSubscription { id }
+                    userErrors { field message }
+                  }
+                }
+                GQL,
+                variables: ['topic' => $topic, 'sub' => ['uri' => $deliveryUrl]],
+                operation: 'WebhookCreate',
+                userErrorPath: 'webhookSubscriptionCreate',
+            );
+
+            $created[] = $topic;
+        }
+
+        return AdapterResult::success(['created' => $created, 'kept' => array_keys($existing)]);
+    }
+
+    /**
+     * Mağazanın AKTİF stok konumları — bağlantıda konum seçimi için.
+     *
+     * @return list<array{id: string, name: string}>
+     */
+    public function fetchLocations(): array
+    {
+        $data = $this->gql(
+            <<<'GQL'
+            query Locations {
+              locations(first: 50) { nodes { id name isActive } }
+            }
+            GQL,
+            operation: 'Locations',
+        );
+
+        $out = [];
+        foreach ($data['locations']['nodes'] ?? [] as $node) {
+            if (is_array($node) && ($node['isActive'] ?? false) === true && is_string($node['id'] ?? null)) {
+                $out[] = ['id' => $node['id'], 'name' => (string) ($node['name'] ?? $node['id'])];
+            }
+        }
+
+        return $out;
     }
 
     /**

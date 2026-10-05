@@ -439,8 +439,14 @@ final class CaptureMetrics
     {
         // ── token_expiring_soon ──────────────────────────────────────
         //
-        // ⚠️ `expires_at IS NULL` ÖLÇÜLMEZ: Woo/Trendyol kalıcı anahtar
-        // taşır ve Shopify'ın offline token'ı SÜRESİZDİR. NULL "hemen
+        // ⚠️ YENİLEME ANAHTARI ÖNCE (`refresh_expires_at`, 5 Eki 2026):
+        // Shopify uygulamasının erişim anahtarı 1 SAATTE dolar ve kendiliğinden
+        // yenilenir; yalnız `expires_at`'e bakılsaydı her Shopify bağlantısı
+        // her saat bu uyarıyı üretirdi. Satıcıyı ilgilendiren yenileme
+        // anahtarının bitişidir (90 gün); bilinmiyorsa erişim anahtarınınki.
+        //
+        // ⚠️ İKİSİ DE NULL OLAN ÖLÇÜLMEZ: Woo/Trendyol kalıcı anahtar
+        // taşır (eski, elle açılmış Shopify özel uygulaması da). NULL "hemen
         // doluyor" sayılsaydı o bağlantılar her turda kırmızı yanar ve
         // satıcı hiç bitmeyen bir uyarıyı kapatmaya çalışırdı — uyarıya
         // olan güven biter.
@@ -468,8 +474,8 @@ final class CaptureMetrics
             SELECT channel_connection_id, count(*) AS adet
               FROM channel_credentials
              WHERE revoked_at IS NULL
-               AND expires_at IS NOT NULL
-               AND expires_at < clock_timestamp() + ?::interval
+               AND COALESCE(refresh_expires_at, expires_at) IS NOT NULL
+               AND COALESCE(refresh_expires_at, expires_at) < clock_timestamp() + ?::interval
              GROUP BY channel_connection_id
         SQL, [self::TOKEN_EXPIRY_WINDOW_DAYS.' days']);
 

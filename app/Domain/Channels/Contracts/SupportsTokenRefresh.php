@@ -15,9 +15,11 @@ namespace App\Domain\Channels\Contracts;
  *
  * KİMLER UYGULAR: Etsy (access token **1 saat**) ve eBay (**2 saat** access,
  * 18 ay refresh). Woo, Trendyol ve Hepsiburada KALICI anahtar taşır ve bu
- * arayüzü UYGULAMAZ. Shopify'ın offline token'ı süresizdir; iptal
- * `app/uninstalled` webhook'uyla gelir ve `revoked_at` yazılır — o da bu
- * arayüzü uygulamaz (§04 · dipnot).
+ * arayüzü UYGULAMAZ. Shopify 5 Eki 2026'dan beri UYGULAR: 34Pazar
+ * uygulamasının erişim anahtarı 1 saat, yenileme anahtarı 90 gün yaşar
+ * (Shopify, 1 Nisan 2026'dan sonraki herkese açık uygulamalarda süresi dolan
+ * anahtarı zorunlu tuttu). Elle açılmış eski özel uygulama bağlantısında
+ * yenileme anahtarı yoktur, `expires_at` NULL'dur ve tur onu hiç seçmez.
  *
  * NEDEN ZORUNLU: 1 saatlik token saatlik koşan mutabakat turunu bile aşar.
  * Yenileme olmadan HER İKİNCİ TUR 401 alır ve `AUTHENTICATION` KALICI

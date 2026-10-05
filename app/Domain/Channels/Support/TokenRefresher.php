@@ -197,6 +197,7 @@ final class TokenRefresher
                 $fresh->secrets,
                 $fresh->scope ?? $locked->scope,
                 $fresh->expiresAt,
+                $fresh->refreshExpiresAt,
             );
 
             return 'refreshed';

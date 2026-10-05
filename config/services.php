@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    // 34Pazar Shopify uygulaması (34Devs Partner hesabı) — OAuth istemcisi.
+    // Satıcı başına DEĞİL, tek uygulama: tüm mağazalar bununla bağlanır.
+    // Boşsa Shopify bağlantısı açılmaz (ShopifyAuth::configured()).
+    'shopify' => [
+        'client_id' => env('SHOPIFY_CLIENT_ID'),
+        'client_secret' => env('SHOPIFY_CLIENT_SECRET'),
+        'scopes' => env('SHOPIFY_SCOPES'),
+    ],
+
 ];

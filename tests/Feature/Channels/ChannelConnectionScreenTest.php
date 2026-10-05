@@ -199,12 +199,15 @@ final class ChannelConnectionScreenTest extends TestCase
             );
         }
 
-        // ⚠️ ETSY SIR SORMAZ, YÖNLENDİRİR — Shopify'ın aksine.
-        $this->assertTrue($types['etsy']['oauth']);
-        $this->assertSame([], $types['etsy']['secretFields']);
+        // ⚠️ ETSY VE SHOPIFY SIR SORMAZ, YÖNLENDİRİR (Shopify: 34Pazar
+        // uygulaması, 5 Eki 2026). Woo anahtar ister.
+        foreach (['etsy', 'shopify'] as $code) {
+            $this->assertTrue($types[$code]['oauth']);
+            $this->assertSame([], $types[$code]['secretFields']);
+        }
 
-        $this->assertFalse($types['shopify']['oauth']);
-        $this->assertNotSame([], $types['shopify']['secretFields']);
+        $this->assertFalse($types['woocommerce']['oauth']);
+        $this->assertNotSame([], $types['woocommerce']['secretFields']);
     }
 
     /**

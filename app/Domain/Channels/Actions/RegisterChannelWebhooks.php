@@ -93,10 +93,19 @@ final class RegisterChannelWebhooks
 
         $secret = Str::random(48);
 
-        TenantContext::runAsSystem(fn () => $this->vault->store($connection, [
-            ...$secrets,
-            'webhook_secret' => $secret,
-        ]));
+        // ⚠️ SÜRE VE KAPSAM KORUNUR. `store()` kaydın TAMAMINI yazar;
+        // `expiresAt` verilmeseydi süresi dolan anahtarın (Shopify: 1 saat)
+        // `expires_at`'i NULL olur, yenileme turu (`TokenRefresher` yalnız
+        // `expires_at IS NOT NULL` satırları seçer) bağlantıyı bir daha
+        // görmez ve anahtar bir saat sonra SESSİZCE ölürdü.
+        $current = TenantContext::runAsSystem(fn () => $connection->activeCredential()->first());
+
+        TenantContext::runAsSystem(fn () => $this->vault->store(
+            $connection,
+            [...$secrets, 'webhook_secret' => $secret],
+            $current?->scope,
+            $current?->expires_at,
+        ));
 
         return $secret;
     }

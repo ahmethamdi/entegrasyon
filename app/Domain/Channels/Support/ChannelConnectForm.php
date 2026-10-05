@@ -184,45 +184,20 @@ final class ChannelConnectForm
         ],
 
         'shopify' => [
-            // ⚠️ TEK TOKEN — Woo'nun çifti DEĞİL. Shopify custom app
-            // kurulumunda satıcı bir Admin API erişim anahtarı üretir
-            // (`shpat_...`) ve o tek başına kimliktir. İkinci bir alan
-            // sorulsaydı satıcı Shopify panelinde OLMAYAN bir değeri
-            // arardı.
-            'secrets' => [
-                [
-                    'name' => 'access_token',
-                    'label' => 'Admin API erişim anahtarı',
-                    'placeholder' => 'shpat_...',
-                    'masked' => true,
-                    'hint' => 'Shopify yöneticisinde Ayarlar → Uygulamalar → '
-                        .'Uygulama geliştir → API kimlik bilgileri altında üretilir.',
-                ],
-                [
-                    'name' => 'webhook_secret',
-                    'label' => 'Webhook imza anahtarı',
-                    'masked' => true,
-                    'hint' => 'Sipariş webhook\'larının sahiciliği bununla '
-                        .'doğrulanır. Girilmezse gelen siparişler REDDEDİLİR.',
-                ],
-            ],
-            'identity' => [
-                [
-                    'name' => ShopifyAdapter::LOCATION_KEY,
-                    'label' => 'Stok konumu (location)',
-                    'placeholder' => 'gid://shopify/Location/1234567890',
-                    // ⚠️ VARSAYILANI SESSİZCE SEÇMİYORUZ (P1-5 · §06.4):
-                    // iki depolu bir satıcının stoğu YANLIŞ DEPOYA
-                    // yazılırdı, geri alınamaz ve satıcı bunu ancak
-                    // siparişler yanlış depodan çıkınca fark ederdi.
-                    'hint' => 'Stok bu konuma yazılır. Shopify yöneticisinde '
-                        .'Ayarlar → Konumlar altındaki konumu açtığında adres '
-                        .'çubuğundaki sayı konumun kimliğidir; başına '
-                        .'gid://shopify/Location/ eklenir. Çok depolu '
-                        .'mağazada yanlış konum stoğu yanlış depoya yazar.',
-                ],
-            ],
-            'oauth' => false,
+            // 34PAZAR UYGULAMASI ÜZERİNDEN (OAuth) — 5 Eki 2026.
+            //
+            // Eskiden satıcı kendi "özel uygulamasını" açıp `shpat_`
+            // anahtarı, webhook imza anahtarı ve `gid://shopify/Location/…`
+            // değerini YAPIŞTIRIYORDU. 1 Ocak 2026'dan beri Shopify yeni
+            // özel uygulama açtırmıyor → yeni mağaza BAĞLANAMIYORDU. Artık
+            // satıcı yalnız mağaza adresini yazar, Shopify'da onaylar;
+            // anahtar (`ShopifyOAuthController`), konum ve webhook'lar
+            // bizim işimiz.
+            'secrets' => [],
+            'identity' => [],
+            'oauth' => true,
+            'help' => 'Mağaza adresini xxx.myshopify.com biçiminde yaz. Shopify '
+                .'onay ekranına yönlendirileceksin; izin verince bağlantı kurulur.',
         ],
 
         'etsy' => [

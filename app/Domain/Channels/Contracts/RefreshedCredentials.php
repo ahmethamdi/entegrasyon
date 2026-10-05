@@ -30,5 +30,7 @@ final readonly class RefreshedCredentials
         public array $secrets,
         public ?DateTimeImmutable $expiresAt = null,
         public ?string $scope = null,
+        // Yenileme anahtarının bitişi (Shopify: 90 gün). null = bilinmiyor/değişmedi.
+        public ?DateTimeImmutable $refreshExpiresAt = null,
     ) {}
 }
