@@ -101,6 +101,28 @@ final class SiteController extends Controller
         return $this->page('site.blog.show', $request, ['post' => $post, 'related' => $blog->related($post, 3)]);
     }
 
+    /**
+     * İngilizce yardım sayfaları (Shopify App Store listelemesindeki FAQ,
+     * Changelog, Tutorial, Documentation bağlantıları). Tanıtım sitesi
+     * Türkçedir; bu sayfalar yalnız uygulamayı kullanan satıcı içindir.
+     */
+    public const ENGLISH_PAGES = [
+        'getting-started' => 'Getting started',
+        'docs' => 'Documentation',
+        'faq' => 'FAQ',
+        'changelog' => 'Changelog',
+    ];
+
+    public function english(Request $request, string $page): View
+    {
+        abort_unless(array_key_exists($page, self::ENGLISH_PAGES), 404);
+
+        return $this->page("site.en.{$page}", $request, [
+            'pageTitle' => self::ENGLISH_PAGES[$page],
+            'englishPages' => self::ENGLISH_PAGES,
+        ]);
+    }
+
     public function legal(Request $request, string $page): View
     {
         abort_unless(array_key_exists($page, self::LEGAL_PAGES), 404);

@@ -166,4 +166,17 @@ final class ContentTest extends TestCase
             ->assertOk()
             ->assertSee('<meta name="robots" content="noindex">', false);
     }
+
+    /** Shopify App Store listelemesi bu İngilizce sayfalara bağlanır; 404 olmamalı. */
+    #[Test]
+    public function english_help_pages_render(): void
+    {
+        foreach (array_keys(SiteController::ENGLISH_PAGES) as $page) {
+            $this->get(route('site.en', $page))
+                ->assertOk()
+                ->assertSee('<html lang="en"', false);
+        }
+
+        $this->get('/en/olmayan-sayfa')->assertNotFound();
+    }
 }
