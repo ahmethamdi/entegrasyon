@@ -1,0 +1,36 @@
+# 34Pazar Shopify uygulamasının yapılandırması — Dev Dashboard'daki sürümün
+# KAYNAĞI. Değişiklik: bu dosya → `shopify app deploy --path shopify-app`.
+# Dev Dashboard'daki "Yeni sürüm" formunda gizlilik webhook'ları alanı YOK;
+# o yüzden yapılandırma burada tutulur (5 Eki 2026).
+#
+# client_id gizli değildir (her OAuth adresinde görünür); istemci SIRRI
+# yalnız sunucudadır (.env.production → SHOPIFY_CLIENT_SECRET).
+
+client_id = "1583a5e5ecff35887a9623b87f8f1517"
+name = "34Pazar"
+
+# Shopify'dan başlayan kurulum: imza → HEMEN OAuth (ShopifyInstallController).
+application_url = "https://34pazar.com/shopify"
+
+# Panel Shopify yöneticisinin İÇİNDE açılmaz: sitemiz çerçeveye girmeyi
+# reddeder (X-Frame-Options) — gömülü kalsaydı yönetici boş/hatalı ekran görürdü.
+embedded = false
+
+[access_scopes]
+# Gerekçesi ShopifyAuth::DEFAULT_SCOPES'ta; ikisi AYNI kalmalı.
+scopes = "write_inventory,read_locations,write_merchant_managed_fulfillment_orders,read_orders,write_products"
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://34pazar.com/channels/shopify/callback",
+  "https://34pazar.com/shopify/auth/callback",
+]
+
+[webhooks]
+api_version = "2026-10"
+
+  # Zorunlu gizlilik konuları — ShopifyComplianceController (imza → 401/200).
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "https://34pazar.com/webhooks/shopify/compliance"
