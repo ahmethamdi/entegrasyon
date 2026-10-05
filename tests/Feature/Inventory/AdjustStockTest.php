@@ -262,6 +262,89 @@ final class AdjustStockTest extends TestCase
     // ─────────────────────────────────────────────────── yardımcılar
 
     /** @return array{0: Tenant, 1: User, 2: string} */
+    // ─────────────────────────────────────────────────── sayım (setTo)
+
+    /**
+     * SAYIM EKSİĞİ GİRİLEBİLİR — eklenene kadar panelden stok düşürmenin
+     * hiçbir yolu yoktu.
+     */
+    #[Test]
+    public function a_count_below_the_balance_writes_a_manual_reduction(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+        $variant = $this->stockedVariant($tenant, $warehouseId, onHand: 10);
+
+        $this->actingAs($user)->post('/inventory/adjust', [
+            'variant_id' => $variant->id,
+            'target' => 7,
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $movement = $this->asTenant($tenant, fn () => InventoryMovement::query()
+            ->where('variant_id', $variant->id)->latest('occurred_at')->firstOrFail());
+
+        $this->assertSame(MovementType::MANUAL_REDUCTION, $movement->type);
+        $this->assertSame(-3, (int) $movement->on_hand_delta);
+        $this->assertSame(7, $this->onHandOf($tenant, $warehouseId, $variant));
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    #[Test]
+    public function a_count_above_the_balance_writes_an_adjustment(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+        $variant = $this->stockedVariant($tenant, $warehouseId, onHand: 10);
+
+        $this->actingAs($user)->post('/inventory/adjust', ['variant_id' => $variant->id, 'target' => 15]);
+
+        $this->assertSame(15, $this->onHandOf($tenant, $warehouseId, $variant));
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /** Fark yoksa hareket yazılmaz — kanala boşuna gönderim de olmaz. */
+    #[Test]
+    public function a_count_equal_to_the_balance_writes_nothing(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+        $variant = $this->stockedVariant($tenant, $warehouseId, onHand: 10);
+
+        $before = $this->asTenant($tenant, fn () => InventoryMovement::query()->count());
+
+        $this->actingAs($user)->post('/inventory/adjust', ['variant_id' => $variant->id, 'target' => 10]);
+
+        $this->assertSame($before, $this->asTenant($tenant, fn () => InventoryMovement::query()->count()));
+    }
+
+    #[Test]
+    public function a_negative_count_is_rejected(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+        $variant = $this->stockedVariant($tenant, $warehouseId, onHand: 10);
+
+        $this->actingAs($user)->post('/inventory/adjust', ['variant_id' => $variant->id, 'target' => -1])
+            ->assertSessionHasErrors('target');
+
+        $this->assertSame(10, $this->onHandOf($tenant, $warehouseId, $variant));
+    }
+
+    /** Stoğu 0 açılmış üründe de sayım çalışır (satır CreateProduct'ta açılır). */
+    #[Test]
+    public function a_count_works_on_a_variant_with_no_stock_yet(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+        $variant = $this->stockedVariant($tenant, $warehouseId, onHand: 0);
+
+        $this->actingAs($user)->post('/inventory/adjust', ['variant_id' => $variant->id, 'target' => 4]);
+
+        $this->assertSame(4, $this->onHandOf($tenant, $warehouseId, $variant));
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    private function onHandOf(Tenant $tenant, string $warehouseId, Variant $variant): int
+    {
+        return (int) $this->asTenant($tenant, fn () => InventoryLevel::query()
+            ->where('warehouse_id', $warehouseId)->where('variant_id', $variant->id)->value('on_hand'));
+    }
+
     private function makeTenant(string $name = 'Düzeltme'): array
     {
         $user = User::factory()->create();

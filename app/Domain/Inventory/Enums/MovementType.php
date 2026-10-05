@@ -17,6 +17,12 @@ enum MovementType: string
     case RESERVATION = 'RESERVATION';
     case RELEASE = 'RELEASE';
     case MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT';
+    /**
+     * Elle AZALTMA — sayım eksiği, hasar, kayıp. Eklenene kadar panelden
+     * stok düşürmenin hiçbir yolu yoktu (azaltan türler yalnız SALE ve
+     * TRANSFER_OUT); sayımda eksik çıkan satıcı bunu giremiyordu.
+     */
+    case MANUAL_REDUCTION = 'MANUAL_REDUCTION';
     case IMPORT = 'IMPORT';
     case TRANSFER_IN = 'TRANSFER_IN';
     case TRANSFER_OUT = 'TRANSFER_OUT';
@@ -41,6 +47,9 @@ enum MovementType: string
             self::RETURN,
             self::RELEASE,
             self::MANUAL_ADJUSTMENT,
+            // Sayım gerçeği: rafta olmayan mal "yetersiz stok" diye
+            // reddedilemez, bakiye negatife de düşebilir (rezerve varsa).
+            self::MANUAL_REDUCTION,
             self::IMPORT,
             self::TRANSFER_IN,
             self::RECONCILIATION_ADJUSTMENT => false,

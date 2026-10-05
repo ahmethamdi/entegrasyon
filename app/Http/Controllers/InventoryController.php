@@ -75,8 +75,10 @@ final class InventoryController extends Controller
     {
         $validated = $request->validate([
             'variant_id' => ['required', 'uuid'],
-            // Yön hareket türünden gelir; düzeltme EKLER, eksiltmez.
-            'quantity' => ['required', 'integer', 'min:1'],
+            // İki biçim: `target` = SAYIM ("rafta X var", eksiltebilir —
+            // panelin asıl yolu); `quantity` = EKLE (eski biçim, pozitif).
+            'target' => ['required_without:quantity', 'nullable', 'integer', 'min:0', 'max:1000000'],
+            'quantity' => ['required_without:target', 'nullable', 'integer', 'min:1'],
             'note' => ['nullable', 'string', 'max:500'],
         ]);
 
@@ -84,6 +86,20 @@ final class InventoryController extends Controller
         $variant = Variant::query()->findOrFail($validated['variant_id']);
 
         $warehouseId = $this->defaultWarehouseId($request);
+
+        if (isset($validated['target'])) {
+            $movement = $adjustStock->setTo(
+                warehouseId: $warehouseId,
+                variantId: $variant->id,
+                target: (int) $validated['target'],
+                note: $validated['note'] ?? null,
+                actorId: $request->user()?->id,
+            );
+
+            return back()->with('success', $movement === null
+                ? __('Stok zaten :count, değişiklik yok.', ['count' => $validated['target']])
+                : __(':sku stoğu :count olarak kaydedildi.', ['sku' => $variant->sku, 'count' => $validated['target']]));
+        }
 
         $adjustStock->run(
             warehouseId: $warehouseId,

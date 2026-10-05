@@ -7,6 +7,7 @@ namespace App\Domain\Inventory\Actions;
 use App\Domain\Identity\Actions\RecordAuditLog;
 use App\Domain\Identity\Enums\AuditAction;
 use App\Domain\Inventory\Enums\MovementType;
+use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Models\InventoryMovement;
 use App\Domain\Inventory\Support\MovementKey;
 use Illuminate\Support\Facades\DB;
@@ -29,9 +30,9 @@ use Symfony\Component\Uid\UuidV7;
  *   sipariş alımı aynı satıra yazar ve kilit sırası tutarlı olmalıdır.
  *   `ApplyMovement` kendi kilidini ALMAZ; çağıranın alması ön koşuldur.
  *
- * MANUAL_ADJUSTMENT EKLER: yön hareket türünden gelir ve düzeltme sayım
- * farkını ekler. Eksiltme bu action ile YAPILMAZ — o iş uygun hareket
- * türüyle (SALE, TRANSFER_OUT) yapılır. Miktar bu yüzden pozitif olmalıdır.
+ * `run()` EKLER (MANUAL_ADJUSTMENT, pozitif miktar). Panelin asıl yolu
+ * `setTo()`'dur: sayım değeri verilir, fark kilit altında hesaplanır ve
+ * eksi farkta MANUAL_REDUCTION yazılır.
  *
  * İDEMPOTENCY ANAHTARI HER ÇAĞRIDA YENİDİR ve bu bilinçlidir: düzeltme
  * kullanıcının açık eylemidir, iki ayrı sayım iki ayrı düzeltmedir. Siparişte
@@ -94,6 +95,72 @@ final class AdjustStock
                 changes: [
                     'warehouse_id' => $warehouseId,
                     'quantity' => $quantity,
+                    'movement_id' => $movement->id,
+                    'note' => $note,
+                ],
+                userId: $actorId,
+            );
+
+            return $movement;
+        });
+    }
+
+    /**
+     * SAYIM: "rafta X var" — bakiye X'e getirilir.
+     *
+     * Satıcının düşündüğü işlem budur; "kaç ekleyeyim" hesabını ona
+     * yaptırmak hem yanlış girişe davet eder hem de eksiltmeyi imkânsız
+     * kılıyordu. Fark KİLİT ALTINDA hesaplanır: okuma ile yazma arasında
+     * gelen bir sipariş farkı bayatlatırdı ve sayım satışı geri getirirdi.
+     *
+     * Fark sıfırsa hareket YAZILMAZ (null) — anlamsız ledger satırı ve
+     * kanala boşuna gönderim olmaz. Eksi fark `MANUAL_REDUCTION`'dır.
+     */
+    public function setTo(
+        string $warehouseId,
+        string $variantId,
+        int $target,
+        ?string $note = null,
+        ?string $actorId = null,
+    ): ?InventoryMovement {
+        if ($target < 0) {
+            throw new \InvalidArgumentException("Sayım değeri negatif olamaz, {$target} verildi.");
+        }
+
+        return DB::transaction(function () use ($warehouseId, $variantId, $target, $note, $actorId): ?InventoryMovement {
+            $this->lockRows->run($warehouseId, [$variantId]);
+
+            $onHand = (int) InventoryLevel::query()
+                ->where('warehouse_id', $warehouseId)
+                ->where('variant_id', $variantId)
+                ->value('on_hand');
+
+            $delta = $target - $onHand;
+
+            if ($delta === 0) {
+                return null;
+            }
+
+            $movement = $this->applyMovement->run(
+                warehouseId: $warehouseId,
+                variantId: $variantId,
+                type: $delta > 0 ? MovementType::MANUAL_ADJUSTMENT : MovementType::MANUAL_REDUCTION,
+                quantity: abs($delta),
+                idempotencyKey: MovementKey::manualAdjustment((string) new UuidV7),
+                sourceType: 'panel_count',
+                sourceId: $actorId,
+                note: $note,
+            );
+
+            $this->audit->run(
+                action: AuditAction::STOCK_ADJUSTED,
+                subjectType: 'variants',
+                subjectId: $variantId,
+                changes: [
+                    'warehouse_id' => $warehouseId,
+                    'from' => $onHand,
+                    'to' => $target,
+                    'quantity' => $delta,
                     'movement_id' => $movement->id,
                     'note' => $note,
                 ],

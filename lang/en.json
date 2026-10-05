@@ -1,5 +1,6 @@
 {
     ":done/:total adım": ":done/:total steps",
+    ":sku stoğu :count olarak kaydedildi.": "Stock for :sku saved as :count.",
     "Abonelik": "Subscription",
     "Ana menü": "Main menu",
     "Ana sayfa": "Home",
@@ -11,6 +12,11 @@
     "Hesabını oluştur.": "Create your account.",
     "Hesap oluştur": "Create account",
     "Hızlı menü": "Quick menu",
+    "İade": "Returned",
+    "İlk gönderim": "First sync",
+    "İlk ürünün kanala ulaştı.": "Your first product reached the channel.",
+    "İptal": "Cancelled",
+    "İçeriğe geç": "Skip to content",
     "Kampanyalar": "Campaigns",
     "Kanal bağla": "Connect a channel",
     "Kanal onayları": "Channel approvals",
@@ -32,6 +38,7 @@
     "Siparişler": "Orders",
     "Sistem durumu": "System status",
     "Stok": "Stock",
+    "Stok zaten :count, değişiklik yok.": "Stock is already :count, nothing changed.",
     "Teslim edildi": "Delivered",
     "Yakında": "Coming soon",
     "Yardım": "Help",
@@ -41,10 +48,5 @@
     "Ürüne git": "Go to products",
     "Ürünler": "Products",
     "Ürünlerin sistemde.": "Your products are in.",
-    "Ürünlerini ekle ya da mağazandan / CSV dosyasından çek.": "Add your products, or pull them from your store or a CSV file.",
-    "İade": "Returned",
-    "İlk gönderim": "First sync",
-    "İlk ürünün kanala ulaştı.": "Your first product reached the channel.",
-    "İptal": "Cancelled",
-    "İçeriğe geç": "Skip to content"
+    "Ürünlerini ekle ya da mağazandan / CSV dosyasından çek.": "Add your products, or pull them from your store or a CSV file."
 }

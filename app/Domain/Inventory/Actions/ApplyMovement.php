@@ -139,6 +139,7 @@ final class ApplyMovement
         return match ($type) {
             // Depodan çıkan mal
             MovementType::SALE,
+            MovementType::MANUAL_REDUCTION,
             MovementType::TRANSFER_OUT => [-$quantity, 0],
 
             // Depoya giren mal
