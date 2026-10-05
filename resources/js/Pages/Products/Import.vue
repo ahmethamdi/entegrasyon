@@ -102,6 +102,51 @@ function schedulePoll() {
 watch(inFlight, (busy) => (busy ? schedulePoll() : stopPolling()), { immediate: true });
 onUnmounted(stopPolling);
 
+/**
+ * Üstteki kutu SON TURUN GERÇEK DURUMUNU söyler.
+ *
+ * Gönderim sonrası mesaj ("çekiliyor") tek seferliktir; tur bir saniyede
+ * bitse bile ekranda kalır ve satıcı işin sürdüğünü sanırdı. Bu yüzden
+ * mesaj yalnız "az önce başlattın" işaretidir — ne yazılacağına son
+ * satırın durumu karar verir.
+ */
+const latest = computed(() => props.rows[0] ?? null);
+
+const banner = computed(() => {
+    if (!flashSuccess.value) {
+        return null;
+    }
+
+    const row = latest.value;
+
+    if (row === null || inFlight.value) {
+        return { busy: true, tone: 'info', text: flashSuccess.value };
+    }
+
+    if (row.status === 'failed') {
+        return { busy: false, tone: 'error', text: `İçe aktarma tamamlanamadı. ${row.lastError ?? ''}`.trim() };
+    }
+
+    const parts = [`${row.created} yeni`, `${row.updated} güncellendi`];
+
+    if (row.skipped > 0) {
+        parts.push(`${row.skipped} atlandı`);
+    }
+
+    if (row.errors.length > 0) {
+        parts.push(`${row.errors.length} uyarı — ayrıntı aşağıdaki tabloda`);
+    }
+
+    return { busy: false, tone: row.errors.length > 0 ? 'warn' : 'ok', text: `Tamamlandı: ${parts.join(', ')}.` };
+});
+
+const bannerTones = {
+    info: 'border-sky-200 bg-sky-50 text-sky-900',
+    ok: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    warn: 'border-amber-200 bg-amber-50 text-amber-900',
+    error: 'border-red-300 bg-red-50 text-red-900',
+};
+
 const expanded = ref(null);
 
 function toggleErrors(id) {
@@ -114,10 +159,18 @@ function toggleErrors(id) {
         <PageHeader section="Ürünler" title="Toplu içe aktarma" />
 
         <div
-            v-if="flashSuccess"
-            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            v-if="banner"
+            class="mt-6 flex items-center gap-3 rounded-lg border px-4 py-3 text-sm"
+            :class="bannerTones[banner.tone]"
+            role="status"
+            aria-live="polite"
         >
-            {{ flashSuccess }}
+            <span
+                v-if="banner.busy"
+                class="size-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent"
+                aria-hidden="true"
+            />
+            {{ banner.text }}
         </div>
 
         <!--
@@ -214,9 +267,9 @@ function toggleErrors(id) {
                         <button
                             type="submit"
                             class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="channelForm.processing || !channelForm.connection_id"
+                            :disabled="channelForm.processing || inFlight || !channelForm.connection_id"
                         >
-                            {{ channelForm.processing ? 'Başlatılıyor…' : 'Ürünleri çek' }}
+                            {{ channelForm.processing ? 'Başlatılıyor…' : inFlight ? 'Çekiliyor…' : 'Ürünleri çek' }}
                         </button>
                     </template>
                 </form>
