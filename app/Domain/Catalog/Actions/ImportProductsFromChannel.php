@@ -356,6 +356,7 @@ final class ImportProductsFromChannel
             warehouseId: $warehouseId,
             description: $product->description,
             brand: $product->brand,
+            currency: $product->currency ?? 'TRY',
             barcode: $product->barcode,
             internalCategoryId: null,
         );

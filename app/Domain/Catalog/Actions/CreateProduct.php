@@ -103,12 +103,17 @@ final class CreateProduct
                     'content_version' => 1,
                 ]);
 
+                // STOK SATIRI HER ZAMAN AÇILIR (0 ile de). Açılmasaydı stoğu 0
+                // olan ürün Stok ekranında HİÇ görünmez ve satıcı ona stok
+                // giremezdi (34pazar-test: 25 üründen 6'sı yoktu). Satır
+                // `LockInventoryRows`'un eksik satır eklemesiyle açılır;
+                // on_hand = 0 = Σ (boş) hareket — defter eşitliği bozulmaz.
+                $this->lockRows->run($warehouseId, [$variant->id]);
+
                 // AÇILIŞ STOĞU HAREKET OLARAK GİRER — projeksiyona doğrudan
                 // yazılmaz. Sıfır stokta hareket açılmaz: ApplyMovement pozitif
                 // miktar bekler ve sıfırlık bir ledger satırı anlamsızdır.
                 if ($openingStock > 0) {
-                    $this->lockRows->run($warehouseId, [$variant->id]);
-
                     $this->applyMovement->run(
                         warehouseId: $warehouseId,
                         variantId: $variant->id,

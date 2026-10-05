@@ -128,11 +128,13 @@ final class ShopifyCatalogImportTest extends TestCase
                     'product' => ['id' => 'gid://shopify/Product/1', 'title' => 'SKU\'suz Ürün'],
                 ]],
                 'pageInfo' => ['hasNextPage' => false],
-            ]],
+            ], 'shop' => ['currencyCode' => 'USD']],
         ], 200)]);
 
         $page = $this->adapter()->fetchProductPage();
         $product = $page->products[0];
+
+        $this->assertSame('USD', $product->currency, 'Mağaza para birimi taşınmadı — USD fiyat TL sanılır.');
 
         $this->assertCount(1, $page->products, 'Satır DÜŞÜRÜLDÜ — kullanıcı sebebini göremez.');
         $this->assertNull($product->sku);

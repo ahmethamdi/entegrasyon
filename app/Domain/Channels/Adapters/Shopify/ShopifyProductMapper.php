@@ -225,7 +225,7 @@ final class ShopifyProductMapper
      *
      * @param  array<string, mixed>  $variant
      */
-    public static function toRemoteProduct(array $variant, ?string $shopDomain = null): RemoteProduct
+    public static function toRemoteProduct(array $variant, ?string $shopDomain = null, ?string $currency = null): RemoteProduct
     {
         $sku = isset($variant['sku']) ? trim((string) $variant['sku']) : '';
         $product = is_array($variant['product'] ?? null) ? $variant['product'] : [];
@@ -264,6 +264,8 @@ final class ShopifyProductMapper
             ])),
             raw: $variant,
             listingIdentity: isset($identity['external_id']) ? $identity : [],
+            // Shopify'da varyant fiyatı MAĞAZA para birimindedir.
+            currency: self::nonEmptyString($currency),
         );
     }
 

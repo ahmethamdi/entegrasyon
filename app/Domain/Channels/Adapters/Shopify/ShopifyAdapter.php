@@ -1896,6 +1896,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
                 }
                 pageInfo { hasNextPage endCursor }
               }
+              shop { currencyCode }
             }
             GQL,
             variables: ['cursor' => $cursor],
@@ -1904,12 +1905,13 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
 
         $nodes = $data['productVariants']['nodes'] ?? [];
         $pageInfo = $data['productVariants']['pageInfo'] ?? [];
+        $currency = isset($data['shop']['currencyCode']) ? (string) $data['shop']['currencyCode'] : null;
 
         $products = [];
 
         foreach (is_array($nodes) ? $nodes : [] as $node) {
             if (is_array($node)) {
-                $products[] = ShopifyProductMapper::toRemoteProduct($node, $this->shopDomain());
+                $products[] = ShopifyProductMapper::toRemoteProduct($node, $this->shopDomain(), $currency);
             }
         }
 

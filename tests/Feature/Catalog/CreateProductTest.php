@@ -109,8 +109,10 @@ final class CreateProductTest extends TestCase
      * AÇILIŞ STOĞU SIFIRSA HAREKET YAZILMAZ.
      *
      * `ApplyMovement` pozitif miktar bekler; sıfır için hareket açmak hem
-     * istisna verir hem anlamsız bir ledger satırı üretir. Bakiye satırı da
-     * yaratılmaz: ilk hareket onu yaratır.
+     * istisna verir hem anlamsız bir ledger satırı üretir.
+     *
+     * AMA BAKİYE SATIRI 0 İLE AÇILIR: açılmasaydı ürün Stok ekranında hiç
+     * görünmez ve satıcı ona stok giremezdi (34pazar-test: 6 ürün yoktu).
      */
     #[Test]
     public function zero_opening_stock_writes_no_movement(): void
@@ -133,6 +135,12 @@ final class CreateProductTest extends TestCase
                 ->where('variant_id', $variant->id)->count()),
             'Sıfır açılış stoğu hareket yazmamalı.',
         );
+
+        $level = $this->asTenant($tenant, fn () => InventoryLevel::query()
+            ->where('variant_id', $variant->id)->where('warehouse_id', $warehouseId)->first());
+
+        $this->assertNotNull($level, 'Stok satırı yok — ürün Stok ekranında görünmez.');
+        $this->assertSame(0, (int) $level->on_hand);
     }
 
     /**

@@ -7,6 +7,7 @@ namespace Tests\Feature\Catalog;
 use App\Domain\Catalog\Actions\ImportProductsFromChannel;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductImage;
+use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Actions\CreateTenant;
@@ -268,6 +269,27 @@ final class ChannelProductImportTest extends TestCase
         $this->assertSame('INV-gid://x/Variant/48213', $listing->channel_metadata['inventory_item_gid']);
         $this->assertSame('live', $listing->lifecycle_status, 'Bağ canlı değil — stok bu kanala hiç gitmez.');
         $this->assertNotNull($listing->listed_at);
+    }
+
+    /**
+     * KANALIN PARA BİRİMİ YAZILIR: USD mağazanın fiyatı TL sanılmaz.
+     */
+    #[Test]
+    public function a_new_product_takes_the_channel_currency(): void
+    {
+        [$tenant, $connection] = $this->makeConnection();
+
+        ProgrammableImportAdapter::returns('woocommerce', [
+            new RemoteProduct(externalId: '1', sku: 'USD-1', title: 'Dolar', price: '729.95', quantity: 1, currency: 'USD'),
+            $this->remote(sku: 'TL-1'),
+        ]);
+
+        $this->import($tenant, $connection);
+
+        $currencies = $this->asTenant($tenant, fn () => Variant::query()->pluck('currency', 'sku')->all());
+
+        $this->assertSame('USD', $currencies['USD-1']);
+        $this->assertSame('TRY', $currencies['TL-1'], 'Bildirmeyen kanalda varsayılan TRY.');
     }
 
     /**

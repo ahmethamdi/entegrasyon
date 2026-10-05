@@ -63,6 +63,13 @@ final readonly class RemoteProduct
          * @var array<string, mixed>
          */
         public array $listingIdentity = [],
+        /**
+         * Fiyatın para birimi (ISO 4217). Null = kanal bildirmiyor; içe
+         * aktarma varsayılanı (TRY) kullanır. Shopify mağazası USD ise
+         * fiyat USD'dir — TRY yazılsaydı 729,95 $ ürün 729,95 ₺ görünür
+         * ve TL kanallarına çevrilmeden giderdi.
+         */
+        public ?string $currency = null,
     ) {}
 
     /**
