@@ -34,6 +34,9 @@ final class SiteController extends Controller
         'cerez' => 'Çerez politikası',
         'kullanim-kosullari' => 'Kullanım koşulları',
         'mesafeli-satis' => 'Mesafeli hizmet sözleşmesi',
+        // Gizlilik metninin İngilizce çevirisi — Shopify App Store
+        // incelemesi ve İngilizce panel kullanıcıları için.
+        'privacy' => 'Privacy Policy (English)',
     ];
 
     public function home(Request $request): View

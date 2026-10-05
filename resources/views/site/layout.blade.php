@@ -11,7 +11,7 @@
     sayfası yalnız kendi küçük dosyalarını indirir, ilk boyama hızlı olur.
 --}}
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="@yield('lang', 'tr')">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -19,7 +19,7 @@
     <meta name="description" content="@yield('description')">
     <link rel="canonical" href="@hasSection('canonical')@yield('canonical')@else{{ url()->current() }}@endif">
     <meta property="og:type" content="website">
-    <meta property="og:locale" content="tr_TR">
+    <meta property="og:locale" content="@yield('og_locale', 'tr_TR')">
     <meta property="og:site_name" content="34Pazar">
     <meta property="og:title" content="@yield('title')">
     <meta property="og:description" content="@yield('description')">

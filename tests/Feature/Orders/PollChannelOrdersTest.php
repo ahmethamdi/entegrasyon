@@ -53,6 +53,40 @@ final class PollChannelOrdersTest extends TestCase
     }
 
     /**
+     * ALICININ KİŞİSEL VERİSİ İNBOX'TA SAKLANMAZ (gizlilik politikası §2.3).
+     *
+     * Paket kimliği ve kalemler kalır — sipariş işleme yalnız onları okur.
+     */
+    #[Test]
+    public function buyer_personal_data_is_masked_before_it_is_stored(): void
+    {
+        [$tenant] = $this->setUpConnection();
+
+        Http::fake(['*' => Http::response([
+            'content' => [[
+                'shipmentPackageId' => 'PKG-9',
+                'orderNumber' => 'TY-9',
+                'status' => 'Created',
+                'customerFirstName' => 'Ayşe',
+                'customerEmail' => 'ayse@example.com',
+                'shipmentAddress' => ['fullName' => 'Ayşe Yılmaz', 'address1' => 'Bağdat Cd. 1'],
+                'lines' => [['lineId' => 1, 'stockCode' => 'SKU-9', 'quantity' => 1]],
+            ]],
+            'totalPages' => 1,
+        ], 200)]);
+
+        app(PollChannelOrders::class)->run();
+
+        $stored = (string) $this->asTenant($tenant, fn () => DB::table('inbox_messages')->value('payload'));
+
+        $this->assertStringContainsString('PKG-9', $stored);
+        $this->assertStringContainsString('SKU-9', $stored);
+        foreach (['Ayşe', 'ayse@example.com', 'Bağdat'] as $personal) {
+            $this->assertStringNotContainsString($personal, $stored);
+        }
+    }
+
+    /**
      * ÇEKİLEN SİPARİŞ İNBOX'A `polling` KAYNAĞIYLA YAZILIR.
      *
      * Kaynak ayrımı iz sürmek için gerekli: bir sipariş kaybolduğunda

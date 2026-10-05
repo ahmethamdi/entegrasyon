@@ -6,6 +6,7 @@ namespace App\Domain\Messaging\Actions;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Support\Privacy\PersonalDataMask;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -134,8 +135,11 @@ final class IngestInboxMessage
     {
         $decoded = json_decode($payload, true);
 
+        // Alıcının kişisel verisi SAKLANMAZ (gizlilik politikası §2.3).
+        // Tekillik özeti (`payload_hash`) ham gövdeden hesaplanır; maske
+        // yalnız saklanan kopyaya uygulanır.
         if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-            return $payload;
+            return json_encode(PersonalDataMask::apply($decoded), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         }
 
         return json_encode(['_raw' => $payload], JSON_THROW_ON_ERROR);

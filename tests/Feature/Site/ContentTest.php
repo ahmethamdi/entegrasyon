@@ -119,7 +119,7 @@ final class ContentTest extends TestCase
             $this->get(route('site.legal', $page))
                 ->assertOk()
                 ->assertSee(config('site.owner'))
-                ->assertSee('Son güncelleme');
+                ->assertSee($page === 'privacy' ? 'Last updated' : 'Son güncelleme');
         }
     }
 

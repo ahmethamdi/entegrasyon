@@ -21,13 +21,18 @@
 @endpush
 
 @section('content')
+    @php($english = trim($__env->yieldContent('lang')) === 'en')
     <div class="wrap pt-10 pb-20 lg:pt-16 lg:pb-28">
         <div class="grid gap-12 lg:grid-cols-12">
             <article class="lg:col-span-8">
                 <header>
-                    <p class="eyebrow accent">Yasal</p>
+                    <p class="eyebrow accent">{{ $english ? 'Legal' : 'Yasal' }}</p>
                     <h1 class="display t-2 mt-4">{{ $legalTitle }}</h1>
-                    <p class="mt-6 text-sm muted">Son güncelleme: <time datetime="2026-10-04">4 Ekim 2026</time></p>
+                    @if ($english)
+                        <p class="mt-6 text-sm muted">Last updated: <time datetime="2026-10-05">5 October 2026</time></p>
+                    @else
+                        <p class="mt-6 text-sm muted">Son güncelleme: <time datetime="2026-10-05">5 Ekim 2026</time></p>
+                    @endif
                 </header>
 
                 <div class="prose-site mt-10 lg:mt-14">
@@ -37,7 +42,7 @@
 
             <nav class="lg:col-span-3 lg:col-start-10" aria-labelledby="yasal-nav">
                 <div class="lg:sticky lg:top-28 border-t border-line pt-6">
-                    <h2 id="yasal-nav" class="text-sm font-semibold uppercase tracking-[0.12em]">Yasal metinler</h2>
+                    <h2 id="yasal-nav" class="text-sm font-semibold uppercase tracking-[0.12em]">{{ $english ? 'Legal' : 'Yasal metinler' }}</h2>
                     <ul class="mt-4 space-y-3" role="list">
                         @foreach ($legalPages as $slug => $name)
                             <li>

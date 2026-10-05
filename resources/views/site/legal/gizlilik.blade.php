@@ -9,8 +9,10 @@
     YALNIZ GERÇEKTEN KULLANILAN HİZMETLER YAZILIR: barındırma IONOS
     (Almanya), ödeme Stripe. Analitik, reklam, hata izleme aracı YOK —
     eklenirse bu metin ve çerez politikası birlikte güncellenmeli.
-    E-posta altyapısı sağlayıcısı henüz seçilmedi; seçildiğinde
-    "Aktarımlar" bölümüne eklenecek.
+    E-posta gönderimi Google Workspace (smtp.gmail.com). Shopify
+    uygulaması (5 Eki 2026): Shopify Billing + kaldırma/gizlilik
+    webhook'ları. İngilizce çevirisi `privacy.blade.php` — ikisi BİRLİKTE
+    güncellenir.
 --}}
 @extends('site.legal.layout')
 
@@ -44,11 +46,13 @@
     <ul>
         <li><strong>Kanal bağlantı bilgileri:</strong> bağladığınız satış kanallarının (ör. Shopify, WooCommerce) API anahtarları ve erişim belirteçleri. Bu bilgiler veritabanında <strong>şifrelenmiş</strong> olarak saklanır ve kayıt dosyalarına yazılmaz.</li>
         <li><strong>Katalog ve stok verileri:</strong> ürünler, varyantlar, stok kodları, stok hareketleri ve fiyatlar.</li>
+        <li><strong>Shopify uygulaması:</strong> uygulamayı Shopify'dan kurduğunuzda mağazanızın alan adı (xxx.myshopify.com), mağaza adı ve mağaza e-posta adresi hesabınızı açmak ve mağazanızı bağlamak için alınır.</li>
         <li><strong>Sipariş verileri:</strong> kanallarınızdan gelen siparişlerin numarası, tarihi, durumu, kalemleri, tutarları ve kargo takip bilgisi. Siparişteki alıcıya ait ad, e-posta, telefon ve adres gibi alanlar sipariş kaydında tutulmaz; yalnızca kanalın verdiği müşteri numarası gibi bir referans saklanır. Kanaldan gelen ham bildirimler kayıt altına alınırken bu kişisel alanlar maskelenir.</li>
     </ul>
 
     <h3>2.4. Ücretli plana geçtiğinizde</h3>
     <p>Ödeme, ödeme hizmet sağlayıcımız Stripe'ın ödeme sayfasında alınır. Kart bilgileriniz Stripe tarafından işlenir; bu bilgiler bizim sunucularımıza ulaşmaz ve tarafımızca saklanmaz. Biz yalnızca abonelik durumunu, planı, Stripe'taki müşteri ve abonelik numarasını ve fatura bilgilerini saklarız.</p>
+    <p>{{ config('site.brand') }}'ı Shopify uygulaması olarak kullanıyorsanız abonelik ücreti Shopify faturanıza eklenir ve Shopify tarafından tahsil edilir (Shopify Billing). Bu durumda ödeme bilgileriniz yalnızca Shopify'da işlenir; biz abonelik numarasını, planı ve durumunu saklarız.</p>
 
     <h3>2.5. Bizimle iletişime geçtiğinizde</h3>
     <p>E-posta veya telefonla bize ulaştığınızda adınız, iletişim bilginiz ve mesajınızın içeriği, talebinizi yanıtlamak için işlenir.</p>
@@ -77,6 +81,8 @@
     <ul>
         <li><strong>Barındırma — IONOS SE (Almanya):</strong> site ve veritabanı Almanya'daki sunucularda (AB) çalışır. IONOS, sözleşmeye dayalı olarak veri işleyen sıfatıyla hizmet verir.</li>
         <li><strong>Ödeme — Stripe:</strong> ücretli abonelikler Stripe üzerinden tahsil edilir. Avrupa'daki kullanıcılar için sözleşme tarafı Stripe Payments Europe, Ltd. (İrlanda) olup veriler ABD'deki Stripe, Inc.'e de aktarılabilir. Bu aktarım, AB-ABD Veri Gizliliği Çerçevesi ve/veya AB Komisyonu'nun standart sözleşme maddeleri gibi uygun güvenceler kapsamında yapılır. Stripe, ödeme hizmeti ve dolandırıcılık önleme bakımından kendi gizlilik politikasına tabidir.</li>
+        <li><strong>E-posta gönderimi — Google (Google Ireland Ltd.):</strong> hesap doğrulama ve parola sıfırlama gibi hizmet e-postaları Google Workspace üzerinden gönderilir; bu kapsamda alıcı e-posta adresi ve e-posta içeriği Google tarafından işlenir. Veriler ABD'deki Google LLC'ye de aktarılabilir; aktarım AB-ABD Veri Gizliliği Çerçevesi ve/veya standart sözleşme maddeleri kapsamındadır.</li>
+        <li><strong>Shopify (Shopify International Ltd., İrlanda):</strong> uygulamayı Shopify üzerinden kullandığınızda abonelik ücreti Shopify tarafından tahsil edilir; mağazanızla veri alışverişi Shopify'ın API'si üzerinden yapılır.</li>
         <li><strong>Bağladığınız satış kanalları:</strong> stok, fiyat, ürün ve kargo bilgileri, sizin talimatınızla bağladığınız kanallara (ör. Shopify, WooCommerce mağazanız veya pazaryeri hesabınız) API üzerinden gönderilir. Bu aktarımın amacı hizmetin kendisidir; kanalların veri işleme koşulları kendi politikalarına tabidir.</li>
         <li><strong>Yetkili kurumlar:</strong> yalnızca hukuken zorunlu olduğu durumlarda, yetkili kamu kurum ve kuruluşlarına.</li>
     </ul>
@@ -88,6 +94,7 @@
     <ul>
         <li><strong>Hesap, katalog ve sipariş verileri:</strong> hesabınız açık kaldığı sürece. Hesabınızı kapattığınızda, yasal saklama yükümlülüğü bulunmayan veriler makul bir süre içinde silinir veya anonim hale getirilir. Hesabınızın kapatılmasını <a href="mailto:{{ config('site.contact_email') }}">{{ config('site.contact_email') }}</a> adresine yazarak isteyebilirsiniz.</li>
         <li><strong>Kanal bağlantı bilgileri:</strong> hesabınız kapatıldığında silinir.</li>
+        <li><strong>Shopify uygulamasını kaldırdığınızda:</strong> mağazanızın erişim belirteci geçersiz kılınır ve bağlantı kapatılır. Shopify'ın mağaza verisi silme bildirimi (kaldırmadan yaklaşık 48 saat sonra gelir) ulaştığında o mağazadan gelen siparişlerdeki müşteri referansları ve ham bildirim içerikleri silinir. Shopify üzerinden iletilen müşteri verisi erişim ve silme talepleri 30 gün içinde yanıtlanır.</li>
         <li><strong>Fatura ve ödeme kayıtları:</strong> vergi ve ticaret mevzuatının öngördüğü yasal saklama süreleri boyunca.</li>
         <li><strong>Sunucu ve oturum kayıtları:</strong> güvenlik amacıyla sınırlı bir süre; oturum kayıtları oturumunuz sona erdiğinde geçerliliğini yitirir.</li>
         <li><strong>Destek yazışmaları:</strong> talebiniz sonuçlandıktan sonra, olası soruların yanıtlanabilmesi için makul bir süre.</li>
