@@ -237,6 +237,20 @@ final class ShopifyOrderTest extends TestCase
      * ve stok düşülmez. SİPARİŞ KAYBETMEK STOK TUTARSIZLIĞINDAN KÖTÜDÜR
      * (Karar 24).
      */
+    /**
+     * MAĞAZA DİLİMİNDEKİ SAAT UTC'YE ÇEVRİLİR.
+     *
+     * Test mağazasında (New York, -04:00) 11:19 UTC'lik sipariş 07:19
+     * kaydedildi: Eloquent ofseti atıp duvar saatini yazıyordu.
+     */
+    #[Test]
+    public function the_store_local_time_is_converted_to_utc(): void
+    {
+        $event = $this->normalize('orders/create', ['created_at' => '2026-10-05T07:19:18-04:00']);
+
+        $this->assertSame('2026-10-05 11:19:18 +00:00', $event?->occurredAt?->format('Y-m-d H:i:s P'));
+    }
+
     #[Test]
     public function a_line_without_a_sku_is_kept_not_dropped(): void
     {
