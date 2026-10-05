@@ -5,12 +5,15 @@ import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { channelName, money, orderState, toneClass } from '../../lib/format.js';
+import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
     summary: { type: Object, default: () => ({}) },
     filters: { type: Object, default: () => ({}) },
 });
+
+const { t } = useI18n();
 
 const search = ref(props.filters.search ?? '');
 
@@ -31,14 +34,14 @@ function submitSearch() {
  * çıkışı gerçekten tehlikededir. Eşleşmemiş satır henüz stoğa dokunmamıştır.
  */
 const badges = {
-    OVERSOLD: { text: 'Fazla satış', class: 'bg-red-50 text-red-800 border-red-200' },
-    PENDING: { text: 'Stok düşülmedi', class: 'bg-amber-50 text-amber-900 border-amber-200' },
-    APPLIED: { text: 'Stok düştü', class: 'bg-stone-50 text-stone-600 border-stone-200' },
+    OVERSOLD: { text: k('Fazla satış'), class: 'bg-red-50 text-red-800 border-red-200' },
+    PENDING: { text: k('Stok düşülmedi'), class: 'bg-amber-50 text-amber-900 border-amber-200' },
+    APPLIED: { text: k('Stok düştü'), class: 'bg-stone-50 text-stone-600 border-stone-200' },
 };
 
 function placedAt(row) {
     if (!row.placedAt) return '—';
-    return new Date(row.placedAt).toLocaleString('tr-TR', {
+    return new Date(row.placedAt).toLocaleString(intlLocale(), {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
@@ -47,17 +50,17 @@ function placedAt(row) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Siparişler" title="Tüm kanallardan siparişler" />
+        <PageHeader :section="t('Siparişler')" :title="t('Tüm kanallardan siparişler')" />
 
         <!--
             EYLEM GEREKTİREN ÖZET ÜSTTE. Fazla satış gizlenmez (§17 · P0):
             satıcı gönderemeyeceği bir siparişi kabul ettiğini burada görür.
         -->
         <div class="mt-6 grid gap-3 sm:grid-cols-3">
-            <StatCard label="Toplam sipariş" :value="summary.orderCount" />
+            <StatCard :label="t('Toplam sipariş')" :value="summary.orderCount" />
 
             <StatCard
-                label="Fazla satış içeren"
+                :label="t('Fazla satış içeren')"
                 :value="summary.oversoldOrderCount"
                 :tone="summary.oversoldOrderCount > 0 ? 'error' : 'neutral'"
             />
@@ -69,7 +72,7 @@ function placedAt(row) {
                 fazla gösterilir. Bu yüzden tonu UYARI (amber), hata değil.
             -->
             <StatCard
-                label="Tanınmayan ürün içeren"
+                :label="t('Tanınmayan ürün içeren')"
                 :value="summary.unmatchedOrderCount"
                 :tone="summary.unmatchedOrderCount > 0 ? 'warning' : 'neutral'"
             />
@@ -86,7 +89,7 @@ function placedAt(row) {
                         : 'text-stone-700 hover:bg-stone-100'"
                     @click="applyFilter('all')"
                 >
-                    Tümü
+                    {{ t('Tümü') }}
                 </button>
                 <button
                     type="button"
@@ -96,7 +99,7 @@ function placedAt(row) {
                         : 'text-stone-700 hover:bg-stone-100'"
                     @click="applyFilter('awaiting_shipment')"
                 >
-                    Kargo bekleyen
+                    {{ t('Kargo bekleyen') }}
                 </button>
                 <button
                     type="button"
@@ -106,7 +109,7 @@ function placedAt(row) {
                         : 'text-stone-700 hover:bg-stone-100'"
                     @click="applyFilter('oversold')"
                 >
-                    Fazla satış
+                    {{ t('Fazla satış') }}
                 </button>
                 <button
                     type="button"
@@ -116,7 +119,7 @@ function placedAt(row) {
                         : 'text-stone-700 hover:bg-stone-100'"
                     @click="applyFilter('unmatched')"
                 >
-                    Tanınmayan ürün
+                    {{ t('Tanınmayan ürün') }}
                 </button>
             </div>
 
@@ -126,24 +129,25 @@ function placedAt(row) {
                 bırakılsaydı 320px'lik telefonda kutu + düğme satıra sığmaz
                 ve sayfayı yatay kaydırırdı (gerçek tarayıcıda ölçüldü).
             -->
-            <form class="flex w-full items-center gap-2 sm:w-auto" @submit.prevent="submitSearch">
+            <form class="flex w-full items-center gap-2 sm:w-auto" role="search" @submit.prevent="submitSearch">
                 <input
                     v-model="search"
                     type="search"
-                    placeholder="Sipariş no veya SKU ara"
+                    :placeholder="t('Sipariş no veya SKU ara')"
+                    :aria-label="t('Sipariş ara')"
                     class="w-full min-w-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring sm:w-64"
                 >
                 <button
                     type="submit"
                     class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                 >
-                    Ara
+                    {{ t('Ara') }}
                 </button>
             </form>
         </div>
 
         <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
-            <p class="text-sm text-stone-600">Bu ölçütlerle sipariş bulunamadı.</p>
+            <p class="text-sm text-stone-600">{{ t('Bu ölçütlerle sipariş bulunamadı.') }}</p>
         </div>
 
         <!-- liste -->
@@ -152,13 +156,13 @@ function placedAt(row) {
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Sipariş</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kanal</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Durum</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Adet</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Tutar</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Stok</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600"></th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Sipariş') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kanal') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Durum') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Adet') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Tutar') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Stok') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600"><span class="sr-only">{{ t('İşlem') }}</span></th>
                     </tr>
                 </thead>
 
@@ -208,14 +212,14 @@ function placedAt(row) {
                                 class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="badges[row.stockBadge]?.class"
                             >
-                                {{ badges[row.stockBadge]?.text ?? row.stockBadge }}
+                                {{ badges[row.stockBadge] ? t(badges[row.stockBadge].text) : row.stockBadge }}
                             </span>
 
                             <p v-if="row.hasOversold" class="mt-0.5 text-[11px] text-red-700">
-                                {{ row.oversoldLineCount }} kalem stoksuz satıldı
+                                {{ t(':count kalem stoksuz satıldı', { count: row.oversoldLineCount }) }}
                             </p>
                             <p v-if="row.hasUnmatched" class="mt-0.5 text-[11px] text-amber-800">
-                                {{ row.unmatchedLineCount }} ürün kataloğunda yok · stok düşülmedi
+                                {{ t(':count ürün kataloğunda yok · stok düşülmedi', { count: row.unmatchedLineCount }) }}
                             </p>
                         </td>
 
@@ -224,7 +228,7 @@ function placedAt(row) {
                                 :href="`/orders/${row.id}`"
                                 class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                             >
-                                Ayrıntı
+                                {{ t('Ayrıntı') }}
                             </Link>
                         </td>
                     </tr>

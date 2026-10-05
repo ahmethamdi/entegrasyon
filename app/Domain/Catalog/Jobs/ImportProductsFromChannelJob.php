@@ -77,7 +77,7 @@ final class ImportProductsFromChannelJob extends TenantAwareJob
         if ($connection === null) {
             $import->forceFill([
                 'status' => 'failed',
-                'last_error' => 'Kanal bağlantısı bulunamadı.',
+                'last_error' => __('Kanal bağlantısı bulunamadı.'),
                 'finished_at' => now(),
             ])->save();
 
@@ -135,7 +135,7 @@ final class ImportProductsFromChannelJob extends TenantAwareJob
 
             $import?->forceFill([
                 'status' => 'failed',
-                'last_error' => $e?->getMessage() ?? 'İş tamamlanamadı.',
+                'last_error' => $e?->getMessage() ?? $this->withLocale($this->locale, fn (): string => __('İş tamamlanamadı.')),
                 'finished_at' => now(),
             ])->save();
         });

@@ -21,6 +21,6 @@ final class DuplicateSkuException extends RuntimeException
 {
     public static function for(string $sku): self
     {
-        return new self("Bu SKU zaten kullanılıyor: {$sku}");
+        return new self(__('Bu SKU zaten kullanılıyor: :sku', ['sku' => $sku]));
     }
 }

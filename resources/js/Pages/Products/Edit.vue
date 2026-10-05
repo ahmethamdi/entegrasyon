@@ -2,6 +2,7 @@
 import { Link, useForm } from '@inertiajs/vue3';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -16,6 +17,8 @@ const form = useForm({
     status: props.product.status ?? 'active',
 });
 
+const { t } = useI18n();
+
 function submit() {
     form.put(`/products/${props.product.id}`);
 }
@@ -23,10 +26,10 @@ function submit() {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Ürünler" :title="product.title">
+        <PageHeader :section="t('Ürünler')" :title="product.title">
             <template #actions>
                 <div class="text-right">
-                    <p class="text-xs text-stone-500">Toplam stok</p>
+                    <p class="text-xs text-stone-500">{{ t('Toplam stok') }}</p>
                     <p
                         class="font-mono text-xl font-semibold tabular-nums"
                         :class="product.hasOversold ? 'text-red-800' : 'text-stone-900'"
@@ -38,14 +41,14 @@ function submit() {
                         :href="`/products?filter=out&search=${encodeURIComponent(product.sku)}`"
                         class="text-[11px] text-red-700 underline"
                     >
-                        fazla satış var
+                        {{ t('fazla satış var') }}
                     </Link>
                 </div>
             </template>
 
             <template #toolbar>
                 <p class="font-mono text-xs text-stone-500">
-                    {{ product.sku }} · içerik sürümü {{ product.contentVersion }}
+                    {{ t(':sku · içerik sürümü :version', { sku: product.sku, version: product.contentVersion }) }}
                 </p>
             </template>
         </PageHeader>
@@ -56,16 +59,14 @@ function submit() {
             ledger'ı kirletirdi. Stok sayımı ürün listesindedir.
         -->
         <p class="mt-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
-            Bu ekran yalnızca içeriği düzenler; stok değişmez.
-            Stok sayımı
-            <Link :href="`/products?search=${encodeURIComponent(product.sku)}`" class="font-medium text-stone-900 underline">ürün listesinden</Link>
-            girilir.
+            {{ t('Bu ekran yalnızca içeriği düzenler; stok değişmez.') }}
+            <Link :href="`/products?search=${encodeURIComponent(product.sku)}`" class="font-medium text-stone-900 underline">{{ t('Stok sayımı ürün listesinden girilir.') }}</Link>
         </p>
 
         <form class="mt-6 max-w-xl space-y-5" @submit.prevent="submit">
             <div>
                 <label for="title" class="block text-sm font-medium text-stone-700">
-                    Ürün adı
+                    {{ t('Ürün adı') }}
                 </label>
                 <input
                     id="title"
@@ -82,7 +83,7 @@ function submit() {
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label for="price" class="block text-sm font-medium text-stone-700">
-                        Fiyat
+                        {{ t('Fiyat') }}
                     </label>
                     <input
                         id="price"
@@ -99,23 +100,23 @@ function submit() {
 
                 <div>
                     <label for="status" class="block text-sm font-medium text-stone-700">
-                        Durum
+                        {{ t('Durum') }}
                     </label>
                     <select
                         id="status"
                         v-model="form.status"
                         class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
-                        <option value="active">Yayında</option>
-                        <option value="draft">Taslak</option>
-                        <option value="archived">Arşiv</option>
+                        <option value="active">{{ t('Yayında') }}</option>
+                        <option value="draft">{{ t('Taslak') }}</option>
+                        <option value="archived">{{ t('Arşiv') }}</option>
                     </select>
                 </div>
             </div>
 
             <div>
                 <label for="description" class="block text-sm font-medium text-stone-700">
-                    Açıklama
+                    {{ t('Açıklama') }}
                 </label>
                 <textarea
                     id="description"
@@ -127,7 +128,7 @@ function submit() {
 
             <div>
                 <label for="brand" class="block text-sm font-medium text-stone-700">
-                    Marka
+                    {{ t('Marka') }}
                 </label>
                 <input
                     id="brand"
@@ -143,19 +144,18 @@ function submit() {
             -->
             <div>
                 <label for="internal_category_id" class="block text-sm font-medium text-stone-700">
-                    İç kategori
+                    {{ t('İç kategori') }}
                 </label>
                 <input
                     id="internal_category_id"
                     v-model="form.internal_category_id"
                     type="text"
-                    placeholder="Örn. kadin-elbise"
+                    :placeholder="t('Örn. kadin-elbise')"
                     class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
-                    Kendi kategori adınız. Ürünün kanalda hangi kategoriye açılacağı
-                    <Link href="/mappings" class="underline">eşleştirme ekranında</Link>
-                    bu ad üzerinden belirlenir.
+                    {{ t('Kendi kategori adınız.') }}
+                    <Link href="/mappings" class="underline">{{ t('Ürünün kanalda hangi kategoriye açılacağı eşleştirme ekranında bu ad üzerinden belirlenir.') }}</Link>
                 </p>
                 <p v-if="form.errors.internal_category_id" class="mt-1 text-xs text-red-700">
                     {{ form.errors.internal_category_id }}
@@ -168,11 +168,11 @@ function submit() {
                     :disabled="form.processing"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    {{ form.processing ? 'Kaydediliyor…' : 'Kaydet' }}
+                    {{ form.processing ? t('Kaydediliyor…') : t('Kaydet') }}
                 </button>
 
                 <Link href="/products" class="text-sm text-stone-600 underline">
-                    Vazgeç
+                    {{ t('Vazgeç') }}
                 </Link>
             </div>
         </form>

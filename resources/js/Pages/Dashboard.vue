@@ -2,6 +2,8 @@
 import { Link } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import PanelLayout from '../Layouts/PanelLayout.vue';
+import { money } from '../lib/format.js';
+import { intlLocale, k, useI18n } from '../lib/i18n';
 
 const props = defineProps({
     tenant: { type: Object, default: () => ({}) },
@@ -23,11 +25,9 @@ const props = defineProps({
  * "Teknik ayrıntılar"a indi: destek görüşmesinde hâlâ gerekli.
  */
 
-const today = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+const { t } = useI18n();
 
-function money(total, currency) {
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: currency || 'TRY' }).format(Number(total));
-}
+const today = new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 
 const revenueText = computed(() => {
     const rows = props.today?.revenue ?? [];
@@ -46,23 +46,23 @@ const toneClass = {
 
 /* Kanal sağlığı satıcının diliyle. */
 const health = {
-    healthy: { text: 'Bağlı', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-    unhealthy: { text: 'Bağlantı koptu', class: 'bg-red-50 text-red-800 border-red-200' },
-    unknown: { text: 'Kontrol ediliyor', class: 'bg-stone-50 text-stone-600 border-stone-200' },
+    healthy: { text: k('Bağlı'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    unhealthy: { text: k('Bağlantı koptu'), class: 'bg-red-50 text-red-800 border-red-200' },
+    unknown: { text: k('Kontrol ediliyor'), class: 'bg-stone-50 text-stone-600 border-stone-200' },
 };
 
 const statusLabels = {
-    pending: 'bekliyor',
-    retrying: 'yeniden deniyor',
-    completed: 'tamamlandı',
-    superseded: 'yenisi geldi',
-    dead: 'başarısız',
+    pending: k('bekliyor'),
+    retrying: k('yeniden deniyor'),
+    completed: k('tamamlandı'),
+    superseded: k('yenisi geldi'),
+    dead: k('başarısız'),
 };
 
 function formatTime(iso) {
     if (!iso) return '—';
 
-    return new Intl.DateTimeFormat('tr-TR', {
+    return new Intl.DateTimeFormat(intlLocale(), {
         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
     }).format(new Date(iso));
 }
@@ -72,7 +72,7 @@ function formatTime(iso) {
     <PanelLayout>
         <p class="text-sm capitalize text-stone-500">{{ today }}</p>
         <h1 class="mt-1 text-2xl font-semibold tracking-tight text-stone-900">
-            Merhaba{{ tenant?.name ? `, ${tenant.name}` : '' }}
+            {{ tenant?.name ? t('Merhaba, :name', { name: tenant.name }) : t('Merhaba') }}
         </h1>
 
         <!-- bugün -->
@@ -81,25 +81,25 @@ function formatTime(iso) {
                 href="/orders"
                 class="rounded-xl border border-stone-200 bg-white p-5 transition hover:border-stone-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
-                <p class="text-sm text-stone-600">Bugünkü siparişler</p>
+                <p class="text-sm text-stone-600">{{ t('Bugünkü siparişler') }}</p>
                 <p class="mt-1 text-3xl font-semibold tabular-nums text-stone-900">{{ props.today?.orderCount ?? 0 }}</p>
             </Link>
             <div class="rounded-xl border border-stone-200 bg-white p-5">
-                <p class="text-sm text-stone-600">Bugünkü satış</p>
+                <p class="text-sm text-stone-600">{{ t('Bugünkü satış') }}</p>
                 <p class="mt-1 text-3xl font-semibold tabular-nums text-stone-900">{{ revenueText }}</p>
             </div>
         </div>
 
         <!-- yapılacaklar -->
         <section class="mt-10" aria-labelledby="todo-heading">
-            <h2 id="todo-heading" class="text-lg font-semibold text-stone-900">Yapman gerekenler</h2>
+            <h2 id="todo-heading" class="text-lg font-semibold text-stone-900">{{ t('Yapman gerekenler') }}</h2>
 
             <div
                 v-if="!todos.length"
                 class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4"
             >
-                <p class="font-medium text-emerald-900">Her şey yolunda.</p>
-                <p class="mt-0.5 text-sm text-emerald-800">Şu an ilgilenmen gereken bir şey yok.</p>
+                <p class="font-medium text-emerald-900">{{ t('Her şey yolunda.') }}</p>
+                <p class="mt-0.5 text-sm text-emerald-800">{{ t('Şu an ilgilenmen gereken bir şey yok.') }}</p>
             </div>
 
             <ul v-else class="mt-3 space-y-2">
@@ -114,7 +114,7 @@ function formatTime(iso) {
                             <span class="block font-medium text-stone-900">{{ todo.title }}</span>
                             <span class="block text-sm text-stone-600">{{ todo.hint }}</span>
                         </span>
-                        <span class="shrink-0 text-sm font-medium text-stone-700" aria-hidden="true">Git →</span>
+                        <span class="shrink-0 text-sm font-medium text-stone-700" aria-hidden="true">{{ t('Git') }} →</span>
                     </Link>
                 </li>
             </ul>
@@ -123,19 +123,19 @@ function formatTime(iso) {
         <!-- kanallar -->
         <section class="mt-10" aria-labelledby="channels-heading">
             <div class="flex items-center justify-between">
-                <h2 id="channels-heading" class="text-lg font-semibold text-stone-900">Kanalların</h2>
+                <h2 id="channels-heading" class="text-lg font-semibold text-stone-900">{{ t('Kanalların') }}</h2>
                 <Link href="/channels/create" class="text-sm font-medium text-stone-700 underline underline-offset-4 hover:text-stone-900">
-                    Kanal ekle
+                    {{ t('Kanal ekle') }}
                 </Link>
             </div>
 
             <div v-if="!connections.length" class="mt-3 rounded-xl border border-dashed border-stone-300 px-5 py-6 text-center">
-                <p class="text-stone-700">Henüz bağlı kanalın yok.</p>
+                <p class="text-stone-700">{{ t('Henüz bağlı kanalın yok.') }}</p>
                 <Link
                     href="/channels/create"
                     class="mt-3 inline-block rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
                 >
-                    İlk kanalını bağla
+                    {{ t('İlk kanalını bağla') }}
                 </Link>
             </div>
 
@@ -153,7 +153,7 @@ function formatTime(iso) {
                         class="shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium"
                         :class="(health[connection.health] ?? health.unknown).class"
                     >
-                        {{ (health[connection.health] ?? health.unknown).text }}
+                        {{ t((health[connection.health] ?? health.unknown).text) }}
                     </span>
                 </li>
             </ul>
@@ -166,38 +166,38 @@ function formatTime(iso) {
         <details class="group mt-12 rounded-xl border border-stone-200 bg-white">
             <summary class="cursor-pointer list-none px-5 py-3 text-sm font-medium text-stone-700 hover:text-stone-900">
                 <span class="mr-1 inline-block transition group-open:rotate-90" aria-hidden="true">›</span>
-                Teknik ayrıntılar
+                {{ t('Teknik ayrıntılar') }}
             </summary>
 
             <div class="border-t border-stone-200 px-5 py-4">
                 <dl class="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <div>
-                        <dt class="text-xs text-stone-500">Kanallarla aynı</dt>
+                        <dt class="text-xs text-stone-500">{{ t('Kanallarla aynı') }}</dt>
                         <dd class="text-lg font-medium tabular-nums text-stone-900">{{ syncHealth.synced ?? 0 }}</dd>
                     </div>
                     <div>
-                        <dt class="text-xs text-stone-500">Gönderilmeyi bekleyen</dt>
+                        <dt class="text-xs text-stone-500">{{ t('Gönderilmeyi bekleyen') }}</dt>
                         <dd class="text-lg font-medium tabular-nums text-stone-900">{{ syncHealth.dirty ?? 0 }}</dd>
                     </div>
                     <div>
-                        <dt class="text-xs text-stone-500">Tekrar denenecek</dt>
+                        <dt class="text-xs text-stone-500">{{ t('Tekrar denenecek') }}</dt>
                         <dd class="text-lg font-medium tabular-nums text-stone-900">{{ syncHealth.errorTransient ?? 0 }}</dd>
                     </div>
                     <div>
-                        <dt class="text-xs text-stone-500">Senin düzeltmen gereken</dt>
+                        <dt class="text-xs text-stone-500">{{ t('Senin düzeltmen gereken') }}</dt>
                         <dd class="text-lg font-medium tabular-nums" :class="(syncHealth.errorPermanent ?? 0) > 0 ? 'text-red-700' : 'text-stone-900'">
                             {{ syncHealth.errorPermanent ?? 0 }}
                         </dd>
                     </div>
                 </dl>
 
-                <h3 class="mt-6 text-sm font-medium text-stone-900">Son gönderimler</h3>
-                <p v-if="!recentOperations.length" class="mt-1 text-sm text-stone-500">Henüz gönderim yok.</p>
+                <h3 class="mt-6 text-sm font-medium text-stone-900">{{ t('Son gönderimler') }}</h3>
+                <p v-if="!recentOperations.length" class="mt-1 text-sm text-stone-500">{{ t('Henüz gönderim yok.') }}</p>
                 <ul v-else class="mt-2 divide-y divide-stone-100 text-sm">
                     <li v-for="op in recentOperations" :key="op.id" class="flex flex-wrap items-center justify-between gap-2 py-2">
                         <span class="text-stone-900">{{ op.channel }}</span>
                         <span class="font-mono text-xs text-stone-500">{{ op.type }}</span>
-                        <span :class="op.isFailed ? 'text-red-700' : 'text-stone-600'">{{ statusLabels[op.status] ?? op.status }}</span>
+                        <span :class="op.isFailed ? 'text-red-700' : 'text-stone-600'">{{ statusLabels[op.status] ? t(statusLabels[op.status]) : op.status }}</span>
                         <span class="text-xs tabular-nums text-stone-500">{{ formatTime(op.createdAt) }}</span>
                     </li>
                 </ul>

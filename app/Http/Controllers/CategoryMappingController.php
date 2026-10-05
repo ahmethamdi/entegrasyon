@@ -124,7 +124,7 @@ final class CategoryMappingController extends Controller
 
         if ($category === null) {
             throw ValidationException::withMessages([
-                'channel_category_id' => 'Kategori bulunamadı.',
+                'channel_category_id' => __('Kategori bulunamadı.'),
             ]);
         }
 
@@ -142,7 +142,10 @@ final class CategoryMappingController extends Controller
 
         return redirect()->back()->with(
             'success',
-            sprintf('"%s" → %s eşleştirildi.', $validated['internal_category_id'], $category->path ?? $category->name),
+            __('":internal" → :category eşleştirildi.', [
+                'internal' => $validated['internal_category_id'],
+                'category' => $category->path ?? $category->name,
+            ]),
         );
     }
 
@@ -162,7 +165,7 @@ final class CategoryMappingController extends Controller
 
         if ($definition === null) {
             throw ValidationException::withMessages([
-                'option_definition_id' => 'Seçenek tanımı bulunamadı.',
+                'option_definition_id' => __('Seçenek tanımı bulunamadı.'),
             ]);
         }
 
@@ -170,7 +173,7 @@ final class CategoryMappingController extends Controller
 
         if ($category === null) {
             throw ValidationException::withMessages([
-                'channel_category_id' => 'Kategori bulunamadı.',
+                'channel_category_id' => __('Kategori bulunamadı.'),
             ]);
         }
 
@@ -182,7 +185,7 @@ final class CategoryMappingController extends Controller
             ]);
         }
 
-        return redirect()->back()->with('success', "{$definition->name} özniteliği eşleştirildi.");
+        return redirect()->back()->with('success', __(':name özniteliği eşleştirildi.', ['name' => $definition->name]));
     }
 
     /** Değer eşleştirmesini kaydeder. */
@@ -200,7 +203,7 @@ final class CategoryMappingController extends Controller
 
         if ($value === null) {
             throw ValidationException::withMessages([
-                'option_value_id' => 'Seçenek değeri bulunamadı.',
+                'option_value_id' => __('Seçenek değeri bulunamadı.'),
             ]);
         }
 
@@ -217,7 +220,7 @@ final class CategoryMappingController extends Controller
             ]);
         }
 
-        return redirect()->back()->with('success', "{$value->value} değeri eşleştirildi.");
+        return redirect()->back()->with('success', __(':value değeri eşleştirildi.', ['value' => $value->value]));
     }
 
     // ─────────────────────────────────────────────────── yardımcılar

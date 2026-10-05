@@ -1,10 +1,13 @@
 <script setup>
 import BrandMark from '../../Components/BrandMark.vue';
 import { Link, useForm } from '@inertiajs/vue3';
+import { useI18n } from '../../lib/i18n';
 
 defineProps({
     status: { type: String, default: null },
 });
+
+const { t } = useI18n();
 
 const form = useForm({ email: '' });
 
@@ -20,21 +23,21 @@ function submit() {
                 <BrandMark size="lg" />
             </p>
             <h1 class="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
-                Parolanı sıfırla
+                {{ t('Parolanı sıfırla') }}
             </h1>
             <p class="mt-2 text-sm text-stone-600">
-                Hesabının e-posta adresini yaz; parola sıfırlama bağlantısı gönderelim.
+                {{ t('Hesabının e-posta adresini yaz; parola sıfırlama bağlantısı gönderelim.') }}
             </p>
 
             <!-- Yanıt adresin kayıtlı olup olmadığını SÖYLEMEZ (bkz. denetleyici). -->
             <p v-if="status" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-                {{ status }} Birkaç dakika içinde gelmezse gereksiz klasörünü kontrol et.
+                {{ status }} {{ t('Birkaç dakika içinde gelmezse gereksiz klasörünü kontrol et.') }}
             </p>
 
             <form class="mt-8 space-y-4" @submit.prevent="submit">
                 <div>
                     <label for="email" class="block text-sm font-medium text-stone-700">
-                        E-posta
+                        {{ t('E-posta') }}
                     </label>
                     <input
                         id="email"
@@ -55,13 +58,13 @@ function submit() {
                     :disabled="form.processing"
                     class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    Sıfırlama bağlantısı gönder
+                    {{ t('Sıfırlama bağlantısı gönder') }}
                 </button>
             </form>
 
             <p class="mt-6 text-sm text-stone-600">
                 <Link href="/login" class="font-medium text-stone-900 underline">
-                    Girişe dön
+                    {{ t('Girişe dön') }}
                 </Link>
             </p>
         </div>

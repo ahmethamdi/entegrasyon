@@ -455,16 +455,32 @@ final class ChannelConnectForm
         }
 
         // Doğrulama kuralları sunucunun işidir; ekrana gitmez.
-        $withoutRules = static fn (array $fields): array => array_map(
-            static fn (array $field): array => array_diff_key($field, ['rules' => true]),
+        //
+        // Etiket, ipucu ve örnek değer BURADA, çalışma anında çevrilir:
+        // `CHANNELS` bir sınıf sabitidir ve içinde `__()` çağrılamaz.
+        // Anahtar Türkçe metnin kendisidir (`lang/en.json`).
+        $forScreen = static fn (array $fields): array => array_map(
+            static function (array $field): array {
+                $field = array_diff_key($field, ['rules' => true]);
+
+                foreach (['label', 'hint', 'placeholder'] as $key) {
+                    if (isset($field[$key]) && $field[$key] !== '') {
+                        $field[$key] = __($field[$key]);
+                    }
+                }
+
+                return $field;
+            },
             $fields,
         );
 
+        $help = self::help($channelTypeCode);
+
         return [
-            'secretFields' => $withoutRules(self::secretFields($channelTypeCode)),
-            'identityFields' => $withoutRules(self::identityFields($channelTypeCode)),
+            'secretFields' => $forScreen(self::secretFields($channelTypeCode)),
+            'identityFields' => $forScreen(self::identityFields($channelTypeCode)),
             'oauth' => self::usesOauth($channelTypeCode),
-            'help' => self::help($channelTypeCode),
+            'help' => $help !== null ? __($help) : null,
             'asksStoreUrl' => self::asksStoreUrl($channelTypeCode),
             'connectable' => true,
         ];

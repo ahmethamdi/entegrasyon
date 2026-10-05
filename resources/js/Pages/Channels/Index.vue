@@ -3,12 +3,14 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     connections: { type: Array, default: () => [] },
 });
 
 const page = usePage();
+const { t } = useI18n();
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashWarning = computed(() => page.props.flash?.warning);
@@ -24,9 +26,16 @@ const sorted = computed(() =>
 );
 
 const healthLabels = {
-    healthy: 'Cevap veriyor',
-    unhealthy: 'Cevap vermiyor',
-    unknown: 'Denenmedi',
+    healthy: k('Cevap veriyor'),
+    unhealthy: k('Cevap vermiyor'),
+    unknown: k('Denenmedi'),
+};
+
+/* Bağlantı durumu — veritabanındaki ham değer ekrana basılmaz. */
+const statusLabels = {
+    active: k('Etkin'),
+    pending: k('Beklemede'),
+    inactive: k('Kapalı'),
 };
 
 function healthClass(health) {
@@ -63,29 +72,29 @@ function tokenClass(status) {
 function tokenTitle(connection) {
     if (!connection.tokenExpiresAt) return '';
 
-    return `Yetki bitiş: ${formatDate(connection.tokenExpiresAt)}`;
+    return t('Yetki bitiş: :date', { date: formatDate(connection.tokenExpiresAt) });
 }
 
 /** Yetenekler tip sisteminden gelir; kanal adı kontrol edilmez. */
 const capabilityLabels = {
-    catalog: 'Ürün',
+    catalog: k('Ürün'),
     // ⚠️ BU SATIR EKSİKTİ ve `?? key` yedeği yüzünden HATA VERMEDİ:
     // rozet ham anahtarı (`catalog_import`) İngilizce ve alt çizgili
     // olarak bastı. Yedek olmasaydı boş görünürdü — ikisi de sessiz.
     // Gerçek tarayıcı çalıştırmasında bulundu.
-    catalog_import: 'İçe aktarma',
-    inventory: 'Stok',
-    pricing: 'Fiyat',
-    orders: 'Sipariş',
-    taxonomy: 'Kategori',
-    approval: 'Onay',
-    fulfillment: 'Kargo',
+    catalog_import: k('İçe aktarma'),
+    inventory: k('Stok'),
+    pricing: k('Fiyat'),
+    orders: k('Sipariş'),
+    taxonomy: k('Kategori'),
+    approval: k('Onay'),
+    fulfillment: k('Kargo'),
 };
 
 function activeCapabilities(capabilities) {
     return Object.entries(capabilities ?? {})
         .filter(([, enabled]) => enabled)
-        .map(([key]) => capabilityLabels[key] ?? key);
+        .map(([key]) => (capabilityLabels[key] ? t(capabilityLabels[key]) : key));
 }
 
 /*
@@ -130,19 +139,19 @@ function recheck(id) {
 
 function formatDate(iso) {
     if (!iso) return '—';
-    return new Date(iso).toLocaleString('tr-TR');
+    return new Date(iso).toLocaleString(intlLocale());
 }
 </script>
 
 <template>
     <PanelLayout>
-        <PageHeader section="Mağazam" title="Kanallarım">
+        <PageHeader :section="t('Mağazam')" :title="t('Kanallarım')">
             <template #actions>
                 <Link
                     href="/channels/create"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
                 >
-                    Mağaza bağla
+                    {{ t('Mağaza bağla') }}
                 </Link>
             </template>
         </PageHeader>
@@ -163,10 +172,10 @@ function formatDate(iso) {
 
         <div v-if="!sorted.length" class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center">
             <p class="text-sm text-stone-600">
-                Henüz bağlı mağaza yok. Senkron için en az bir kanal gerekiyor.
+                {{ t('Henüz bağlı mağaza yok. Senkron için en az bir kanal gerekiyor.') }}
             </p>
             <Link href="/channels/create" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
-                İlk mağazayı bağla
+                {{ t('İlk mağazayı bağla') }}
             </Link>
         </div>
 
@@ -186,7 +195,7 @@ function formatDate(iso) {
                                 class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
                                 :class="healthClass(connection.health)"
                             >
-                                {{ healthLabels[connection.health] ?? connection.health }}
+                                {{ healthLabels[connection.health] ? t(healthLabels[connection.health]) : connection.health }}
                             </span>
 
                             <!--
@@ -222,7 +231,7 @@ function formatDate(iso) {
                         :disabled="checking !== null"
                         @click="recheck(connection.id)"
                     >
-                        {{ checking === connection.id ? 'Kontrol ediliyor…' : 'Tekrar dene' }}
+                        {{ checking === connection.id ? t('Kontrol ediliyor…') : t('Tekrar dene') }}
                     </button>
                 </div>
 
@@ -243,10 +252,10 @@ function formatDate(iso) {
                     class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3"
                 >
                     <label :for="`depo-${connection.id}`" class="block text-sm font-medium text-stone-900">
-                        Stok hangi depoya yazılsın?
+                        {{ t('Stok hangi depoya yazılsın?') }}
                     </label>
                     <p class="mt-0.5 text-xs text-stone-600">
-                        Mağazanda birden fazla depo var. Seçtiğin depodaki stok 34Pazar'la eşitlenir.
+                        {{ t('Mağazanda birden fazla depo var. Seçtiğin depodaki stok 34Pazar\'la eşitlenir.') }}
                     </p>
                     <div class="mt-2 flex flex-wrap gap-2">
                         <select
@@ -254,7 +263,7 @@ function formatDate(iso) {
                             v-model="chosenLocation[connection.id]"
                             class="min-w-0 flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm"
                         >
-                            <option :value="undefined" disabled>Depo seç…</option>
+                            <option :value="undefined" disabled>{{ t('Depo seç…') }}</option>
                             <option v-for="location in connection.locationChoices" :key="location.id" :value="location.id">
                                 {{ location.name }}
                             </option>
@@ -265,22 +274,22 @@ function formatDate(iso) {
                             :disabled="!chosenLocation[connection.id] || savingLocation !== null"
                             @click="saveLocation(connection.id)"
                         >
-                            {{ savingLocation === connection.id ? 'Kaydediliyor…' : 'Kaydet' }}
+                            {{ savingLocation === connection.id ? t('Kaydediliyor…') : t('Kaydet') }}
                         </button>
                     </div>
                 </div>
 
                 <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
                     <div>
-                        <dt class="text-stone-500">Durum</dt>
-                        <dd class="mt-0.5 font-medium text-stone-900">{{ connection.status }}</dd>
+                        <dt class="text-stone-500">{{ t('Durum') }}</dt>
+                        <dd class="mt-0.5 font-medium text-stone-900">{{ statusLabels[connection.status] ? t(statusLabels[connection.status]) : connection.status }}</dd>
                     </div>
                     <div>
-                        <dt class="text-stone-500">Son sağlıklı</dt>
+                        <dt class="text-stone-500">{{ t('Son sağlıklı') }}</dt>
                         <dd class="mt-0.5 text-stone-700">{{ formatDate(connection.lastHealthyAt) }}</dd>
                     </div>
                     <div>
-                        <dt class="text-stone-500">Yetenekler</dt>
+                        <dt class="text-stone-500">{{ t('Yetenekler') }}</dt>
                         <dd class="mt-0.5 text-stone-700">
                             {{ activeCapabilities(connection.capabilities).join(' · ') || '—' }}
                         </dd>

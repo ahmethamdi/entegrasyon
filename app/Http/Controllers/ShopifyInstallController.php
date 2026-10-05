@@ -60,12 +60,12 @@ final class ShopifyInstallController extends Controller
     {
         if (! ShopifyAuth::configured() || ! $this->shopifyOpen()) {
             Log::error('shopify.install.unavailable');
-            abort(503, 'Shopify bağlantısı şu an kullanılamıyor.');
+            abort(503, __('Shopify bağlantısı şu an kullanılamıyor.'));
         }
 
         if (! ShopifyAuth::launchRequestValid($request->query())) {
             Log::warning('shopify.install.launch_invalid', ['shop' => $request->query('shop')]);
-            abort(400, 'Geçersiz Shopify isteği.');
+            abort(400, __('Geçersiz Shopify isteği.'));
         }
 
         $shop = strtolower((string) $request->query('shop'));
@@ -165,7 +165,7 @@ final class ShopifyInstallController extends Controller
             try {
                 app(EnforceQuota::class)->check(QuotaMetric::CHANNELS);
             } catch (QuotaExceededException $e) {
-                return redirect()->route('billing.index')->with('success', $e->userMessage());
+                return redirect()->route('billing.index')->with('success', $e->metric->exceededMessage($e->current, $e->limit));
             }
         }
 

@@ -4,6 +4,7 @@ import { computed } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
@@ -13,6 +14,8 @@ const props = defineProps({
     filters: { type: Object, default: () => ({}) },
     lastCheckedAt: { type: String, default: null },
 });
+
+const { t } = useI18n();
 
 /**
  * Durum rozetleri — İKİ DURUM, İKİ FARKLI EYLEM.
@@ -26,11 +29,11 @@ const props = defineProps({
  */
 const badges = {
     rejected: {
-        text: 'Reddedildi',
+        text: k('Reddedildi'),
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     pending_approval: {
-        text: 'Onay bekliyor',
+        text: k('Onay bekliyor'),
         class: 'bg-sky-50 text-sky-800 border-sky-200',
     },
 };
@@ -40,11 +43,15 @@ const connectionNames = computed(() => Object.fromEntries(
 ));
 
 const lastCheckedText = computed(() => (
-    props.lastCheckedAt ? new Date(props.lastCheckedAt).toLocaleString('tr-TR') : null
+    props.lastCheckedAt ? new Date(props.lastCheckedAt).toLocaleString(intlLocale()) : null
 ));
 
 function badgeFor(status) {
-    return badges[status] ?? { text: status, class: 'bg-stone-50 text-stone-600 border-stone-200' };
+    const badge = badges[status];
+
+    return badge
+        ? { ...badge, text: t(badge.text) }
+        : { text: status, class: 'bg-stone-50 text-stone-600 border-stone-200' };
 }
 
 /**
@@ -65,10 +72,10 @@ function applyFilter(patch) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Mağazam" title="Kanal onayları">
+        <PageHeader :section="t('Mağazam')" :title="t('Kanal onayları')">
             <template #actions>
                 <p v-if="lastCheckedText" class="text-xs text-stone-500">
-                    Son kontrol: {{ lastCheckedText }}
+                    {{ t('Son kontrol: :time', { time: lastCheckedText }) }}
                 </p>
             </template>
         </PageHeader>
@@ -86,17 +93,16 @@ function applyFilter(patch) {
             class="mt-6 rounded-lg border border-stone-200 bg-white px-4 py-12 text-center"
         >
             <p class="text-sm text-stone-600">
-                Onay süreci olan bağlı kanalınız yok.
+                {{ t('Onay süreci olan bağlı kanalınız yok.') }}
             </p>
             <p class="mt-1 text-xs text-stone-500">
-                WooCommerce gibi mağaza yazılımlarında ürün gönderilir gönderilmez yayına girer;
-                onay bekleme durumu yalnızca Trendyol gibi pazaryerlerinde vardır.
+                {{ t('WooCommerce gibi mağaza yazılımlarında ürün gönderilir gönderilmez yayına girer; onay bekleme durumu yalnızca Trendyol gibi pazaryerlerinde vardır.') }}
             </p>
             <Link
                 href="/channels"
                 class="mt-4 inline-block rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
-                Kanallara git
+                {{ t('Kanallara git') }}
             </Link>
         </div>
 
@@ -109,17 +115,17 @@ function applyFilter(patch) {
             -->
             <div class="mt-6 grid gap-3 sm:grid-cols-2">
                 <StatCard
-                    label="Reddedildi"
+                    :label="t('Reddedildi')"
                     :value="summary.rejected ?? 0"
                     :tone="summary.rejected > 0 ? 'error' : 'neutral'"
-                    :hint="summary.rejected > 0 ? 'Düzeltip yeniden gönderin' : null"
+                    :hint="summary.rejected > 0 ? t('Düzeltip yeniden gönderin') : null"
                 />
 
                 <!-- Bekleyen bir SORUN DEĞİL: nötr ton. -->
                 <StatCard
-                    label="Onay bekliyor"
+                    :label="t('Onay bekliyor')"
                     :value="summary.pending ?? 0"
-                    :hint="summary.pending > 0 ? 'Kanalın incelemesi sürüyor' : null"
+                    :hint="summary.pending > 0 ? t('Kanalın incelemesi sürüyor') : null"
                 />
             </div>
 
@@ -127,9 +133,8 @@ function applyFilter(patch) {
                 v-if="summary.rejected > 0"
                 class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
             >
-                <span class="font-semibold">{{ summary.rejected }} ürün kanal tarafından reddedildi.</span>
-                Bu satırlar kendiliğinden düzelmez — sebebi okuyup ürünü düzeltin ve
-                kanala yeniden gönderin.
+                <span class="font-semibold">{{ t(':count ürün kanal tarafından reddedildi.', { count: summary.rejected }) }}</span>
+                {{ t('Bu satırlar kendiliğinden düzelmez — sebebi okuyup ürünü düzeltin ve kanala yeniden gönderin.') }}
             </div>
 
             <!-- filtreler -->
@@ -141,7 +146,7 @@ function applyFilter(patch) {
                         :class="!filters.status ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: undefined })"
                     >
-                        Hepsi
+                        {{ t('Hepsi') }}
                     </button>
                     <button
                         type="button"
@@ -149,7 +154,7 @@ function applyFilter(patch) {
                         :class="filters.status === 'rejected' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: 'rejected' })"
                     >
-                        Reddedilenler
+                        {{ t('Reddedilenler') }}
                     </button>
                     <button
                         type="button"
@@ -157,7 +162,7 @@ function applyFilter(patch) {
                         :class="filters.status === 'pending_approval' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: 'pending_approval' })"
                     >
-                        Bekleyenler
+                        {{ t('Bekleyenler') }}
                     </button>
                 </div>
 
@@ -168,7 +173,7 @@ function applyFilter(patch) {
                     :value="filters.connection ?? ''"
                     @change="applyFilter({ connection: $event.target.value || undefined })"
                 >
-                    <option value="">Tüm kanallar</option>
+                    <option value="">{{ t('Tüm kanallar') }}</option>
                     <option v-for="c in connections" :key="c.id" :value="c.id">
                         {{ c.channel }} · {{ c.label }}
                     </option>
@@ -185,11 +190,11 @@ function applyFilter(patch) {
                 <table class="w-full min-w-4xl text-sm">
                     <thead class="border-b border-stone-200 bg-stone-50 text-left">
                         <tr>
-                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Ürün</th>
-                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kanal</th>
-                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Durum</th>
-                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Sebep</th>
-                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Son kontrol</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Ürün') }}</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kanal') }}</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Durum') }}</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Sebep') }}</th>
+                            <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Son kontrol') }}</th>
                         </tr>
                     </thead>
 
@@ -255,7 +260,7 @@ function applyFilter(patch) {
                             <td class="px-4 py-3 text-stone-700">
                                 <template v-if="row.reason">{{ row.reason }}</template>
                                 <span v-else-if="row.status === 'pending_approval'" class="text-stone-400">
-                                    Kanal henüz bir şey bildirmedi
+                                    {{ t('Kanal henüz bir şey bildirmedi') }}
                                 </span>
                                 <span v-else class="text-stone-400">—</span>
                             </td>
@@ -267,8 +272,8 @@ function applyFilter(patch) {
                                     edildi ama tarih yok" gibi okunurdu.
                                 -->
                                 {{ row.checkedAt
-                                    ? new Date(row.checkedAt).toLocaleString('tr-TR')
-                                    : 'Henüz sorulmadı' }}
+                                    ? new Date(row.checkedAt).toLocaleString(intlLocale())
+                                    : t('Henüz sorulmadı') }}
                             </td>
                         </tr>
 
@@ -276,14 +281,14 @@ function applyFilter(patch) {
                             <td colspan="5" class="px-4 py-12 text-center">
                                 <p class="text-sm text-stone-600">
                                     <template v-if="filters.status || filters.connection">
-                                        Bu filtreye uyan ürün yok.
+                                        {{ t('Bu filtreye uyan ürün yok.') }}
                                     </template>
                                     <template v-else>
-                                        Onay bekleyen ya da reddedilen ürün yok — gönderdiğiniz her şey yayında.
+                                        {{ t('Onay bekleyen ya da reddedilen ürün yok — gönderdiğiniz her şey yayında.') }}
                                     </template>
                                 </p>
                                 <p class="mt-1 text-xs text-stone-500">
-                                    Onay durumu saatlik olarak kanaldan okunur.
+                                    {{ t('Onay durumu saatlik olarak kanaldan okunur.') }}
                                 </p>
                             </td>
                         </tr>

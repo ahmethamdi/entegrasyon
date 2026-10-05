@@ -29,18 +29,17 @@ final class QuotaExceededException extends RuntimeException
         public readonly int $current,
         public readonly string $planCode,
     ) {
-        parent::__construct(sprintf(
-            '%s kotası doldu: %d/%d. %s',
-            ucfirst($metric->label()),
-            $current,
-            $limit,
-            $metric->advice(),
-        ));
+        parent::__construct($metric->exceededMessage($current, $limit));
     }
 
-    /** Panelde alan hatası olarak gösterilecek mesaj. */
+    /**
+     * Panelde alan hatası olarak gösterilecek mesaj.
+     *
+     * Gösterim anında yeniden kurulur: istisna kuyrukta (varsayılan dil)
+     * yaratılıp panelde başka dilde gösterilebilir.
+     */
     public function userMessage(): string
     {
-        return $this->getMessage();
+        return $this->metric->exceededMessage($this->current, $this->limit);
     }
 }

@@ -11,9 +11,20 @@ import { router, usePage } from '@inertiajs/vue3';
  * Yer tutucular Laravel biçimindedir: `t(":count ürün", { count: 3 })`.
  * Sunucudaki `__()` ile aynı dosya ve aynı sözdizimi: bir metin iki yerde
  * iki ayrı biçimde çevrilmez.
+ *
+ * TEKİL|ÇOĞUL: Türkçe sayıdan sonra tekil der ("1 kanal", "5 kanal"),
+ * İngilizce demez ("1 channels" yanlış). Sözlük değeri `"tekil|çoğul"`
+ * ise `count` tam 1 olduğunda ilki, değilse ikincisi seçilir — Laravel
+ * `trans_choice()` ile aynı kural, sunucuda o kullanılır. Sayı olmayan
+ * `count` ("sınırsız") çoğul sayılır.
  */
 export function translate(dictionary, key, replacements = {}) {
     let text = dictionary?.[key] ?? key;
+
+    if (text.includes('|') && 'count' in replacements) {
+        const [one, many] = text.split('|');
+        text = Number(replacements.count) === 1 ? one : many;
+    }
 
     // Uzun ad önce: `:count` değiştirilirken `:countAll` bozulmasın.
     Object.keys(replacements)

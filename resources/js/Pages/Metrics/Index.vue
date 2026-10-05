@@ -2,11 +2,14 @@
 import { computed } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { intlLocale, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     cards: { type: Array, default: () => [] },
     summary: { type: Object, default: () => ({}) },
 });
+
+const { t } = useI18n();
 
 /**
  * Değeri BİRİMİYLE biçimler.
@@ -25,21 +28,21 @@ function format(value, unit) {
         // "62 000 ms" ile "62,0 sn" aynı sayıdır ama ikincisi eşikle
         // (60 sn) doğrudan karşılaştırılabilir.
         return value >= 1000
-            ? `${(value / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sn`
+            ? t(':value sn', { value: (value / 1000).toLocaleString(intlLocale(), { maximumFractionDigits: 1 }) })
             : `${Math.round(value)} ms`;
     }
 
     if (unit === 's') {
         return value >= 60
-            ? `${Math.round(value / 60)} dk`
-            : `${Math.round(value)} sn`;
+            ? t(':value dk', { value: Math.round(value / 60) })
+            : t(':value sn', { value: Math.round(value) });
     }
 
     if (unit === '%') {
-        return `%${value.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`;
+        return t('%:value', { value: value.toLocaleString(intlLocale(), { maximumFractionDigits: 1 }) });
     }
 
-    return value.toLocaleString('tr-TR', { maximumFractionDigits: 0 });
+    return value.toLocaleString(intlLocale(), { maximumFractionDigits: 0 });
 }
 
 /**
@@ -112,16 +115,16 @@ const lastCapture = computed(() => {
         return null;
     }
 
-    return new Date(props.summary.capturedAt.replace(' ', 'T') + 'Z').toLocaleString('tr-TR');
+    return new Date(props.summary.capturedAt.replace(' ', 'T') + 'Z').toLocaleString(intlLocale());
 });
 </script>
 
 <template>
     <PanelLayout>
-        <PageHeader section="Gelişmiş" title="Sistem durumu">
+        <PageHeader :section="t('Gelişmiş')" :title="t('Sistem durumu')">
             <template #actions>
                 <p v-if="lastCapture" class="text-xs text-stone-500">
-                    Son ölçüm: {{ lastCapture }}
+                    {{ t('Son ölçüm: :time', { time: lastCapture }) }}
                 </p>
             </template>
         </PageHeader>
@@ -134,9 +137,8 @@ const lastCapture = computed(() => {
             v-if="summary.breaching > 0"
             class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
-            <span class="font-semibold">{{ summary.breaching }} metrik eşiği aştı.</span>
-            Eşikler mimari dokümanın §11 tablosundan gelir; aşan metrikler aşağıda en üstte
-            listelenir.
+            <span class="font-semibold">{{ t(':count metrik eşiği aştı.', { count: summary.breaching }) }}</span>
+            {{ t('Eşiği aşan metrikler aşağıda en üstte listelenir.') }}
         </div>
 
         <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -173,13 +175,13 @@ const lastCapture = computed(() => {
                         v-if="card.breaching"
                         class="shrink-0 rounded border border-red-300 bg-white px-2 py-0.5 text-[10px] font-medium tracking-wide text-red-900"
                     >
-                        EŞİK AŞILDI
+                        {{ t('EŞİK AŞILDI') }}
                     </span>
                     <span
                         v-else-if="card.nearThreshold"
                         class="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[10px] font-medium tracking-wide text-amber-900"
                     >
-                        EŞİĞE YAKIN
+                        {{ t('EŞİĞE YAKIN') }}
                     </span>
                 </div>
 
@@ -192,12 +194,12 @@ const lastCapture = computed(() => {
                         <span
                             v-if="trend(card.history) === 'up'"
                             class="align-middle text-sm text-stone-400"
-                            title="Önceki ölçüme göre arttı"
+                            :title="t('Önceki ölçüme göre arttı')"
                         >↑</span>
                         <span
                             v-else-if="trend(card.history) === 'down'"
                             class="align-middle text-sm text-stone-400"
-                            title="Önceki ölçüme göre düştü"
+                            :title="t('Önceki ölçüme göre düştü')"
                         >↓</span>
                     </p>
 
@@ -231,9 +233,9 @@ const lastCapture = computed(() => {
                     olmadığını bilemez.
                 -->
                 <p class="mt-2 text-[11px] text-stone-500">
-                    Eşik: {{ format(card.threshold, card.unit) }}
+                    {{ t('Eşik: :value', { value: format(card.threshold, card.unit) }) }}
                     <span v-if="card.history.length > 1" class="text-stone-400">
-                        · son {{ card.history.length }} ölçüm
+                        · {{ t('son :count ölçüm', { count: card.history.length }) }}
                     </span>
                 </p>
             </div>
@@ -243,9 +245,9 @@ const lastCapture = computed(() => {
             v-if="cards.length === 0"
             class="mt-8 rounded-lg border border-stone-200 bg-white px-4 py-12 text-center"
         >
-            <p class="text-sm text-stone-600">Henüz ölçüm yok.</p>
+            <p class="text-sm text-stone-600">{{ t('Henüz ölçüm yok.') }}</p>
             <p class="mt-1 text-xs text-stone-500">
-                Metrikler saatlik toplanır; ilk tur koştuktan sonra burada görünür.
+                {{ t('Metrikler saatlik toplanır; ilk tur koştuktan sonra burada görünür.') }}
             </p>
         </div>
     </PanelLayout>

@@ -2,6 +2,7 @@
 import { Link, useForm } from '@inertiajs/vue3';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { useI18n } from '../../lib/i18n';
 
 const form = useForm({
     sku: '',
@@ -14,6 +15,8 @@ const form = useForm({
     barcode: '',
 });
 
+const { t } = useI18n();
+
 function submit() {
     form.post('/products');
 }
@@ -22,22 +25,22 @@ function submit() {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Ürünler"
-            title="Ürün ekle"
-            description="Ürünü bir kez ekle, istediğin kanallara buradan gönder. Girdiğin stok tüm kanallarda ortak kullanılır."
+            :section="t('Ürünler')"
+            :title="t('Ürün ekle')"
+            :description="t('Ürünü bir kez ekle, istediğin kanallara buradan gönder. Girdiğin stok tüm kanallarda ortak kullanılır.')"
         />
 
         <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">
             <div>
                 <label for="title" class="block text-sm font-medium text-stone-700">
-                    Ürün adı
+                    {{ t('Ürün adı') }}
                 </label>
                 <input
                     id="title"
                     v-model="form.title"
                     type="text"
                     required
-                    placeholder="Yün Kazak"
+                    :placeholder="t('Yün Kazak')"
                     class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p v-if="form.errors.title" class="mt-1 text-sm text-red-700">
@@ -54,11 +57,11 @@ function submit() {
                     v-model="form.sku"
                     type="text"
                     required
-                    placeholder="KAZAK-001"
+                    :placeholder="t('KAZAK-001')"
                     class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
-                    Kanallarla eşleşmenin anahtarı. Hesabınız içinde tekil olmalı.
+                    {{ t('Kanallarla eşleşmenin anahtarı. Hesabınız içinde tekil olmalı.') }}
                 </p>
                 <p v-if="form.errors.sku" class="mt-1 text-sm text-red-700">
                     {{ form.errors.sku }}
@@ -68,7 +71,7 @@ function submit() {
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label for="price" class="block text-sm font-medium text-stone-700">
-                        Fiyat
+                        {{ t('Fiyat') }}
                     </label>
                     <input
                         id="price"
@@ -87,7 +90,7 @@ function submit() {
 
                 <div>
                     <label for="opening_stock" class="block text-sm font-medium text-stone-700">
-                        Açılış stoğu
+                        {{ t('Açılış stoğu') }}
                     </label>
                     <input
                         id="opening_stock"
@@ -97,7 +100,7 @@ function submit() {
                         class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p class="mt-1 text-xs text-stone-500">
-                        Giriş hareketi olarak işlenir. Negatif olamaz.
+                        {{ t('Giriş hareketi olarak işlenir. Negatif olamaz.') }}
                     </p>
                     <p v-if="form.errors.opening_stock" class="mt-1 text-sm text-red-700">
                         {{ form.errors.opening_stock }}
@@ -107,7 +110,7 @@ function submit() {
 
             <div>
                 <label for="description" class="block text-sm font-medium text-stone-700">
-                    Açıklama
+                    {{ t('Açıklama') }}
                 </label>
                 <textarea
                     id="description"
@@ -123,7 +126,7 @@ function submit() {
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label for="brand" class="block text-sm font-medium text-stone-700">
-                        Marka
+                        {{ t('Marka') }}
                     </label>
                     <input
                         id="brand"
@@ -135,7 +138,7 @@ function submit() {
 
                 <div>
                     <label for="barcode" class="block text-sm font-medium text-stone-700">
-                        Barkod
+                        {{ t('Barkod') }}
                     </label>
                     <input
                         id="barcode"
@@ -153,18 +156,17 @@ function submit() {
             -->
             <div>
                 <label for="internal_category_id" class="block text-sm font-medium text-stone-700">
-                    İç kategori
+                    {{ t('İç kategori') }}
                 </label>
                 <input
                     id="internal_category_id"
                     v-model="form.internal_category_id"
                     type="text"
-                    placeholder="Örn. kadin-elbise"
+                    :placeholder="t('Örn. kadin-elbise')"
                     class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
-                    Kendi kategori adınız. Kanalın kategorisine bu ad üzerinden
-                    eşleştirilir; aynı adı taşıyan ürünler tek eşleştirmeyi paylaşır.
+                    {{ t('Kendi kategori adınız. Kanalın kategorisine bu ad üzerinden eşleştirilir; aynı adı taşıyan ürünler tek eşleştirmeyi paylaşır.') }}
                 </p>
                 <p v-if="form.errors.internal_category_id" class="mt-1 text-xs text-red-700">
                     {{ form.errors.internal_category_id }}
@@ -177,11 +179,11 @@ function submit() {
                     :disabled="form.processing"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    {{ form.processing ? 'Ekleniyor…' : 'Ürünü ekle' }}
+                    {{ form.processing ? t('Ekleniyor…') : t('Ürünü ekle') }}
                 </button>
 
                 <Link href="/products" class="text-sm text-stone-600 underline">
-                    Vazgeç
+                    {{ t('Vazgeç') }}
                 </Link>
             </div>
         </form>

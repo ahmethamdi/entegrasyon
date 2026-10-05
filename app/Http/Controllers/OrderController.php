@@ -185,7 +185,7 @@ final class OrderController extends Controller
 
         if (! $this->channelSupportsFulfillment($order)) {
             return back()->withErrors([
-                'tracking_number' => 'Bu kanal kargo bildirimini desteklemiyor; takip numarasını kanalın kendi panelinden girin.',
+                'tracking_number' => __('Bu kanal kargo bildirimini desteklemiyor; takip numarasını kanalın kendi panelinden girin.'),
             ]);
         }
 
@@ -196,7 +196,7 @@ final class OrderController extends Controller
 
         if ($active) {
             return back()->withErrors([
-                'tracking_number' => 'Bu sipariş için kargo bildirimi zaten gönderildi.',
+                'tracking_number' => __('Bu sipariş için kargo bildirimi zaten gönderildi.'),
             ]);
         }
 
@@ -207,7 +207,7 @@ final class OrderController extends Controller
             actorId: $request->user()?->id,
         );
 
-        return back()->with('success', 'Kargo bildirimi kanala gönderiliyor.');
+        return back()->with('success', __('Kargo bildirimi kanala gönderiliyor.'));
     }
 
     /**
@@ -233,7 +233,7 @@ final class OrderController extends Controller
             trackingNumber: $this->blankToNull($validated['tracking_number'] ?? null),
         );
 
-        return back()->with('success', 'Kargo bildirimi yeniden gönderiliyor.');
+        return back()->with('success', __('Kargo bildirimi yeniden gönderiliyor.'));
     }
 
     /**

@@ -38,7 +38,7 @@ final class EmailVerificationController extends Controller
     {
         $request->fulfill();
 
-        return redirect()->intended(route('dashboard'))->with('success', 'E-posta adresiniz doğrulandı.');
+        return redirect()->intended(route('dashboard'))->with('success', __('E-posta adresiniz doğrulandı.'));
     }
 
     public function resend(Request $request): RedirectResponse
@@ -49,6 +49,6 @@ final class EmailVerificationController extends Controller
 
         $request->user()?->sendEmailVerificationNotification();
 
-        return back()->with('status', 'Doğrulama bağlantısı yeniden gönderildi.');
+        return back()->with('status', __('Doğrulama bağlantısı yeniden gönderildi.'));
     }
 }

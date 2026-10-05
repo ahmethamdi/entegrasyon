@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     channelTypes: { type: Array, default: () => [] },
@@ -13,6 +14,7 @@ const props = defineProps({
     optionDefinitions: { type: Array, default: () => [] },
 });
 
+const { t } = useI18n();
 const page = usePage();
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -41,10 +43,10 @@ function rank(row) {
 }
 
 function statusLabel(row) {
-    if (!row.mapping) return 'Eşleşmedi';
-    if (!row.mapping.ready) return 'Zorunlu öznitelik eksik';
-    if (row.mapping.stale) return 'Yeniden doğrula';
-    return 'Hazır';
+    if (!row.mapping) return k('Eşleşmedi');
+    if (!row.mapping.ready) return k('Zorunlu öznitelik eksik');
+    if (row.mapping.stale) return k('Yeniden doğrula');
+    return k('Hazır');
 }
 
 function statusClass(row) {
@@ -94,14 +96,14 @@ function toggle(id) {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Gelişmiş"
-            title="Kategori eşleştirme"
-            description="Ürünlerinin kanalda hangi kategoride ve hangi özelliklerle (renk, beden…) açılacağını burada seçersin. Eşleştirme eksikse ürün o kanala gönderilemez; stok yine de güncellenir."
+            :section="t('Gelişmiş')"
+            :title="t('Kategori eşleştirme')"
+            :description="t('Ürünlerinin kanalda hangi kategoride ve hangi özelliklerle (renk, beden…) açılacağını burada seçersin. Eşleştirme eksikse ürün o kanala gönderilemez; stok yine de güncellenir.')"
         >
             <template #actions>
                 <div v-if="channelTypes.length > 1" class="shrink-0">
                     <label class="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                        Kanal
+                        {{ t('Kanal') }}
                     </label>
                     <select
                         class="mt-1 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
@@ -140,17 +142,16 @@ function toggle(id) {
             class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center"
         >
             <p class="text-sm text-stone-600">
-                Bu kanalın kategori ağacı henüz çekilmedi. Taksonomi günlük olarak
-                güncellenir; kanal bağlıysa bir sonraki turda burada görünecek.
+                {{ t('Bu kanalın kategori ağacı henüz çekilmedi. Taksonomi günlük olarak güncellenir; kanal bağlıysa bir sonraki turda burada görünecek.') }}
             </p>
             <Link href="/channels" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
-                Kanallara git
+                {{ t('Kanallara git') }}
             </Link>
         </div>
 
         <template v-else>
             <p class="mt-6 font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                Taksonomi sürümü {{ taxonomyVersion }} · {{ channelCategories.length }} kategori
+                {{ t('Taksonomi sürümü :version · :count kategori', { version: taxonomyVersion, count: channelCategories.length }) }}
             </p>
 
             <!--
@@ -162,11 +163,10 @@ function toggle(id) {
                 class="mt-4 rounded-lg border border-dashed border-stone-300 p-10 text-center"
             >
                 <p class="text-sm text-stone-600">
-                    Hiçbir ürününüzde iç kategori tanımlı değil. Ürünü düzenleyip
-                    iç kategori alanını doldurun; eşleştirme o kategoriler üzerinden yapılır.
+                    {{ t('Hiçbir ürününüzde iç kategori tanımlı değil. Ürünü düzenleyip iç kategori alanını doldurun; eşleştirme o kategoriler üzerinden yapılır.') }}
                 </p>
                 <Link href="/products" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
-                    Ürünlere git
+                    {{ t('Ürünlere git') }}
                 </Link>
             </div>
 
@@ -186,12 +186,12 @@ function toggle(id) {
                                     class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
                                     :class="statusClass(row)"
                                 >
-                                    {{ statusLabel(row) }}
+                                    {{ t(statusLabel(row)) }}
                                 </span>
                             </div>
 
                             <p class="mt-1 font-mono text-xs text-stone-500">
-                                {{ row.productCount }} ürün
+                                {{ t(':count ürün', { count: row.productCount }) }}
                                 <template v-if="row.mapping">
                                     · {{ row.mapping.categoryPath }}
                                 </template>
@@ -205,8 +205,7 @@ function toggle(id) {
                                 v-if="row.mapping && row.mapping.missingRequiredAttributes.length"
                                 class="mt-2 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
                             >
-                                Eksik zorunlu öznitelik:
-                                {{ row.mapping.missingRequiredAttributes.join(', ') }}
+                                {{ t('Eksik zorunlu öznitelik: :names', { names: row.mapping.missingRequiredAttributes.join(', ') }) }}
                             </p>
 
                             <!--
@@ -217,9 +216,7 @@ function toggle(id) {
                                 v-if="row.mapping && row.mapping.stale"
                                 class="mt-2 rounded bg-stone-100 px-3 py-2 text-xs text-stone-700"
                             >
-                                Bu eşleştirme {{ row.mapping.taxonomyVersion }} sürümünde yapıldı;
-                                kanal o zamandan beri kategori ağacını güncelledi. Eşleştirme
-                                geçerli kalır, yeniden seçerek doğrulayabilirsiniz.
+                                {{ t('Bu eşleştirme :version sürümünde yapıldı; kanal o zamandan beri kategori ağacını güncelledi. Eşleştirme geçerli kalır, yeniden seçerek doğrulayabilirsiniz.', { version: row.mapping.taxonomyVersion }) }}
                             </p>
                         </div>
 
@@ -228,13 +225,13 @@ function toggle(id) {
                             class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                             @click="toggle(row.id)"
                         >
-                            {{ expanded === row.id ? 'Kapat' : 'Eşleştir' }}
+                            {{ expanded === row.id ? t('Kapat') : t('Eşleştir') }}
                         </button>
                     </div>
 
                     <div v-if="expanded === row.id" class="border-t border-stone-100 bg-stone-50 p-5">
                         <label class="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                            Kanal kategorisi
+                            {{ t('Kanal kategorisi') }}
                         </label>
                         <div class="mt-1 flex gap-2">
                             <select
@@ -243,7 +240,7 @@ function toggle(id) {
                                 :value="row.mapping?.channelCategoryId ?? ''"
                                 @change="saveCategory(row.id, $event.target.value)"
                             >
-                                <option value="" disabled>Kategori seçin…</option>
+                                <option value="" disabled>{{ t('Kategori seçin…') }}</option>
                                 <!-- YALNIZCA YAPRAKLAR: ara kategoriye ürün açılamaz. -->
                                 <option
                                     v-for="category in channelCategories"
@@ -258,8 +255,7 @@ function toggle(id) {
                         <!-- Zorunlu öznitelikler: kategori seçildikten sonra anlamlı. -->
                         <div v-if="row.mapping && row.mapping.requiredAttributes.length" class="mt-6">
                             <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
-                                Zorunlu öznitelikler
-                                ({{ row.mapping.mappedRequiredCount }}/{{ row.mapping.requiredAttributeCount }})
+                                {{ t('Zorunlu öznitelikler (:mapped/:total)', { mapped: row.mapping.mappedRequiredCount, total: row.mapping.requiredAttributeCount }) }}
                             </p>
 
                             <div class="mt-2 space-y-2">
@@ -282,7 +278,7 @@ function toggle(id) {
                                             attribute.externalId,
                                         )"
                                     >
-                                        <option value="" disabled>Seçenek eşleştirin…</option>
+                                        <option value="" disabled>{{ t('Seçenek eşleştirin…') }}</option>
                                         <option
                                             v-for="definition in optionDefinitions"
                                             :key="definition.id"
@@ -298,19 +294,18 @@ function toggle(id) {
                                             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                                             : 'border-amber-300 bg-amber-50 text-amber-900'"
                                     >
-                                        {{ row.mapping.mappedAttributes[attribute.externalId] ? 'Eşleşti' : 'Eksik' }}
+                                        {{ row.mapping.mappedAttributes[attribute.externalId] ? t('Eşlendi') : t('Eksik') }}
                                     </span>
                                 </div>
                             </div>
 
                             <p v-if="!optionDefinitions.length" class="mt-2 text-xs text-stone-600">
-                                Henüz seçenek tanımınız yok (Beden, Renk gibi). Varyantlı ürün
-                                oluşturduğunuzda burada görünecekler.
+                                {{ t('Henüz seçenek tanımınız yok (Beden, Renk gibi). Varyantlı ürün oluşturduğunuzda burada görünecekler.') }}
                             </p>
                         </div>
 
                         <p v-else-if="row.mapping" class="mt-6 text-xs text-stone-600">
-                            Bu kategoride zorunlu öznitelik yok.
+                            {{ t('Bu kategoride zorunlu öznitelik yok.') }}
                         </p>
                     </div>
                 </article>

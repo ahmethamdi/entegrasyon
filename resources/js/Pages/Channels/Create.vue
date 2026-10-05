@@ -3,6 +3,9 @@ import { computed, watch } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { useI18n } from '../../lib/i18n';
+
+const { t } = useI18n();
 
 const props = defineProps({
     channelTypes: { type: Array, default: () => [] },
@@ -107,15 +110,15 @@ function submit() {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Kanallarım"
-            title="Kanal bağla"
-            description="Bilgilerin şifrelenerek saklanır, kimseye gösterilmez. Kaydedince bağlantıyı hemen deneriz; başarılıysa kanal kullanıma açılır."
+            :section="t('Kanallarım')"
+            :title="t('Kanal bağla')"
+            :description="t('Bilgilerin şifrelenerek saklanır, kimseye gösterilmez. Kaydedince bağlantıyı hemen deneriz; başarılıysa kanal kullanıma açılır.')"
         />
 
         <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">
             <div>
                 <label for="channel_type_code" class="block text-sm font-medium text-stone-700">
-                    Kanal
+                    {{ t('Kanal') }}
                 </label>
                 <select
                     id="channel_type_code"
@@ -134,18 +137,18 @@ function submit() {
 
             <div>
                 <label for="label" class="block text-sm font-medium text-stone-700">
-                    Etiket
+                    {{ t('Etiket') }}
                 </label>
                 <input
                     id="label"
                     v-model="form.label"
                     type="text"
                     required
-                    placeholder="Ana Mağaza"
+                    :placeholder="t('Ana Mağaza')"
                     class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
-                    Yalnızca senin göreceğin isim; birden fazla mağazayı ayırt etmek için.
+                    {{ t('Yalnızca senin göreceğin isim; birden fazla mağazayı ayırt etmek için.') }}
                 </p>
                 <p v-if="form.errors.label" class="mt-1 text-sm text-red-700">
                     {{ form.errors.label }}
@@ -154,18 +157,18 @@ function submit() {
 
             <div v-if="asksStoreUrl">
                 <label for="store_url" class="block text-sm font-medium text-stone-700">
-                    Mağaza adresi
+                    {{ t('Mağaza adresi') }}
                 </label>
                 <input
                     id="store_url"
                     v-model="form.store_url"
                     type="text"
                     required
-                    placeholder="magaza.example.com"
+                    :placeholder="t('magaza.example.com')"
                     class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
-                    Bir mağaza yalnızca tek bir hesaba bağlanabilir. Bağlantı HTTPS üzerinden kurulur.
+                    {{ t('Bir mağaza yalnızca tek bir hesaba bağlanabilir. Bağlantı HTTPS üzerinden kurulur.') }}
                 </p>
                 <p v-if="form.errors.store_url" class="mt-1 text-sm text-red-700">
                     {{ form.errors.store_url }}
@@ -182,16 +185,16 @@ function submit() {
                 class="rounded-lg border border-amber-300 bg-amber-50 p-4"
             >
                 <p class="text-sm font-medium text-amber-900">
-                    {{ selected?.name }} panelden bağlanamıyor
+                    {{ t(':channel panelden bağlanamıyor', { channel: selected?.name ?? '' }) }}
                 </p>
                 <p class="mt-1 text-sm text-amber-800">
-                    Bu kanalın kimlik biçimi panelde tanımlı değil.
+                    {{ t('Bu kanalın kimlik biçimi panelde tanımlı değil.') }}
                 </p>
             </div>
 
             <div v-else-if="allFields.length" class="rounded-lg border border-stone-200 bg-stone-50 p-4">
                 <p class="text-sm font-medium text-stone-900">
-                    {{ selected?.name }} kimlik bilgileri
+                    {{ t(':channel kimlik bilgileri', { channel: selected?.name ?? '' }) }}
                 </p>
                 <p v-if="selected?.help" class="mt-1 text-xs text-stone-600">
                     {{ selected.help }}
@@ -232,8 +235,7 @@ function submit() {
                 class="rounded-lg border border-sky-200 bg-sky-50 p-4"
             >
                 <p class="text-sm text-sky-900">
-                    Kaydettikten sonra {{ selected?.name }} sitesine yönlendirileceksin ve
-                    izni orada vereceksin. Bağlantı ancak izin verildikten sonra çalışır.
+                    {{ t('Kaydettikten sonra :channel sitesine yönlendirileceksin ve izni orada vereceksin. Bağlantı ancak izin verildikten sonra çalışır.', { channel: selected?.name ?? '' }) }}
                 </p>
             </div>
 
@@ -244,15 +246,15 @@ function submit() {
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     <template v-if="form.processing">
-                        {{ usesOauth ? 'Yönlendiriliyor…' : 'Bağlanıyor…' }}
+                        {{ usesOauth ? t('Yönlendiriliyor…') : t('Bağlanıyor…') }}
                     </template>
                     <template v-else>
-                        {{ usesOauth ? `${selected?.name} ile bağlan` : 'Bağla ve doğrula' }}
+                        {{ usesOauth ? t(':channel ile bağlan', { channel: selected?.name ?? '' }) : t('Bağla ve doğrula') }}
                     </template>
                 </button>
 
                 <Link href="/channels" class="text-sm text-stone-600 underline">
-                    Vazgeç
+                    {{ t('Vazgeç') }}
                 </Link>
             </div>
         </form>

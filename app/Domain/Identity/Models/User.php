@@ -6,8 +6,10 @@ namespace App\Domain\Identity\Models;
 
 use App\Domain\Identity\Notifications\ResetPasswordNotification;
 use App\Domain\Identity\Notifications\VerifyEmailNotification;
+use App\Http\Middleware\SetLocale;
 use App\Support\Uuid\HasUuidV7;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,7 +25,7 @@ use Illuminate\Notifications\Notifiable;
  * @property string $id
  * @property string $email
  */
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail
 {
     use HasFactory;
     use HasUuidV7;
@@ -50,13 +52,33 @@ class User extends Authenticatable implements MustVerifyEmail
         ];
     }
 
-    /** Türkçe doğrulama e-postası — gerekçe bildirim sınıfında. */
+    /**
+     * Posta dili — kullanıcının panelde seçtiği dil.
+     *
+     * Laravel bildirimi göndermeden önce bu dile geçer. Seçim yoksa (ya da
+     * İngilizce panel kapalıysa) null döner ve isteğin dili kullanılır:
+     * `SetLocale` onu zaten oturumdan/tarayıcıdan çözmüştür. Parola
+     * sıfırlamada istek giriş yapılmadan gelir; kayıtlı tercih yine burada
+     * okunur, posta isteği yapanın tarayıcısına değil hesabın diline gider.
+     */
+    public function preferredLocale(): ?string
+    {
+        if (! config('app.english_panel')) {
+            return null;
+        }
+
+        $locale = $this->getAttribute('locale');
+
+        return is_string($locale) && in_array($locale, SetLocale::SUPPORTED, true) ? $locale : null;
+    }
+
+    /** Doğrulama e-postası (alıcının dilinde) — gerekçe bildirim sınıfında. */
     public function sendEmailVerificationNotification(): void
     {
         $this->notify(new VerifyEmailNotification);
     }
 
-    /** Türkçe sıfırlama e-postası — gerekçe bildirim sınıfında. */
+    /** Sıfırlama e-postası (alıcının dilinde) — gerekçe bildirim sınıfında. */
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
     {
         $this->notify(new ResetPasswordNotification($token));

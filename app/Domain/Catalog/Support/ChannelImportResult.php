@@ -47,7 +47,7 @@ final class ChannelImportResult
         return new self(
             supported: false,
             stoppedEarly: true,
-            stopReason: sprintf('%s kanalı kanaldan ürün çekmeyi desteklemiyor.', $channelName),
+            stopReason: __(':channel kanaldan ürün çekmeyi desteklemiyor.', ['channel' => $channelName]),
         );
     }
 

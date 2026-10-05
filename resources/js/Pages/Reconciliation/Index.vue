@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
@@ -11,6 +12,8 @@ const props = defineProps({
     last_run: { type: Object, default: null },
     filters: { type: Object, default: () => ({}) },
 });
+
+const { t } = useI18n();
 
 /**
  * FLASH EKRAN BAŞINA RENDER EDİLİR — layout onu GÖSTERMEZ.
@@ -60,52 +63,52 @@ const badges = {
      * geçince bu rozet yanındaki kırmızı ELLE İNCELEME ile aynı görünecekti.
      */
     PRICE_CONFLICT: {
-        text: 'Fiyat çakışması',
+        text: k('Fiyat çakışması'),
         class: 'bg-violet-50 text-violet-800 border-violet-300',
     },
     MANUAL_REVIEW: {
-        text: 'Elle inceleme',
+        text: k('Elle inceleme'),
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     DRIFT_DETECTED: {
-        text: 'Farklılık var',
+        text: k('Farklılık var'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     REPAIR_QUEUED: {
-        text: 'Onarılıyor',
+        text: k('Onarılıyor'),
         class: 'bg-sky-50 text-sky-800 border-sky-200',
     },
     REMOTE_MISSING: {
-        text: 'Kanalda yok',
+        text: k('Kanalda yok'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     REMOTE_UNREACHABLE: {
-        text: 'Kanal okunamadı',
+        text: k('Kanal okunamadı'),
         class: 'bg-stone-100 text-stone-700 border-stone-300',
     },
     REPAIRED: {
-        text: 'Onarıldı',
+        text: k('Onarıldı'),
         class: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     },
     MATCHED: {
-        text: 'Eşleşti',
+        text: k('Eşleşti'),
         class: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     },
 };
 
 /** Aday seçim sebebi — "bu satıra neden bakıldı". */
 const reasons = {
-    recently_sold: 'Yeni satış',
-    previous_error: 'Önceki hata',
-    stale_sync: 'Bekleyen senkron',
-    drift_detected: 'Doğrulama turu',
-    sampled: 'Örneklem',
+    recently_sold: k('Yeni satış'),
+    previous_error: k('Önceki hata'),
+    stale_sync: k('Bekleyen senkron'),
+    drift_detected: k('Doğrulama turu'),
+    sampled: k('Örneklem'),
 };
 
 const scopes = {
-    hot: 'Sıcak (5 dk)',
-    warm: 'Ilık (saatlik)',
-    cold: 'Soğuk (günlük)',
+    hot: k('Sıcak (5 dk)'),
+    warm: k('Ilık (saatlik)'),
+    cold: k('Soğuk (günlük)'),
 };
 
 const lastRunText = computed(() => {
@@ -113,22 +116,26 @@ const lastRunText = computed(() => {
         return null;
     }
 
-    const scope = scopes[props.last_run.scope] ?? props.last_run.scope;
+    const scope = scopes[props.last_run.scope] ? t(scopes[props.last_run.scope]) : props.last_run.scope;
     const when = props.last_run.finishedAt ?? props.last_run.startedAt;
 
     if (!when) {
         return scope;
     }
 
-    return `${scope} · ${new Date(when).toLocaleString('tr-TR')}`;
+    return `${scope} · ${new Date(when).toLocaleString(intlLocale())}`;
 });
 
 function badgeFor(status) {
-    return badges[status] ?? { text: status, class: 'bg-stone-50 text-stone-600 border-stone-200' };
+    const badge = badges[status];
+
+    return badge
+        ? { ...badge, text: t(badge.text) }
+        : { text: status, class: 'bg-stone-50 text-stone-600 border-stone-200' };
 }
 
 function reasonFor(reason) {
-    return reasons[reason] ?? reason;
+    return reasons[reason] ? t(reasons[reason]) : reason;
 }
 
 /**
@@ -169,10 +176,10 @@ function isDeciding(row, decision) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Gelişmiş" title="Fiyat ve stok kontrolü">
+        <PageHeader :section="t('Gelişmiş')" :title="t('Fiyat ve stok kontrolü')">
             <template #actions>
                 <p v-if="lastRunText" class="text-xs text-stone-500">
-                    Son tur: {{ lastRunText }}
+                    {{ t('Son tur: :time', { time: lastRunText }) }}
                 </p>
             </template>
         </PageHeader>
@@ -199,22 +206,22 @@ function isDeciding(row, decision) {
                 şey aramaya başlardı.
             -->
             <StatCard
-                label="Fiyat çakışması"
+                :label="t('Fiyat çakışması')"
                 :value="summary.price_conflict ?? 0"
                 :tone="summary.price_conflict > 0 ? 'warning' : 'neutral'"
-                :hint="summary.price_conflict > 0 ? 'Kararınız bekleniyor' : null"
+                :hint="summary.price_conflict > 0 ? t('Kararınız bekleniyor') : null"
             />
 
             <StatCard
-                label="Elle inceleme"
+                :label="t('Elle inceleme')"
                 :value="summary.manual_review ?? 0"
                 :tone="summary.manual_review > 0 ? 'error' : 'neutral'"
-                :hint="summary.manual_review > 0 ? 'Otomatik onarım durdu' : null"
+                :hint="summary.manual_review > 0 ? t('Otomatik onarım durdu') : null"
             />
 
             <!-- Sürüklenme kendiliğinden onarılır: UYARI, hata değil. -->
             <StatCard
-                label="Sürüklenme"
+                :label="t('Sürüklenme')"
                 :value="summary.drift ?? 0"
                 :tone="summary.drift > 0 ? 'warning' : 'neutral'"
             />
@@ -224,9 +231,9 @@ function isDeciding(row, decision) {
                 gösterilir: sessizce yutulsaydı satıcı kanalının
                 okunamadığını hiç bilmezdi.
             -->
-            <StatCard label="Kanal okunamadı" :value="summary.unreachable ?? 0" />
+            <StatCard :label="t('Kanal okunamadı')" :value="summary.unreachable ?? 0" />
 
-            <StatCard label="Onarıldı" :value="summary.repaired ?? 0" tone="good" />
+            <StatCard :label="t('Onarıldı')" :value="summary.repaired ?? 0" tone="good" />
         </div>
 
         <!--
@@ -240,12 +247,9 @@ function isDeciding(row, decision) {
             class="mt-6 rounded border border-violet-300 bg-violet-50 px-4 py-3 text-sm text-violet-900"
         >
             <span class="font-semibold">
-                {{ summary.price_conflict }} üründe kanaldaki fiyat sizinkinden farklı.
+                {{ t(':count üründe kanaldaki fiyat sizinkinden farklı.', { count: summary.price_conflict }) }}
             </span>
-            Kanal panelinden kampanya yapmış olabilirsiniz, bu yüzden fiyatı
-            <strong>otomatik olarak değiştirmedik</strong>. Her satır için
-            kanaldaki fiyatı kabul edebilir ya da kendi fiyatınızı
-            gönderebilirsiniz.
+            {{ t('Kanal panelinden kampanya yapmış olabilirsiniz, bu yüzden fiyatı otomatik olarak değiştirmedik. Her satır için kanaldaki fiyatı kabul edebilir ya da kendi fiyatınızı gönderebilirsiniz.') }}
         </div>
 
         <!--
@@ -256,10 +260,8 @@ function isDeciding(row, decision) {
             v-if="summary.manual_review > 0"
             class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
-            <span class="font-semibold">{{ summary.manual_review }} ürün elle inceleme bekliyor.</span>
-            Bu satırlarda kanal üç tur üst üste bizim gönderdiğimiz değeri uygulamadı;
-            otomatik onarım durduruldu. Kanal panelinden ürünün stok yönetimi
-            ayarını ve yetkileri kontrol edin.
+            <span class="font-semibold">{{ t(':count ürün elle inceleme bekliyor.', { count: summary.manual_review }) }}</span>
+            {{ t('Bu satırlarda kanal üç tur üst üste bizim gönderdiğimiz değeri uygulamadı; otomatik onarım durduruldu. Kanal panelinden ürünün stok yönetimi ayarını ve yetkileri kontrol edin.') }}
         </div>
 
         <!-- filtreler -->
@@ -273,7 +275,7 @@ function isDeciding(row, decision) {
                         : 'text-stone-700 hover:bg-stone-100'"
                     @click="applyFilter('open')"
                 >
-                    Açık sorunlar
+                    {{ t('Açık sorunlar') }}
                 </button>
                 <button
                     type="button"
@@ -283,7 +285,7 @@ function isDeciding(row, decision) {
                         : 'text-stone-700 hover:bg-stone-100'"
                     @click="applyFilter('all')"
                 >
-                    Tüm geçmiş
+                    {{ t('Tüm geçmiş') }}
                 </button>
             </div>
         </div>
@@ -298,14 +300,14 @@ function isDeciding(row, decision) {
             <table class="w-full min-w-5xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">SKU</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Durum</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Sebep</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Bizde</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Kanalda</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Fark</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kontrol</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Karar</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('SKU') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Durum') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Sebep') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Bizde') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Kanalda') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Fark') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kontrol') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Karar') }}</th>
                     </tr>
                 </thead>
 
@@ -348,7 +350,7 @@ function isDeciding(row, decision) {
                                 {{ row.domain === 'PRICE' ? (row.our_price ?? '—') : (row.expected_remote ?? '—') }}
                             </p>
                             <p v-if="row.oversold" class="font-mono text-[11px] text-red-700">
-                                bakiye {{ row.available }}
+                                {{ t('bakiye :count', { count: row.available }) }}
                             </p>
                         </td>
 
@@ -373,7 +375,7 @@ function isDeciding(row, decision) {
                         </td>
 
                         <td class="px-4 py-3 text-xs text-stone-500">
-                            {{ row.checkedAt ? new Date(row.checkedAt).toLocaleString('tr-TR') : '—' }}
+                            {{ row.checkedAt ? new Date(row.checkedAt).toLocaleString(intlLocale()) : '—' }}
                         </td>
 
                         <!--
@@ -392,7 +394,7 @@ function isDeciding(row, decision) {
                                     :disabled="deciding !== null"
                                     @click="decide(row, 'accept_channel')"
                                 >
-                                    {{ isDeciding(row, 'accept_channel') ? 'Kaydediliyor…' : 'Kanalınki kalsın' }}
+                                    {{ isDeciding(row, 'accept_channel') ? t('Kaydediliyor…') : t('Kanalınki kalsın') }}
                                 </button>
                                 <button
                                     type="button"
@@ -400,7 +402,7 @@ function isDeciding(row, decision) {
                                     :disabled="deciding !== null"
                                     @click="decide(row, 'push_ours')"
                                 >
-                                    {{ isDeciding(row, 'push_ours') ? 'Gönderiliyor…' : 'Bizimki gitsin' }}
+                                    {{ isDeciding(row, 'push_ours') ? t('Gönderiliyor…') : t('Bizimki gitsin') }}
                                 </button>
                             </div>
                             <span v-else class="text-xs text-stone-400">—</span>
@@ -411,14 +413,14 @@ function isDeciding(row, decision) {
                         <td colspan="8" class="px-4 py-12 text-center">
                             <p class="text-sm text-stone-600">
                                 <template v-if="last_run">
-                                    Açık sürüklenme yok — kanallardaki stok bizdekiyle uyuşuyor.
+                                    {{ t('Açık sürüklenme yok — kanallardaki stok bizdekiyle uyuşuyor.') }}
                                 </template>
                                 <template v-else>
-                                    Henüz mutabakat turu koşmadı.
+                                    {{ t('Henüz mutabakat turu koşmadı.') }}
                                 </template>
                             </p>
                             <p v-if="!last_run" class="mt-1 text-xs text-stone-500">
-                                Turlar otomatik çalışır: sıcak 5 dakikada, ılık saatlik, soğuk günlük.
+                                {{ t('Turlar otomatik çalışır: sıcak 5 dakikada, ılık saatlik, soğuk günlük.') }}
                             </p>
                         </td>
                     </tr>

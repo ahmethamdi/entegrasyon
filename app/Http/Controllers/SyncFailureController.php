@@ -125,8 +125,8 @@ final class SyncFailureController extends Controller
         return redirect('/failures')->with(
             'success',
             $requested === 0
-                ? 'Yeniden denenecek başarısız işlem bulunamadı.'
-                : $requested.' işlem yeniden kuyruğa alındı — gönderim sıraya girdi.',
+                ? __('Yeniden denenecek başarısız işlem bulunamadı.')
+                : trans_choice(':count işlem yeniden kuyruğa alındı — gönderim sıraya girdi.', $requested, ['count' => $requested]),
         );
     }
 

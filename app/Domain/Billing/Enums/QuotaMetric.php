@@ -36,10 +36,11 @@ enum QuotaMetric: string
     /** Kullanıcıya gösterilen ad — hata mesajında geçer. */
     public function label(): string
     {
-        return match ($this) {
+        // Çalışma anında çevrilir; anahtar Türkçe metnin kendisidir.
+        return __(match ($this) {
             self::PRODUCTS => 'ürün',
             self::CHANNELS => 'kanal bağlantısı',
-        };
+        });
     }
 
     /**
@@ -50,9 +51,24 @@ enum QuotaMetric: string
      */
     public function advice(): string
     {
-        return match ($this) {
+        return __(match ($this) {
             self::PRODUCTS => 'Daha fazla ürün eklemek için planını yükselt.',
             self::CHANNELS => 'Daha fazla kanal bağlamak için planını yükselt.',
-        };
+        });
+    }
+
+    /**
+     * Kota dolduğunda satıcıya gösterilen tam cümle — panel dilinde.
+     *
+     * `QuotaExceededException` mesajını kurulurken üretir ve parçaları
+     * birleştirir; çevrilmiş etiket Türkçe kalıba girince cümle iki dilli
+     * olurdu. Ekrana giden metin bu yüzden TEK anahtarla kurulur.
+     */
+    public function exceededMessage(int $current, int $limit): string
+    {
+        return __(match ($this) {
+            self::PRODUCTS => 'Ürün kotan doldu (:current/:limit). Daha fazla ürün eklemek için planını yükselt.',
+            self::CHANNELS => 'Kanal bağlantısı kotan doldu (:current/:limit). Daha fazla kanal bağlamak için planını yükselt.',
+        }, ['current' => $current, 'limit' => $limit]);
     }
 }

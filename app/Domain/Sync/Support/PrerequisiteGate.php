@@ -73,9 +73,9 @@ final class PrerequisiteGate
         // gönderirdik.
         if ($internalCategoryId === null || trim($internalCategoryId) === '') {
             return PrerequisiteResult::blocked(
-                missingCategoryReason: sprintf(
-                    '%s ürününe iç kategori atanmamış; ürünü düzenleyip iç kategori alanını doldurun.',
-                    $product->sku,
+                missingCategoryReason: __(
+                    ':sku ürününe iç kategori atanmamış; ürünü düzenleyip iç kategori alanını doldurun.',
+                    ['sku' => $product->sku],
                 ),
             );
         }
@@ -88,9 +88,9 @@ final class PrerequisiteGate
 
         if ($mapping === null) {
             return PrerequisiteResult::blocked(
-                missingCategoryReason: sprintf(
-                    '"%s" iç kategorisi bu kanalda eşleştirilmemiş.',
-                    $internalCategoryId,
+                missingCategoryReason: __(
+                    '":category" iç kategorisi bu kanalda eşleştirilmemiş.',
+                    ['category' => $internalCategoryId],
                 ),
             );
         }

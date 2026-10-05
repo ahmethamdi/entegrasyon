@@ -77,10 +77,18 @@ final class ProductImportController extends Controller
                 'createdAt' => $import->created_at?->toIso8601String(),
                 'finishedAt' => $import->finished_at?->toIso8601String(),
             ])->all(),
-            'columns' => [
-                'required' => ['sku', 'baslik', 'fiyat', 'stok'],
-                'optional' => ['aciklama', 'marka', 'barkod', 'kategori'],
-            ],
+            // KOLON ADLARI PANEL DİLİNDE gösterilir: ayrıştırıcı iki dilin
+            // adlarını da tanır (`CsvProductParser::COLUMNS`), İngilizce
+            // paneldeki satıcıya Türkçe başlık yazdırmanın gereği yok.
+            'columns' => app()->getLocale() === 'en'
+                ? [
+                    'required' => ['sku', 'title', 'price', 'stock'],
+                    'optional' => ['description', 'brand', 'barcode', 'category'],
+                ]
+                : [
+                    'required' => ['sku', 'baslik', 'fiyat', 'stok'],
+                    'optional' => ['aciklama', 'marka', 'barkod', 'kategori'],
+                ],
             'connections' => $this->importableConnections(),
         ]);
     }
@@ -114,7 +122,7 @@ final class ProductImportController extends Controller
         ImportProductsFromChannelJob::dispatch($import->tenant_id, $import->id);
 
         return redirect('/products/import')
-            ->with('success', "{$import->filename} kanalından ürünler çekiliyor.");
+            ->with('success', __(':name kanalından ürünler çekiliyor.', ['name' => $import->filename]));
     }
 
     public function store(Request $request): RedirectResponse
@@ -150,7 +158,7 @@ final class ProductImportController extends Controller
         ImportProductsJob::dispatch($import->tenant_id, $import->id);
 
         return redirect('/products/import')
-            ->with('success', "{$import->filename} yüklendi, arka planda işleniyor.");
+            ->with('success', __(':file yüklendi, arka planda işleniyor.', ['file' => $import->filename]));
     }
 
     /**
@@ -164,7 +172,7 @@ final class ProductImportController extends Controller
     {
         $warehouse = $request->attributes->get('tenant')?->defaultWarehouse();
 
-        abort_if($warehouse === null, 409, 'Kiracının varsayılan deposu yok.');
+        abort_if($warehouse === null, 409, __('Kiracının varsayılan deposu yok.'));
 
         return $warehouse->id;
     }
@@ -213,23 +221,23 @@ final class ProductImportController extends Controller
             ->find($connectionId);
 
         if ($connection === null) {
-            throw ValidationException::withMessages(['connection_id' => 'Kanal bulunamadı.']);
+            throw ValidationException::withMessages(['connection_id' => __('Kanal bulunamadı.')]);
         }
 
         if ($connection->status !== 'active') {
             throw ValidationException::withMessages([
-                'connection_id' => sprintf(
-                    '%s bağlantısı aktif değil; önce sağlık kontrolünü geçmesi gerekiyor.',
-                    $connection->label ?: $connection->external_account_id,
+                'connection_id' => __(
+                    ':name bağlantısı aktif değil; önce sağlık kontrolünü geçmesi gerekiyor.',
+                    ['name' => $connection->label ?: $connection->external_account_id],
                 ),
             ]);
         }
 
         if (! $this->supportsImport($connection)) {
             throw ValidationException::withMessages([
-                'connection_id' => sprintf(
-                    '%s kanalı kanaldan ürün çekmeyi desteklemiyor.',
-                    $connection->channelType?->name ?? $connection->channel_type_code,
+                'connection_id' => __(
+                    ':channel kanalı kanaldan ürün çekmeyi desteklemiyor.',
+                    ['channel' => $connection->channelType?->name ?? $connection->channel_type_code],
                 ),
             ]);
         }

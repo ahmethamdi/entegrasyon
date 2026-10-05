@@ -1,11 +1,14 @@
 <script setup>
 import BrandMark from '../../Components/BrandMark.vue';
 import { useForm } from '@inertiajs/vue3';
+import { useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     token: { type: String, required: true },
     email: { type: String, default: '' },
 });
+
+const { t } = useI18n();
 
 const form = useForm({
     token: props.token,
@@ -28,13 +31,13 @@ function submit() {
                 <BrandMark size="lg" />
             </p>
             <h1 class="mt-2 text-2xl font-semibold tracking-tight text-stone-900">
-                Yeni parola belirle
+                {{ t('Yeni parola belirle') }}
             </h1>
 
             <form class="mt-8 space-y-4" @submit.prevent="submit">
                 <div>
                     <label for="email" class="block text-sm font-medium text-stone-700">
-                        E-posta
+                        {{ t('E-posta') }}
                     </label>
                     <input
                         id="email"
@@ -51,7 +54,7 @@ function submit() {
 
                 <div>
                     <label for="password" class="block text-sm font-medium text-stone-700">
-                        Yeni parola
+                        {{ t('Yeni parola') }}
                     </label>
                     <input
                         id="password"
@@ -69,7 +72,7 @@ function submit() {
 
                 <div>
                     <label for="password_confirmation" class="block text-sm font-medium text-stone-700">
-                        Yeni parola (tekrar)
+                        {{ t('Yeni parola (tekrar)') }}
                     </label>
                     <input
                         id="password_confirmation"
@@ -86,7 +89,7 @@ function submit() {
                     :disabled="form.processing"
                     class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                    Parolayı güncelle
+                    {{ t('Parolayı güncelle') }}
                 </button>
             </form>
         </div>

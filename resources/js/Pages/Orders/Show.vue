@@ -4,11 +4,13 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { channelName, money, orderState, toneClass } from '../../lib/format.js';
+import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     order: { type: Object, required: true },
 });
 
+const { t } = useI18n();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success);
 
@@ -58,18 +60,18 @@ function submitRetry(fulfillment) {
 
 /** Gönderim durumu rozetleri; kanaldan gelen satırın rozeti yoktur. */
 const pushBadges = {
-    pending: { text: 'Kanala gönderiliyor', class: 'bg-sky-50 text-sky-800 border-sky-200' },
-    sent: { text: 'Kanala gönderildi', class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
-    failed: { text: 'Gönderilemedi', class: 'bg-red-50 text-red-800 border-red-200' },
+    pending: { text: k('Kanala gönderiliyor'), class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    sent: { text: k('Kanala gönderildi'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    failed: { text: k('Gönderilemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
 };
 
 const lineBadges = {
-    OVERSOLD: { text: 'Fazla satış', class: 'bg-red-50 text-red-800 border-red-200' },
-    PENDING: { text: 'Stok düşülmedi', class: 'bg-amber-50 text-amber-900 border-amber-200' },
-    APPLIED: { text: 'Stok düştü', class: 'bg-stone-50 text-stone-600 border-stone-200' },
+    OVERSOLD: { text: k('Fazla satış'), class: 'bg-red-50 text-red-800 border-red-200' },
+    PENDING: { text: k('Stok düşülmedi'), class: 'bg-amber-50 text-amber-900 border-amber-200' },
+    APPLIED: { text: k('Stok düştü'), class: 'bg-stone-50 text-stone-600 border-stone-200' },
     // Sonradan eşleşti; satış açılış stoğundan önceydi veya satır tamamen
     // iptal edilmişti — stok bilerek düşülmedi.
-    SKIPPED: { text: 'Stoktan düşülmedi', class: 'bg-slate-50 text-slate-700 border-slate-200' },
+    SKIPPED: { text: k('Stoktan düşülmedi'), class: 'bg-slate-50 text-slate-700 border-slate-200' },
 };
 
 /**
@@ -77,26 +79,26 @@ const lineBadges = {
  * kanaldan gelmez ve `external_ref` taşımaz.
  */
 const eventLabels = {
-    created: 'Sipariş alındı',
-    updated: 'Güncellendi',
-    cancelled: 'İptal edildi',
-    returned: 'İade edildi',
-    fulfilled: 'Kargolandı',
-    OVERSELL_DETECTED: 'Fazla satış tespit edildi',
+    created: k('Sipariş alındı'),
+    updated: k('Güncellendi'),
+    cancelled: k('İptal edildi'),
+    returned: k('İade edildi'),
+    fulfilled: k('Kargolandı'),
+    OVERSELL_DETECTED: k('Fazla satış tespit edildi'),
 };
 
 /* Olayın nereden geldiği — "webhook" / "polling" satıcıya bir şey söylemez. */
 const sourceLabels = {
-    webhook: 'kanaldan geldi',
-    polling: 'kanaldan alındı',
-    channel: 'kanaldan geldi',
-    panel: 'panelden',
-    system: 'sistem',
+    webhook: k('kanaldan geldi'),
+    polling: k('kanaldan alındı'),
+    channel: k('kanaldan geldi'),
+    panel: k('panelden'),
+    system: k('sistem'),
 };
 
 function stamp(value) {
     if (!value) return '—';
-    return new Date(value).toLocaleString('tr-TR', {
+    return new Date(value).toLocaleString(intlLocale(), {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit',
     });
@@ -105,13 +107,13 @@ function stamp(value) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Sipariş" :title="order.externalNumber ?? order.externalId">
+        <PageHeader :section="t('Sipariş')" :title="order.externalNumber ?? order.externalId">
             <template #actions>
                 <Link
                     href="/orders"
                     class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
-                    Listeye dön
+                    {{ t('Listeye dön') }}
                 </Link>
             </template>
 
@@ -138,25 +140,25 @@ function stamp(value) {
         <!-- tutarlar -->
         <div class="mt-6 grid gap-4 sm:grid-cols-4">
             <div class="rounded-lg border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Ara toplam</p>
+                <p class="text-xs text-stone-500">{{ t('Ara toplam') }}</p>
                 <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
                     {{ money(order.subtotal, order.currency) }}
                 </p>
             </div>
             <div class="rounded-lg border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Kargo</p>
+                <p class="text-xs text-stone-500">{{ t('Kargo') }}</p>
                 <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
                     {{ money(order.shippingTotal, order.currency) }}
                 </p>
             </div>
             <div class="rounded-lg border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Vergi</p>
+                <p class="text-xs text-stone-500">{{ t('Vergi') }}</p>
                 <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
                     {{ money(order.taxTotal, order.currency) }}
                 </p>
             </div>
             <div class="rounded-lg border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">Genel toplam</p>
+                <p class="text-xs text-stone-500">{{ t('Genel toplam') }}</p>
                 <p class="mt-1 text-lg font-semibold tabular-nums text-stone-900">
                     {{ money(order.grandTotal, order.currency) }}
                 </p>
@@ -164,18 +166,18 @@ function stamp(value) {
         </div>
 
         <!-- satırlar -->
-        <h2 class="mt-10 text-sm font-semibold text-stone-900">Kalemler</h2>
+        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Kalemler') }}</h2>
 
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
         <div class="mt-3 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Ürün</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Adet</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">İptal / İade</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Tutar</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Stok</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Ürün') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Adet') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('İptal / İade') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Tutar') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Stok') }}</th>
                     </tr>
                 </thead>
 
@@ -208,7 +210,7 @@ function stamp(value) {
                                 class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="lineBadges[line.stockStatus]?.class"
                             >
-                                {{ lineBadges[line.stockStatus]?.text ?? line.stockStatus }}
+                                {{ lineBadges[line.stockStatus] ? t(lineBadges[line.stockStatus].text) : line.stockStatus }}
                             </span>
 
                             <!--
@@ -217,7 +219,7 @@ function stamp(value) {
                                 bakiye olduğundan fazla görünür.
                             -->
                             <p v-if="!line.isMatched" class="mt-0.5 text-[11px] text-amber-800">
-                                Bu stok kodu kataloğunda yok · stok düşülmedi
+                                {{ t('Bu stok kodu kataloğunda yok · stok düşülmedi') }}
                             </p>
                         </td>
                     </tr>
@@ -230,7 +232,7 @@ function stamp(value) {
             sipariş geldiği kanala gönderilir. Kanaldan gelen kargo da
             burada listelenir (rozetsiz).
         -->
-        <h2 class="mt-10 text-sm font-semibold text-stone-900">Kargo</h2>
+        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Kargo') }}</h2>
 
         <div class="mt-3 rounded-lg border border-stone-200 bg-white">
             <ul v-if="order.fulfillments.length">
@@ -242,13 +244,13 @@ function stamp(value) {
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
                             <p class="text-xs text-stone-900">
-                                {{ fulfillment.carrier ?? 'Kargo firması belirtilmedi' }}
+                                {{ fulfillment.carrier ?? t('Kargo firması belirtilmedi') }}
                                 <span v-if="fulfillment.trackingNumber" class="font-mono text-stone-600">
                                     · {{ fulfillment.trackingNumber }}
                                 </span>
                             </p>
                             <p class="mt-0.5 font-mono text-[11px] text-stone-500">
-                                {{ fulfillment.source === 'panel' ? 'panelden girildi' : 'kanaldan geldi' }}
+                                {{ fulfillment.source === 'panel' ? t('panelden girildi') : t('kanaldan geldi') }}
                                 · {{ stamp(fulfillment.shippedAt) }}
                             </p>
                         </div>
@@ -259,7 +261,7 @@ function stamp(value) {
                                 class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="pushBadges[fulfillment.pushStatus].class"
                             >
-                                {{ pushBadges[fulfillment.pushStatus].text }}
+                                {{ t(pushBadges[fulfillment.pushStatus].text) }}
                             </span>
                             <button
                                 v-if="fulfillment.pushStatus === 'failed' && retrying !== fulfillment.id"
@@ -267,7 +269,7 @@ function stamp(value) {
                                 class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                 @click="openRetry(fulfillment)"
                             >
-                                Düzelt ve tekrar gönder
+                                {{ t('Düzelt ve tekrar gönder') }}
                             </button>
                         </div>
                     </div>
@@ -283,7 +285,7 @@ function stamp(value) {
                         @submit.prevent="submitRetry(fulfillment)"
                     >
                         <div>
-                            <label :for="`retry-carrier-${fulfillment.id}`" class="block text-xs font-medium text-stone-700">Kargo firması</label>
+                            <label :for="`retry-carrier-${fulfillment.id}`" class="block text-xs font-medium text-stone-700">{{ t('Kargo firması') }}</label>
                             <input
                                 :id="`retry-carrier-${fulfillment.id}`"
                                 v-model="retryForm.carrier"
@@ -293,7 +295,7 @@ function stamp(value) {
                             >
                         </div>
                         <div>
-                            <label :for="`retry-tracking-${fulfillment.id}`" class="block text-xs font-medium text-stone-700">Takip numarası</label>
+                            <label :for="`retry-tracking-${fulfillment.id}`" class="block text-xs font-medium text-stone-700">{{ t('Takip numarası') }}</label>
                             <input
                                 :id="`retry-tracking-${fulfillment.id}`"
                                 v-model="retryForm.tracking_number"
@@ -306,21 +308,21 @@ function stamp(value) {
                             :disabled="retryForm.processing"
                             class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            Tekrar gönder
+                            {{ t('Tekrar gönder') }}
                         </button>
                         <button type="button" class="text-sm text-stone-600 underline" @click="retrying = null">
-                            Vazgeç
+                            {{ t('Vazgeç') }}
                         </button>
                     </form>
                 </li>
             </ul>
 
-            <p v-else class="px-4 py-3 text-xs text-stone-500">Henüz kargo bilgisi yok.</p>
+            <p v-else class="px-4 py-3 text-xs text-stone-500">{{ t('Henüz kargo bilgisi yok.') }}</p>
         </div>
 
         <!-- Kanal desteklemiyorsa form yerine ne yapılacağı söylenir. -->
         <p v-if="!order.canShip" class="mt-3 text-xs text-stone-500">
-            Bu kanal kargo bildirimini desteklemiyor; takip numarasını kanalın kendi panelinden girin.
+            {{ t('Bu kanal kargo bildirimini desteklemiyor; takip numarasını kanalın kendi panelinden girin.') }}
         </p>
 
         <form
@@ -329,18 +331,18 @@ function stamp(value) {
             @submit.prevent="submitShipment"
         >
             <div>
-                <label for="ship-carrier" class="block text-xs font-medium text-stone-700">Kargo firması</label>
+                <label for="ship-carrier" class="block text-xs font-medium text-stone-700">{{ t('Kargo firması') }}</label>
                 <input
                     id="ship-carrier"
                     v-model="shipForm.carrier"
                     type="text"
                     list="carrier-suggestions"
-                    placeholder="Yurtiçi Kargo"
+                    :placeholder="t('örn. Yurtiçi Kargo')"
                     class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
             </div>
             <div>
-                <label for="ship-tracking" class="block text-xs font-medium text-stone-700">Takip numarası</label>
+                <label for="ship-tracking" class="block text-xs font-medium text-stone-700">{{ t('Takip numarası') }}</label>
                 <input
                     id="ship-tracking"
                     v-model="shipForm.tracking_number"
@@ -354,11 +356,11 @@ function stamp(value) {
                 :disabled="shipForm.processing"
                 class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-                Kargoya verildi
+                {{ t('Kargoya verildi') }}
             </button>
 
             <p class="w-full text-xs text-stone-500">
-                Takip numarası siparişin geldiği kanala ({{ channelName(order.channel.type) }}) gönderilir ve sipariş orada kargolandı olarak işaretlenir.
+                {{ t('Takip numarası siparişin geldiği kanala (:channel) gönderilir ve sipariş orada kargolandı olarak işaretlenir.', { channel: channelName(order.channel.type) }) }}
             </p>
             <p v-if="shipForm.errors.tracking_number" class="w-full text-sm text-red-700">
                 {{ shipForm.errors.tracking_number }}
@@ -373,7 +375,7 @@ function stamp(value) {
         </datalist>
 
         <!-- olay geçmişi -->
-        <h2 class="mt-10 text-sm font-semibold text-stone-900">Geçmiş</h2>
+        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Geçmiş') }}</h2>
 
         <div class="mt-3 rounded-lg border border-stone-200 bg-white">
             <ul>
@@ -389,12 +391,12 @@ function stamp(value) {
                                 ? 'font-medium text-red-800'
                                 : 'text-stone-900'"
                         >
-                            {{ eventLabels[event.type] ?? event.type }}
+                            {{ eventLabels[event.type] ? t(eventLabels[event.type]) : event.type }}
                             <span v-if="event.quantity" class="font-mono text-stone-500">
-                                · {{ event.quantity }} adet
+                                · {{ t(':count adet', { count: event.quantity }) }}
                             </span>
                         </p>
-                        <p class="mt-0.5 text-xs text-stone-500">{{ sourceLabels[event.source] ?? event.source }}</p>
+                        <p class="mt-0.5 text-xs text-stone-500">{{ sourceLabels[event.source] ? t(sourceLabels[event.source]) : event.source }}</p>
                     </div>
 
                     <p class="font-mono text-[11px] text-stone-500">{{ stamp(event.occurredAt) }}</p>

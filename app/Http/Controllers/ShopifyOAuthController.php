@@ -60,7 +60,7 @@ final class ShopifyOAuthController extends Controller
         $connection = $this->findConnection($connectionId);
 
         if ($connection === null) {
-            return redirect()->route('channels.index')->with('success', 'Bağlantı bulunamadı.');
+            return redirect()->route('channels.index')->with('success', __('Bağlantı bulunamadı.'));
         }
 
         if (! ShopifyAuth::configured()) {
@@ -68,7 +68,7 @@ final class ShopifyOAuthController extends Controller
 
             return redirect()->route('channels.index')->with(
                 'success',
-                'Shopify bağlantısı şu an kullanılamıyor. Lütfen bizimle iletişime geçin.',
+                __('Shopify bağlantısı şu an kullanılamıyor. Lütfen bizimle iletişime geçin.'),
             );
         }
 
@@ -104,17 +104,17 @@ final class ShopifyOAuthController extends Controller
             is_string($expectedState) ? $expectedState : null,
             is_string($request->query('state')) ? $request->query('state') : null,
         )) {
-            return $fail('Shopify bağlantısı doğrulanamadı. Lütfen yeniden deneyin.', 'shopify.oauth.state_mismatch');
+            return $fail(__('Shopify bağlantısı doğrulanamadı. Lütfen yeniden deneyin.'), 'shopify.oauth.state_mismatch');
         }
 
         if (! ShopifyAuth::callbackHmacValid($request->query())) {
-            return $fail('Shopify bağlantısı doğrulanamadı. Lütfen yeniden deneyin.', 'shopify.oauth.hmac_invalid');
+            return $fail(__('Shopify bağlantısı doğrulanamadı. Lütfen yeniden deneyin.'), 'shopify.oauth.hmac_invalid');
         }
 
         $connection = is_string($connectionId) ? $this->findConnection($connectionId) : null;
 
         if ($connection === null) {
-            return redirect()->route('channels.index')->with('success', 'Bağlantı bulunamadı.');
+            return redirect()->route('channels.index')->with('success', __('Bağlantı bulunamadı.'));
         }
 
         $shop = $request->query('shop');
@@ -122,7 +122,7 @@ final class ShopifyOAuthController extends Controller
         if (! ShopifyAuth::validShopDomain(is_string($shop) ? $shop : null)
             || strcasecmp((string) $shop, (string) $connection->external_account_id) !== 0) {
             return $fail(
-                'Shopify başka bir mağaza için onay verdi. Bağlamak istediğin mağazayla giriş yapıp yeniden dene.',
+                __('Shopify başka bir mağaza için onay verdi. Bağlamak istediğin mağazayla giriş yapıp yeniden dene.'),
                 'shopify.oauth.shop_mismatch',
                 ['shop' => is_string($shop) ? $shop : null],
             );
@@ -131,7 +131,7 @@ final class ShopifyOAuthController extends Controller
         $code = $request->query('code');
 
         if (! is_string($code) || $code === '') {
-            return redirect()->route('channels.index')->with('success', 'Shopify yetkilendirmesi tamamlanmadı.');
+            return redirect()->route('channels.index')->with('success', __('Shopify yetkilendirmesi tamamlanmadı.'));
         }
 
         try {
@@ -141,7 +141,7 @@ final class ShopifyOAuthController extends Controller
             $credentials = ShopifyAuth::credentialsFrom((array) $response->json());
         } catch (Throwable $e) {
             return $fail(
-                'Shopify kimlik bilgisi alınamadı. Lütfen yeniden deneyin.',
+                __('Shopify kimlik bilgisi alınamadı. Lütfen yeniden deneyin.'),
                 'shopify.oauth.exchange_failed',
                 ['error' => $e->getMessage()],
             );
@@ -197,7 +197,7 @@ final class ShopifyOAuthController extends Controller
 
         // Liste DIŞI değer kabul edilmez: başka mağazanın konum kimliği
         // yazılırsa stok oraya gitmeye çalışırdı.
-        abort_unless(in_array($chosen, $choices, true), 422, 'Geçersiz konum.');
+        abort_unless(in_array($chosen, $choices, true), 422, __('Geçersiz konum.'));
 
         $connection->forceFill(['settings' => [
             ...$connection->settings ?? [],
@@ -213,7 +213,7 @@ final class ShopifyOAuthController extends Controller
             && ($connection->settings[self::LOCATION_CHOICES_KEY] ?? []) !== []) {
             return redirect()->route('channels.index')->with(
                 'success',
-                'Shopify bağlandı. Mağazanda birden fazla depo var — stoğun hangi depoya yazılacağını seç.',
+                __('Shopify bağlandı. Mağazanda birden fazla depo var — stoğun hangi depoya yazılacağını seç.'),
             );
         }
 
@@ -226,8 +226,8 @@ final class ShopifyOAuthController extends Controller
         return redirect()->route('channels.index')->with(
             'success',
             $connection->status === 'active'
-                ? 'Shopify mağazan bağlandı.'
-                : 'Shopify bağlandı ama mağaza yanıt vermedi. "Tekrar dene"ye bas.',
+                ? __('Shopify mağazan bağlandı.')
+                : __('Shopify bağlandı ama mağaza yanıt vermedi. "Tekrar dene"ye bas.'),
         );
     }
 

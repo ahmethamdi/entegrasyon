@@ -138,9 +138,9 @@ final class ImportProductsFromChannel
                     $skipped++;
                     $errors[] = [
                         'line' => 0,
-                        'message' => sprintf(
-                            '%s: kanalda SKU tanımlı değil, içe aktarılamadı.',
-                            $product->title ?? "#{$product->externalId}",
+                        'message' => __(
+                            ':title: kanalda SKU tanımlı değil, içe aktarılamadı.',
+                            ['title' => $product->title ?? "#{$product->externalId}"],
                         ),
                     ];
 
@@ -218,9 +218,9 @@ final class ImportProductsFromChannel
             errors: $this->withQuotaNote($errors, $quotaBlocked),
             stoppedEarly: $hitPageCap,
             stopReason: $hitPageCap
-                ? sprintf(
-                    'Tur başına en fazla %d sayfa okunur; kanalda daha fazla ürün var. Yeniden çalıştırın.',
-                    $maxPages,
+                ? __(
+                    'Tur başına en fazla :max sayfa okunur; kanalda daha fazla ürün var. Yeniden çalıştırın.',
+                    ['max' => $maxPages],
                 )
                 : null,
         );
@@ -245,10 +245,9 @@ final class ImportProductsFromChannel
 
         $errors[] = [
             'line' => 0,
-            'message' => sprintf(
-                'Plan ürün sınırına ulaşıldı (%d ürün): kanaldaki %d yeni ürün içe aktarılmadı. Mevcut ürünlerin güncellemesi uygulandı. Daha fazla ürün için planınızı yükseltin.',
-                (int) $limit,
-                $blocked,
+            'message' => __(
+                'Plan ürün sınırına ulaşıldı (:limit ürün): kanaldaki :count yeni ürün içe aktarılmadı. Mevcut ürünlerin güncellemesi uygulandı. Daha fazla ürün için planınızı yükseltin.',
+                ['limit' => (int) $limit, 'count' => $blocked],
             ),
         ];
 
@@ -316,9 +315,9 @@ final class ImportProductsFromChannel
         ]);
 
         if ($listing->external_id !== null && $listing->external_id !== $externalId) {
-            throw new RuntimeException(sprintf(
-                'ürün bu kanalda başka bir kayda bağlı (%s); bağ değiştirilmedi.',
-                $listing->external_id,
+            throw new RuntimeException(__(
+                'ürün bu kanalda başka bir kayda bağlı (:id); bağ değiştirilmedi.',
+                ['id' => $listing->external_id],
             ));
         }
 

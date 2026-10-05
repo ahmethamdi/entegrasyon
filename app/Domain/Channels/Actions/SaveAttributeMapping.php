@@ -45,10 +45,9 @@ final class SaveAttributeMapping
             ->exists();
 
         if (! $exists) {
-            throw new InvalidArgumentException(sprintf(
-                '"%s" özniteliği %s kategorisinde bulunmuyor.',
-                $externalAttributeId,
-                $channelCategory->path ?? $channelCategory->name,
+            throw new InvalidArgumentException(__(
+                '":attribute" özniteliği :category kategorisinde bulunmuyor.',
+                ['attribute' => $externalAttributeId, 'category' => $channelCategory->path ?? $channelCategory->name],
             ));
         }
 

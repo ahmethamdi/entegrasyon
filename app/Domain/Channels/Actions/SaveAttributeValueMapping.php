@@ -113,10 +113,9 @@ final class SaveAttributeValueMapping
         }
 
         if (! in_array($externalValueId, $allowed, strict: true)) {
-            throw new InvalidArgumentException(sprintf(
-                '"%s" değeri "%s" özniteliğinin izin verdiği değerler arasında değil.',
-                $externalValueId,
-                $externalAttributeId,
+            throw new InvalidArgumentException(__(
+                '":value" değeri ":attribute" özniteliğinin izin verdiği değerler arasında değil.',
+                ['value' => $externalValueId, 'attribute' => $externalAttributeId],
             ));
         }
     }

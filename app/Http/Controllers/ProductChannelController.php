@@ -103,7 +103,7 @@ final class ProductChannelController extends Controller
 
         return redirect("/products/{$model->id}/channels")->with(
             'success',
-            'Görsel seçimi kaydedildi. Kanalda görünmesi için ürünü yeniden gönder.',
+            __('Görsel seçimi kaydedildi. Kanalda görünmesi için ürünü yeniden gönder.'),
         );
     }
 
@@ -136,10 +136,9 @@ final class ProductChannelController extends Controller
         if (! $prerequisite->satisfied()) {
             return redirect("/products/{$model->id}/channels")->with(
                 'warning',
-                sprintf(
-                    '%s gönderilemedi — ön koşul eksik. %s',
-                    $model->sku,
-                    $prerequisite->reason(),
+                __(
+                    ':sku gönderilemedi — ön koşul eksik. :reason',
+                    ['sku' => $model->sku, 'reason' => $prerequisite->reason()],
                 ),
             );
         }
@@ -147,8 +146,8 @@ final class ProductChannelController extends Controller
         // Sürüm kapısı elediyse yeni iş yoktur; kullanıcıya "gönderildi"
         // demek yanlış olurdu — zaten gönderilmiş olan budur.
         $message = $operationIds === []
-            ? "{$model->sku} bu kanalda zaten güncel."
-            : "{$model->sku} {$connection->label} kanalına gönderiliyor.";
+            ? __(':sku bu kanalda zaten güncel.', ['sku' => $model->sku])
+            : __(':sku :channel kanalına gönderiliyor.', ['sku' => $model->sku, 'channel' => $connection->label]);
 
         return redirect("/products/{$model->id}/channels")->with('success', $message);
     }
@@ -234,24 +233,24 @@ final class ProductChannelController extends Controller
 
         if ($connection === null) {
             throw ValidationException::withMessages([
-                'connection_id' => 'Kanal bulunamadı.',
+                'connection_id' => __('Kanal bulunamadı.'),
             ]);
         }
 
         if ($connection->status !== 'active') {
             throw ValidationException::withMessages([
-                'connection_id' => sprintf(
-                    '%s bağlantısı aktif değil; önce sağlık kontrolünü geçmesi gerekiyor.',
-                    $connection->label,
+                'connection_id' => __(
+                    ':name bağlantısı aktif değil; önce sağlık kontrolünü geçmesi gerekiyor.',
+                    ['name' => $connection->label],
                 ),
             ]);
         }
 
         if (! $this->supportsCatalog($connection)) {
             throw ValidationException::withMessages([
-                'connection_id' => sprintf(
-                    '%s kanalı ürün göndermeyi desteklemiyor.',
-                    $connection->label,
+                'connection_id' => __(
+                    ':name kanalı ürün göndermeyi desteklemiyor.',
+                    ['name' => $connection->label],
                 ),
             ]);
         }

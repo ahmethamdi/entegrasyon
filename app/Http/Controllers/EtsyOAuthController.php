@@ -76,7 +76,7 @@ final class EtsyOAuthController extends Controller
 
         if ($connection === null) {
             return redirect()->route('channels.index')
-                ->with('success', 'Bağlantı bulunamadı.');
+                ->with('success', __('Bağlantı bulunamadı.'));
         }
 
         $handshake = EtsyAuth::newHandshake();
@@ -146,8 +146,7 @@ final class EtsyOAuthController extends Controller
 
             return redirect()->route('channels.index')->with(
                 'success',
-                'Etsy bağlantısı doğrulanamadı (state uyuşmadı). Lütfen '.
-                'yeniden deneyin.',
+                __('Etsy bağlantısı doğrulanamadı. Lütfen yeniden deneyin.'),
             );
         }
 
@@ -157,7 +156,7 @@ final class EtsyOAuthController extends Controller
         if (! is_string($code) || $code === '' || ! is_string($verifier)) {
             return redirect()->route('channels.index')->with(
                 'success',
-                'Etsy yetkilendirmesi tamamlanmadı.',
+                __('Etsy yetkilendirmesi tamamlanmadı.'),
             );
         }
 
@@ -165,7 +164,7 @@ final class EtsyOAuthController extends Controller
 
         if ($connection === null) {
             return redirect()->route('channels.index')
-                ->with('success', 'Bağlantı bulunamadı.');
+                ->with('success', __('Bağlantı bulunamadı.'));
         }
 
         try {
@@ -178,7 +177,7 @@ final class EtsyOAuthController extends Controller
 
             return redirect()->route('channels.index')->with(
                 'success',
-                'Etsy kimlik bilgisi alınamadı. Lütfen yeniden deneyin.',
+                __('Etsy kimlik bilgisi alınamadı. Lütfen yeniden deneyin.'),
             );
         }
 
@@ -207,7 +206,7 @@ final class EtsyOAuthController extends Controller
         $this->checkHealth->run($connection);
 
         return redirect()->route('channels.index')
-            ->with('success', 'Etsy bağlantısı yetkilendirildi.');
+            ->with('success', __('Etsy bağlantısı yetkilendirildi.'));
     }
 
     /**

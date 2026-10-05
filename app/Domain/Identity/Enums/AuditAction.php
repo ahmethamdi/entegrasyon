@@ -75,12 +75,13 @@ enum AuditAction: string
     /** Panelde gösterilecek Türkçe ad. */
     public function label(): string
     {
-        return match ($this) {
+        // Çalışma anında çevrilir; anahtar Türkçe metnin kendisidir.
+        return __(match ($this) {
             self::CHANNEL_CONNECTED => 'Kanal bağlandı',
             self::CHANNEL_CREDENTIAL_UPDATED => 'Kanal anahtarı yenilendi',
             self::STOCK_ADJUSTED => 'Stok elle düzeltildi',
             self::TENANT_CREATED => 'Hesap oluşturuldu',
             self::PRICE_CONFLICT_RESOLVED => 'Fiyat çakışması çözüldü',
-        };
+        });
     }
 }

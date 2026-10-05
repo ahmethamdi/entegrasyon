@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Traits\Localizable;
 
 /**
  * Kiracı bağlamını yükünden kuran iş temel sınıfı.
@@ -32,19 +33,30 @@ use Illuminate\Queue\SerializesModels;
  *
  *   (PHP 8.3 hedefleniyor; `public protected(set)` 8.4 özelliğidir ve
  *   kullanılamaz.)
+ *
+ * DİL DE YÜKTE TAŞINIR: işi başlatan isteğin dili (`SetLocale`) kurulurken
+ * yakalanır ve iş o dilde koşar. Olmasaydı İngilizce panelden başlatılan
+ * içe aktarmanın hata/özet metinleri kuyruk işçisinin varsayılan dilinde
+ * (Türkçe) veritabanına yazılırdı. `withLocale()` bitişte eski dili geri
+ * koyar — işçi süreci kalıcıdır, dil sonraki işe sızmaz. Varsayılan değer
+ * `$locale` alanı olmadan kuyruğa yazılmış eski işler içindir.
  */
 abstract class TenantAwareJob implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
+    use Localizable;
     use Queueable;
     use SerializesModels;
 
     public string $tenantId;
 
+    public string $locale = 'tr';
+
     public function __construct(string $tenantId)
     {
         $this->tenantId = $tenantId;
+        $this->locale = app()->getLocale();
     }
 
     final public function handle(): void
@@ -52,7 +64,7 @@ abstract class TenantAwareJob implements ShouldQueue
         TenantContext::set($this->tenantId);
 
         try {
-            $this->handleForTenant();
+            $this->withLocale($this->locale, fn () => $this->handleForTenant());
         } finally {
             TenantContext::clear();
         }

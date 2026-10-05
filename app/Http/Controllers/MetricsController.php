@@ -137,7 +137,9 @@ final class MetricsController extends Controller
 
             $cards[] = [
                 'metric' => $metric->value,
-                'label' => $metric->label(),
+                // Etiket sözlük anahtarıdır; e-posta da aynı `label()`'ı kullandığı
+                // için çeviri enum'da değil burada yapılır.
+                'label' => __($metric->label()),
                 'unit' => $metric->unit()->value,
                 'scopeKind' => $this->scopeKindLabel($metric->scopeKind()),
 
@@ -221,9 +223,9 @@ final class MetricsController extends Controller
     private function scopeKindLabel(MetricScopeKind $kind): string
     {
         return match ($kind) {
-            MetricScopeKind::SYSTEM => 'Sistem',
-            MetricScopeKind::TENANT => 'Hesabınız',
-            MetricScopeKind::CONNECTION => 'Kanal',
+            MetricScopeKind::SYSTEM => __('Sistem'),
+            MetricScopeKind::TENANT => __('Hesabınız'),
+            MetricScopeKind::CONNECTION => __('Kanal'),
         };
     }
 }

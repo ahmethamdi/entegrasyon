@@ -8,11 +8,11 @@ use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * E-posta doğrulama postası — Türkçe (B4).
+ * E-posta doğrulama postası — alıcının dilinde (B4).
  *
  * Bağlantı imzalı ve süreli (`verification.verify`, Laravel'in
- * `verificationUrl()`'i APP_URL'den kurar). Metin burada sabittir:
- * varsayılan çeviri anahtarları `lang/tr.json` olmadan İngilizce kalırdı.
+ * `verificationUrl()`'i APP_URL'den kurar). Metin `__()` ile çevrilir:
+ * anahtar Türkçe metindir, İngilizcesi `lang/en.json`'da.
  */
 final class VerifyEmailNotification extends VerifyEmail
 {
@@ -20,13 +20,14 @@ final class VerifyEmailNotification extends VerifyEmail
     {
         $minutes = (int) config('auth.verification.expire', 60);
 
+        // Metin `__()` ile; dil alıcının tercihidir (`User::preferredLocale`).
         return (new MailMessage)
-            ->subject('E-posta adresinizi doğrulayın')
-            ->greeting('Hoş geldiniz,')
-            ->line('Hesabınızı kullanmaya başlamak için e-posta adresinizi doğrulayın.')
-            ->action('E-postamı doğrula', $this->verificationUrl($notifiable))
-            ->line("Bu bağlantı {$minutes} dakika geçerlidir.")
-            ->line('Bu hesabı siz açmadıysanız bu e-postayı yok sayabilirsiniz.')
-            ->salutation('Entegrasyon');
+            ->subject(__('E-posta adresinizi doğrulayın'))
+            ->greeting(__('Hoş geldiniz,'))
+            ->line(__('Hesabınızı kullanmaya başlamak için e-posta adresinizi doğrulayın.'))
+            ->action(__('E-postamı doğrula'), $this->verificationUrl($notifiable))
+            ->line(__('Bu bağlantı :minutes dakika geçerlidir.', ['minutes' => $minutes]))
+            ->line(__('Bu hesabı siz açmadıysanız bu e-postayı yok sayabilirsiniz.'))
+            ->salutation('34Pazar');
     }
 }

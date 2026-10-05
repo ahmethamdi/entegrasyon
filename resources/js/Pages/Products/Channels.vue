@@ -3,6 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -50,6 +51,7 @@ const imageSummary = computed(() =>
 
 const insecureCount = computed(() => props.images.filter((image) => image.url === null).length);
 
+const { t } = useI18n();
 const page = usePage();
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -73,12 +75,12 @@ const sending = ref(null);
  * kendiliğinden düzelecek sanmaya iter ve o satıra hiç bakmaz.
  */
 const statusLabels = {
-    error_permanent: 'Kalıcı hata',
-    error_transient: 'Geçici hata',
-    blocked: 'Engellendi',
-    pending: 'Bekliyor',
-    syncing: 'Gönderiliyor',
-    synced: 'Senkron',
+    error_permanent: k('Kalıcı hata'),
+    error_transient: k('Geçici hata'),
+    blocked: k('Engellendi'),
+    pending: k('Bekliyor'),
+    syncing: k('Gönderiliyor'),
+    synced: k('Senkron'),
 };
 
 function statusClass(status) {
@@ -98,19 +100,19 @@ function statusClass(status) {
  * KANAL'ı bekler. İkisi de "senkron sorunu" değildir.
  */
 const lifecycleLabels = {
-    blocked: 'Ön koşul eksik',
-    pending_approval: 'Kanal onayı bekliyor',
-    rejected: 'Kanal reddetti',
+    blocked: k('Ön koşul eksik'),
+    pending_approval: k('Kanal onayı bekliyor'),
+    rejected: k('Kanal reddetti'),
 };
 
 /** Gönderilmemiş kanalda rozet yok — durumu "henüz gönderilmedi". */
 function statusLabel(channel) {
-    if (!channel.published) return 'Gönderilmedi';
+    if (!channel.published) return k('Gönderilmedi');
 
     // Yaşam döngüsü önce: engel ve onay senkron durumundan önce gelir.
     if (lifecycleLabels[channel.lifecycle]) return lifecycleLabels[channel.lifecycle];
 
-    return statusLabels[channel.syncStatus] ?? channel.syncStatus ?? 'Bekliyor';
+    return statusLabels[channel.syncStatus] ?? channel.syncStatus ?? k('Bekliyor');
 }
 
 function badgeClass(channel) {
@@ -157,19 +159,19 @@ function send(connectionId) {
 
 <template>
     <PanelLayout>
-        <PageHeader section="Ürün · hangi kanallarda" :title="product.title">
+        <PageHeader :section="t('Ürün · hangi kanallarda')" :title="product.title">
             <template #actions>
                 <Link
                     :href="`/products/${product.id}/edit`"
                     class="shrink-0 rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
-                    Ürünü düzenle
+                    {{ t('Ürünü düzenle') }}
                 </Link>
             </template>
 
             <template #toolbar>
                 <p class="font-mono text-xs text-stone-500">
-                    {{ product.sku }} · içerik sürümü v{{ product.contentVersion }}
+                    {{ t(':sku · içerik sürümü v:version', { sku: product.sku, version: product.contentVersion }) }}
                 </p>
             </template>
         </PageHeader>
@@ -200,11 +202,10 @@ function send(connectionId) {
             satıcı bir görseli belirli bir kanaldan çıkarabilir.
         -->
         <section v-if="imageChannels.length" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
-            <h2 class="text-sm font-medium text-stone-900">Görseller</h2>
+            <h2 class="text-sm font-medium text-stone-900">{{ t('Görseller') }}</h2>
 
             <p v-if="!images.length" class="mt-2 text-sm text-amber-900">
-                Bu üründe görsel yok. Görselsiz ürünü çoğu pazaryeri kabul etmez; ürünü kanaldan
-                içe aktararak görsellerini getirebilirsin.
+                {{ t('Bu üründe görsel yok. Görselsiz ürünü çoğu pazaryeri kabul etmez; ürünü kanaldan içe aktararak görsellerini getirebilirsin.') }}
             </p>
 
             <template v-else>
@@ -212,15 +213,15 @@ function send(connectionId) {
                     <li v-for="channel in imageSummary" :key="channel.code">
                         <span class="font-medium text-stone-900">{{ channel.name }}:</span>
                         <span v-if="channel.count === 0" class="text-red-800">
-                            hiç görsel gitmeyecek — ürün reddedilebilir.
+                            {{ t('hiç görsel gitmeyecek — ürün reddedilebilir.') }}
                         </span>
                         <span v-else-if="channel.overflow > 0" class="text-amber-900">
-                            ilk {{ channel.maxImages }} görsel gider, {{ channel.overflow }} görsel dışarıda kalır.
+                            {{ t('ilk :max görsel gider, :overflow görsel dışarıda kalır.', { max: channel.maxImages, overflow: channel.overflow }) }}
                         </span>
-                        <span v-else class="text-stone-600">{{ channel.count }} görsel gider.</span>
+                        <span v-else class="text-stone-600">{{ t(':count görsel gider.', { count: channel.count }) }}</span>
                     </li>
                     <li v-if="insecureCount" class="text-amber-900">
-                        {{ insecureCount }} görselin adresi HTTPS değil; hiçbir kanala gitmez.
+                        {{ t(':count görselin adresi HTTPS değil; hiçbir kanala gitmez.', { count: insecureCount }) }}
                     </li>
                 </ul>
 
@@ -233,7 +234,7 @@ function send(connectionId) {
                         <img
                             v-if="image.url"
                             :src="image.url"
-                            :alt="`Görsel ${index + 1}`"
+                            :alt="t('Görsel :number', { number: index + 1 })"
                             loading="lazy"
                             class="aspect-square w-full rounded object-cover"
                         >
@@ -241,15 +242,15 @@ function send(connectionId) {
                             v-else
                             class="flex aspect-square w-full items-center justify-center rounded bg-stone-100 p-2 text-center text-[10px] text-stone-500"
                         >
-                            HTTPS değil
+                            {{ t('HTTPS değil') }}
                         </div>
 
                         <p class="mt-1 font-mono text-[10px] text-stone-500">
-                            {{ index + 1 }}. görsel{{ image.imported ? ' · içe aktarıldı' : '' }}
+                            {{ t(':number. görsel', { number: index + 1 }) }}{{ image.imported ? ` · ${t('içe aktarıldı')}` : '' }}
                         </p>
 
                         <fieldset class="mt-2 space-y-1">
-                            <legend class="sr-only">{{ index + 1 }}. görselin gideceği kanallar</legend>
+                            <legend class="sr-only">{{ t(':number. görselin gideceği kanallar', { number: index + 1 }) }}</legend>
                             <label
                                 v-for="channel in imageChannels"
                                 :key="channel.code"
@@ -279,11 +280,10 @@ function send(connectionId) {
             class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center"
         >
             <p class="text-sm text-stone-600">
-                Ürün gönderilebilecek aktif kanal yok. Kanalın sağlık kontrolünü
-                geçmiş olması gerekiyor.
+                {{ t('Ürün gönderilebilecek aktif kanal yok. Kanalın sağlık kontrolünü geçmiş olması gerekiyor.') }}
             </p>
             <Link href="/channels" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
-                Kanallara git
+                {{ t('Kanallara git') }}
             </Link>
         </div>
 
@@ -303,13 +303,13 @@ function send(connectionId) {
                                 class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
                                 :class="badgeClass(channel)"
                             >
-                                {{ statusLabel(channel) }}
+                                {{ t(statusLabel(channel)) }}
                             </span>
                             <span
                                 v-if="channel.published && channel.pendingWork"
                                 class="rounded-md border border-stone-300 bg-white px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-stone-600"
                             >
-                                Bekleyen iş
+                                {{ t('Bekleyen iş') }}
                             </span>
                         </div>
 
@@ -324,7 +324,7 @@ function send(connectionId) {
                         class="shrink-0 rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         @click="send(channel.connectionId)"
                     >
-                        {{ channel.published ? 'Yeniden gönder' : 'Kanala gönder' }}
+                        {{ channel.published ? t('Yeniden gönder') : t('Kanala gönder') }}
                     </button>
                 </div>
 
@@ -349,22 +349,22 @@ function send(connectionId) {
                     v-if="channel.rejectionReason"
                     class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
                 >
-                    Kanal reddetti: {{ channel.rejectionReason }}
+                    {{ t('Kanal reddetti: :reason', { reason: channel.rejectionReason }) }}
                 </p>
 
                 <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
                     <div>
-                        <dt class="text-stone-500">Kanaldaki kimlik</dt>
+                        <dt class="text-stone-500">{{ t('Kanaldaki kimlik') }}</dt>
                         <dd class="mt-0.5 font-mono text-stone-900">
                             {{ channel.externalId ?? '—' }}
                         </dd>
                     </div>
                     <div>
-                        <dt class="text-stone-500">Yaşam döngüsü</dt>
+                        <dt class="text-stone-500">{{ t('Yaşam döngüsü') }}</dt>
                         <dd class="mt-0.5 text-stone-700">{{ channel.lifecycle ?? '—' }}</dd>
                     </div>
                     <div>
-                        <dt class="text-stone-500">Kanalda görüntüle</dt>
+                        <dt class="text-stone-500">{{ t('Kanalda görüntüle') }}</dt>
                         <dd class="mt-0.5">
                             <a
                                 v-if="channel.externalUrl"
@@ -373,7 +373,7 @@ function send(connectionId) {
                                 rel="noopener noreferrer"
                                 class="text-stone-900 underline"
                             >
-                                Aç
+                                {{ t('Aç') }}
                             </a>
                             <span v-else class="text-stone-700">—</span>
                         </dd>

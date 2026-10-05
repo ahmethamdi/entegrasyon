@@ -147,10 +147,9 @@ final class ImportProducts
     {
         $limit = $this->quota->planForCurrentTenant()?->limitFor(QuotaMetric::PRODUCTS);
 
-        return sprintf(
-            'Plan ürün sınırına ulaşıldı (%d ürün): %d yeni ürün yaratılmadı. Mevcut ürünlerin güncellemesi uygulandı. Daha fazla ürün için planınızı yükseltin.',
-            (int) $limit,
-            $blocked,
+        return __(
+            'Plan ürün sınırına ulaşıldı (:limit ürün): :blocked yeni ürün yaratılmadı. Mevcut ürünlerin güncellemesi uygulandı. Daha fazla ürün için planınızı yükseltin.',
+            ['limit' => (int) $limit, 'blocked' => $blocked],
         );
     }
 

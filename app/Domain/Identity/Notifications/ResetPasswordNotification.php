@@ -8,10 +8,11 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
 
 /**
- * Parola sıfırlama e-postası — Türkçe.
+ * Parola sıfırlama e-postası — alıcının dilinde (Türkçe/İngilizce).
  *
- * Laravel'in varsayılanı çeviri anahtarlarını `lang/tr.json`'dan okur;
- * dosya yokken satıcıya İngilizce posta giderdi. Metin burada sabittir.
+ * Laravel'in varsayılanı İngilizce anahtarlarla çalışır; Türkçe satıcıya
+ * İngilizce posta giderdi. Anahtar Türkçe metnin kendisidir, İngilizcesi
+ * `lang/en.json`'da.
  *
  * Adres `url()` ile kurulur: APP_URL üretimde panel adresidir. İsteğin
  * Host başlığı KULLANILMAZ — kullanılsaydı saldırgan sahte Host ile
@@ -28,13 +29,15 @@ final class ResetPasswordNotification extends ResetPassword
 
         $minutes = (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire', 60);
 
+        // Metin `__()` ile; dil alıcının tercihidir (`User::preferredLocale`),
+        // Laravel bildirimi göndermeden önce o dile geçer.
         return (new MailMessage)
-            ->subject('Parola sıfırlama isteği')
-            ->greeting('Merhaba,')
-            ->line('Hesabınız için bir parola sıfırlama isteği aldık.')
-            ->action('Parolamı sıfırla', $url)
-            ->line("Bu bağlantı {$minutes} dakika geçerlidir.")
-            ->line('Bu isteği siz yapmadıysanız bu e-postayı yok sayabilirsiniz; parolanız değişmez.')
-            ->salutation('Entegrasyon');
+            ->subject(__('Parola sıfırlama isteği'))
+            ->greeting(__('Merhaba,'))
+            ->line(__('Hesabınız için bir parola sıfırlama isteği aldık.'))
+            ->action(__('Parolamı sıfırla'), $url)
+            ->line(__('Bu bağlantı :minutes dakika geçerlidir.', ['minutes' => $minutes]))
+            ->line(__('Bu isteği siz yapmadıysanız bu e-postayı yok sayabilirsiniz; parolanız değişmez.'))
+            ->salutation('34Pazar');
     }
 }

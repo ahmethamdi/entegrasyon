@@ -79,6 +79,14 @@ final class CsvProductParser
         'opening_stock' => 'stok',
     ];
 
+    /** İngilizce panel kolonları bu adlarla gösterir (`ProductImportController`). */
+    private const REQUIRED_LABELS_EN = [
+        'sku' => 'sku',
+        'title' => 'title',
+        'price' => 'price',
+        'opening_stock' => 'stock',
+    ];
+
     /**
      * Ayırıcı adayları — Türkçe Excel varsayılanı NOKTALI VİRGÜLDÜR.
      *
@@ -88,6 +96,18 @@ final class CsvProductParser
      */
     private const DELIMITERS = [',', ';', "\t"];
 
+    /**
+     * Eksik kolon raporu ekrandaki kolon adlarıyla aynı dilde olmalı:
+     * İngilizce panel `price` gösterip hatada `fiyat` deseydi kullanıcı
+     * dosyasında hangi kolonun eksik olduğunu bulamazdı.
+     *
+     * @return array<string, string>
+     */
+    private static function requiredLabels(): array
+    {
+        return app()->getLocale() === 'en' ? self::REQUIRED_LABELS_EN : self::REQUIRED_LABELS;
+    }
+
     public function parse(string $csv): CsvParseResult
     {
         $lines = $this->splitLines($this->stripBom($csv));
@@ -95,7 +115,7 @@ final class CsvProductParser
         if ($lines === []) {
             return new CsvParseResult(
                 headerValid: false,
-                missingColumns: array_values(self::REQUIRED_LABELS),
+                missingColumns: array_values(self::requiredLabels()),
             );
         }
 
@@ -109,7 +129,7 @@ final class CsvProductParser
                 headerValid: false,
                 // Kullanıcının dosyasındaki adla raporlanır.
                 missingColumns: array_values(array_map(
-                    static fn (string $field): string => self::REQUIRED_LABELS[$field],
+                    static fn (string $field): string => self::requiredLabels()[$field],
                     $missing,
                 )),
             );
@@ -288,30 +308,30 @@ final class CsvProductParser
     private function validate(array $row): ?string
     {
         if (($row['sku'] ?? '') === '') {
-            return 'SKU boş olamaz.';
+            return __('SKU boş olamaz.');
         }
 
         if (($row['title'] ?? '') === '') {
-            return 'Başlık boş olamaz.';
+            return __('Başlık boş olamaz.');
         }
 
         if ($row['price'] === null) {
-            return 'Fiyat sayı olmalı (örnek: 199,90).';
+            return __('Fiyat sayı olmalı (örnek: 199,90).');
         }
 
         if ($row['price'] < 0) {
-            return 'Fiyat negatif olamaz.';
+            return __('Fiyat negatif olamaz.');
         }
 
         if ($row['opening_stock'] === null) {
-            return 'Stok tam sayı olmalı.';
+            return __('Stok tam sayı olmalı.');
         }
 
         // Açılış stoğu negatif olamaz: `CreateProduct` da bunu reddeder
         // ama hatayı BURADA yakalamak kullanıcıya satır numarasıyla
         // söylemeyi sağlar.
         if ($row['opening_stock'] < 0) {
-            return 'Açılış stoğu negatif olamaz.';
+            return __('Açılış stoğu negatif olamaz.');
         }
 
         return null;

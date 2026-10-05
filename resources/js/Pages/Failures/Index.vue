@@ -4,12 +4,14 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
     summary: { type: Object, default: () => ({}) },
 });
 
+const { t } = useI18n();
 const page = usePage();
 const flash = computed(() => page.props.flash?.success ?? null);
 
@@ -44,10 +46,10 @@ function retryAll() {
  * `INVENTORY_PUSH` iç bir kavramdır ve satıcıya hiçbir şey söylemez.
  */
 const domains = {
-    INVENTORY: 'Stok',
-    PRICE: 'Fiyat',
-    CONTENT: 'İçerik',
-    MEDIA: 'Görsel',
+    INVENTORY: k('Stok'),
+    PRICE: k('Fiyat'),
+    CONTENT: k('İçerik'),
+    MEDIA: k('Görsel'),
 };
 
 /**
@@ -60,66 +62,72 @@ const domains = {
  */
 const errors = {
     AUTHENTICATION: {
-        text: 'Yetki sorunu',
-        advice: 'Kanal anahtarını yenileyin — yeniden deneme tek başına çözmez.',
+        text: k('Yetki sorunu'),
+        advice: k('Kanal anahtarını yenileyin — yeniden deneme tek başına çözmez.'),
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     VALIDATION: {
-        text: 'Bilgi hatalı',
-        advice: 'Kanal ürün verisini reddetti; veriyi düzeltip yeniden deneyin.',
+        text: k('Bilgi hatalı'),
+        advice: k('Kanal ürün verisini reddetti; veriyi düzeltip yeniden deneyin.'),
         class: 'bg-red-50 text-red-900 border-red-300',
     },
     RATE_LIMITED: {
-        text: 'Kanal yoğun',
-        advice: 'Kanal kotası doldu; yeniden deneme genellikle çözer.',
+        text: k('Kanal yoğun'),
+        advice: k('Kanal kotası doldu; yeniden deneme genellikle çözer.'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     SERVER_ERROR: {
-        text: 'Kanal hatası',
-        advice: 'Kanal 5xx döndü; yeniden deneme genellikle çözer.',
+        text: k('Kanal hatası'),
+        advice: k('Kanal 5xx döndü; yeniden deneme genellikle çözer.'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     TIMEOUT: {
-        text: 'Kanal geç cevap verdi',
-        advice: 'İstek yanıtsız kaldı; yeniden deneme genellikle çözer.',
+        text: k('Kanal geç cevap verdi'),
+        advice: k('İstek yanıtsız kaldı; yeniden deneme genellikle çözer.'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     NETWORK: {
-        text: 'Bağlantı sorunu',
-        advice: 'Kanala ulaşılamadı; yeniden deneme genellikle çözer.',
+        text: k('Bağlantı sorunu'),
+        advice: k('Kanala ulaşılamadı; yeniden deneme genellikle çözer.'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     CONFLICT: {
-        text: 'Çakışma',
-        advice: 'Eşzamanlı değişiklik çakıştı; yeniden deneme genellikle çözer.',
+        text: k('Çakışma'),
+        advice: k('Eşzamanlı değişiklik çakıştı; yeniden deneme genellikle çözer.'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
     NOT_FOUND: {
-        text: 'Kanalda yok',
-        advice: 'Ürün kanalda bulunamadı; kanal panelinden kontrol edin.',
+        text: k('Kanalda yok'),
+        advice: k('Ürün kanalda bulunamadı; kanal panelinden kontrol edin.'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
     },
 };
 
 function errorFor(errorClass) {
-    return errors[errorClass] ?? {
-        text: errorClass ?? 'BİLİNMEYEN',
+    const error = errors[errorClass];
+
+    if (error) {
+        return { ...error, text: t(error.text), advice: t(error.advice) };
+    }
+
+    return {
+        text: errorClass ?? t('BİLİNMEYEN'),
         advice: null,
         class: 'bg-stone-100 text-stone-700 border-stone-300',
     };
 }
 
 function domainFor(domain) {
-    return domains[domain] ?? domain ?? '—';
+    return domains[domain] ? t(domains[domain]) : (domain ?? '—');
 }
 </script>
 
 <template>
     <PanelLayout>
         <PageHeader
-            section="Gelişmiş"
-            title="Kanala gönderilemeyenler"
-            description="Birkaç kez denenip kanala ulaştırılamayan güncellemeler. Sebebini oku; çoğu zaman ürün bilgisini ya da kanal bağlantısını düzeltip tekrar denemen yeter."
+            :section="t('Gelişmiş')"
+            :title="t('Kanala gönderilemeyenler')"
+            :description="t('Birkaç kez denenip kanala ulaştırılamayan güncellemeler. Sebebini oku; çoğu zaman ürün bilgisini ya da kanal bağlantısını düzeltip tekrar denemen yeter.')"
         >
             <template #actions>
                 <button
@@ -129,7 +137,7 @@ function domainFor(domain) {
                     :disabled="busy !== null"
                     @click="retryAll"
                 >
-                    {{ busy === 'all' ? 'Kuyruğa alınıyor…' : `Hepsini yeniden dene (${rows.length})` }}
+                    {{ busy === 'all' ? t('Kuyruğa alınıyor…') : t('Hepsini yeniden dene (:count)', { count: rows.length }) }}
                 </button>
             </template>
         </PageHeader>
@@ -148,13 +156,13 @@ function domainFor(domain) {
             hangi satırların kendisini beklediğini bilemezdi.
         -->
         <div class="mt-6 grid gap-3 sm:grid-cols-2">
-            <StatCard label="Başarısız işlem" :value="summary.total ?? 0" />
+            <StatCard :label="t('Başarısız işlem')" :value="summary.total ?? 0" />
 
             <StatCard
-                label="Müdahale bekliyor"
+                :label="t('Müdahale bekliyor')"
                 :value="summary.needs_user ?? 0"
                 :tone="summary.needs_user > 0 ? 'error' : 'neutral'"
-                :hint="summary.needs_user > 0 ? 'Yeniden denemeyle çözülmez' : null"
+                :hint="summary.needs_user > 0 ? t('Yeniden denemeyle çözülmez') : null"
             />
         </div>
 
@@ -168,9 +176,8 @@ function domainFor(domain) {
             v-if="summary.needs_user > 0"
             class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
-            <span class="font-semibold">{{ summary.needs_user }} işlem müdahale bekliyor.</span>
-            Yetki ve doğrulama hataları yeniden denemeyle çözülmez: önce kanal anahtarını
-            yenileyin veya ürün verisini düzeltin, sonra yeniden deneyin.
+            <span class="font-semibold">{{ t(':count işlem müdahale bekliyor.', { count: summary.needs_user }) }}</span>
+            {{ t('Yetki ve doğrulama hataları yeniden denemeyle çözülmez: önce kanal anahtarını yenileyin veya ürün verisini düzeltin, sonra yeniden deneyin.') }}
         </div>
 
         <!--
@@ -186,12 +193,12 @@ function domainFor(domain) {
             <table class="w-full min-w-208 text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">SKU</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Kanal</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Alan</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Hata</th>
-                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">Deneme</th>
-                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">Zaman</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('SKU') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kanal') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Alan') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Hata') }}</th>
+                        <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Deneme') }}</th>
+                        <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Zaman') }}</th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600"></th>
                     </tr>
                 </thead>
@@ -246,7 +253,7 @@ function domainFor(domain) {
                         </td>
 
                         <td class="px-4 py-3 text-xs text-stone-500">
-                            {{ row.failedAt ? new Date(row.failedAt).toLocaleString('tr-TR') : '—' }}
+                            {{ row.failedAt ? new Date(row.failedAt).toLocaleString(intlLocale()) : '—' }}
                         </td>
 
                         <td class="px-4 py-3 text-right">
@@ -256,7 +263,7 @@ function domainFor(domain) {
                                 :disabled="busy !== null"
                                 @click="retry(row.id)"
                             >
-                                {{ busy === row.id ? 'Kuyruğa alınıyor…' : 'Yeniden dene' }}
+                                {{ busy === row.id ? t('Kuyruğa alınıyor…') : t('Yeniden dene') }}
                             </button>
                         </td>
                     </tr>
@@ -264,10 +271,10 @@ function domainFor(domain) {
                     <tr v-if="rows.length === 0">
                         <td colspan="7" class="px-4 py-12 text-center">
                             <p class="text-sm text-stone-600">
-                                Başarısız işlem yok — tüm gönderimler kanala ulaştı.
+                                {{ t('Başarısız işlem yok — tüm gönderimler kanala ulaştı.') }}
                             </p>
                             <p class="mt-1 text-xs text-stone-500">
-                                Bir gönderim tüm denemelerini tüketirse burada listelenir.
+                                {{ t('Bir gönderim tüm denemelerini tüketirse burada listelenir.') }}
                             </p>
                         </td>
                     </tr>

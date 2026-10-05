@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { useI18n } from '../../lib/i18n';
 
 defineProps({
     sections: { type: Array, default: () => [] },
@@ -18,6 +19,8 @@ defineProps({
  * Anahtar `bölüm:soru` biçiminde: yalnızca sıra numarası kullanılsaydı
  * iki bölümdeki aynı numaralı sorular birlikte açılırdı.
  */
+const { t } = useI18n();
+
 const open = ref(null);
 
 function toggle(key) {
@@ -28,9 +31,9 @@ function toggle(key) {
 <template>
     <PanelLayout>
         <PageHeader
-            section="Destek"
-            title="Yardım"
-            description="Sık sorulan sorular ve panelin neden öyle davrandığı."
+            :section="t('Destek')"
+            :title="t('Yardım')"
+            :description="t('Sık sorulan sorular ve panelin neden öyle davrandığı.')"
         />
 
         <!--

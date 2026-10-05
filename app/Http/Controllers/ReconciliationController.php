@@ -162,8 +162,8 @@ final class ReconciliationController extends Controller
         return redirect('/reconciliation')->with(
             'success',
             $validated['decision'] === ResolvePriceConflict::ACCEPT_CHANNEL
-                ? 'Kanaldaki fiyat kabul edildi — bu ürüne fiyat gönderilmeyecek.'
-                : 'Sizin fiyatınız kanala gönderilmek üzere sıraya alındı.',
+                ? __('Kanaldaki fiyat kabul edildi — bu ürüne fiyat gönderilmeyecek.')
+                : __('Sizin fiyatınız kanala gönderilmek üzere sıraya alındı.'),
         );
     }
 

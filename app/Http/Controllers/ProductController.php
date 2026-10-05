@@ -153,7 +153,7 @@ final class ProductController extends Controller
 
         return redirect('/products')->with(
             'success',
-            "{$product->sku} eklendi.",
+            __(':sku eklendi.', ['sku' => $product->sku]),
         );
     }
 
@@ -203,7 +203,7 @@ final class ProductController extends Controller
             internalCategoryId: $validated['internal_category_id'] ?? null,
         );
 
-        return redirect('/products')->with('success', "{$model->sku} güncellendi.");
+        return redirect('/products')->with('success', __(':sku güncellendi.', ['sku' => $model->sku]));
     }
 
     // ─────────────────────────────────────────────────── liste sorguları
@@ -540,7 +540,7 @@ final class ProductController extends Controller
     {
         $warehouse = $request->attributes->get('tenant')?->defaultWarehouse();
 
-        abort_if($warehouse === null, 409, 'Kiracının varsayılan deposu yok.');
+        abort_if($warehouse === null, 409, __('Kiracının varsayılan deposu yok.'));
 
         return $warehouse->id;
     }

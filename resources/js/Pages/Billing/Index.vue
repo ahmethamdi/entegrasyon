@@ -168,7 +168,7 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
             <div class="mt-3 rounded-lg border border-stone-200 bg-white p-4">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <p class="text-lg font-medium text-stone-900">
-                        {{ current.planName ?? '—' }}
+                        {{ current.planName ? t(current.planName) : '—' }}
                     </p>
                     <span
                         v-if="current.status"
@@ -179,7 +179,7 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                     >
                         {{ t(statusLabels[current.status] ?? current.status) }}
                     </span>
-                    <span v-else class="text-[11px] text-stone-500">
+                    <span v-else class="text-[11px] text-stone-500 first-letter:uppercase">
                         {{ t('abonelik yok') }}
                     </span>
                 </div>
@@ -196,7 +196,7 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
 
             <dl class="mt-3 grid gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-2">
                 <div v-for="row in usageRows" :key="row.key" class="bg-white p-4">
-                    <dt class="text-xs font-medium text-stone-500">
+                    <dt class="text-xs font-medium text-stone-500 first-letter:uppercase">
                         {{ t(row.label) }}
                     </dt>
                     <dd class="mt-1 text-xl font-medium tabular-nums text-stone-900">
@@ -233,8 +233,11 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                     <p class="text-sm font-semibold text-stone-900">{{ t(plan.name) }}</p>
 
                     <p class="mt-2 text-xl font-medium tabular-nums text-stone-900">
-                        {{ priceText(plan) }}
-                        <span class="text-xs font-normal text-stone-500">{{ t('/ ay') }}</span>
+                        <template v-if="Number(price(plan) ?? 0) > 0">
+                            {{ priceText(plan) }}
+                            <span class="text-xs font-normal text-stone-500">{{ t('/ ay') }}</span>
+                        </template>
+                        <template v-else>{{ t('Her zaman ücretsiz') }}</template>
                     </p>
 
                     <ul class="mt-3 flex-1 space-y-1 text-xs text-stone-600">

@@ -116,10 +116,9 @@ final readonly class PrerequisiteResult
         }
 
         if ($this->missingAttributes !== []) {
-            $parts[] = sprintf(
-                'Eksik zorunlu öznitelik: %s.',
-                implode(', ', $this->missingAttributes),
-            );
+            $parts[] = __('Eksik zorunlu öznitelik: :attributes.', [
+                'attributes' => implode(', ', $this->missingAttributes),
+            ]);
         }
 
         return implode(' ', $parts);

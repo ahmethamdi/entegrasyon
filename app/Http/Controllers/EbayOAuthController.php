@@ -88,7 +88,7 @@ final class EbayOAuthController extends Controller
 
         if ($connection === null) {
             return redirect()->route('channels.index')
-                ->with('success', 'Bağlantı bulunamadı.');
+                ->with('success', __('Bağlantı bulunamadı.'));
         }
 
         try {
@@ -99,8 +99,7 @@ final class EbayOAuthController extends Controller
             // sebebini ANLAYAMAZDI — oysa eksik olan bizdeki bir alandır.
             return redirect()->route('channels.index')->with(
                 'success',
-                'eBay uygulama kimliği tanımsız. Bağlantıyı düzenleyip '.
-                'App ID ve Cert ID değerlerini gir.',
+                __('eBay uygulama kimliği tanımsız. Bağlantıyı düzenleyip App ID ve Cert ID değerlerini gir.'),
             );
         }
 
@@ -159,8 +158,7 @@ final class EbayOAuthController extends Controller
 
             return redirect()->route('channels.index')->with(
                 'success',
-                'eBay bağlantısı doğrulanamadı (state uyuşmadı). Lütfen '.
-                'yeniden deneyin.',
+                __('eBay bağlantısı doğrulanamadı. Lütfen yeniden deneyin.'),
             );
         }
 
@@ -170,7 +168,7 @@ final class EbayOAuthController extends Controller
         if (! is_string($code) || $code === '') {
             return redirect()->route('channels.index')->with(
                 'success',
-                'eBay yetkilendirmesi tamamlanmadı.',
+                __('eBay yetkilendirmesi tamamlanmadı.'),
             );
         }
 
@@ -178,7 +176,7 @@ final class EbayOAuthController extends Controller
 
         if ($connection === null) {
             return redirect()->route('channels.index')
-                ->with('success', 'Bağlantı bulunamadı.');
+                ->with('success', __('Bağlantı bulunamadı.'));
         }
 
         try {
@@ -191,7 +189,7 @@ final class EbayOAuthController extends Controller
 
             return redirect()->route('channels.index')->with(
                 'success',
-                'eBay kimlik bilgisi alınamadı. Lütfen yeniden deneyin.',
+                __('eBay kimlik bilgisi alınamadı. Lütfen yeniden deneyin.'),
             );
         }
 
@@ -223,7 +221,7 @@ final class EbayOAuthController extends Controller
         $this->checkHealth->run($connection);
 
         return redirect()->route('channels.index')
-            ->with('success', 'eBay bağlantısı yetkilendirildi.');
+            ->with('success', __('eBay bağlantısı yetkilendirildi.'));
     }
 
     /**

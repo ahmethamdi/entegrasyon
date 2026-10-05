@@ -116,7 +116,7 @@ final class ChannelConnectionController extends Controller
                 // alır — anahtar yanlış değil, HİÇ SORULMAMIŞTIR.
                 function (string $attribute, mixed $value, \Closure $fail): void {
                     if (is_string($value) && $value !== '' && ! ChannelConnectForm::isDefined($value)) {
-                        $fail('Bu kanalın kimlik biçimi panelde tanımlı değil; şu an bağlanamıyor.');
+                        $fail(__('Bu kanalın kimlik biçimi panelde tanımlı değil; şu an bağlanamıyor.'));
                     }
                 },
             ],
@@ -159,8 +159,7 @@ final class ChannelConnectionController extends Controller
 
             if (! ShopifyAuth::validShopDomain($host)) {
                 throw ValidationException::withMessages([
-                    'store_url' => 'Shopify mağaza adresini xxx.myshopify.com biçiminde yaz. '
-                        .'Shopify yöneticisinde Ayarlar → Alan adları altında görünür.',
+                    'store_url' => __('Shopify mağaza adresini xxx.myshopify.com biçiminde yaz. Shopify yöneticisinde Ayarlar → Alan adları altında görünür.'),
                 ]);
             }
 
@@ -182,7 +181,9 @@ final class ChannelConnectionController extends Controller
             try {
                 app(EnforceQuota::class)->check(QuotaMetric::CHANNELS);
             } catch (QuotaExceededException $e) {
-                throw ValidationException::withMessages([$errorKey => $e->userMessage()]);
+                throw ValidationException::withMessages([
+                    $errorKey => $e->metric->exceededMessage($e->current, $e->limit),
+                ]);
             }
         }
 
@@ -212,14 +213,18 @@ final class ChannelConnectionController extends Controller
             );
         } catch (AccountAlreadyConnectedException $e) {
             // Kısıt ihlalini alan hatasına çevir: kullanıcı 500 değil açıklama görür.
-            throw ValidationException::withMessages([$errorKey => $e->getMessage()]);
+            // İstisna metni hesap kimliğini ve kanal kodunu taşır; satıcıya
+            // aynı bilgi çevrilebilir tek cümleyle verilir.
+            throw ValidationException::withMessages([$errorKey => __('Bu mağaza başka bir hesaba bağlı.')]);
         } catch (\InvalidArgumentException $e) {
-            throw ValidationException::withMessages([$errorKey => $e->getMessage()]);
+            // Sabit metinli istisnalar (`StoreUrl`, `ConnectChannel`) sözlükte
+            // anahtar olarak durur; karşılığı olmayan metin Türkçe kalır.
+            throw ValidationException::withMessages([$errorKey => __($e->getMessage())]);
         } catch (Throwable $e) {
             // Veritabanı kısıtı yarışta devreye girdiyse de anlaşılır hata ver.
             if ($this->isAccountUniquenessViolation($e)) {
                 throw ValidationException::withMessages([
-                    $errorKey => 'Bu mağaza başka bir hesaba bağlı.',
+                    $errorKey => __('Bu mağaza başka bir hesaba bağlı.'),
                 ]);
             }
 
@@ -365,16 +370,15 @@ final class ChannelConnectionController extends Controller
     private function connectionFlash(ChannelConnection $connection): array
     {
         if ($connection->health_status === 'healthy') {
-            return ['success', "{$connection->label} bağlandı ve kanal cevap veriyor."];
+            return ['success', __(':label bağlandı ve kanal cevap veriyor.', ['label' => $connection->label])];
         }
 
         // Hata METNİ burada TEKRARLANMAZ: bağlantı kartı onu zaten gösteriyor.
         // Uzun bir cURL mesajını iki yerde göstermek asıl eylemi ("anahtarları
         // kontrol et") okunmaz hale getiriyordu.
-        return ['warning', sprintf(
-            '%s kaydedildi ama kanal cevap vermedi — bağlantı beklemede. '.
-            'Aşağıdaki hataya bakıp anahtarları kontrol edin.',
-            $connection->label,
+        return ['warning', __(
+            ':label kaydedildi ama kanal cevap vermedi — bağlantı beklemede. Aşağıdaki hataya bakıp anahtarları kontrol edin.',
+            ['label' => $connection->label],
         )];
     }
 
@@ -427,7 +431,7 @@ final class ChannelConnectionController extends Controller
             // şifreli kasadır ve bu dizi Inertia prop'u olarak
             // TARAYICIYA ulaşır.
             'tokenStatus' => $tokenStatus?->value,
-            'tokenStatusLabel' => $tokenStatus?->label(),
+            'tokenStatusLabel' => $tokenStatus !== null ? __($tokenStatus->label()) : null,
             'tokenExpiresAt' => $expiresAt?->toIso8601String(),
         ];
     }

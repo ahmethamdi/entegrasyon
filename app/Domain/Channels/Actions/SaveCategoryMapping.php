@@ -49,9 +49,9 @@ final class SaveCategoryMapping
         $tenantId = TenantContext::idOrFail();
 
         if (! $channelCategory->is_leaf) {
-            throw new InvalidArgumentException(sprintf(
-                '"%s" bir ara kategoridir; ürün yalnızca alt kategorisi olmayan bir kategoriye açılabilir.',
-                $channelCategory->path ?? $channelCategory->name,
+            throw new InvalidArgumentException(__(
+                '":category" bir ara kategoridir; ürün yalnızca alt kategorisi olmayan bir kategoriye açılabilir.',
+                ['category' => $channelCategory->path ?? $channelCategory->name],
             ));
         }
 

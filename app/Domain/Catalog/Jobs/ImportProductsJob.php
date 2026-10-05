@@ -102,7 +102,7 @@ final class ImportProductsJob extends TenantAwareJob
             'errors' => $result->errors,
             'last_error' => $result->headerValid
                 ? null
-                : 'Zorunlu kolon eksik: '.implode(', ', $result->missingColumns),
+                : __('Zorunlu kolon eksik: :columns', ['columns' => implode(', ', $result->missingColumns)]),
             'finished_at' => now(),
         ])->save();
     }
@@ -121,7 +121,7 @@ final class ImportProductsJob extends TenantAwareJob
 
             $import?->forceFill([
                 'status' => 'failed',
-                'last_error' => $e?->getMessage() ?? 'İş tamamlanamadı.',
+                'last_error' => $e?->getMessage() ?? $this->withLocale($this->locale, fn (): string => __('İş tamamlanamadı.')),
                 'finished_at' => now(),
             ])->save();
         });
