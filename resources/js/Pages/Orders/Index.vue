@@ -187,7 +187,7 @@ function placedAt(row) {
 
                         <td class="px-4 py-3">
                             <span
-                                class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="toneClass[orderState(row.status, row.hasShipment).tone]"
                             >
                                 {{ $t(orderState(row.status, row.hasShipment).text) }}
@@ -209,7 +209,7 @@ function placedAt(row) {
                         -->
                         <td class="px-4 py-3">
                             <span
-                                class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="badges[row.stockBadge]?.class"
                             >
                                 {{ badges[row.stockBadge] ? t(badges[row.stockBadge].text) : row.stockBadge }}

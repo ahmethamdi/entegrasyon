@@ -102,7 +102,7 @@ function toggle(id) {
         >
             <template #actions>
                 <div v-if="channelTypes.length > 1" class="shrink-0">
-                    <label class="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
+                    <label class="block text-xs font-medium text-stone-500">
                         {{ t('Kanal') }}
                     </label>
                     <select
@@ -150,7 +150,7 @@ function toggle(id) {
         </div>
 
         <template v-else>
-            <p class="mt-6 font-mono text-[10px] uppercase tracking-widest text-stone-500">
+            <p class="mt-6 text-xs font-medium text-stone-500">
                 {{ t('Taksonomi sürümü :version · :count kategori', { version: taxonomyVersion, count: channelCategories.length }) }}
             </p>
 
@@ -183,7 +183,7 @@ function toggle(id) {
                                     {{ row.id }}
                                 </h2>
                                 <span
-                                    class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+                                    class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                     :class="statusClass(row)"
                                 >
                                     {{ t(statusLabel(row)) }}
@@ -230,7 +230,7 @@ function toggle(id) {
                     </div>
 
                     <div v-if="expanded === row.id" class="border-t border-stone-100 bg-stone-50 p-5">
-                        <label class="block font-mono text-[10px] uppercase tracking-widest text-stone-500">
+                        <label class="block text-xs font-medium text-stone-500">
                             {{ t('Kanal kategorisi') }}
                         </label>
                         <div class="mt-1 flex gap-2">
@@ -254,7 +254,7 @@ function toggle(id) {
 
                         <!-- Zorunlu öznitelikler: kategori seçildikten sonra anlamlı. -->
                         <div v-if="row.mapping && row.mapping.requiredAttributes.length" class="mt-6">
-                            <p class="font-mono text-[10px] uppercase tracking-widest text-stone-500">
+                            <p class="text-xs font-medium text-stone-500">
                                 {{ t('Zorunlu öznitelikler (:mapped/:total)', { mapped: row.mapping.mappedRequiredCount, total: row.mapping.requiredAttributeCount }) }}
                             </p>
 
@@ -289,7 +289,7 @@ function toggle(id) {
                                     </select>
 
                                     <span
-                                        class="shrink-0 rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+                                        class="shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                         :class="row.mapping.mappedAttributes[attribute.externalId]
                                             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                                             : 'border-amber-300 bg-amber-50 text-amber-900'"

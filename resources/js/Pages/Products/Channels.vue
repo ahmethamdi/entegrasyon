@@ -115,6 +115,15 @@ function statusLabel(channel) {
     return statusLabels[channel.syncStatus] ?? channel.syncStatus ?? k('Bekliyor');
 }
 
+/* Kanaldaki satış durumu — ham kod (`live`) satıcıya gösterilmez. */
+const lifecycleTexts = {
+    live: k('Satışta'),
+    pending_approval: k('Kanal onayı bekliyor'),
+    rejected: k('Kanal reddetti'),
+    blocked: k('Ön koşul eksik'),
+    delisted: k('Satıştan kaldırıldı'),
+};
+
 function badgeClass(channel) {
     if (!channel.published) return 'border-stone-200 bg-stone-50 text-stone-600';
     if (channel.lifecycle === 'rejected') return 'bg-red-50 text-red-800 border-red-200';
@@ -171,7 +180,7 @@ function send(connectionId) {
 
             <template #toolbar>
                 <p class="font-mono text-xs text-stone-500">
-                    {{ t(':sku · içerik sürümü v:version', { sku: product.sku, version: product.contentVersion }) }}
+                    {{ product.sku }}
                 </p>
             </template>
         </PageHeader>
@@ -300,14 +309,14 @@ function send(connectionId) {
                                 {{ channel.label }}
                             </h2>
                             <span
-                                class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="badgeClass(channel)"
                             >
                                 {{ t(statusLabel(channel)) }}
                             </span>
                             <span
                                 v-if="channel.published && channel.pendingWork"
-                                class="rounded-md border border-stone-300 bg-white px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-stone-600"
+                                class="whitespace-nowrap rounded-full border border-stone-300 bg-white px-2.5 py-0.5 text-xs font-medium text-stone-600"
                             >
                                 {{ t('Bekleyen iş') }}
                             </span>
@@ -361,7 +370,7 @@ function send(connectionId) {
                     </div>
                     <div>
                         <dt class="text-stone-500">{{ t('Yaşam döngüsü') }}</dt>
-                        <dd class="mt-0.5 text-stone-700">{{ channel.lifecycle ?? '—' }}</dd>
+                        <dd class="mt-0.5 text-stone-700">{{ channel.lifecycle ? t(lifecycleTexts[channel.lifecycle] ?? channel.lifecycle) : '—' }}</dd>
                     </div>
                     <div>
                         <dt class="text-stone-500">{{ t('Kanalda görüntüle') }}</dt>

@@ -160,7 +160,7 @@ const lastCapture = computed(() => {
                         >
                             {{ card.label }}
                         </p>
-                        <p class="mt-0.5 font-mono text-[10px] uppercase tracking-wide text-stone-400">
+                        <p class="mt-0.5 text-xs text-stone-400">
                             {{ card.scopeKind }}
                         </p>
                     </div>

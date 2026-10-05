@@ -192,7 +192,7 @@ function formatDate(iso) {
                                 {{ connection.label }}
                             </h2>
                             <span
-                                class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="healthClass(connection.health)"
                             >
                                 {{ healthLabels[connection.health] ? t(healthLabels[connection.health]) : connection.health }}
@@ -212,7 +212,7 @@ function formatDate(iso) {
                             -->
                             <span
                                 v-if="connection.tokenStatus"
-                                class="rounded border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="tokenClass(connection.tokenStatus)"
                                 :title="tokenTitle(connection)"
                             >
