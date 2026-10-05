@@ -123,7 +123,7 @@ final class DashboardController extends Controller
             ],
             [
                 'key' => 'failed_sync',
-                'count' => SyncOperation::query()->where('status', SyncOperationStatus::DEAD->value)->count(),
+                'count' => SyncOperation::query()->unresolvedDead()->count(),
                 'title' => 'güncelleme kanala gönderilemedi',
                 'hint' => 'Sebebine bak, düzeltip tek tıkla tekrar dene.',
                 'href' => '/failures',

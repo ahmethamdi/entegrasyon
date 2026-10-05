@@ -10,6 +10,7 @@ use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -102,5 +103,28 @@ class SyncOperation extends Model
     public function isRepair(): bool
     {
         return $this->intent === SyncIntent::REPAIR;
+    }
+
+    /**
+     * ÇÖZÜLMEMİŞ ölü işlemler — "gönderilemedi" sayısının TEK kaynağı.
+     *
+     * "Yeniden dene" yeni bir işlem açar; eski ölü işlem ölü KALIR (geçmiş).
+     * Ölüler düz sayılsaydı satıcı sorunu çözse bile ana sayfa "gönderilemedi"
+     * demeyi sürdürürdü (34pazar-test, 5 Ekim: iki güncelleme yeniden
+     * gönderilip geçti, sayaç 2'de kaldı). Aynı varlık + aynı iş türü için
+     * DAHA SONRA tamamlanmış bir işlem varsa ölü işlem çözülmüştür.
+     * Kimlikler UUIDv7'dir — `>` zaman sırasıdır.
+     */
+    public function scopeUnresolvedDead(Builder $query): Builder
+    {
+        return $query
+            ->where('sync_operations.status', SyncOperationStatus::DEAD->value)
+            ->whereNotExists(fn ($later) => $later
+                ->selectRaw('1')
+                ->from('sync_operations as later')
+                ->whereColumn('later.entity_id', 'sync_operations.entity_id')
+                ->whereColumn('later.operation_type', 'sync_operations.operation_type')
+                ->whereColumn('later.id', '>', 'sync_operations.id')
+                ->where('later.status', SyncOperationStatus::COMPLETED->value));
     }
 }

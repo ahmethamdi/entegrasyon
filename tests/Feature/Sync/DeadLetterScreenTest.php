@@ -240,6 +240,33 @@ final class DeadLetterScreenTest extends TestCase
     }
 
     /**
+     * SONRADAN BAŞARILAN ÖLÜ İŞLEM ÇÖZÜLMÜŞTÜR — listede ve sayaçta yok.
+     *
+     * "Yeniden dene" yeni işlem açar, eskisi ölü kalır. Düz sayılsaydı
+     * satıcı sorunu çözse bile ana sayfa "gönderilemedi" demeyi sürdürürdü
+     * (34pazar-test, 5 Ekim). Başka iş türünün başarısı çözmez.
+     */
+    #[Test]
+    public function a_dead_operation_followed_by_a_success_is_resolved(): void
+    {
+        [$tenant, $user, $listing] = $this->makeContext('A');
+
+        $this->deadOperation($tenant, $listing, SyncDomain::INVENTORY);
+        $this->deadOperation($tenant, $listing, SyncDomain::PRICE);
+        $this->operation($tenant, $listing, SyncDomain::INVENTORY, SyncOperationStatus::COMPLETED);
+        $this->operation($tenant, $listing, SyncDomain::CONTENT, SyncOperationStatus::COMPLETED);
+
+        $rows = $this->rows($this->actingAs($user)->get('/failures'));
+
+        $this->assertSame(['PRICE'], array_column($rows, 'domain'), 'Çözülen stok hatası hâlâ listede.');
+
+        $todo = collect($this->actingAs($user)->get('/panel')->viewData('page')['props']['todos'] ?? [])
+            ->firstWhere('key', 'failed_sync');
+
+        $this->assertSame(1, $todo['count'] ?? null, 'Ana sayfa sayacı çözülen hatayı sayıyor.');
+    }
+
+    /**
      * HATA SINIFI VE MESAJI EKRANDA — kullanıcıya NE YAPACAĞINI söyler.
      *
      * `AUTHENTICATION` "anahtarı yenile", `VALIDATION` "ürün verisini

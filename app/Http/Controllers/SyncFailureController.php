@@ -7,7 +7,6 @@ namespace App\Http\Controllers;
 use App\Domain\Sync\Actions\RequestResync;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
-use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Support\Tenancy\TenantContext;
@@ -147,7 +146,7 @@ final class SyncFailureController extends Controller
      */
     private function deadOperations()
     {
-        return SyncOperation::query()->where('status', SyncOperationStatus::DEAD->value);
+        return SyncOperation::query()->unresolvedDead();
     }
 
     /**
