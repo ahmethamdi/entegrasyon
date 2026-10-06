@@ -100,6 +100,7 @@ final class ImportProductsFromChannel
         // yalnız YENİ ürün sayılır, güncelleme serbest.
         $remaining = $this->quota->remaining(QuotaMetric::PRODUCTS);
         $quotaBlocked = 0;
+        $archived = 0;
 
         $cursor = null;
         $pagesRead = 0;
@@ -129,6 +130,7 @@ final class ImportProductsFromChannel
             }
 
             $pagesRead++;
+            $archived += $page->archived;
 
             foreach ($page->products as $product) {
                 // SKU'SUZ VE ADRESSİZ ÜRÜN ATLANIR ama SAYILIR ve SEBEBİYLE
@@ -210,6 +212,18 @@ final class ImportProductsFromChannel
         // "içe aktarma tamamlandı" der, oysa katalogun kalanı hiç
         // görülmemiştir (§13 · "no silent caps").
         $hitPageCap = $page->hasMore && $pagesRead >= $maxPages;
+
+        // Arşivli varyantlar ATLANDI sayılır ve TEK satırla açıklanır.
+        if ($archived > 0) {
+            $skipped += $archived;
+            $errors[] = [
+                'line' => 0,
+                'message' => __(
+                    ':count ürün kanalda arşivde olduğu için içe aktarılmadı. Satışa açmak için ürünü kanalda arşivden çıkarıp yeniden çekin.',
+                    ['count' => $archived],
+                ),
+            ];
+        }
 
         return new ChannelImportResult(
             created: $created,

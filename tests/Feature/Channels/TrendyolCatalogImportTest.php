@@ -143,6 +143,30 @@ final class TrendyolCatalogImportTest extends TestCase
         unset($adapter);
     }
 
+    /**
+     * Tamamı arşivli katalog "Tamamlandı 0/0/0/0" GÖRÜNMEZ: arşivliler
+     * atlandı sayılır ve sebebi yazılır (gerçek hesap, 6 Eki 2026).
+     */
+    #[Test]
+    public function archived_variants_are_reported_as_skipped_with_a_reason(): void
+    {
+        Http::fake(['*' => Http::response($this->page([
+            $this->content('1', [$this->variant('A1', archived: true), $this->variant('A2', archived: true)]),
+        ]), 200)]);
+
+        $this->adapter();
+        $connection = $this->connection;
+
+        $result = $this->asTenant($connection->tenant_id, fn () => app(ImportProductsFromChannel::class)->run(
+            $connection,
+            (string) Warehouse::query()->value('id'),
+        ));
+
+        $this->assertSame(0, $result->created);
+        $this->assertSame(2, $result->skipped);
+        $this->assertStringContainsString('arşivde', $result->errors[0]['message'] ?? '');
+    }
+
     // ─────────────────────────────────────────────────────── yardımcılar
 
     private ChannelConnection $connection;

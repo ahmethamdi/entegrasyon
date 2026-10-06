@@ -27,6 +27,11 @@ final readonly class RemoteProductPage
         public array $products,
         public ?string $nextCursor = null,
         public bool $hasMore = false,
+        // Kanalda ARŞİVDE olduğu için sayfadan çıkarılan varyant sayısı.
+        // İçe aktarma bunu "atlandı" sayar ve sebebini yazar; yoksa
+        // tamamı arşivli bir katalog "Tamamlandı 0/0/0/0" görünürdü
+        // (Trendyol gerçek hesabı, 6 Eki 2026: 2.918 varyantın hepsi).
+        public int $archived = 0,
     ) {}
 
     public function count(): int

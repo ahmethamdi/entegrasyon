@@ -756,6 +756,7 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
         $response->throw();
 
         $products = [];
+        $archived = 0;
 
         foreach ((array) ($response->json('content') ?? []) as $content) {
             if (! is_array($content)) {
@@ -763,9 +764,17 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
             }
 
             foreach ((array) ($content['variants'] ?? []) as $variant) {
-                if (is_array($variant) && ! self::flag($variant['archived'] ?? false)) {
-                    $products[] = self::toRemoteProduct($content, $variant);
+                if (! is_array($variant)) {
+                    continue;
                 }
+
+                if (self::flag($variant['archived'] ?? false)) {
+                    $archived++;
+
+                    continue;
+                }
+
+                $products[] = self::toRemoteProduct($content, $variant);
             }
         }
 
@@ -775,6 +784,7 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
             products: $products,
             nextCursor: $page + 1 < $totalPages ? (string) ($page + 1) : null,
             hasMore: $page + 1 < $totalPages,
+            archived: $archived,
         );
     }
 
