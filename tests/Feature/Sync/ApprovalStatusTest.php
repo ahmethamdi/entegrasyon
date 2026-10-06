@@ -127,14 +127,15 @@ final class ApprovalStatusTest extends TestCase
     }
 
     /**
-     * Onaylanmış ama SATIŞA KAPALI ürün "approved" sayılmaz.
+     * Onaylı ama STOKSUZ (`onSale: false`) ürün "approved" sayılır.
      *
-     * Trendyol'da `approved: true` + `onSale: false` mümkündür (satıcı
-     * kapatmış veya stok yok). Bu satır kanalda GÖRÜNMEZ; "onaylandı"
-     * demek kullanıcıya ürünün yayında olduğunu düşündürürdü.
+     * Ürün stok 0 ile yaratılır ve Trendyol onu `onSale: false` gösterir.
+     * "inactive" sayılsaydı listing canlıya geçmez, canlı olmayan listing'e
+     * stok gitmez ve ürün hiç satışa açılmazdı — kilitlenme gerçek hesapta
+     * bulundu (6 Eki).
      */
     #[Test]
-    public function approved_but_not_on_sale_is_reported_separately(): void
+    public function approved_but_not_on_sale_counts_as_approved(): void
     {
         $this->fakeTrendyol(approved: [['barcode' => 'SKU-1', 'onSale' => false]]);
 
@@ -147,7 +148,33 @@ final class ApprovalStatusTest extends TestCase
 
         $batch = $this->adapter($connection)->fetchApprovalStatus($listings);
 
+        $this->assertSame('approved', $batch->statusFor('SKU-1')['status']);
+    }
+
+    /**
+     * Kanalın KENDİ engeli (kilit, kara liste, arşiv) satışı kapatır.
+     */
+    #[Test]
+    public function a_locked_approved_product_is_inactive(): void
+    {
+        $this->fakeTrendyol(approved: [
+            ['barcode' => 'SKU-1', 'onSale' => false, 'locked' => true, 'lockReason' => 'Fiyat ihlali'],
+            ['barcode' => 'SKU-2', 'onSale' => false, 'blacklisted' => true],
+        ]);
+
+        [$tenant] = $this->makeTenant();
+        $connection = $this->connection($tenant);
+
+        $listings = $this->asTenant($tenant, fn () => [
+            $this->listing($tenant, $connection, 'SKU-1', externalId: 'SKU-1'),
+            $this->listing($tenant, $connection, 'SKU-2', externalId: 'SKU-2'),
+        ]);
+
+        $batch = $this->adapter($connection)->fetchApprovalStatus($listings);
+
         $this->assertSame('inactive', $batch->statusFor('SKU-1')['status']);
+        $this->assertSame('Fiyat ihlali', $batch->statusFor('SKU-1')['reason']);
+        $this->assertSame('inactive', $batch->statusFor('SKU-2')['status']);
     }
 
     /**

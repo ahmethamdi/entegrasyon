@@ -1371,10 +1371,21 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
 
         $statuses = [];
 
+        // ⚠️ `onSale` ONAY ÖLÇÜSÜ DEĞİLDİR. Ürün stok 0 ile yaratılır ve
+        // Trendyol stoksuz ürünü `onSale: false` gösterir. Onu "inactive"
+        // saymak listing'i `pending_approval`'da tutardı; canlı olmayan
+        // listing'e stok gitmez, stok gitmeyen ürün de hiç satışa açılmaz —
+        // her Trendyol ürünü sonsuza dek kilitli kalırdı (gerçek hesapta
+        // bulundu, 6 Eki). Yalnız kanalın kendi engelleri satışı kapatır.
         foreach ($this->approvedVariants($barcodes) as $barcode => $row) {
+            $raw = $row['raw'];
+            $blocked = (bool) ($raw['archived'] ?? false)
+                || (bool) ($raw['locked'] ?? false)
+                || (bool) ($raw['blacklisted'] ?? false);
+
             $statuses[$barcode] = [
-                'status' => $row['sellable'] ? 'approved' : 'inactive',
-                'reason' => $row['sellable'] ? null : $row['lock_reason'],
+                'status' => $blocked ? 'inactive' : 'approved',
+                'reason' => $blocked ? $row['lock_reason'] : null,
             ];
         }
 
