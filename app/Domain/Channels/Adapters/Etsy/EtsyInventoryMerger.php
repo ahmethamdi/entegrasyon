@@ -59,15 +59,25 @@ final class EtsyInventoryMerger
      * kalemin taşımadığı bir alan uydurulmak zorunda kalınırdı; üstelik
      * kanalda SKU BOŞ olabilir ve boş dize iki varyantı birden eşlerdi.
      *
+     * ⚠️ MİKTAR ÖNCE `product_id`, SONRA SKU İLE EŞLENİR (7 Eki 2026).
+     * Etsy'de SKU zorunlu değildir; SKU'suz varyanta içe aktarma kendi
+     * SKU'sunu üretir ve o SKU kanalda YOKTUR — yalnız SKU ile eşlenseydi
+     * stok hiçbir varyanta yazılmaz, istek yine "başarılı" dönerdi. SKU
+     * yedektir: `product_id`'nin envanter yazımından sonra korunup
+     * korunmadığı Etsy belgelerinde YAZMIYOR (ilk gerçek hesapta ölçülecek).
+     * BOŞ SKU HİÇBİR ŞEYLE EŞLEŞMEZ.
+     *
      * @param  list<array<string, mixed>>  $products  Kanaldan OKUNAN tam envanter
      * @param  array<string, int>  $quantityBySku  Yalnızca DEĞİŞECEK miktarlar
      * @param  array<string, string>  $priceByProductId  Yalnızca DEĞİŞECEK fiyatlar
+     * @param  array<string, int>  $quantityByProductId  Yalnızca DEĞİŞECEK miktarlar (öncelikli)
      * @return list<array<string, mixed>>
      */
     public static function merge(
         array $products,
         array $quantityBySku,
         array $priceByProductId = [],
+        array $quantityByProductId = [],
     ): array {
         $merged = [];
 
@@ -76,17 +86,85 @@ final class EtsyInventoryMerger
                 continue;
             }
 
-            $sku = (string) ($product['sku'] ?? '');
-            $productId = (string) ($product['product_id'] ?? '');
-
             $merged[] = self::rebuildProduct(
                 $product,
-                $quantityBySku[$sku] ?? null,
-                $productId === '' ? null : ($priceByProductId[$productId] ?? null),
+                self::quantityFor($product, $quantityBySku, $quantityByProductId),
+                self::productId($product) === null ? null : ($priceByProductId[self::productId($product)] ?? null),
             );
         }
 
         return $merged;
+    }
+
+    /**
+     * Yükteki hangi kalemler envanterde KARŞILIK BULMADI — kalemin SKU'su
+     * döner. Kalem `product_id`'si YA DA dolu SKU'su eşleşirse yazılmış
+     * sayılır. Çağıran bunu sessiz geçmemeli: eşleşmeyen kalem kanala hiç
+     * yazılmamıştır.
+     *
+     * @param  list<array<string, mixed>>  $products
+     * @param  list<array{product_id: string|null, sku: string}>  $items
+     * @return list<string>
+     */
+    public static function unmatchedItems(array $products, array $items): array
+    {
+        $ids = [];
+        $skus = [];
+
+        foreach ($products as $product) {
+            if (! is_array($product)) {
+                continue;
+            }
+
+            if (($id = self::productId($product)) !== null) {
+                $ids[$id] = true;
+            }
+
+            $sku = (string) ($product['sku'] ?? '');
+
+            if ($sku !== '') {
+                $skus[$sku] = true;
+            }
+        }
+
+        $unmatched = [];
+
+        foreach ($items as $item) {
+            $byId = $item['product_id'] !== null && isset($ids[$item['product_id']]);
+            $bySku = $item['sku'] !== '' && isset($skus[$item['sku']]);
+
+            if (! $byId && ! $bySku) {
+                $unmatched[] = $item['sku'] !== '' ? $item['sku'] : (string) $item['product_id'];
+            }
+        }
+
+        return $unmatched;
+    }
+
+    /**
+     * @param  array<string, mixed>  $product
+     * @param  array<string, int>  $quantityBySku
+     * @param  array<string, int>  $quantityByProductId
+     */
+    private static function quantityFor(array $product, array $quantityBySku, array $quantityByProductId): ?int
+    {
+        $id = self::productId($product);
+
+        if ($id !== null && array_key_exists($id, $quantityByProductId)) {
+            return $quantityByProductId[$id];
+        }
+
+        $sku = (string) ($product['sku'] ?? '');
+
+        return $sku === '' ? null : ($quantityBySku[$sku] ?? null);
+    }
+
+    /** @param array<string, mixed> $product */
+    private static function productId(array $product): ?string
+    {
+        $id = (string) ($product['product_id'] ?? '');
+
+        return $id === '' ? null : $id;
     }
 
     /**

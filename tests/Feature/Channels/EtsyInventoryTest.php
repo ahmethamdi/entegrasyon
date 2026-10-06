@@ -439,6 +439,63 @@ final class EtsyInventoryTest extends TestCase
         });
     }
 
+    /**
+     * ⚠️ ETSY'DE SKU BOŞ, BİZDE ÜRETİLMİŞ SKU VAR (içe aktarma). Eşleme
+     * yalnız SKU ile yapılsaydı stok hiçbir varyanta yazılmaz ve istek yine
+     * başarılı dönerdi. `product_id` öncelikli eşlenir; kardeşler korunur.
+     */
+    #[Test]
+    public function a_variant_without_a_channel_sku_is_matched_by_product_id(): void
+    {
+        $products = array_map(static function (array $p): array {
+            $p['sku'] = '';
+
+            return $p;
+        }, $this->products());
+
+        Http::fake(['*' => Http::sequence()->push(['products' => $products], 200)->push(['products' => $products], 200)]);
+
+        [$tenant, $connection] = $this->connected();
+
+        $result = $this->asTenant($tenant, function () use ($connection) {
+            $listing = $this->listingFor($connection, '5001', 'ETS-OTO-1');
+
+            return $this->adapterFor($connection)->pushInventory(new InventoryPushBatch(
+                channelConnectionId: $connection->id,
+                items: [new InventoryPushItem(listingId: $listing->id, externalId: '5001', sku: 'ETS-OTO-1', quantity: 42, version: 1)],
+            ));
+        });
+
+        $this->assertTrue($result->successful);
+
+        $written = collect(Http::recorded())->first(static fn (array $pair): bool => $pair[0]->method() === 'PUT')[0]->data();
+
+        // Sıra korunur: 5000, 5001, 5002 → yalnız ortadaki değişti.
+        $this->assertSame([3, 42, 11], array_map(static fn (array $p): int => $p['offerings'][0]['quantity'], $written['products']));
+    }
+
+    /** Hiçbir kalem eşleşmezse yazma YAPILMAZ ve başarı dönülmez. */
+    #[Test]
+    public function an_unmatched_batch_is_not_written_and_fails(): void
+    {
+        $this->fakeInventory();
+
+        [$tenant, $connection] = $this->connected();
+
+        $result = $this->asTenant($tenant, function () use ($connection) {
+            $listing = $this->listingFor($connection, '9999', 'YOK-01');
+
+            return $this->adapterFor($connection)->pushInventory(new InventoryPushBatch(
+                channelConnectionId: $connection->id,
+                items: [new InventoryPushItem(listingId: $listing->id, externalId: '9999', sku: 'YOK-01', quantity: 5, version: 1)],
+            ));
+        });
+
+        $this->assertFalse($result->successful);
+        $this->assertStringContainsString('YOK-01', (string) $result->errorMessage);
+        Http::assertNotSent(static fn ($request): bool => $request->method() === 'PUT');
+    }
+
     /** SKU → Etsy product_id. */
     private const PRODUCT_IDS = ['TSH-S' => '5000', 'TSH-M' => '5001', 'TSH-L' => '5002'];
 

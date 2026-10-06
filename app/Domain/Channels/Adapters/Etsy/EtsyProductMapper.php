@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Etsy;
 
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\RemoteProduct;
 
 /**
  * Kanonik listing → Etsy ilan gövdesi.
@@ -115,6 +116,101 @@ final class EtsyProductMapper
         }
 
         return $identity;
+    }
+
+    /**
+     * İçe aktarma: Etsy ilanı → varyant başına `RemoteProduct`.
+     *
+     * Ad = ilan başlığı + varyant özellikleri ("Kupa — Kırmızı / L"): aynı
+     * ilanın varyantları aynı adla gelseydi panelde ayırt edilemezdi.
+     *
+     * SKU BOŞSA NULL geçilir: içe aktarma kanal adresi bilinen ürüne kendi
+     * SKU'sunu üretir. Stok yazımı `product_id` ile eşlendiği için üretilen
+     * SKU'nun kanalda olmaması yazmayı bozmaz (`EtsyInventoryMerger::merge`).
+     *
+     * @param  array<string, mixed>  $listing  `includes=Images,Inventory` ile okunmuş ilan
+     * @return list<RemoteProduct>
+     */
+    public static function toRemoteProducts(array $listing): array
+    {
+        $listingId = (string) $listing['listing_id'];
+        $text = static function (mixed $value): ?string {
+            $value = is_scalar($value) ? trim(html_entity_decode((string) $value, ENT_QUOTES | ENT_HTML5)) : '';
+
+            return $value === '' ? null : $value;
+        };
+
+        $images = [];
+        $sorted = array_values(array_filter((array) ($listing['images'] ?? []), 'is_array'));
+        usort($sorted, static fn (array $a, array $b): int => (int) ($a['rank'] ?? 0) <=> (int) ($b['rank'] ?? 0));
+
+        foreach ($sorted as $image) {
+            $url = (string) ($image['url_fullxfull'] ?? $image['url_570xN'] ?? '');
+
+            if (str_starts_with($url, 'https://')) {
+                $images[] = $url;
+            }
+        }
+
+        $title = $text($listing['title'] ?? null) ?? "#{$listingId}";
+        $out = [];
+
+        foreach ((array) ($listing['inventory']['products'] ?? []) as $product) {
+            if (! is_array($product) || ! isset($product['product_id']) || ($product['is_deleted'] ?? false) === true) {
+                continue;
+            }
+
+            $offering = null;
+
+            foreach ((array) ($product['offerings'] ?? []) as $candidate) {
+                if (is_array($candidate) && ($candidate['is_deleted'] ?? false) !== true) {
+                    $offering = $candidate;
+
+                    break;
+                }
+            }
+
+            // Kapalı seçenek Etsy'de satılmıyor — alınmaz (adapter notu).
+            if ($offering === null || ($offering['is_enabled'] ?? true) === false) {
+                continue;
+            }
+
+            $values = [];
+
+            foreach ((array) ($product['property_values'] ?? []) as $property) {
+                foreach ((array) (is_array($property) ? ($property['values'] ?? []) : []) as $value) {
+                    if (($value = $text($value)) !== null) {
+                        $values[] = $value;
+                    }
+                }
+            }
+
+            $price = is_array($offering['price'] ?? null) ? $offering['price'] : null;
+            $sku = $text($product['sku'] ?? null);
+
+            $out[] = new RemoteProduct(
+                externalId: (string) $product['product_id'],
+                sku: $sku,
+                title: $values === [] ? $title : $title.' — '.implode(' / ', $values),
+                price: $price === null ? null : self::money($price),
+                quantity: (int) ($offering['quantity'] ?? 0),
+                description: $text($listing['description'] ?? null),
+                status: $text($listing['state'] ?? null),
+                images: $images,
+                raw: ['listing_id' => $listingId, 'product' => $product],
+                listingIdentity: array_filter([
+                    'external_id' => (string) $product['product_id'],
+                    'external_parent_id' => $listingId,
+                    'external_url' => $text($listing['url'] ?? null),
+                    'channel_metadata' => isset($offering['offering_id'])
+                        ? [self::OFFERING_ID_KEY => (string) $offering['offering_id']]
+                        : null,
+                ], static fn (mixed $v): bool => $v !== null),
+                currency: $price === null ? null : $text($price['currency_code'] ?? null),
+            );
+        }
+
+        return $out;
     }
 
     /**

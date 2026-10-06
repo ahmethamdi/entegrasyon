@@ -283,12 +283,9 @@ class ChannelTypeSeeder extends Seeder
                     // bugünkü durum DEĞİL. İlan edilen ama çalışmayan
                     // yetenek panelde çalışmayan sekme demektir (§05).
                     'catalog' => true,          // slice 3.4 ✓
-                    // ⚠️ İÇE AKTARMA AYRI BİR YETENEKTİR ve HENÜZ YOK:
-                    // `SupportsCatalogImport` "kanalda ne var ki bende
-                    // YOK" sorusunu sorar; `SupportsCatalog`'un okuma
-                    // metotları YEREL kayıttan başlar. İkisi karıştırılsa
-                    // panel çalışmayan bir sekme gösterirdi.
-                    'catalog_import' => false,
+                    // İçe aktarma ayrı yetenektir (`SupportsCatalogImport`):
+                    // 7 Eki 2026'da yazıldı — active/sold_out/inactive ilanlar.
+                    'catalog_import' => true,
                     'inventory' => true,        // slice 3.5 ✓
                     'pricing' => true,          // slice 3.6 ✓
                     'orders' => true,           // slice 3.7 ✓

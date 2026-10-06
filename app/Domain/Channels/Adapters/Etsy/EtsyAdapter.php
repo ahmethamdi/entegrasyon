@@ -14,6 +14,7 @@ use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -35,6 +36,7 @@ use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
+use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
 use DateTimeImmutable;
@@ -65,7 +67,9 @@ use Throwable;
  *   · `SupportsFulfillment` — §11.4 bunu öngörüyor ama slice tablosunda
  *     kendi satırı YOKTUR; ilan edilip yazılmasaydı panelde çalışmayan
  *     bir sekme açardı (§05).
- *   · `SupportsCatalogImport` — slice tablosunda yok.
+ *
+ * `SupportsCatalogImport` 7 Eki 2026'da eklendi: mağazası dolu satıcı
+ * bağlandığında ilanları 34Pazar'a gelmiyordu.
  *
  * ─────────────────────────────────────────────────────────────────────
  * ⚠️ İKİ AYRI KİMLİK BAŞLIĞI VARDIR (§11.2)
@@ -92,7 +96,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -185,6 +189,12 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
     private const SEARCH_PAGE_SIZE = 100;
 
     private const MAX_SEARCH_PAGES = 20;
+
+    /** İçe aktarma sayfası — Etsy'nin ilan listesi üst sınırı 100. */
+    private const IMPORT_PAGE_SIZE = 100;
+
+    /** İçe aktarılan ilan durumları, SIRAYLA (`fetchProductPage`). */
+    private const IMPORT_STATES = ['active', 'sold_out', 'inactive'];
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -607,6 +617,89 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
         );
     }
 
+    // ------------------------------------------------------------ içe aktarma
+
+    /**
+     * Mağazanın ilanları — `GET /shops/{id}/listings?includes=Images,Inventory`.
+     *
+     * Etsy'nin İLANI bizim ürünümüz, envanterdeki her PRODUCT bir varyant:
+     * her varyant ayrı `RemoteProduct` olur, ilan kimliği
+     * `external_parent_id`'ye yazılır (panel varyantları onunla gruplar;
+     * stok/fiyat yazımı da onu hedefler — `toIdentityResult` ile aynı düzen).
+     *
+     * ⚠️ `state` TEK DEĞER ALIR ve varsayılanı yalnız `active`'tir. Yalnız
+     * aktifler çekilseydi stoğu bitmiş (`sold_out`) ilanlar — satıcının
+     * kataloğunun gerçek parçası — 34Pazar'a hiç gelmez, stok gelince de
+     * kanala bağlı görünmezdi. Sıra: active → sold_out → inactive. Taslak
+     * ve süresi dolmuş (`draft`, `expired`) ilanlar ALINMAZ: satışta
+     * değiller ve satıcının yarım bıraktığı denemeler olabilirler.
+     *
+     * Silinmiş product ve kapalı offering ALINMAZ: Etsy'de o seçenek
+     * satılmıyor; alınsaydı panelde kanalda karşılığı olmayan varyant
+     * görünürdü.
+     *
+     * İmleç `{durum sırası}:{offset}`.
+     */
+    public function fetchProductPage(?string $cursor = null): RemoteProductPage
+    {
+        [$stateIndex, $offset] = $cursor !== null && preg_match('/^(\d+):(\d+)$/', $cursor, $m) === 1
+            ? [(int) $m[1], (int) $m[2]]
+            : [0, 0];
+
+        if (! isset(self::IMPORT_STATES[$stateIndex])) {
+            return new RemoteProductPage(products: []);
+        }
+
+        $response = $this->client->get(
+            EtsyEndpoints::url(EtsyEndpoints::SHOP_LISTINGS, ['shop_id' => $this->requireShopId()]),
+            query: [
+                'state' => self::IMPORT_STATES[$stateIndex],
+                'limit' => self::IMPORT_PAGE_SIZE,
+                'offset' => $offset,
+                'includes' => 'Images,Inventory',
+            ],
+            headers: $this->apiKeyHeader(),
+        );
+
+        $response->throw();
+
+        /** @var list<mixed> $results */
+        $results = (array) ($response->json('results') ?? []);
+        $products = [];
+
+        foreach ($results as $listing) {
+            if (is_array($listing) && isset($listing['listing_id'])) {
+                array_push($products, ...EtsyProductMapper::toRemoteProducts($listing));
+            }
+        }
+
+        $total = (int) ($response->json('count') ?? 0);
+        $next = $offset + self::IMPORT_PAGE_SIZE;
+
+        if ($results !== [] && $next < $total) {
+            return new RemoteProductPage(products: $products, nextCursor: "{$stateIndex}:{$next}", hasMore: true);
+        }
+
+        $nextState = $stateIndex + 1;
+        $hasMore = isset(self::IMPORT_STATES[$nextState]);
+
+        return new RemoteProductPage(
+            products: $products,
+            nextCursor: $hasMore ? "{$nextState}:0" : null,
+            hasMore: $hasMore,
+        );
+    }
+
+    /**
+     * Tur başına en fazla 100 sayfa — 100'lük sayfayla 10.000 ilan. Sınır
+     * emniyettir (bozuk kanal turu sonsuza dek sürmesin); sınıra takılan tur
+     * kullanıcıya söylenir, kalanlar sonraki turda gelir.
+     */
+    public function maxImportPages(): int
+    {
+        return 100;
+    }
+
     private function requireShopId(): string
     {
         $shopId = $this->shopId();
@@ -697,13 +790,43 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
 
         foreach ($byListing as $listingId => $items) {
             $quantityBySku = [];
+            $quantityByProductId = [];
+            $keys = [];
 
             foreach ($items as $item) {
-                $quantityBySku[(string) $item['sku']] = (int) $item['quantity'];
+                $sku = (string) $item['sku'];
+                $productId = (string) ($item['external_id'] ?? '');
+
+                if ($sku !== '') {
+                    $quantityBySku[$sku] = (int) $item['quantity'];
+                }
+
+                if ($productId !== '') {
+                    $quantityByProductId[$productId] = (int) $item['quantity'];
+                }
+
+                $keys[] = ['product_id' => $productId === '' ? null : $productId, 'sku' => $sku];
             }
 
-            $this->writeInventory((string) $listingId, quantityBySku: $quantityBySku);
-            $pushed += count($items);
+            $unmatched = $this->writeInventory(
+                (string) $listingId,
+                quantityBySku: $quantityBySku,
+                quantityByProductId: $quantityByProductId,
+                items: $keys,
+            );
+
+            $missing = [...$missing, ...$unmatched];
+            $pushed += count($items) - count($unmatched);
+        }
+
+        if ($pushed === 0) {
+            // Hiçbir kalem kanaldaki bir varyantla eşleşmedi: istek
+            // atılmadı ya da hiçbir şey değiştirmedi. Başarı dönülmez.
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Etsy stok yükündeki kalemler ilandaki hiçbir varyantla eşleşmedi: '
+                .implode(', ', $missing),
+            );
         }
 
         return AdapterResult::success(array_filter([
@@ -724,14 +847,23 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
      * eski kalması an meselesi olurdu. Değişen tek şey, birleştiriciye
      * hangi haritanın verildiğidir.
      *
+     * Stok turunda envanterde karşılığı olmayan kalemlerin SKU'larını döner;
+     * ilanın HİÇBİR kalemi eşleşmediyse yazma yapılmaz (değişmeyecek gövdeyi
+     * geri yazmak yalnızca kota harcar).
+     *
      * @param  array<string, int>  $quantityBySku  Stok turunda dolu
      * @param  array<string, string>  $priceByProductId  Fiyat turunda dolu
+     * @param  array<string, int>  $quantityByProductId  Stok turunda dolu (öncelikli)
+     * @param  list<array{product_id: string|null, sku: string}>  $items  Stok kalemlerinin kimlikleri
+     * @return list<string>
      */
     private function writeInventory(
         string $listingId,
         array $quantityBySku = [],
         array $priceByProductId = [],
-    ): void {
+        array $quantityByProductId = [],
+        array $items = [],
+    ): array {
         // ① OKU — mevcut TÜM envanter.
         $response = $this->client->get(
             EtsyEndpoints::url(EtsyEndpoints::LISTING_INVENTORY, ['listing_id' => $listingId]),
@@ -759,7 +891,13 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
 
         // ② BİRLEŞTİR — yalnızca bizim kalemlerimiz değişir; kardeş
         // varyantların HEM miktarı HEM fiyatı kanaldaki hâliyle korunur.
-        $merged = EtsyInventoryMerger::merge($products, $quantityBySku, $priceByProductId);
+        $unmatched = EtsyInventoryMerger::unmatchedItems($products, $items);
+
+        if ($items !== [] && count($unmatched) === count($items)) {
+            return $unmatched;
+        }
+
+        $merged = EtsyInventoryMerger::merge($products, $quantityBySku, $priceByProductId, $quantityByProductId);
 
         // ③ YAZ — TAM gövde.
         $write = $this->client->request(
@@ -770,6 +908,8 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
         );
 
         $write->throw();
+
+        return $unmatched;
     }
 
     /**
