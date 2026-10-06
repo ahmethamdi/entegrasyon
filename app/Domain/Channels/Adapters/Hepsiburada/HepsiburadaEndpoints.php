@@ -87,6 +87,9 @@ final class HepsiburadaEndpoints
     /** Son 1 ayın iptalleri (kalem bazında). */
     public const ORDERS_CANCELLED = '/orders/merchantid/{merchantId}/cancelled';
 
+    /** Siparişin TÜM kalemleri (açık, paketli, iptal) — durumdan bağımsız. */
+    public const ORDER_DETAIL = '/orders/merchantid/{merchantId}/ordernumber/{orderNumber}';
+
     /** Paketler — tarih aralığı ≤24 saat, limit ≤10, sayfalama BAŞLIKTA. */
     public const PACKAGES = '/packages/merchantid/{merchantId}';
 

@@ -136,6 +136,149 @@ final class HepsiburadaOrderSliceTest extends TestCase
         $this->assertSame('open:1', $page->nextCursor, 'S-2 bir sonraki sayfada bütün olarak gelmeli.');
     }
 
+    /**
+     * ⚠️ İKİ TUR ARASINDA PAKETLENEN SİPARİŞ — `/orders`'ta hiç görünmez.
+     *
+     * Paket listesi okunmasaydı sipariş hiç alınmaz ve stoğu düşmezdi.
+     * Detay 404 → paketteki kalemlerle kurulur.
+     */
+    #[Test]
+    public function an_order_packed_between_polls_is_taken_from_the_package_list(): void
+    {
+        [$tenant] = $this->setUpConnection();
+
+        $kupa = $this->variant($tenant, 'KUPA-01');
+        $this->seedStock($tenant, $kupa, 10);
+
+        Http::fake(function (Request $request) {
+            if (str_contains($request->url(), '/packages/merchantid/')) {
+                return Http::response([[
+                    'packageNumber' => 'P-1', 'status' => 'Open',
+                    'items' => [[
+                        'lineItemId' => 'L-9', 'orderNumber' => '4100000009', 'merchantSku' => 'kupa-01',
+                        'hbSku' => 'HBV-KUPA', 'productName' => 'Kupa', 'quantity' => 4,
+                        'price' => ['amount' => 25, 'currency' => 'TRY'], 'totalPrice' => ['amount' => 100, 'currency' => 'TRY'],
+                        'orderDate' => '2026-10-06T10:00:00Z',
+                    ]],
+                ]], 200);
+            }
+
+            if (str_contains($request->url(), '/ordernumber/')) {
+                return Http::response('', 404);
+            }
+
+            return Http::response(['totalCount' => 0, 'items' => []], 200);
+        });
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(6, $this->availableFor($tenant, $kupa));
+
+        // İkinci tur: paket yine listede — stok ikinci kez düşmez, detay
+        // yeniden sorulmaz.
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(6, $this->availableFor($tenant, $kupa));
+        $this->assertCount(1, Http::recorded(static fn (Request $r): bool => str_contains($r->url(), '/ordernumber/')));
+        $this->assertLedgerMatchesProjection($tenant->id, $this->warehouse($tenant)->id, $kupa->id);
+    }
+
+    /**
+     * ⚠️ KISMİ PAKETLEME: A kalemi paketli, B açık. Sipariş hangi listeden
+     * kurulursa kursun öteki tekilleştirmede yutulur — kalemler DETAYDAN
+     * gelir, iptal edilmiş kalem alınmaz.
+     */
+    #[Test]
+    public function a_partially_packed_order_is_created_with_all_lines_from_the_detail(): void
+    {
+        [$tenant] = $this->setUpConnection();
+
+        $kupa = $this->variant($tenant, 'KUPA-01');
+        $tabak = $this->variant($tenant, 'TABAK-01');
+        $catal = $this->variant($tenant, 'CATAL-01');
+
+        foreach ([$kupa, $tabak, $catal] as $variant) {
+            $this->seedStock($tenant, $variant, 10);
+        }
+
+        $line = fn (string $id, string $sku, int $qty, string $status): array => [
+            'id' => $id, 'orderNumber' => '4100000005', 'orderDate' => '2026-10-06T10:00:00Z',
+            'merchantSKU' => $sku, 'sku' => 'HBV-'.$sku, 'name' => $sku, 'quantity' => $qty, 'status' => $status,
+            'unitPrice' => ['amount' => 10, 'currency' => 'TRY'], 'totalPrice' => ['amount' => 10 * $qty, 'currency' => 'TRY'],
+        ];
+
+        Http::fake(function (Request $request) use ($line) {
+            $url = $request->url();
+
+            return match (true) {
+                str_contains($url, '/ordernumber/4100000005') => Http::response(['orderNumber' => '4100000005', 'items' => [
+                    $line('A', 'KUPA-01', 1, 'Packaged'), $line('B', 'TABAK-01', 2, 'Open'), $line('C', 'CATAL-01', 3, 'CancelledByMerchant'),
+                ]], 200),
+                str_contains($url, '/packages/merchantid/') => Http::response([[
+                    'packageNumber' => 'P-5', 'items' => [['lineItemId' => 'A', 'orderNumber' => '4100000005', 'merchantSku' => 'KUPA-01', 'quantity' => 1]],
+                ]], 200),
+                str_contains($url, '/cancelled') => Http::response(['totalCount' => 0, 'items' => []], 200),
+                str_contains($url, '/orders/merchantid/') => Http::response(['totalCount' => 1, 'items' => [$line('B', 'TABAK-01', 2, 'Open')]], 200),
+                default => Http::response([], 404),
+            };
+        });
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(9, $this->availableFor($tenant, $kupa));
+        $this->assertSame(8, $this->availableFor($tenant, $tabak));
+        $this->assertSame(10, $this->availableFor($tenant, $catal), 'İptal edilmiş kalem stok düşürmez.');
+        $this->assertSame(1, $this->asTenant($tenant, fn () => Order::query()->where('external_id', '4100000005')->count()));
+    }
+
+    /**
+     * Paket sorgusu ≤24 saatlik dilimlerle yürür — uzun aralıkta `enddate`
+     * SESSİZCE yok sayılır (belgeli). 30 saatlik pencere iki dilim olur.
+     * Dolu sayfa (10 paket) sonraki ofseti ister.
+     */
+    #[Test]
+    public function the_package_list_is_walked_in_windows_of_at_most_24_hours(): void
+    {
+        [$tenant, $connection] = $this->setUpConnection();
+
+        Carbon::setTestNow('2026-10-06 12:00:00');
+
+        $full = array_map(static fn (int $i): array => ['packageNumber' => "P-{$i}", 'items' => []], range(1, 10));
+
+        Http::fake(function (Request $request) use ($full) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            return Http::response(($query['offset'] ?? '0') === '0' ? $full : [], 200);
+        });
+
+        $adapter = $this->asTenant($tenant, fn () => app(AdapterRegistry::class)->for($connection));
+        $since = Carbon::parse('2026-10-05 09:00:00', 'UTC');
+
+        $first = $adapter->fetchOrders($since, 'packages:0:0');
+        $this->assertSame('packages:0:10', $first->nextCursor, 'Dolu sayfa → aynı dilimde sonraki ofset.');
+
+        $this->assertSame('packages:1:0', $adapter->fetchOrders($since, $first->nextCursor)->nextCursor);
+        $adapter->fetchOrders($since, 'packages:1:0');
+        $this->assertSame('cancelled:0', $adapter->fetchOrders($since, 'packages:2:0')->nextCursor);
+
+        $windows = collect(Http::recorded())->map(static function (array $pair): array {
+            parse_str((string) parse_url($pair[0]->url(), PHP_URL_QUERY), $query);
+
+            return [$query['begindate'], $query['enddate'], $query['limit']];
+        })->unique()->values()->all();
+
+        // 09:00 UTC − 3 sa = 06:00 UTC = 09:00 TR; bitiş 12:00 UTC + 3 sa = 18:00 TR (ertesi gün).
+        $this->assertSame([
+            ['2026-10-05 09:00', '2026-10-06 09:00', '10'],
+            ['2026-10-06 09:00', '2026-10-06 18:00', '10'],
+        ], $windows);
+
+        Carbon::setTestNow();
+    }
+
     /** Sorgu penceresi 3 saat geriye genişletilir (saat dilimi belgesiz). */
     #[Test]
     public function the_query_window_is_widened_for_the_undocumented_timezone(): void

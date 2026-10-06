@@ -134,7 +134,7 @@ yalnız HB'nin önceden yüklediği ürünlerle açılır.
 
 ---
 
-## Kod durumu (6 Eki akşam)
+## Kod durumu (7 Eki)
 
 - ✅ ① kimlik/User-Agent/ortam/webhook-auth (`a86a402`) · ② ilan içe aktarma +
   katalog zenginleştirme (`2031421`) · ③ stok (`stock-uploads`) ve fiyat
@@ -143,8 +143,17 @@ yalnız HB'nin önceden yüklediği ürünlerle açılır.
 - Kanal yalnız YOKLAMA ile çalışır (`supports_webhooks=false`): webhook'lu
   kanal yoklanmıyor; HB webhook'u satıcının HB'ye bildirmesini ve gövde
   işlemeyi gerektirir — sonraki adım.
-- ⏭️ Açık: `/packages` (iki tur arasında paketlenen sipariş `/orders`'tan
-  düşer), iadeler (`/claims`), webhook, upload sonucunu okuma
+- ✅ ⑤ paket listesi (`/packages`, yalnız "open" paketler): yoklama sırası
+  açık → paketler → iptaller. ≤24 saatlik dilimler, limit 10, toplam
+  başlıktan okunamazsa "dolu sayfa = devamı var". Yeni görülen her sipariş
+  **sipariş detayından** (`/orders/.../ordernumber/{no}`) bütün kalemleriyle
+  kurulur (kısmi paketlemede kalem yutulmasın; iptal kalemi alınmaz); detay
+  404 ise listedeki kalemler. Zaten alınmış siparişin detayı sorulmaz.
+- ⚠️ Doğrulanacak (SIT): boş paket listesi 200 `[]` mı 404 mü (404 şimdilik
+  boş + `hepsiburada.packages_not_found` uyarısı) · sayfalama başlığının adı
+  · `begindate` paket mi sipariş tarihine mi bakıyor · detaydaki iptal
+  durum adları (`cancel` içeren süzülüyor).
+- ⏭️ Açık: iadeler (`/claims`), webhook, upload sonucunu okuma
   (`…-uploads/id/{id}` errors), saat dilimi ölçümü, gerçek SIT testi.
 
 ## Koddaki sapmalar (6 Eki tespiti — ①'de düzeltildi)

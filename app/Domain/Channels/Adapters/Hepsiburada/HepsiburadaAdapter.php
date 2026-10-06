@@ -33,6 +33,7 @@ use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
@@ -144,6 +145,12 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
 
     /** Sipariş listesi sayfası. */
     private const ORDER_PAGE_SIZE = 100;
+
+    /** Paket listesi sayfası — belgeli üst sınır 10. */
+    private const PACKAGE_PAGE_SIZE = 10;
+
+    /** Paket sorgusunun tarih aralığı — belgeli üst sınır 24 saat. */
+    private const PACKAGE_WINDOW_HOURS = 24;
 
     /** Saat dilimi belgelenmediği için sorgu penceresinin genişletilmesi. */
     private const ORDER_DATE_SLACK_HOURS = 3;
@@ -654,35 +661,154 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
     }
 
     /**
-     * Sipariş yoklaması — iki liste sırayla: açık (paketlenmemiş) kalemler,
-     * sonra iptaller. İmleç `{liste}:{offset}`.
+     * Sipariş yoklaması — üç liste sırayla: açık (paketlenmemiş) kalemler,
+     * paketler, iptaller. İmleç `open:{offset}` · `packages:{pencere}:{offset}`
+     * · `cancelled:{offset}`.
      *
-     * SİPARİŞ BİRİMİ `orderNumber`, kalem `id` (lineItemId). Açık kalemler
-     * siparişe göre GRUPLANIR ve tek "created" olayı olur.
+     * SİPARİŞ BİRİMİ `orderNumber`, kalem `id` (lineItemId). Görülen her YENİ
+     * sipariş tek "created" olayı olur ve kalemleri sipariş DETAYINDAN
+     * kurulur (`completeOrder`).
      *
-     * ⚠️ SAYFA SINIRINDA YARIM SİPARİŞ ERTELENİR. Bir siparişin kalemleri iki
-     * sayfaya bölünürse ikinci parça "sipariş zaten alınmış" diye atlanır ve
-     * o kalemlerin stoğu HİÇ düşmezdi. Sayfanın son siparişi, devamı
-     * varsa bir sonraki sayfaya bırakılır.
+     * ⚠️ NEDEN PAKETLER: `/orders` yalnız PAKETLENMEMİŞ kalemleri verir.
+     * Satıcı siparişi iki tur arasında paketlerse sipariş o listeden düşer ve
+     * stoğu HİÇ düşmezdi. Paket listesi o siparişleri yakalar.
      *
      * ⚠️ SAAT DİLİMİ BELGELENMEMİŞ (`begindate` örneği `2023-04-02 00:00`).
      * Pencere 3 saat geriye GENİŞLETİLİR: dilim UTC de olsa TR de olsa
      * sipariş kaçmaz; tekrar gelen kayıt olay kimliğiyle elenir.
-     *
-     * BİLİNEN BOŞLUK: `/orders` yalnız PAKETLENMEMİŞ kalemleri verir. Satıcı
-     * iki tur arasında paketlerse sipariş buradan düşer — paket listesi
-     * (`/packages`) ayrı adımda okunacak.
      */
     public function fetchOrders(CarbonInterface $since, ?string $cursor = null): OrderPage
     {
-        [$list, $offset] = $this->orderCursor($cursor);
+        [$list, $window, $offset] = $this->orderCursor($cursor);
+
+        return match ($list) {
+            'open' => $this->fetchOpenLines($since, $offset),
+            'packages' => $this->fetchPackages($since, $window, $offset),
+            'cancelled' => $this->fetchCancelledLines($since, $offset),
+        };
+    }
+
+    /**
+     * Açık kalemler — siparişe göre gruplanır.
+     *
+     * ⚠️ SAYFA SINIRINDA YARIM SİPARİŞ ERTELENİR. Detay okunamazsa (404)
+     * sipariş listedeki kalemlerle kurulur; o durumda kalemleri iki sayfaya
+     * bölünmüş sipariş ikinci parçasını "zaten alınmış" diye kaybederdi.
+     * Sayfanın son siparişi, devamı varsa bir sonraki sayfaya bırakılır.
+     */
+    private function fetchOpenLines(CarbonInterface $since, int $offset): OrderPage
+    {
+        $response = $this->orderList(HepsiburadaEndpoints::ORDERS, $since, $offset);
+
+        $items = array_values(array_filter((array) ($response->json('items') ?? []), 'is_array'));
+        $total = (int) ($response->json('totalCount') ?? 0);
+        $more = $offset + count($items) < $total && $items !== [];
+
+        [$groups, $consumed] = self::groupOpenLines($items, $more);
+
+        // Açık liste bitti → paketlere geç.
+        return new OrderPage(
+            orders: $this->completeOrders($groups),
+            nextCursor: $more ? 'open:'.($offset + $consumed) : 'packages:0:0',
+            hasMore: true,
+        );
+    }
+
+    /**
+     * Paketler — `GET /packages` (yalnız "open" = gönderime hazır paketler).
+     *
+     * ⚠️ ÜÇ BELGELİ KISIT:
+     *   - `begindate`–`enddate` ≤24 saat; uzunsa `enddate` SESSİZCE yok
+     *     sayılır ve yalnız ilk 24 saat döner → pencere 24 saatlik
+     *     dilimlerle yürünür, imleç dilimin sırasını taşır.
+     *   - `limit` ≤10.
+     *   - Sayfalama bilgisi GÖVDEDE değil yanıt BAŞLIĞINDA (adı belgesiz) →
+     *     başlık okunabilirse o, okunamazsa "sayfa dolu geldiyse devamı var".
+     */
+    private function fetchPackages(CarbonInterface $since, int $window, int $offset): OrderPage
+    {
+        $begin = $since->copy()->subHours(self::ORDER_DATE_SLACK_HOURS);
+        $end = now()->addHours(self::ORDER_DATE_SLACK_HOURS);
+        $from = $begin->copy()->addHours($window * self::PACKAGE_WINDOW_HOURS);
+
+        if ($from->greaterThanOrEqualTo($end)) {
+            return new OrderPage(orders: [], nextCursor: 'cancelled:0', hasMore: true);
+        }
+
+        $to = $from->copy()->addHours(self::PACKAGE_WINDOW_HOURS);
+        $to = $to->greaterThan($end) ? $end : $to;
 
         $response = $this->client->get(
-            endpoint: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_ORDER, $this->isTest())
-                .HepsiburadaEndpoints::path(
-                    $list === 'open' ? HepsiburadaEndpoints::ORDERS : HepsiburadaEndpoints::ORDERS_CANCELLED,
-                    ['merchantId' => $this->merchantId()],
-                ),
+            endpoint: $this->orderPath(HepsiburadaEndpoints::PACKAGES),
+            query: [
+                'offset' => $offset,
+                'limit' => self::PACKAGE_PAGE_SIZE,
+                'begindate' => $from->copy()->setTimezone(self::CHANNEL_TIMEZONE)->format('Y-m-d H:i'),
+                'enddate' => $to->copy()->setTimezone(self::CHANNEL_TIMEZONE)->format('Y-m-d H:i'),
+            ],
+            headers: $this->defaultHeaders(),
+        );
+
+        // Boş listeye 200 `[]` mı 404 mü döndüğü BELGESİZ. 404 dilimi boş
+        // sayar ama GÜNLÜĞE yazar: tur düşseydi açık sipariş ve iptaller de
+        // okunmazdı; sessiz geçseydi yanlış yol hiç fark edilmezdi.
+        if ($response->status() === 404) {
+            Log::warning('hepsiburada.packages_not_found', ['connection' => $this->connection->id, 'window' => $window]);
+
+            return new OrderPage(orders: [], nextCursor: 'packages:'.($window + 1).':0', hasMore: true);
+        }
+
+        $response->throw();
+
+        $body = $response->json();
+        $packages = array_is_list((array) $body) ? (array) $body : (array) ($body['items'] ?? []);
+        $packages = array_values(array_filter($packages, 'is_array'));
+
+        $groups = [];
+
+        foreach ($packages as $package) {
+            foreach ((array) ($package['items'] ?? []) as $line) {
+                $number = is_array($line) ? trim((string) ($line['orderNumber'] ?? '')) : '';
+
+                if ($number !== '') {
+                    $groups[$number][] = self::packageLineAsOrderLine($line);
+                }
+            }
+        }
+
+        $total = $this->headerTotal($response->headers());
+        $more = $total !== null
+            ? $offset + count($packages) < $total && $packages !== []
+            : count($packages) >= self::PACKAGE_PAGE_SIZE;
+
+        return new OrderPage(
+            orders: $this->completeOrders($groups),
+            nextCursor: $more ? "packages:{$window}:".($offset + count($packages)) : 'packages:'.($window + 1).':0',
+            hasMore: true,
+        );
+    }
+
+    /** Kalem iptalleri — son 1 ay (belgeli). */
+    private function fetchCancelledLines(CarbonInterface $since, int $offset): OrderPage
+    {
+        $response = $this->orderList(HepsiburadaEndpoints::ORDERS_CANCELLED, $since, $offset);
+
+        $items = array_values(array_filter((array) ($response->json('items') ?? []), 'is_array'));
+        $total = (int) ($response->json('totalCount') ?? 0);
+        $more = $offset + count($items) < $total && $items !== [];
+
+        return new OrderPage(
+            orders: array_map(static fn (array $line): array => ['_kind' => 'cancelled', ...$line], $items),
+            nextCursor: $more ? 'cancelled:'.($offset + count($items)) : null,
+            hasMore: $more,
+        );
+    }
+
+    /** `{items, totalCount}` biçimli sipariş listesi (açık / iptal). */
+    private function orderList(string $template, CarbonInterface $since, int $offset): Response
+    {
+        $response = $this->client->get(
+            endpoint: $this->orderPath($template),
             query: [
                 'offset' => $offset,
                 'limit' => self::ORDER_PAGE_SIZE,
@@ -696,28 +822,132 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
 
         $response->throw();
 
-        $items = array_values(array_filter((array) ($response->json('items') ?? []), 'is_array'));
-        $total = (int) ($response->json('totalCount') ?? 0);
-        $more = $offset + count($items) < $total && $items !== [];
+        return $response;
+    }
 
-        if ($list === 'cancelled') {
-            $orders = array_map(static fn (array $line): array => ['_kind' => 'cancelled', ...$line], $items);
+    /**
+     * Gruplanmış siparişleri "created" kayıtlarına çevirir — kalemler DETAYDAN.
+     *
+     * ⚠️ KISMİ PAKETLEME: A ve B kalemli siparişte yalnız A paketlenirse açık
+     * listede B, paket listesinde A görünür. Sipariş hangisinden önce
+     * kurulursa kursun ikincisi aynı olay kimliğiyle (`{no}:created`)
+     * tekilleştirmede YUTULUR ve o kalemin stoğu hiç düşmezdi. Detay
+     * siparişin bütün kalemlerini verir; iptal edilmiş kalem alınmaz.
+     *
+     * Daha önce alınmış sipariş için detay İSTENMEZ: liste aynı siparişi her
+     * turda yeniden döndürür, her seferinde detay okumak kotayı boşa harcardı.
+     *
+     * @param  array<string, list<array<string, mixed>>>  $groups  sipariş no → listedeki kalemler
+     * @return list<array<string, mixed>>
+     */
+    private function completeOrders(array $groups): array
+    {
+        $orders = [];
 
-            return new OrderPage(
-                orders: $orders,
-                nextCursor: $more ? 'cancelled:'.($offset + count($items)) : null,
-                hasMore: $more,
-            );
+        foreach ($groups as $number => $lines) {
+            $number = (string) $number;
+
+            if ($this->alreadyIngested($number)) {
+                continue;
+            }
+
+            $orders[] = ['_kind' => 'created', 'orderNumber' => $number, 'items' => $this->orderDetailLines($number) ?? $lines];
         }
 
-        [$orders, $consumed] = self::groupOpenLines($items, $more);
+        return $orders;
+    }
 
-        // Açık liste bitti → iptallere geç.
-        return new OrderPage(
-            orders: $orders,
-            nextCursor: $more ? 'open:'.($offset + $consumed) : 'cancelled:0',
-            hasMore: true,
+    /**
+     * Siparişin iptal edilmemiş kalemleri; sipariş detayda yoksa (404) null.
+     *
+     * 404 dışındaki hata YÜKSELTİLİR: tur başarısız sayılır, imleç ilerlemez
+     * ve sipariş bir sonraki turda yeniden sorulur. Listedeki kalemlerle
+     * yetinmek kısmi paketlemede kalem kaybettirebilirdi.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    private function orderDetailLines(string $number): ?array
+    {
+        $response = $this->client->get(
+            endpoint: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_ORDER, $this->isTest())
+                .HepsiburadaEndpoints::path(
+                    HepsiburadaEndpoints::ORDER_DETAIL,
+                    ['merchantId' => $this->merchantId(), 'orderNumber' => $number],
+                ),
+            headers: $this->defaultHeaders(),
         );
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        $lines = array_values(array_filter(
+            (array) ($response->json('items') ?? []),
+            static fn (mixed $line): bool => is_array($line)
+                && ! str_contains(strtolower((string) ($line['status'] ?? '')), 'cancel')
+                // Başka siparişin kalemi karışmasın; numara yoksa kabul.
+                && (string) ($line['orderNumber'] ?? $number) === $number,
+        ));
+
+        return $lines === [] ? null : $lines;
+    }
+
+    /** Bu sipariş daha önce inbox'a "created" olarak yazıldı mı? */
+    private function alreadyIngested(string $number): bool
+    {
+        return TenantContext::runAsSystem(fn (): bool => InboxMessage::query()
+            ->where('channel_connection_id', $this->connection->id)
+            ->where('external_event_id', "{$number}:created")
+            ->exists());
+    }
+
+    /**
+     * Paket kalemini açık sipariş kalemi biçimine çevirir — detay okunamazsa
+     * `parseOrderEvent` aynı alan adlarıyla çalışsın.
+     *
+     * @param  array<string, mixed>  $line
+     * @return array<string, mixed>
+     */
+    private static function packageLineAsOrderLine(array $line): array
+    {
+        return array_filter([
+            'id' => $line['lineItemId'] ?? null,
+            'orderNumber' => $line['orderNumber'] ?? null,
+            'orderDate' => $line['orderDate'] ?? null,
+            'merchantSKU' => $line['merchantSku'] ?? null,
+            'sku' => $line['hbSku'] ?? null,
+            'name' => $line['productName'] ?? null,
+            'quantity' => $line['quantity'] ?? null,
+            'unitPrice' => $line['price'] ?? null,
+            'totalPrice' => $line['totalPrice'] ?? null,
+        ], static fn (mixed $v): bool => $v !== null);
+    }
+
+    /**
+     * Paket listesinin toplam kaydı — başlık adı belgesiz, bilinen adaylar
+     * harf duyarsız denenir. Bulunamazsa null.
+     *
+     * @param  array<string, array<int, string>>  $headers
+     */
+    private function headerTotal(array $headers): ?int
+    {
+        foreach (['totalcount', 'x-total-count', 'x-totalcount'] as $name) {
+            $value = $this->header($headers, $name);
+
+            if ($value !== null && is_numeric($value)) {
+                return (int) $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function orderPath(string $template): string
+    {
+        return HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_ORDER, $this->isTest())
+            .HepsiburadaEndpoints::path($template, ['merchantId' => $this->merchantId()]);
     }
 
     /**
@@ -726,7 +956,7 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
      * dolduruyorsa sonsuz döngü olmasın diye alınır.
      *
      * @param  list<array<string, mixed>>  $items
-     * @return array{0: list<array<string, mixed>>, 1: int} [siparişler, tüketilen kalem]
+     * @return array{0: array<string, list<array<string, mixed>>>, 1: int} [sipariş no → kalemler, tüketilen kalem]
      */
     private static function groupOpenLines(array $items, bool $more): array
     {
@@ -751,23 +981,21 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
             unset($groups[$last]);
         }
 
-        $orders = [];
-
-        foreach ($groups as $number => $group) {
-            $orders[] = ['_kind' => 'created', 'orderNumber' => (string) $number, 'items' => $group['lines']];
-        }
-
-        return [$orders, $consumed];
+        return [array_map(static fn (array $group): array => $group['lines'], $groups), $consumed];
     }
 
-    /** @return array{0: 'open'|'cancelled', 1: int} */
+    /** @return array{0: 'open'|'packages'|'cancelled', 1: int, 2: int} [liste, pencere, offset] */
     private function orderCursor(?string $cursor): array
     {
-        if ($cursor !== null && preg_match('/^(open|cancelled):(\d+)$/', $cursor, $m) === 1) {
-            return [$m[1], (int) $m[2]];
+        if ($cursor !== null && preg_match('/^packages:(\d+):(\d+)$/', $cursor, $m) === 1) {
+            return ['packages', (int) $m[1], (int) $m[2]];
         }
 
-        return ['open', 0];
+        if ($cursor !== null && preg_match('/^(open|cancelled):(\d+)$/', $cursor, $m) === 1) {
+            return [$m[1], 0, (int) $m[2]];
+        }
+
+        return ['open', 0, 0];
     }
 
     /**
