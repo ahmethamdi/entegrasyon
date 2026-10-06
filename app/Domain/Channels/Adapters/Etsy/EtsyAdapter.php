@@ -442,7 +442,7 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
                 whenMade: $whenMade,
                 price: (string) $price,
                 shippingProfileId: $shippingProfileId,
-                readinessStateId: $this->setting(self::READINESS_KEY) ?? $this->onlyProfileId(EtsyEndpoints::READINESS_STATES, 'readiness_state_definition_id'),
+                readinessStateId: $this->setting(self::READINESS_KEY) ?? $this->onlyProfileId(EtsyEndpoints::READINESS_STATES, 'readiness_state_id'),
             ),
             headers: $this->apiKeyHeader(),
             asForm: true,

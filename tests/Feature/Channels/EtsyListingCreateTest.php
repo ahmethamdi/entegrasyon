@@ -214,7 +214,7 @@ final class EtsyListingCreateTest extends TestCase
                     static fn (int $i): array => ['shipping_profile_id' => 554 + $i],
                     range(1, $profiles),
                 )], 200),
-                str_contains($url, '/readiness-state-definitions') => Http::response(['results' => [['readiness_state_definition_id' => 888]]], 200),
+                str_contains($url, '/readiness-state-definitions') => Http::response(['results' => [['readiness_state_id' => 888, 'readiness_state' => 'made_to_order']]], 200),
                 $r->method() === 'GET' && str_contains($url, '/inventory') => Http::response(['products' => [
                     ['product_id' => 6000, 'sku' => '', 'property_values' => [], 'offerings' => [['offering_id' => 7000, 'quantity' => 1, 'is_enabled' => true, 'price' => ['amount' => 19990, 'divisor' => 100]]]],
                 ]], 200),
