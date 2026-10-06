@@ -98,7 +98,9 @@ final class ShopifyBillingTest extends TestCase
 
             return $price === ['amount' => '9.99', 'currencyCode' => 'USD']
                 && $r['variables']['test'] === true
-                && $r['variables']['returnUrl'] === route('billing.shopify.return');
+                && $r['variables']['returnUrl'] === route('billing.shopify.return')
+                // Panel Türkçe olsa da Shopify onay ekranı/faturası İngilizce.
+                && $r['variables']['name'] === '34Pazar Starter';
         });
 
         $sub = $this->subscriptions($tenant)->sole();

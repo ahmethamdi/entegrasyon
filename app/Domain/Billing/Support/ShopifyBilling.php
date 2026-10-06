@@ -75,8 +75,11 @@ class ShopifyBilling
             }
             GQL,
             variables: [
-                // Satıcının Shopify faturasında görünen ad.
-                'name' => '34Pazar '.$plan->name,
+                // Satıcının Shopify faturasında ve onay ekranında görünen ad.
+                // HER ZAMAN İngilizce: Shopify faturası ve App Store incelemesi
+                // İngilizce; panel dili Türkçe olsa da "34Pazar Başlangıç"
+                // inceleyicinin önüne çıkıyordu (6 Eki 2026).
+                'name' => '34Pazar '.__($plan->name, locale: 'en'),
                 'returnUrl' => $returnUrl,
                 'test' => $test,
                 'lineItems' => [[
