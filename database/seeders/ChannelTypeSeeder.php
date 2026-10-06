@@ -84,6 +84,9 @@ class ChannelTypeSeeder extends Seeder
                 'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Trendyol\\TrendyolAdapter',
                 'capabilities' => [
                     'catalog' => true,
+                    // 6 Eki 2026: SupportsCatalogImport yazıldı (gerçek hesapta
+                    // panel "ürün çekmeyi destekleyen kanal yok" diyordu).
+                    'catalog_import' => true,
                     'inventory' => true,
                     'pricing' => true,
                     'orders' => true,
