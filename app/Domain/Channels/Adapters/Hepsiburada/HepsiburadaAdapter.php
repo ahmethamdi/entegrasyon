@@ -49,23 +49,22 @@ use Throwable;
  * DEĞİL — dokümanın kendi zaman çizelgesinin dışına çıkış.
  *
  * ─────────────────────────────────────────────────────────────────────
- * ⚠️ UÇ NOKTALAR RESMÎ DOKÜMANDAN DOĞRULANMADI
+ * UÇ NOKTALAR VE KİMLİK RESMÎ DOKÜMANDAN DOĞRULANDI (6 Eki 2026)
  * ─────────────────────────────────────────────────────────────────────
- * `developers.hepsiburada.com` bot isteklerini 403 ile reddediyor.
- * Yollar `HepsiburadaEndpoints` içinde TEK YERDE toplandı ve orada
- * açıkça işaretlendi. **Kanal `is_active = false` ile seed edilir** ve
- * panelde görünmez; doğrulama sırası o dosyada yazılı.
+ * `docs/HEPSIBURADA-API-NOTLARI.md` + `docs/hepsiburada-openapi/`. Gerçek
+ * hesapla henüz sınanmadı; **kanal `is_active = false`** kalır.
  *
  * ─────────────────────────────────────────────────────────────────────
  * ÜÇ KRİTİK FARK — TRENDYOL'A BENZİYOR AMA AYNI DEĞİL
  * ─────────────────────────────────────────────────────────────────────
  *
- * 1. **`User-Agent` KİMLİK DOĞRULAMANIN PARÇASIDIR.** Hepsiburada
- *    `{merchantId} - {AppName}` biçiminde bir `User-Agent` bekler ve
- *    eksikse **kimlik bilgisi DOĞRU olsa bile 401 döner**. Bu, projede
- *    daha önce yaşanmış (`97a7eb7`) "istek sessizce kimliksiz gitti"
- *    hatasının bir başka biçimidir: anahtar doğru, listing
- *    "anahtarın yanlış" diyerek ölür.
+ 1. **KİMLİK = `merchantId` + Servis Anahtarı, `User-Agent` = ENTEGRATÖR
+ *    KULLANICI ADI.** Basic auth kullanıcı adı satıcının `merchantId`'si
+ *    (GUID), şifresi panelden alınan 12 karakterlik Servis Anahtarıdır
+ *    (eski kullanıcı/şifre 15 Ağu 2024'te kapandı). `User-Agent` zorunlu
+ *    ve HB'ye kayıtlı entegratör kullanıcı adını taşır; eksik ya da
+ *    yanlışsa anahtar DOĞRU olsa bile reddedilir (`97a7eb7`'nin kardeşi).
+ *    Önceki `{merchantId} - Entegrasyon` biçimi ikincil kaynaktandı.
  *
  * 2. **STOK VE FİYAT AYNI YÜKTE GİDER — TRENDYOL'UN TERSİ.** Trendyol'da
  *    "stok yükü fiyat alanı TAŞIMAZ" katı bir kuraldı çünkü orada biri
@@ -78,9 +77,11 @@ use Throwable;
  *    yükü tamamlamak zorundadır**; §7'nin "mutlak değer gönderilir"
  *    kuralı burada iki alana birden uygulanır.
  *
- * 3. **WEBHOOK VAR** (`X-HB-Signature` HMAC) — Trendyol'un aksine.
- *    Woo ile aynı gelen hat kuralları geçerli: imza HAM GÖVDE üzerinden
- *    ve JSON ayrıştırmadan ÖNCE doğrulanır.
+ 3. **WEBHOOK VAR AMA İMZA YOK** — Trendyol'un aksine webhook var, Woo'nun
+ *    aksine HMAC yok. Güvenlik Basic auth'tur: satıcı HB'ye bizim
+ *    verdiğimiz kullanıcı adı/şifreyi bildirir, HB her bildirimde onu
+ *    `Authorization` başlığında gönderir. Önceki `X-HB-Signature`
+ *    doğrulaması MEŞRU her bildirimi reddederdi.
  *
  * ─────────────────────────────────────────────────────────────────────
  * KAPSAM — BU TUR SADECE İSTEMCİ KATMANI
@@ -102,14 +103,21 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
 {
     use DeclaresRequestQuota;
 
-    /** Satıcı kimliğinin `settings` içindeki yeri. */
+    /** Satıcı kimliğinin (GUID) `settings` içindeki yeri. */
     public const MERCHANT_ID_KEY = 'merchant_id';
 
-    /** `User-Agent` başlığındaki uygulama adı. */
-    private const APP_NAME = 'Entegrasyon';
+    /** HB'ye kayıtlı entegratör kullanıcı adı — `User-Agent`. SIR DEĞİL. */
+    public const INTEGRATOR_KEY = 'integrator_username';
 
-    /** Webhook imza başlığı. DOĞRULANMADI. */
-    private const SIGNATURE_HEADER = 'x-hb-signature';
+    /** Ortam: `test` (SIT) ya da `canli`. Yoksa canlı. */
+    public const ENVIRONMENT_KEY = 'environment';
+
+    public const ENVIRONMENT_TEST = 'test';
+
+    public const ENVIRONMENT_LIVE = 'canli';
+
+    /** Kasadaki Servis Anahtarı. */
+    public const SERVICE_KEY_SECRET = 'service_key';
 
     /**
      * Toplu stok güncellemesinde tek istekteki üst sınır.
@@ -225,10 +233,12 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
     // ------------------------------------------------------------- webhook
 
     /**
-     * HMAC — HAM GÖVDE üzerinden, JSON AYRIŞTIRMADAN ÖNCE.
+     * BASIC AUTH — HB imza göndermez (resmî doküman, webhook bölümü).
      *
-     * Ayrıştırıp yeniden serileştirmek baytları değiştirir (anahtar
-     * sırası, boşluk, sayı biçimi) ve imza tutmaz.
+     * Satıcı HB'ye kullanıcı adı olarak kendi `merchantId`'sini, şifre
+     * olarak kasadaki `webhook_secret`'ı bildirir; HB her bildirimde
+     * `Authorization: Basic …` gönderir. Gövde imzalanmadığı için ham gövde
+     * burada kullanılmaz.
      *
      * SABİT ZAMANLI KARŞILAŞTIRMA (`hash_equals`): `===` ilk farklı
      * baytta döner ve karşılaştırma süresi doğru ön ek uzunluğunu
@@ -245,24 +255,29 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
      */
     public function verifyWebhookSignature(string $raw, array $headers): bool
     {
-        $provided = $this->header($headers, self::SIGNATURE_HEADER);
+        $provided = $this->header($headers, 'authorization');
 
-        if ($provided === null || $provided === '') {
+        if ($provided === null || ! str_starts_with(strtolower($provided), 'basic ')) {
             return false;
         }
 
         $secret = $this->webhookSecret();
 
         if ($secret === null || $secret === '') {
-            // Sır tanımlı değilse doğrulama YAPILAMAZ ve "geçti" denemez.
-            // Güvenli taraf REDDETMEKTİR: kabul etmek, imzasız sipariş
+            // Şifre tanımlı değilse doğrulama YAPILAMAZ ve "geçti" denemez.
+            // Güvenli taraf REDDETMEKTİR: kabul etmek, kimliksiz sipariş
             // enjeksiyonuna kapı açardı.
             return false;
         }
 
-        $expected = base64_encode(hash_hmac('sha256', $raw, $secret, true));
+        try {
+            $expected = 'basic '.base64_encode($this->merchantId().':'.$secret);
+        } catch (Throwable) {
+            return false;
+        }
 
-        return hash_equals($expected, $provided);
+        // Şema adı harf duyarsız; kimlik kısmı duyarlı.
+        return hash_equals($expected, 'basic '.substr($provided, 6));
     }
 
     /**
@@ -386,7 +401,48 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
      */
     private function defaultHeaders(): array
     {
-        return ['User-Agent' => $this->merchantId().' - '.self::APP_NAME];
+        // Bu bağlantının KENDİ kasası; kiracı bağlamı beklenmez (sağlık
+        // kontrolü ve kuyruk işi bağlamsız çağırabilir — webhook ile aynı).
+        $serviceKey = TenantContext::runAsSystem(fn (): array => $this->readSecrets())[self::SERVICE_KEY_SECRET] ?? null;
+
+        if (! is_string($serviceKey) || $serviceKey === '') {
+            throw new RuntimeException(
+                'Hepsiburada Servis Anahtarı kasada yok — istek kimliksiz gider ve reddedilir.'
+            );
+        }
+
+        return [
+            // Adapter kendi `Authorization`'ını verir: kullanıcı adı kasada
+            // değil bağlantıdadır (merchantId) ve istemcinin bilinen anahtar
+            // çiftleri bu biçimi taşımaz.
+            'Authorization' => 'Basic '.base64_encode($this->merchantId().':'.$serviceKey),
+            'User-Agent' => $this->integratorUsername(),
+        ];
+    }
+
+    /**
+     * HB'ye kayıtlı entegratör kullanıcı adı — `User-Agent` değeri.
+     *
+     * Boşsa istek atılmaz: başlıksız ya da yanlış başlıklı istek reddedilir
+     * ve sebep "anahtar yanlış" diye görünürdü.
+     */
+    private function integratorUsername(): string
+    {
+        $name = $this->connection->settings[self::INTEGRATOR_KEY] ?? null;
+
+        if (! is_string($name) || trim($name) === '') {
+            throw new RuntimeException(
+                'Hepsiburada entegratör kullanıcı adı tanımsız — User-Agent kurulamaz.'
+            );
+        }
+
+        return trim($name);
+    }
+
+    /** Test (SIT) ortamı mı? Tanımsızsa canlı. */
+    private function isTest(): bool
+    {
+        return ($this->connection->settings[self::ENVIRONMENT_KEY] ?? null) === self::ENVIRONMENT_TEST;
     }
 
     /**
@@ -410,7 +466,7 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
         if (! is_string($id) || $id === '') {
             throw new RuntimeException(
                 'Hepsiburada satıcı kimliği (merchantId) tanımsız — '.
-                'User-Agent kurulamaz ve kanal 401 döner.'
+                'kimlik doğrulama kurulamaz ve kanal 401 döner.'
             );
         }
 
@@ -443,7 +499,7 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
     /** Listing hostundaki tam adres. */
     private function listingPath(string $template): string
     {
-        return HepsiburadaEndpoints::HOST_LISTING.HepsiburadaEndpoints::path(
+        return HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_LISTING, $this->isTest()).HepsiburadaEndpoints::path(
             $template,
             ['merchantId' => $this->merchantId()],
         );

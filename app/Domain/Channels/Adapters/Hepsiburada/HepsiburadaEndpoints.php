@@ -5,113 +5,85 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Hepsiburada;
 
 /**
- * Hepsiburada uç noktaları — TEK KAYNAK ve DOĞRULAMA SINIRI.
+ * Hepsiburada uç noktaları — TEK KAYNAK.
  *
  * ─────────────────────────────────────────────────────────────────────
- * ⚠️ BU DOSYADAKİ YOLLAR RESMÎ DOKÜMANDAN DOĞRULANMADI
+ * RESMÎ DOKÜMANDAN DOĞRULANDI (6 Eki 2026)
  * ─────────────────────────────────────────────────────────────────────
- * `developers.hepsiburada.com` bot isteklerini 403, `listing-external
- * .hepsiburada.com/docs` 401 ile reddediyor. Aşağıdaki yollar ikincil
- * kaynaklardan (entegratör dokümantasyonu + arama sonuçları) derlendi.
+ * Yollar `docs/hepsiburada-openapi/*.json` (sitenin OpenAPI kayıtları)
+ * ile BİREBİR aynıdır — büyük/küçük harf dahil (`/Listings/` büyük L).
+ * Ayrıntı ve kaynaklar `docs/HEPSIBURADA-API-NOTLARI.md`. Önceki sürümdeki
+ * yollar ikincil kaynaktan derlenmişti ve küçük harfliydi; tekil
+ * güncelleme yolu da yanlıştı.
  *
- * **HEPSİ TEK BİR YERDE TUTULUYOR ki doğrulama TEK dosyada bitsin.**
- * Adapter içine serpiştirilselerdi düzeltme on ayrı yere dokunmak
- * demek olurdu ve biri unutulunca o çağrı sessizce yanlış adrese
- * giderdi.
- *
- * **NEDEN BU RİSK CİDDİ:** bu projede yanlış uç nokta SESSİZ hataya
- * dönüşür. Kanal 200 dönerse senkron BAŞARILI görünür, `synced_version`
- * ilerler ve satır "senkron" damgası taşırken kanalda hiçbir şey
- * değişmemiş olur. Trendyol'un "KİMLİK BARKODDUR VE SAYIYA ÇEVRİLMEZ"
- * kuralı tam olarak bu hata biçimini anlatıyor.
+ * Hepsi tek yerde: yanlış uç nokta bu projede SESSİZ hataya dönüşür
+ * (kanal 200 dönerse senkron başarılı görünür ve hiçbir şey değişmez).
  *
  * ─────────────────────────────────────────────────────────────────────
- * DOĞRULAMA YAPILMADAN CANLI BAĞLANTI AÇILMAZ
+ * İŞLEV BAŞINA AYRI HOST + TEST/CANLI ORTAM
  * ─────────────────────────────────────────────────────────────────────
- * `ChannelTypeSeeder` bu kanalı `is_active = false` ile yazar; panelde
- * açılır listede GÖRÜNMEZ. Doğrulama sırası:
- *
- *   1. Aşağıdaki her sabiti resmî dokümanla karşılaştır.
- *   2. `HepsiburadaEndpointContractTest`'teki BEKLENEN METİNLERİ güncelle
- *      (test sabitleri beklenen metinle sınar — mutasyon ikisini
- *      BİRLİKTE kaydırmasın diye).
- *   3. Gerçek satıcı hesabıyla sağlık kontrolü çalıştır.
- *   4. `is_active = true` yap.
- *
- * ─────────────────────────────────────────────────────────────────────
- * BEŞ AYRI ALT ALAN ADI — TRENDYOL'DAN FARKI
- * ─────────────────────────────────────────────────────────────────────
- * Trendyol tek host kullanır; Hepsiburada işlevi ayrı alt alan adlarına
- * böler ve her birinin kendi hız sınırı ve sayfalama sözleşmesi vardır.
- * `base_url` bu yüzden bağlantı ayarlarında TEK bir değer olarak
- * TUTULAMAZ — host işleve göre seçilir.
+ * Hepsiburada işlevi ayrı alt alan adlarına böler. Test ortamı (SIT)
+ * adresi canlıdan `-sit` ekiyle ayrılır: entegratör yetkisi ÖNCE testte
+ * verilir, canlı ancak testler geçince açılır. Ortam bağlantı ayarıdır
+ * (`HepsiburadaAdapter::ENVIRONMENT_KEY`).
  */
 final class HepsiburadaEndpoints
 {
     // ───────────────────────────────────────────────── hostlar
 
-    /** Listing CRUD — fiyat, stok, listeleme durumu. DOĞRULANMADI. */
-    public const HOST_LISTING = 'https://listing-external.hepsiburada.com';
+    public const SERVICE_LISTING = 'listing-external';
 
-    /** Ürün açma ve kategori/öznitelik (MPOP). DOĞRULANMADI. */
-    public const HOST_PRODUCT = 'https://mpop.hepsiburada.com';
+    public const SERVICE_ORDER = 'oms-external';
 
-    /** Sipariş yönetimi (OMS). DOĞRULANMADI. */
-    public const HOST_ORDER = 'https://oms-external.hepsiburada.com';
+    public const SERVICE_CATALOG = 'mpop';
 
-    /** Test ortamı ön eki — sandbox hostları DOĞRULANMADI. */
-    public const HOST_LISTING_SANDBOX = 'https://listing-external-sit.hepsiburada.com';
+    /** İşlevin tam host adresi; test ortamında `-sit` eklenir. */
+    public static function host(string $service, bool $test): string
+    {
+        $suffix = $test ? '-sit' : '';
+
+        return match ($service) {
+            self::SERVICE_LISTING, self::SERVICE_ORDER => "https://{$service}{$suffix}.hepsiburada.com",
+            // Katalog servisi `/product` ön ekiyle yaşar.
+            self::SERVICE_CATALOG => "https://mpop{$suffix}.hepsiburada.com/product",
+            default => throw new \InvalidArgumentException("Bilinmeyen Hepsiburada servisi: {$service}"),
+        };
+    }
 
     // ───────────────────────────────────────────────── listing
 
-    /**
-     * Tekil fiyat/stok güncelleme. DOĞRULANMADI.
-     *
-     * `{merchantId}` ve `{merchantSku}` yerine konur.
-     *
-     * ⚠️ STOK VE FİYAT AYNI YÜKTE GİDER — TRENDYOL'UN TERSİ.
-     * Trendyol'da "stok yükü fiyat alanı TAŞIMAZ" katı bir kuraldı
-     * çünkü orada biri diğerini SESSİZCE ezerdi. Hepsiburada'nın uç
-     * noktası ikisini birlikte bekliyor; ayrı göndermek eksik alanı
-     * SIFIRLAYABİLİR ve bu, satışı kapatmak demektir (kanal "stok 0 =
-     * satışa kapat" diye yorumluyor).
-     */
-    public const LISTING_UPDATE = '/listings/merchantid/{merchantId}/sku/{merchantSku}';
+    /** İlan listesi — `offset` ve `limit` ZORUNLU. Sağlık kontrolü de bunu okur. */
+    public const LISTING_LIST = '/Listings/merchantid/{merchantId}';
 
     /**
-     * Toplu fiyat/stok güncelleme — ASENKRON, `trackingId` döner.
-     * DOĞRULANMADI.
+     * Yalnız STOK yüklemesi — ASENKRON, `id` döner.
      *
-     * Tek istekte en fazla 4000 SKU; aynı anda en fazla 5 bekleyen
-     * işlem (ikincil kaynak). Bu sayılar `HepsiburadaAdapter`'ın
-     * `inventoryBatchSize()` değerini belirler.
+     * Toplu `inventory-uploads` stok ve fiyatı birlikte alır ama tek alan
+     * gönderilince ötekinin sıfırlanıp sıfırlanmadığı belgelenmemiş.
+     * Sıfırlanırsa satış kapanır; bu yüzden ayrı uçlar kullanılır.
      */
-    public const LISTING_BULK_UPDATE = '/listings/merchantid/{merchantId}/inventory-uploads';
+    public const STOCK_UPLOAD = '/Listings/merchantid/{merchantId}/stock-uploads';
 
-    /** Toplu işlem sonucu yoklaması. DOĞRULANMADI. */
-    public const LISTING_BULK_STATUS = '/listings/merchantid/{merchantId}/inventory-uploads/id/{trackingId}';
+    public const STOCK_UPLOAD_STATUS = '/Listings/merchantid/{merchantId}/stock-uploads/id/{id}';
 
-    /** Satıcının listeleri — sağlık kontrolü ve uzak durum okuma. DOĞRULANMADI. */
-    public const LISTING_LIST = '/listings/merchantid/{merchantId}';
+    /** Yalnız FİYAT yüklemesi — ASENKRON, `id` döner. */
+    public const PRICE_UPLOAD = '/Listings/merchantid/{merchantId}/price-uploads';
 
-    // ───────────────────────────────────────────────── ürün / kategori
+    public const PRICE_UPLOAD_STATUS = '/Listings/merchantid/{merchantId}/price-uploads/id/{id}';
 
-    /** Ürün açma — ASENKRON, `trackingId` döner. DOĞRULANMADI. */
-    public const PRODUCT_IMPORT = '/product/api/products/import';
+    // ───────────────────────────────────────────────── sipariş (OMS)
 
-    /** Ürün açma sonucu yoklaması. DOĞRULANMADI. */
-    public const PRODUCT_IMPORT_STATUS = '/product/api/products/import/{trackingId}';
+    /** Ödemesi tamamlanmış, paketlenecek sipariş kalemleri. */
+    public const ORDERS = '/orders/merchantid/{merchantId}';
 
-    /** Kategori ağacı. DOĞRULANMADI. */
-    public const CATEGORIES = '/product/api/categories/get-all-categories';
+    /** Son 1 ayın iptalleri (kalem bazında). */
+    public const ORDERS_CANCELLED = '/orders/merchantid/{merchantId}/cancelled';
 
-    /** Kategoriye ait zorunlu/isteğe bağlı öznitelikler. DOĞRULANMADI. */
-    public const CATEGORY_ATTRIBUTES = '/product/api/categories/{categoryId}/attributes';
+    /** Paketler — tarih aralığı ≤24 saat, limit ≤10, sayfalama BAŞLIKTA. */
+    public const PACKAGES = '/packages/merchantid/{merchantId}';
 
-    // ───────────────────────────────────────────────── sipariş
-
-    /** Satıcının paketleri (sipariş listesi). DOĞRULANMADI. */
-    public const ORDER_PACKAGES = '/packages/merchantid/{merchantId}';
+    /** İade talepleri. */
+    public const CLAIMS = '/claims/merchantId/{merchantId}';
 
     /**
      * Yol şablonundaki yer tutucuları doldurur.

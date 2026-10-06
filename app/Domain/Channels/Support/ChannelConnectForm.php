@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Support;
 
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
+use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use InvalidArgumentException;
@@ -171,17 +172,57 @@ final class ChannelConnectForm
         ],
 
         'hepsiburada' => [
-            // ⚠️ BU KANAL `is_active = false` İLE KAPALIDIR ve sebebi
-            // form DEĞİL: uç noktaları doğrulanmadı. Tanımı yine de
-            // burada durur — kimlik biçimi (basic auth çifti) bu formla
-            // UYUMLUDUR ve uç noktalar doğrulandığında kanal açılırken
-            // bu satırın da eklenmesi gerektiği unutulurdu.
+            // Resmî dokümana göre (6 Eki 2026): Basic auth = merchantId +
+            // Servis Anahtarı, `User-Agent` = HB'ye kayıtlı entegratör
+            // kullanıcı adı. Eski kullanıcı adı/parola çifti 15 Ağu 2024'te
+            // kapandı. Kanal hâlâ `is_active = false`: gerçek hesapla
+            // sınanmadı.
             'secrets' => [
-                ['name' => 'api_key', 'label' => 'Kullanıcı adı', 'placeholder' => ''],
-                ['name' => 'api_secret', 'label' => 'Parola', 'placeholder' => '', 'masked' => true],
+                [
+                    'name' => HepsiburadaAdapter::SERVICE_KEY_SECRET,
+                    'label' => 'Servis Anahtarı',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'Satıcı paneli → Bilgilerim → Entegrasyon → Entegratör '
+                        .'Bilgileri → Entegratörlerim → "Servis Anahtarı".',
+                ],
             ],
-            'identity' => [],
+            'identity' => [
+                [
+                    'name' => HepsiburadaAdapter::MERCHANT_ID_KEY,
+                    'label' => 'Merchant ID',
+                    'placeholder' => '00000000-0000-0000-0000-000000000000',
+                    // ⚠️ Değer İSTEK YOLUNA girer (`/merchantid/{id}`); yalnız
+                    // GUID biçimi kabul edilir.
+                    'rules' => ['regex:/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/'],
+                    'hint' => 'Satıcı panelindeki mağaza kimliği (GUID). Bütün '
+                        .'Hepsiburada çağrıları bu kimlik üzerinden yapılır.',
+                ],
+                [
+                    'name' => HepsiburadaAdapter::INTEGRATOR_KEY,
+                    'label' => 'Entegratör kullanıcı adı',
+                    'placeholder' => 'firma_dev',
+                    // ⚠️ Değer `User-Agent` başlığına girer; satır sonu ya da
+                    // denetim karakteri başlık enjeksiyonu olurdu.
+                    'rules' => ['regex:/^[A-Za-z0-9_.\-]{1,64}$/'],
+                    'hint' => 'Hepsiburada\'nın entegratör yetkilendirmesinde verdiği '
+                        .'kullanıcı adı. Her istekte gönderilir; yanlışsa istekler reddedilir.',
+                ],
+                [
+                    'name' => HepsiburadaAdapter::ENVIRONMENT_KEY,
+                    'label' => 'Ortam (test / canli)',
+                    'placeholder' => HepsiburadaAdapter::ENVIRONMENT_LIVE,
+                    'optional' => true,
+                    'rules' => ['in:'.HepsiburadaAdapter::ENVIRONMENT_TEST.','.HepsiburadaAdapter::ENVIRONMENT_LIVE],
+                    'hint' => 'Hepsiburada yetkiyi önce test ortamında verir. Test '
+                        .'bilgileriyle bağlanıyorsan "test" yaz; boş bırakırsan canlı.',
+                ],
+            ],
+            'account' => HepsiburadaAdapter::MERCHANT_ID_KEY,
             'oauth' => false,
+            'help' => 'Önce satıcı panelinden entegratör yetkilendirme talebi aç '
+                .'(Yardım Merkezi → Talepler → "API ENTEGRASYON – API Entegratör '
+                .'Yetkilendirme İşlemleri"). Gelen bilgilerle bağlan.',
         ],
 
         'shopify' => [

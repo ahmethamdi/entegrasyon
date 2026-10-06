@@ -40,16 +40,12 @@ use Tests\TestCase;
  * ⚠️ **DOKÜMAN BU KANALI KAPSAM DIŞI BIRAKIYOR** (§16: "Ay 7"). Faz 4
  * bittiği için kullanıcının açık kararıyla açıldı.
  *
- * ⚠️ **UÇ NOKTALAR DOĞRULANMADI** — `developers.hepsiburada.com` bot
- * isteklerini 403 ile reddediyor. Bu testler adapter'ın DAVRANIŞINI
- * korur (kimlik, başlık, hata sınıflandırma, imza); uç nokta
- * YOLLARININ doğruluğunu KANITLAMAZ. O ancak gerçek satıcı hesabıyla
- * doğrulanabilir ve kanal o yüzden `is_active = false` ile seed edilir.
+ * Uç noktalar ve kimlik resmî dokümana göre (`docs/HEPSIBURADA-API-NOTLARI.md`,
+ * 6 Eki 2026); gerçek hesapla henüz sınanmadı, kanal `is_active = false`.
  *
- * DEĞİŞMEZ KURAL — `User-Agent` KİMLİK DOĞRULAMANIN PARÇASIDIR:
- *   Hepsiburada `{merchantId} - {AppName}` bekler ve eksikse kimlik
- *   bilgisi DOĞRU olsa bile 401 döner. Bu, `97a7eb7`'de yaşanan
- *   "istek sessizce kimliksiz gitti" hatasının bir başka biçimidir.
+ * DEĞİŞMEZ KURAL — KİMLİK: Basic auth `merchantId:ServisAnahtarı`,
+ *   `User-Agent` = entegratör kullanıcı adı. Biri eksikse istek HİÇ
+ *   atılmaz (yoksa "anahtar yanlış" diye görünen kimliksiz istek, `97a7eb7`).
  *
  * DEĞİŞMEZ KURAL — STOK VE FİYAT AYNI YÜKTE (Trendyol'un TERSİ):
  *   Kanal eksik alanı sıfır sayabiliyor ve "stok 0 = satışa kapat" diye
@@ -88,23 +84,61 @@ final class HepsiburadaAdapterTest extends TestCase
     // ─────────────────────────────────────────────────── User-Agent
 
     /**
-     * HER İSTEK `User-Agent: {merchantId} - {AppName}` TAŞIR.
+     * HER İSTEK `merchantId:ServisAnahtarı` Basic auth'u ve entegratör
+     * kullanıcı adını (`User-Agent`) TAŞIR — resmî dokümandaki biçim.
      *
-     * Bu testin kırılması kanalın **401 döndürmesi** demektir — üstelik
-     * anahtar doğruyken. Hata "anahtarın yanlış" diye görünür ve
-     * kullanıcı anahtarı defalarca yeniden girer.
+     * Kırılması kanalın anahtar DOĞRUYKEN reddetmesi demektir; hata
+     * "anahtarın yanlış" diye görünür.
      */
     #[Test]
-    public function every_request_carries_the_merchant_user_agent(): void
+    public function every_request_carries_basic_auth_and_the_integrator_user_agent(): void
     {
         Http::fake(['*' => Http::response(['listings' => []], 200)]);
 
         $this->adapter(merchantId: 'MERCHANT-42')->healthCheck();
 
-        Http::assertSent(static fn ($request): bool => $request->hasHeader(
-            'User-Agent',
-            'MERCHANT-42 - Entegrasyon',
-        ));
+        Http::assertSent(static fn ($request): bool => $request->hasHeader('User-Agent', 'firma_dev')
+            && $request->hasHeader('Authorization', 'Basic '.base64_encode('MERCHANT-42:ANAHTAR12345')));
+    }
+
+    /**
+     * Servis Anahtarı ya da entegratör adı yoksa istek HİÇ atılmaz.
+     */
+    #[Test]
+    public function a_missing_service_key_or_integrator_sends_nothing(): void
+    {
+        Http::fake(['*' => Http::response([], 200)]);
+
+        $noKey = $this->adapter(merchantId: 'M-NOKEY', secrets: [])->healthCheck();
+        $noIntegrator = $this->adapter(merchantId: 'M-NOUA', settings: [])->healthCheck();
+
+        $this->assertFalse($noKey->healthy);
+        $this->assertStringContainsString('Servis Anahtarı', (string) $noKey->message);
+        $this->assertFalse($noIntegrator->healthy);
+        $this->assertStringContainsString('entegratör', (string) $noIntegrator->message);
+
+        Http::assertNothingSent();
+    }
+
+    /**
+     * TEST ORTAMI `-sit` ADRESİNE GİDER, canlı ortam eksiz adrese.
+     *
+     * Yetki önce testte verilir; test bilgisiyle canlıya gitmek (ya da
+     * tersi) 401 verir ve sebep görünmezdi. Yol büyük L ile `/Listings/`.
+     */
+    #[Test]
+    public function the_environment_selects_the_host(): void
+    {
+        Http::fake(['*' => Http::response(['listings' => []], 200)]);
+
+        $this->adapter(merchantId: 'M-TEST', settings: [
+            HepsiburadaAdapter::INTEGRATOR_KEY => 'firma_dev',
+            HepsiburadaAdapter::ENVIRONMENT_KEY => HepsiburadaAdapter::ENVIRONMENT_TEST,
+        ])->healthCheck();
+        $this->adapter(merchantId: 'M-LIVE')->healthCheck();
+
+        Http::assertSent(static fn ($r): bool => str_starts_with($r->url(), 'https://listing-external-sit.hepsiburada.com/Listings/merchantid/M-TEST'));
+        Http::assertSent(static fn ($r): bool => str_starts_with($r->url(), 'https://listing-external.hepsiburada.com/Listings/merchantid/M-LIVE'));
     }
 
     /**
@@ -215,113 +249,50 @@ final class HepsiburadaAdapterTest extends TestCase
 
     // ─────────────────────────────────────────────────── webhook
 
-    /** Geçerli HMAC imzası KABUL edilir. */
-    #[Test]
-    public function a_valid_signature_is_accepted(): void
-    {
-        $raw = '{"orderNumber":"HB-1"}';
-        $secret = 'hb_webhook_secret_value';
-
-        $adapter = $this->adapter(secrets: [
-            'api_key' => 'k', 'api_secret' => 's', 'webhook_secret' => $secret,
-        ]);
-
-        $signature = base64_encode(hash_hmac('sha256', $raw, $secret, true));
-
-        $this->assertTrue($adapter->verifyWebhookSignature(
-            $raw,
-            ['X-HB-Signature' => [$signature]],
-        ));
-    }
-
     /**
-     * BAŞLIK ADI BÜYÜK/KÜÇÜK HARFTEN BAĞIMSIZ OKUNUR.
-     *
-     * HTTP başlık adları duyarsızdır ve vekil sunucular onları yeniden
-     * yazar. Tam eşleşme aransaydı MEŞRU webhook reddedilir ve kanal
-     * sonsuza kadar yeniden gönderirdi.
+     * HB bildirimi Basic auth taşır (imza YOK): `merchantId` +
+     * kasadaki `webhook_secret`. Doğrusu kabul edilir.
      */
     #[Test]
-    public function the_signature_header_is_matched_case_insensitively(): void
+    public function a_webhook_with_the_right_basic_auth_is_accepted(): void
     {
-        $raw = '{"orderNumber":"HB-2"}';
-        $secret = 'hb_webhook_secret_value';
-
-        $adapter = $this->adapter(secrets: [
-            'api_key' => 'k', 'api_secret' => 's', 'webhook_secret' => $secret,
+        $adapter = $this->adapter(merchantId: 'M-1', secrets: [
+            'service_key' => 'ANAHTAR12345', 'webhook_secret' => 'hb_webhook_sifresi',
         ]);
 
-        $signature = base64_encode(hash_hmac('sha256', $raw, $secret, true));
-
-        $this->assertTrue($adapter->verifyWebhookSignature(
-            $raw,
-            ['x-hb-signature' => [$signature]],
-        ));
+        $this->assertTrue($adapter->verifyWebhookSignature('{}', [
+            'Authorization' => ['Basic '.base64_encode('M-1:hb_webhook_sifresi')],
+        ]));
+        // Başlık adı ve şema adı harf duyarsız (vekiller yeniden yazar).
+        $this->assertTrue($adapter->verifyWebhookSignature('{}', [
+            'authorization' => ['basic '.base64_encode('M-1:hb_webhook_sifresi')],
+        ]));
     }
 
-    /** Yanlış imza REDDEDİLİR — sahte sipariş enjeksiyonu engellenir. */
+    /** Yanlış şifre, başka satıcı, başlıksız ya da şifre tanımsız → RED. */
     #[Test]
-    public function a_forged_signature_is_rejected(): void
+    public function a_webhook_without_the_right_basic_auth_is_rejected(): void
     {
-        $adapter = $this->adapter(secrets: [
-            'api_key' => 'k', 'api_secret' => 's', 'webhook_secret' => 'dogru_sir',
+        $adapter = $this->adapter(merchantId: 'M-1', secrets: [
+            'service_key' => 'ANAHTAR12345', 'webhook_secret' => 'dogru',
         ]);
 
-        $this->assertFalse($adapter->verifyWebhookSignature(
-            '{"orderNumber":"HB-3"}',
-            ['X-HB-Signature' => ['sahte-imza']],
-        ));
-    }
-
-    /**
-     * GÖVDE DEĞİŞİRSE İMZA TUTMAZ.
-     *
-     * İmzanın HAM GÖVDE üzerinden doğrulanmasının sebebi budur: tek bir
-     * baytın değişmesi doğrulamayı düşürmeli.
-     */
-    #[Test]
-    public function tampering_with_the_body_breaks_the_signature(): void
-    {
-        $secret = 'hb_webhook_secret_value';
-
-        $adapter = $this->adapter(secrets: [
-            'api_key' => 'k', 'api_secret' => 's', 'webhook_secret' => $secret,
-        ]);
-
-        $signature = base64_encode(hash_hmac('sha256', '{"qty":1}', $secret, true));
-
-        $this->assertFalse($adapter->verifyWebhookSignature(
-            '{"qty":999}',
-            ['X-HB-Signature' => [$signature]],
-        ));
-    }
-
-    /**
-     * SIR TANIMSIZSA DOĞRULAMA "GEÇTİ" DEMEZ.
-     *
-     * Güvenli taraf REDDETMEKTİR: kabul etmek, imzasız sipariş
-     * enjeksiyonuna kapı açardı.
-     */
-    #[Test]
-    public function a_missing_webhook_secret_rejects_instead_of_accepting(): void
-    {
-        $adapter = $this->adapter(secrets: ['api_key' => 'k', 'api_secret' => 's']);
-
-        $this->assertFalse($adapter->verifyWebhookSignature(
-            '{"orderNumber":"HB-4"}',
-            ['X-HB-Signature' => ['herhangi']],
-        ));
-    }
-
-    /** İmza başlığı hiç yoksa REDDEDİLİR. */
-    #[Test]
-    public function a_missing_signature_header_is_rejected(): void
-    {
-        $adapter = $this->adapter(secrets: [
-            'api_key' => 'k', 'api_secret' => 's', 'webhook_secret' => 'sir',
-        ]);
-
+        $this->assertFalse($adapter->verifyWebhookSignature('{}', [
+            'Authorization' => ['Basic '.base64_encode('M-1:yanlis')],
+        ]));
+        $this->assertFalse($adapter->verifyWebhookSignature('{}', [
+            'Authorization' => ['Basic '.base64_encode('M-2:dogru')],
+        ]));
         $this->assertFalse($adapter->verifyWebhookSignature('{}', []));
+        $this->assertFalse($adapter->verifyWebhookSignature('{}', [
+            'Authorization' => ['Bearer dogru'],
+        ]));
+
+        // Şifre kasada yoksa "geçti" denmez.
+        $noSecret = $this->adapter(merchantId: 'M-3', secrets: ['service_key' => 'ANAHTAR12345']);
+        $this->assertFalse($noSecret->verifyWebhookSignature('{}', [
+            'Authorization' => ['Basic '.base64_encode('M-3:')],
+        ]));
     }
 
     // ─────────────────────────────────────────── yazılmamış yetenekler
@@ -390,7 +361,7 @@ final class HepsiburadaAdapterTest extends TestCase
     /**
      * YER TUTUCU ADIYLA DOLDURULUR, KONUMLA DEĞİL.
      *
-     * Konumla eşleştirme `{merchantId}` ve `{merchantSku}`'nun sırası
+     * Konumla eşleştirme `{merchantId}` ve `{id}`'nin sırası
      * değiştiğinde sessizce yanlış değeri yazar ve istek BAŞKA bir
      * satıcının SKU'suna giderdi (toplu içe aktarmadaki "kolonlar ADIYLA
      * eşlenir" kuralının aynısı).
@@ -399,11 +370,11 @@ final class HepsiburadaAdapterTest extends TestCase
     public function endpoint_placeholders_are_filled_by_name(): void
     {
         $path = HepsiburadaEndpoints::path(
-            HepsiburadaEndpoints::LISTING_UPDATE,
-            ['merchantId' => 'M1', 'merchantSku' => 'TSH-001'],
+            HepsiburadaEndpoints::STOCK_UPLOAD_STATUS,
+            ['id' => 'U-9', 'merchantId' => 'M1'],
         );
 
-        $this->assertSame('/listings/merchantid/M1/sku/TSH-001', $path);
+        $this->assertSame('/Listings/merchantid/M1/stock-uploads/id/U-9', $path);
     }
 
     /**
@@ -418,7 +389,7 @@ final class HepsiburadaAdapterTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         HepsiburadaEndpoints::path(
-            HepsiburadaEndpoints::LISTING_UPDATE,
+            HepsiburadaEndpoints::STOCK_UPLOAD_STATUS,
             ['merchantId' => 'M1'],
         );
     }
@@ -445,11 +416,11 @@ final class HepsiburadaAdapterTest extends TestCase
     public function path_values_are_url_encoded(): void
     {
         $path = HepsiburadaEndpoints::path(
-            HepsiburadaEndpoints::LISTING_UPDATE,
-            ['merchantId' => 'M1', 'merchantSku' => 'A/B C'],
+            HepsiburadaEndpoints::STOCK_UPLOAD_STATUS,
+            ['merchantId' => 'M1', 'id' => 'A/B C'],
         );
 
-        $this->assertSame('/listings/merchantid/M1/sku/A%2FB%20C', $path);
+        $this->assertSame('/Listings/merchantid/M1/stock-uploads/id/A%2FB%20C', $path);
     }
 
     // ─────────────────────────────────────────────────── hız sınırı
@@ -471,16 +442,22 @@ final class HepsiburadaAdapterTest extends TestCase
 
     // ─────────────────────────────────────────────────── yardımcılar
 
+    /**
+     * @param  array<string, string>  $secrets
+     * @param  array<string, string>  $settings
+     */
     private function adapter(
         string $merchantId = 'MERCHANT-1',
-        array $secrets = ['api_key' => 'k', 'api_secret' => 's'],
+        array $secrets = ['service_key' => 'ANAHTAR12345'],
+        array $settings = [HepsiburadaAdapter::INTEGRATOR_KEY => 'firma_dev'],
     ): HepsiburadaAdapter {
         [$tenant] = $this->makeTenant();
 
-        return $this->asTenant($tenant, function () use ($merchantId, $secrets): HepsiburadaAdapter {
+        return $this->asTenant($tenant, function () use ($merchantId, $secrets, $settings): HepsiburadaAdapter {
             $connection = ChannelConnection::factory()->create([
                 'channel_type_code' => 'hepsiburada',
                 'external_account_id' => $merchantId,
+                'settings' => $settings,
             ]);
 
             app(CredentialVault::class)->store($connection, $secrets);
