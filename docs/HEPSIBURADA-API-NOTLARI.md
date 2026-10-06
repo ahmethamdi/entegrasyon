@@ -134,7 +134,20 @@ yalnız HB'nin önceden yüklediği ürünlerle açılır.
 
 ---
 
-## Koddaki sapmalar (6 Eki tespiti)
+## Kod durumu (6 Eki akşam)
+
+- ✅ ① kimlik/User-Agent/ortam/webhook-auth (`a86a402`) · ② ilan içe aktarma +
+  katalog zenginleştirme (`2031421`) · ③ stok (`stock-uploads`) ve fiyat
+  (`price-uploads`) + uzak okuma (`8126c24`) · ④ sipariş yoklaması: açık
+  kalemler (siparişe gruplu, sayfa sınırında erteleme) + kalem iptalleri.
+- Kanal yalnız YOKLAMA ile çalışır (`supports_webhooks=false`): webhook'lu
+  kanal yoklanmıyor; HB webhook'u satıcının HB'ye bildirmesini ve gövde
+  işlemeyi gerektirir — sonraki adım.
+- ⏭️ Açık: `/packages` (iki tur arasında paketlenen sipariş `/orders`'tan
+  düşer), iadeler (`/claims`), webhook, upload sonucunu okuma
+  (`…-uploads/id/{id}` errors), saat dilimi ölçümü, gerçek SIT testi.
+
+## Koddaki sapmalar (6 Eki tespiti — ①'de düzeltildi)
 
 1. `User-Agent` biçimi yanlış (§1).
 2. Webhook HMAC doğrulaması var ama HB imza göndermiyor (§5) → meşru

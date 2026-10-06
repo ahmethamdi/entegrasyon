@@ -142,6 +142,15 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
      */
     private const IMPORT_PAGE_SIZE = 50;
 
+    /** Sipariş listesi sayfası. */
+    private const ORDER_PAGE_SIZE = 100;
+
+    /** Saat dilimi belgelenmediği için sorgu penceresinin genişletilmesi. */
+    private const ORDER_DATE_SLACK_HOURS = 3;
+
+    /** Ofsetsiz kanal tarihleri için varsayılan dilim (DOĞRULANMADI). */
+    private const CHANNEL_TIMEZONE = 'Europe/Istanbul';
+
     public function __construct(
         private readonly ChannelConnection $connection,
         private readonly ChannelHttpClient $client,
@@ -644,36 +653,259 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
         return $out;
     }
 
+    /**
+     * Sipariş yoklaması — iki liste sırayla: açık (paketlenmemiş) kalemler,
+     * sonra iptaller. İmleç `{liste}:{offset}`.
+     *
+     * SİPARİŞ BİRİMİ `orderNumber`, kalem `id` (lineItemId). Açık kalemler
+     * siparişe göre GRUPLANIR ve tek "created" olayı olur.
+     *
+     * ⚠️ SAYFA SINIRINDA YARIM SİPARİŞ ERTELENİR. Bir siparişin kalemleri iki
+     * sayfaya bölünürse ikinci parça "sipariş zaten alınmış" diye atlanır ve
+     * o kalemlerin stoğu HİÇ düşmezdi. Sayfanın son siparişi, devamı
+     * varsa bir sonraki sayfaya bırakılır.
+     *
+     * ⚠️ SAAT DİLİMİ BELGELENMEMİŞ (`begindate` örneği `2023-04-02 00:00`).
+     * Pencere 3 saat geriye GENİŞLETİLİR: dilim UTC de olsa TR de olsa
+     * sipariş kaçmaz; tekrar gelen kayıt olay kimliğiyle elenir.
+     *
+     * BİLİNEN BOŞLUK: `/orders` yalnız PAKETLENMEMİŞ kalemleri verir. Satıcı
+     * iki tur arasında paketlerse sipariş buradan düşer — paket listesi
+     * (`/packages`) ayrı adımda okunacak.
+     */
     public function fetchOrders(CarbonInterface $since, ?string $cursor = null): OrderPage
     {
-        throw new RuntimeException(
-            'Hepsiburada sipariş yoklaması henüz yazılmadı — uç noktalar '.
-            'doğrulanmadı.'
+        [$list, $offset] = $this->orderCursor($cursor);
+
+        $response = $this->client->get(
+            endpoint: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_ORDER, $this->isTest())
+                .HepsiburadaEndpoints::path(
+                    $list === 'open' ? HepsiburadaEndpoints::ORDERS : HepsiburadaEndpoints::ORDERS_CANCELLED,
+                    ['merchantId' => $this->merchantId()],
+                ),
+            query: [
+                'offset' => $offset,
+                'limit' => self::ORDER_PAGE_SIZE,
+                'begindate' => $since->copy()->subHours(self::ORDER_DATE_SLACK_HOURS)
+                    ->setTimezone(self::CHANNEL_TIMEZONE)->format('Y-m-d H:i'),
+                'enddate' => now()->addHours(self::ORDER_DATE_SLACK_HOURS)
+                    ->setTimezone(self::CHANNEL_TIMEZONE)->format('Y-m-d H:i'),
+            ],
+            headers: $this->defaultHeaders(),
+        );
+
+        $response->throw();
+
+        $items = array_values(array_filter((array) ($response->json('items') ?? []), 'is_array'));
+        $total = (int) ($response->json('totalCount') ?? 0);
+        $more = $offset + count($items) < $total && $items !== [];
+
+        if ($list === 'cancelled') {
+            $orders = array_map(static fn (array $line): array => ['_kind' => 'cancelled', ...$line], $items);
+
+            return new OrderPage(
+                orders: $orders,
+                nextCursor: $more ? 'cancelled:'.($offset + count($items)) : null,
+                hasMore: $more,
+            );
+        }
+
+        [$orders, $consumed] = self::groupOpenLines($items, $more);
+
+        // Açık liste bitti → iptallere geç.
+        return new OrderPage(
+            orders: $orders,
+            nextCursor: $more ? 'open:'.($offset + $consumed) : 'cancelled:0',
+            hasMore: true,
         );
     }
 
     /**
-     * ⚠️ YAZILMAMIŞ YETENEK SESSİZCE `null` DÖNMEZ.
+     * Açık kalemleri `orderNumber`'a göre gruplar. Devamı olan sayfanın SON
+     * siparişi ertelenir (sınıf notu); tek sipariş bütün sayfayı
+     * dolduruyorsa sonsuz döngü olmasın diye alınır.
      *
-     * `null` dönseydi tekilleştirme saatlik hash yoluna düşer ve yoklama
-     * "çalışıyor" görünürken aynı siparişin İPTALİ o pencerede
-     * kaybolabilirdi (v2.2 · §7).
+     * @param  list<array<string, mixed>>  $items
+     * @return array{0: list<array<string, mixed>>, 1: int} [siparişler, tüketilen kalem]
+     */
+    private static function groupOpenLines(array $items, bool $more): array
+    {
+        $groups = [];
+
+        foreach ($items as $index => $line) {
+            $number = (string) ($line['orderNumber'] ?? '');
+
+            if ($number === '') {
+                continue;
+            }
+
+            $groups[$number] ??= ['first' => $index, 'lines' => []];
+            $groups[$number]['lines'][] = $line;
+        }
+
+        $consumed = count($items);
+
+        if ($more && count($groups) > 1) {
+            $last = array_key_last($groups);
+            $consumed = $groups[$last]['first'];
+            unset($groups[$last]);
+        }
+
+        $orders = [];
+
+        foreach ($groups as $number => $group) {
+            $orders[] = ['_kind' => 'created', 'orderNumber' => (string) $number, 'items' => $group['lines']];
+        }
+
+        return [$orders, $consumed];
+    }
+
+    /** @return array{0: 'open'|'cancelled', 1: int} */
+    private function orderCursor(?string $cursor): array
+    {
+        if ($cursor !== null && preg_match('/^(open|cancelled):(\d+)$/', $cursor, $m) === 1) {
+            return [$m[1], (int) $m[2]];
+        }
+
+        return ['open', 0];
+    }
+
+    /**
+     * Olay kimliği — açık sipariş `{no}:created`, iptal `{no}:cancel:{kalem}`.
+     *
+     * İptal KALEM başınadır: kısmi iptaller birbirini ezmemeli; sipariş
+     * numarasına bağlansaydı ikinci kalemin iptali tekillikte yutulur ve
+     * stoğu geri eklenmezdi.
      *
      * @param  array<string, mixed>  $order
      */
     public function pollingEventIdFor(array $order): ?string
     {
-        throw new RuntimeException(
-            'Hepsiburada sipariş yoklaması henüz yazılmadı — uç noktalar '.
-            'doğrulanmadı.'
+        $number = trim((string) ($order['orderNumber'] ?? ''));
+
+        if ($number === '') {
+            return null;
+        }
+
+        return match ($order['_kind'] ?? null) {
+            'created' => "{$number}:created",
+            'cancelled' => isset($order['lineItemId']) && (string) $order['lineItemId'] !== ''
+                ? "{$number}:cancel:{$order['lineItemId']}"
+                : null,
+            default => null,
+        };
+    }
+
+    /**
+     * Yoklanan kaydı kanonik olaya çevirir.
+     *
+     * Kalem SKU'su `merchantSKU` (satıcının kodu, içe aktarmada varyant
+     * SKU'su odur); yoksa HB SKU'su. Kişisel veri (ad, adres) TAŞINMAZ.
+     */
+    public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
+    {
+        /** @var array<string, mixed> $payload */
+        $payload = is_array($message->payload) ? $message->payload : [];
+        $number = trim((string) ($payload['orderNumber'] ?? ''));
+
+        if ($number === '') {
+            return null;
+        }
+
+        $ref = $message->external_event_id ?? $this->pollingEventIdFor($payload);
+
+        if (($payload['_kind'] ?? null) === 'cancelled') {
+            return new NormalizedOrderEvent(
+                type: 'cancelled',
+                externalOrderId: $number,
+                externalRef: $ref,
+                // Kalem iptalidir; BAŞLIK durumu yazılmaz — tek kalemin
+                // iptali bütün siparişi "iptal" göstermemeli.
+                payload: ['lines' => [array_filter([
+                    'external_line_id' => isset($payload['lineItemId']) ? (string) $payload['lineItemId'] : null,
+                    'sku' => self::lineSku($payload['merchantSku'] ?? null, $payload['sku'] ?? null),
+                    'quantity' => (int) ($payload['quantity'] ?? 0),
+                ], static fn (mixed $v): bool => $v !== null && $v !== '')]],
+                occurredAt: self::channelDate($payload['cancelDate'] ?? null),
+            );
+        }
+
+        $lines = [];
+        $total = 0.0;
+        $currency = 'TRY';
+        $placedAt = null;
+        $customerId = null;
+
+        foreach ((array) ($payload['items'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $lineTotal = (float) ($item['totalPrice']['amount'] ?? 0);
+            $total += $lineTotal;
+            $currency = (string) ($item['unitPrice']['currency'] ?? $currency);
+            $placedAt ??= self::channelDate($item['orderDate'] ?? null);
+            $customerId ??= isset($item['customerId']) ? (string) $item['customerId'] : null;
+
+            $lines[] = [
+                'external_line_id' => (string) ($item['id'] ?? ''),
+                'sku' => self::lineSku($item['merchantSKU'] ?? null, $item['sku'] ?? null),
+                'title' => (string) ($item['name'] ?? ''),
+                'quantity' => (int) ($item['quantity'] ?? 0),
+                'unit_price' => (string) ($item['unitPrice']['amount'] ?? '0'),
+                'line_total' => (string) ($item['totalPrice']['amount'] ?? '0'),
+            ];
+        }
+
+        return new NormalizedOrderEvent(
+            type: 'created',
+            externalOrderId: $number,
+            externalRef: $ref,
+            payload: [
+                'type' => 'created',
+                'external_number' => $number,
+                'status' => 'Open',
+                'currency' => $currency,
+                'subtotal' => (string) $total,
+                'grand_total' => (string) $total,
+                'lines' => $lines,
+                'customer_ref' => array_filter(['external_customer_id' => $customerId]),
+            ],
+            occurredAt: $placedAt,
+            placedAt: $placedAt,
         );
     }
 
-    public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
+    /** Satıcının kodu (büyük harf), yoksa HB SKU'su. */
+    private static function lineSku(mixed $merchantSku, mixed $hbSku): string
     {
-        throw new RuntimeException(
-            'Hepsiburada sipariş normalleştirmesi henüz yazılmadı.'
-        );
+        $merchant = is_scalar($merchantSku) ? trim((string) $merchantSku) : '';
+
+        if ($merchant !== '') {
+            return strtoupper($merchant);
+        }
+
+        return is_scalar($hbSku) ? trim((string) $hbSku) : '';
+    }
+
+    /**
+     * Kanal tarihi. Ofset taşıyorsa (`…Z`) o kullanılır; taşımıyorsa
+     * Türkiye saati varsayılır — DOĞRULANMADI, ilk gerçek siparişte
+     * panelle karşılaştırılacak (Trendyol `orderDate`'i +3 kaydırıyordu).
+     */
+    private static function channelDate(mixed $raw): ?DateTimeImmutable
+    {
+        if (! is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+
+        try {
+            $hasZone = preg_match('/(Z|[+-]\d{2}:?\d{2})$/', trim($raw)) === 1;
+
+            return new DateTimeImmutable(trim($raw), $hasZone ? null : new \DateTimeZone(self::CHANNEL_TIMEZONE));
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     public function acknowledgeOrder(Order $order): AdapterResult

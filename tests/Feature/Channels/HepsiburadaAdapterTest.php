@@ -32,7 +32,6 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
-use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -372,38 +371,6 @@ final class HepsiburadaAdapterTest extends TestCase
         $this->assertNull($page->nextCursor);
     }
 
-    // ─────────────────────────────────────────── yazılmamış yetenekler
-
-    /**
-     * YAZILMAMIŞ YETENEK SESSİZCE BAŞARILI DÖNMEZ (§7).
-     *
-     * `AdapterResult::success()` dönseydi operasyon tamamlandı sanılır,
-     * `synced_version` ilerler ve satır kanalda hiçbir şey değişmemişken
-     * "senkron" görünürdü — teşhisi en zor hata sınıfı.
-     *
-     * **BU LİSTE MADDE KAPANDIKÇA KÜÇÜLÜR.** Yazılan bir gövde listeden
-     * çıkarılmazsa test YANLIŞ SEBEPLE kırmızıya döner ve o, kuralın
-     * kendisini korur (Trendyol'da aynı kalıp kullanılıyor).
-     */
-    #[Test]
-    public function unimplemented_capabilities_throw_instead_of_reporting_success(): void
-    {
-        $adapter = $this->adapter();
-
-        $unwritten = [
-            'fetchOrders' => fn () => $adapter->fetchOrders(now()),
-        ];
-
-        foreach ($unwritten as $name => $call) {
-            try {
-                $call();
-                $this->fail("{$name} sessizce başarılı döndü — §7 ihlali.");
-            } catch (RuntimeException $e) {
-                $this->assertStringContainsString('yazılmadı', $e->getMessage());
-            }
-        }
-    }
-
     // ─────────────────────────────────────────────────── stok / fiyat
 
     /**
@@ -655,7 +622,7 @@ final class HepsiburadaAdapterTest extends TestCase
                     'fulfillment' => false,
                 ],
                 'rate_limit_profile' => [],
-                'supports_webhooks' => true,
+                'supports_webhooks' => false,
                 // UÇ NOKTALAR DOĞRULANMADAN CANLI BAĞLANTI AÇILMAZ.
                 'is_active' => false,
             ],

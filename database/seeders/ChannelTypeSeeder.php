@@ -170,8 +170,12 @@ class ChannelTypeSeeder extends Seeder
                     'max_inventory_batch' => 1000,
                     'max_price_batch' => 1000,
                 ],
-                // Trendyol'un AKSİNE webhook VAR (imzasız, Basic auth).
-                'supports_webhooks' => true,
+                // HB'de webhook VAR (imzasız, Basic auth) ama satıcının HB'ye
+                // ayrıca bildirmesi gerekir ve gövdesi henüz işlenmiyor.
+                // `true` olsaydı yoklama ATLANIR ve hiçbir sipariş gelmezdi
+                // (PollChannelOrders webhook'lu kanalı yoklamaz). Webhook
+                // yazılınca açılacak.
+                'supports_webhooks' => false,
                 'is_active' => false,
             ],
         );
