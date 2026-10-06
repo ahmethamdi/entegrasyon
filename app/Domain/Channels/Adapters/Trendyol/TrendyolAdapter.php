@@ -16,6 +16,7 @@ use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -37,6 +38,8 @@ use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
+use App\Domain\Sync\Support\RemoteProduct;
+use App\Domain\Sync\Support\RemoteProductPage;
 use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -90,7 +93,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsCatalog, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     use DeclaresRequestQuota;
 
@@ -713,6 +716,122 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
         }
 
         return array_values(array_unique($barcodes));
+    }
+
+    // ------------------------------------------------- katalog içe aktarma
+
+    /**
+     * Satıcının Trendyol'daki onaylı ürünlerini sayfa sayfa okur — §7 ·
+     * SupportsCatalogImport. 6 Eki 2026'ya kadar YOKTU: Trendyol satıcısı
+     * mevcut kataloğunu 34Pazar'a hiç çekemiyordu (panel "ürün çekmeyi
+     * destekleyen kanal yok" diyordu).
+     *
+     * Trendyol'da bir İÇERİK (`contentId`) altında birden çok VARYANT
+     * (beden/renk) durur; kanonik model 1 ürün = 1 varyanttır. Her varyant
+     * ayrı ürün olur, içerik kimliği `external_parent_id`'ye yazılır ve
+     * panel bunları ekranda gruplar (Shopify ile aynı).
+     *
+     * KİMLİK BARKODDUR: gönderim (`batchResult`) ve okuma
+     * (`approvedVariants`) ilanı barkodla tanır. İçe aktarılan ürün bu
+     * barkodla CANLI ilana bağlanmazsa ilk gönderim Trendyol'da KOPYA
+     * ürün yaratırdı.
+     *
+     * SKU: satıcının `stockCode`'u, yoksa barkod. Gerçek hesapta (2.918
+     * ürün) `stockCode` boş geldi — barkod Trendyol'da zaten benzersizdir.
+     *
+     * ARŞİVLİ VARYANT ALINMAZ: satıcı onu Trendyol'da kaldırmıştır; stok
+     * gönderilse bile satılamaz.
+     *
+     * İmleç sayfa numarasıdır (Trendyol `page`, 0'dan başlar).
+     */
+    public function fetchProductPage(?string $cursor = null): RemoteProductPage
+    {
+        $page = $cursor === null ? 0 : (int) $cursor;
+
+        $response = $this->get($this->sellerUrl('product', 'products/approved'), [
+            'page' => $page,
+            'size' => self::APPROVED_PAGE_SIZE,
+        ]);
+
+        $response->throw();
+
+        $products = [];
+
+        foreach ((array) ($response->json('content') ?? []) as $content) {
+            if (! is_array($content)) {
+                continue;
+            }
+
+            foreach ((array) ($content['variants'] ?? []) as $variant) {
+                if (is_array($variant) && ! self::flag($variant['archived'] ?? false)) {
+                    $products[] = self::toRemoteProduct($content, $variant);
+                }
+            }
+        }
+
+        $totalPages = (int) ($response->json('totalPages') ?? 1);
+
+        return new RemoteProductPage(
+            products: $products,
+            nextCursor: $page + 1 < $totalPages ? (string) ($page + 1) : null,
+            hasMore: $page + 1 < $totalPages,
+        );
+    }
+
+    /**
+     * Tur başına en fazla 50 sayfa — 100'lük sayfayla 5.000 içerik.
+     *
+     * Emniyet sınırıdır (bkz. Woo). Trendyol `page` ile 10.000 kaydın
+     * ötesine geçmez; o büyüklükte `nextPageToken` gerekir — ayrı madde.
+     */
+    public function maxImportPages(): int
+    {
+        return 50;
+    }
+
+    /**
+     * @param  array<string, mixed>  $content
+     * @param  array<string, mixed>  $variant
+     */
+    private static function toRemoteProduct(array $content, array $variant): RemoteProduct
+    {
+        $barcode = trim((string) ($variant['barcode'] ?? ''));
+        $stockCode = trim((string) ($variant['stockCode'] ?? ''));
+        $contentId = isset($content['contentId']) ? (string) $content['contentId'] : null;
+        $brand = is_array($content['brand'] ?? null) ? trim((string) ($content['brand']['name'] ?? '')) : '';
+        $description = trim((string) ($content['description'] ?? ''));
+        $url = isset($variant['productUrl']) ? (string) $variant['productUrl'] : null;
+
+        return new RemoteProduct(
+            externalId: $barcode,
+            sku: $stockCode !== '' ? $stockCode : ($barcode !== '' ? $barcode : null),
+            title: isset($content['title']) ? (string) $content['title'] : null,
+            // Fiyat STRING kalır — float dönüşümü kuruş kayması üretir.
+            price: isset($variant['price']['salePrice']) ? (string) $variant['price']['salePrice'] : null,
+            // Stok nesnesi miktarsız gelebilir (hiç stok girilmemiş) — o 0'dır.
+            quantity: (int) ($variant['stock']['quantity'] ?? 0),
+            description: $description !== '' ? $description : null,
+            brand: $brand !== '' ? $brand : null,
+            barcode: $barcode !== '' ? $barcode : null,
+            status: self::flag($variant['onSale'] ?? false) ? 'on_sale' : 'not_on_sale',
+            images: array_values(array_filter(array_map(
+                static fn (mixed $image): string => is_array($image) ? (string) ($image['url'] ?? '') : '',
+                (array) ($content['images'] ?? []),
+            ), static fn (string $url): bool => str_starts_with($url, 'https://'))),
+            raw: [...$variant, 'contentId' => $contentId],
+            listingIdentity: $barcode === '' ? [] : array_filter([
+                'external_id' => $barcode,
+                'external_parent_id' => $contentId,
+                'external_url' => $url,
+            ], static fn (?string $value): bool => $value !== null && $value !== ''),
+            currency: 'TRY',
+        );
+    }
+
+    /** Trendyol bayrakları JSON'da bool, bazı uçlarda "true"/"false" metni gelir. */
+    private static function flag(mixed $value): bool
+    {
+        return $value === true || (is_string($value) && strtolower($value) === 'true');
     }
 
     // ------------------------------------------------------------- katalog
