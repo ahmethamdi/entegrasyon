@@ -146,6 +146,8 @@ final class ShopifyBillingTest extends TestCase
         $this->remoteStatus[self::SUB_1] = 'ACTIVE';
 
         // İngilizce panel: plan adı da çevrilir ("Your Başlangıç plan" çıkıyordu).
+        // Şalter AÇIKÇA kurulur: yerel .env'de açık, CI'da kapalı.
+        config(['app.english_panel' => true]);
         $this->actingAs($user)->withHeader('Accept-Language', 'en-US')->get('/billing/shopify/return?charge_id=111')
             ->assertRedirect('/billing')
             ->assertSessionHas('success', 'Your Starter plan is active. The charge is added to your Shopify bill.');
