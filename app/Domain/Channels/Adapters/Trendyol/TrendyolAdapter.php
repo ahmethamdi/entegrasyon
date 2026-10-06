@@ -1257,7 +1257,12 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
             // v2: `lineId`, `lineUnitPrice`, `lineGrossAmount`, `stockCode`.
             $lines[] = [
                 'external_line_id' => (string) ($item['lineId'] ?? $item['id'] ?? ''),
-                'sku' => (string) ($item['barcode'] ?? $item['stockCode'] ?? $item['merchantSku'] ?? ''),
+                // İÇE AKTARMAYLA AYNI KURAL: `stockCode`, boşsa barkod.
+                // Önce barkod okunuyordu; 34Pazar'dan gönderilen üründe
+                // stockCode = varyant SKU'su, barkod ayrıdır ve kalem hiçbir
+                // varyantla eşleşmez, stok SESSİZCE düşmezdi (gerçek
+                // siparişte bulundu, 6 Eki).
+                'sku' => self::lineSku($item),
                 'title' => (string) ($item['productName'] ?? $item['barcode'] ?? ''),
                 'quantity' => $quantity,
                 'unit_price' => (string) ($item['lineUnitPrice'] ?? $item['price'] ?? $item['amount'] ?? '0'),
@@ -1266,6 +1271,24 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
         }
 
         return $lines;
+    }
+
+    /**
+     * Sipariş kaleminin SKU'su — içe aktarmadaki kuralla AYNI.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    private static function lineSku(array $item): string
+    {
+        foreach (['stockCode', 'merchantSku', 'barcode'] as $key) {
+            $value = trim((string) ($item[$key] ?? ''));
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     /**

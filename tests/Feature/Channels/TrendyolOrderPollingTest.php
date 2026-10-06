@@ -177,7 +177,7 @@ final class TrendyolOrderPollingTest extends TestCase
 
         $line = $event->payload['lines'][0];
 
-        // SKU BARKODDUR: eşleştirme barkod üzerinden yapılır.
+        // stockCode YOKSA SKU barkoddur (içe aktarmayla aynı kural).
         $this->assertSame('BARKOD-A', $line['sku']);
         $this->assertSame(2, $line['quantity']);
     }
@@ -217,7 +217,10 @@ final class TrendyolOrderPollingTest extends TestCase
         $line = $event->payload['lines'][0];
 
         $this->assertSame('77', $line['external_line_id']);
-        $this->assertSame('BARKOD-A', $line['sku']);
+        // stockCode VARSA SKU odur: 34Pazar'dan gönderilen üründe stockCode
+        // varyant SKU'sudur, barkod ayrıdır. Barkod okunsaydı kalem hiçbir
+        // varyantla eşleşmez ve stok sessizce düşmezdi (gerçek sipariş, 6 Eki).
+        $this->assertSame('STK-A', $line['sku']);
         $this->assertSame('50.25', $line['unit_price']);
         $this->assertSame('100.5', $line['line_total']);
     }
