@@ -21,7 +21,9 @@ use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\InventoryPushBatch;
+use App\Domain\Sync\Support\InventoryPushItem;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Support\Logging\PayloadRedactor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -389,16 +391,6 @@ final class HepsiburadaAdapterTest extends TestCase
         $adapter = $this->adapter();
 
         $unwritten = [
-            // GERÇEK nesne kurulur: bu değer nesneleri `final` ve
-            // stub'lanamaz — projede bilinçli bir tasarım kararı.
-            'pushInventory' => fn () => $adapter->pushInventory(
-                new InventoryPushBatch(channelConnectionId: 'c1', items: [])
-            ),
-            'pushPrices' => fn () => $adapter->pushPrices(
-                new PricePushBatch(channelConnectionId: 'c1', items: [])
-            ),
-            'fetchInventory' => fn () => $adapter->fetchInventory([]),
-            'fetchPrices' => fn () => $adapter->fetchPrices([]),
             'fetchOrders' => fn () => $adapter->fetchOrders(now()),
         ];
 
@@ -412,23 +404,107 @@ final class HepsiburadaAdapterTest extends TestCase
         }
     }
 
+    // ─────────────────────────────────────────────────── stok / fiyat
+
     /**
-     * STOK/FİYAT GÖVDELERİ AYNI-YÜK TUZAĞINI AÇIKÇA SÖYLER.
+     * STOK `stock-uploads`'a gider ve FİYAT TAŞIMAZ.
      *
-     * Bu kural Trendyol'un TERSİ ve yazacak kişi onu bilmezse satışı
-     * kapatan bir yük gönderir. Mesaj bir belge değil, KORUMA.
+     * Toplu `inventory-uploads`'ta tek alan gönderilince ötekinin sıfırlanıp
+     * sıfırlanmadığı belgelenmemiş; sıfırlanırsa satış kapanır.
+     * `merchantSku` büyük harfe çevrilir (HB öyle saklar).
      */
     #[Test]
-    public function the_unwritten_push_methods_warn_about_the_shared_payload(): void
+    public function stock_goes_to_stock_uploads_without_a_price(): void
     {
-        $adapter = $this->adapter();
+        Http::fake(['*' => Http::response(['id' => 'UP-1'], 200)]);
 
-        try {
-            $adapter->pushInventory(new InventoryPushBatch(channelConnectionId: 'c1', items: []));
-            $this->fail('istisna bekleniyordu');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('AYNI', $e->getMessage());
-        }
+        $result = $this->adapter(merchantId: 'M-STK')->pushInventory(new InventoryPushBatch(
+            channelConnectionId: 'c1',
+            items: [new InventoryPushItem(listingId: 'l1', externalId: 'HBV1', sku: 'kupa-01', quantity: 4, version: 1)],
+        ));
+
+        $this->assertTrue($result->successful);
+        $this->assertSame('UP-1', $result->data['upload_id']);
+
+        Http::assertSent(static fn ($r): bool => $r->method() === 'POST'
+            && str_ends_with($r->url(), '/Listings/merchantid/M-STK/stock-uploads')
+            && $r->data() === [['hepsiburadaSku' => 'HBV1', 'merchantSku' => 'KUPA-01', 'availableStock' => 4]]);
+    }
+
+    /**
+     * FİYAT `price-uploads`'a gider ve STOK TAŞIMAZ; `merchantSku` içe
+     * aktarmanın `channel_metadata`'ya yazdığı değerden gelir.
+     */
+    #[Test]
+    public function price_goes_to_price_uploads_without_stock(): void
+    {
+        Http::fake(['*' => Http::response(['id' => 'UP-2'], 200)]);
+
+        [$tenant] = $this->makeTenant();
+
+        [$adapter, $listingId] = $this->asTenant($tenant, function () use ($tenant): array {
+            $connection = ChannelConnection::factory()->create([
+                'tenant_id' => $tenant->id,
+                'channel_type_code' => 'hepsiburada',
+                'external_account_id' => 'M-PRC',
+                'settings' => [HepsiburadaAdapter::INTEGRATOR_KEY => 'firma_dev'],
+            ]);
+            app(CredentialVault::class)->store($connection, ['service_key' => 'ANAHTAR12345']);
+            $listing = Listing::factory()->create([
+                'tenant_id' => $tenant->id,
+                'channel_connection_id' => $connection->id,
+                'external_id' => 'HBV2',
+                'channel_metadata' => ['merchant_sku' => 'KUPA-02'],
+            ]);
+
+            return [$this->adapterFor($connection), $listing->id];
+        });
+
+        $this->asTenant($tenant, fn () => $adapter->pushPrices(new PricePushBatch(
+            channelConnectionId: 'c1',
+            items: [['listing_id' => $listingId, 'external_id' => 'HBV2', 'price' => '129.90', 'version' => 1]],
+        )));
+
+        Http::assertSent(static fn ($r): bool => str_ends_with($r->url(), '/Listings/merchantid/M-PRC/price-uploads')
+            && $r->data() === [['hepsiburadaSku' => 'HBV2', 'merchantSku' => 'KUPA-02', 'price' => 129.9]]);
+    }
+
+    /** Başarısız yükleme İSTİSNA olarak yükselir — sessizce başarılı dönmez. */
+    #[Test]
+    public function a_failed_upload_throws(): void
+    {
+        Http::fake(['*' => Http::response(['message' => 'hata'], 400)]);
+
+        $this->expectException(RequestException::class);
+
+        $this->adapter()->pushInventory(new InventoryPushBatch(
+            channelConnectionId: 'c1',
+            items: [new InventoryPushItem(listingId: 'l1', externalId: 'HBV1', sku: 'A', quantity: 1, version: 1)],
+        ));
+    }
+
+    /**
+     * Uzak stok/fiyat `hbSkuList` ile okunur; kimliksiz listing sorulmaz,
+     * hiç kimlik yoksa çağrı YAPILMAZ (filtresiz istek bütün kataloğu getirirdi).
+     */
+    #[Test]
+    public function remote_stock_and_price_are_read_by_hb_sku(): void
+    {
+        Http::fake(['*' => Http::response(['listings' => [
+            ['hepsiburadaSku' => 'HBV1', 'availableStock' => 3, 'price' => 99.5],
+        ]], 200)]);
+
+        $adapter = $this->adapter(merchantId: 'M-READ');
+
+        $this->assertSame([], $adapter->fetchInventory([])->quantitiesByExternalId);
+        Http::assertNothingSent();
+
+        $listing = new Listing(['external_id' => 'HBV1']);
+
+        $this->assertSame(['HBV1' => 3], $adapter->fetchInventory([$listing])->quantitiesByExternalId);
+        $this->assertSame(['HBV1' => '99.5'], $adapter->fetchPrices([$listing])->pricesByExternalId);
+
+        Http::assertSent(static fn ($r): bool => str_contains($r->url(), 'hbSkuList=HBV1'));
     }
 
     // ─────────────────────────────────────────────────── uç noktalar

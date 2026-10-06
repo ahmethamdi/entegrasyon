@@ -30,6 +30,7 @@ use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
+use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Log;
@@ -462,26 +463,32 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
     // ------------------------------------------------------------- yetenekler
 
     /**
-     * @param  list<Listing>  $listings
+     * Stoğu MUTLAK değer olarak iter — `POST /Listings/.../stock-uploads`.
+     *
+     * AYRI UÇ: toplu `inventory-uploads` stok ve fiyatı birlikte alır ve tek
+     * alan gönderilince ötekinin sıfırlanıp sıfırlanmadığı BELGELENMEMİŞ —
+     * sıfırlanırsa satış kapanır. `stock-uploads` yalnız stoğu taşır.
+     *
+     * Kimlik `hepsiburadaSku` (listing `external_id`) + `merchantSku`
+     * (varyant SKU'su). ASENKRON: yanıttaki `id` sonuçta taşınır; gerçekten
+     * uygulandığını mutabakat (`fetchInventory`) doğrular.
      */
-    public function fetchInventory(array $listings): RemoteInventorySnapshot
-    {
-        throw new RuntimeException(
-            'Hepsiburada stok okuma henüz yazılmadı — uç noktalar doğrulanmadı '.
-            '(HepsiburadaEndpoints).'
-        );
-    }
-
     public function pushInventory(InventoryPushBatch $batch): AdapterResult
     {
-        // SESSİZCE BAŞARILI DÖNMEZ (§7): `AdapterResult::success()`
-        // dönseydi operasyon tamamlandı sanılır, `synced_version` ilerler
-        // ve satır kanalda hiçbir şey değişmemişken "senkron" görünürdü.
-        throw new RuntimeException(
-            'Hepsiburada stok itme henüz yazılmadı. DİKKAT: stok ve fiyat AYNI '.
-            'yükte gider (Trendyol\'un tersi) — yalnızca stok göndermek fiyatı '.
-            'sıfırlayıp satışı KAPATABİLİR.'
+        if ($batch->isEmpty()) {
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $items = array_map(
+            static fn (array $item): array => array_filter([
+                'hepsiburadaSku' => (string) $item['external_id'],
+                'merchantSku' => isset($item['sku']) ? strtoupper((string) $item['sku']) : null,
+                'availableStock' => $item['quantity'],
+            ], static fn (mixed $v): bool => $v !== null && $v !== ''),
+            $batch->toArray(),
         );
+
+        return $this->upload(HepsiburadaEndpoints::STOCK_UPLOAD, $items, $batch->count());
     }
 
     public function maxInventoryBatchSize(): int
@@ -490,27 +497,151 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
     }
 
     /**
+     * Uzak stoğu okur — `GET /Listings?hbSkuList=` (mutabakat girdisi).
+     *
      * @param  list<Listing>  $listings
      */
-    public function fetchPrices(array $listings): RemotePriceSnapshot
+    public function fetchInventory(array $listings): RemoteInventorySnapshot
     {
-        throw new RuntimeException(
-            'Hepsiburada fiyat okuma henüz yazılmadı — uç noktalar doğrulanmadı.'
-        );
+        $quantities = [];
+
+        foreach ($this->remoteListings($listings) as $hbSku => $row) {
+            $quantities[$hbSku] = (int) ($row['availableStock'] ?? 0);
+        }
+
+        return new RemoteInventorySnapshot($quantities, new DateTimeImmutable);
     }
 
+    /**
+     * Fiyatı MUTLAK değer olarak iter — `POST /Listings/.../price-uploads`.
+     *
+     * Simetrik kural: fiyat yükü stok taşımaz. HB'nin fiyat bandı kuralı
+     * (`OutOfPriceRange`) yüklemenin SONUCUNDA döner, yanıtta değil.
+     */
     public function pushPrices(PricePushBatch $batch): AdapterResult
     {
-        throw new RuntimeException(
-            'Hepsiburada fiyat itme henüz yazılmadı. DİKKAT: stok ve fiyat AYNI '.
-            'yükte gider — yalnızca fiyat göndermek stoğu sıfırlayıp satışı '.
-            'KAPATABİLİR.'
+        if ($batch->isEmpty()) {
+            return AdapterResult::success(['pushed' => 0]);
+        }
+
+        $merchantSkus = $this->merchantSkusFor(array_column($batch->items, 'listing_id'));
+
+        $items = array_map(
+            static fn (array $item): array => array_filter([
+                'hepsiburadaSku' => (string) $item['external_id'],
+                'merchantSku' => $merchantSkus[$item['listing_id']] ?? null,
+                // Para STRING'den sayıya burada, kanal sınırında çevrilir.
+                'price' => round((float) $item['price'], 2),
+            ], static fn (mixed $v): bool => $v !== null && $v !== ''),
+            $batch->items,
         );
+
+        return $this->upload(HepsiburadaEndpoints::PRICE_UPLOAD, $items, $batch->count());
     }
 
     public function maxPriceBatchSize(): int
     {
         return self::MAX_INVENTORY_BATCH;
+    }
+
+    /**
+     * Uzak fiyatı okur. Fiyat STRING taşınır (kuruş kayması olmasın).
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchPrices(array $listings): RemotePriceSnapshot
+    {
+        $prices = [];
+
+        foreach ($this->remoteListings($listings) as $hbSku => $row) {
+            if (isset($row['price']) && is_numeric($row['price'])) {
+                $prices[$hbSku] = (string) $row['price'];
+            }
+        }
+
+        return new RemotePriceSnapshot($prices, new DateTimeImmutable);
+    }
+
+    /**
+     * Yükleme isteği — başarısızlık İSTİSNA olarak yükselir (§7).
+     *
+     * @param  list<array<string, mixed>>  $items
+     */
+    private function upload(string $template, array $items, int $count): AdapterResult
+    {
+        $response = $this->client->post(
+            endpoint: $this->listingPath($template),
+            body: $items,
+            headers: $this->defaultHeaders(),
+        );
+
+        $response->throw();
+
+        return AdapterResult::success([
+            'pushed' => $count,
+            // Asenkron işin kimliği — sonuç `…-uploads/id/{id}`.
+            'upload_id' => $response->json('id'),
+        ]);
+    }
+
+    /**
+     * Uzak ilan satırları `hepsiburadaSku` ile — stok ve fiyat okuması ORTAK.
+     *
+     * Kimliksiz listing sorulmaz; hiç kimlik yoksa çağrı YAPILMAZ (filtresiz
+     * istek bütün kataloğu getirirdi). Başarısız yanıt yükseltilir: boş
+     * sonuç mutabakatta "kanalda ürün yok" sanılırdı.
+     *
+     * @param  list<Listing>  $listings
+     * @return array<string, array<string, mixed>>
+     */
+    private function remoteListings(array $listings): array
+    {
+        $hbSkus = array_values(array_unique(array_filter(array_map(
+            static fn (Listing $listing): string => (string) ($listing->external_id ?? ''),
+            $listings,
+        ))));
+
+        $rows = [];
+
+        foreach (array_chunk($hbSkus, 100) as $chunk) {
+            $response = $this->client->get(
+                endpoint: $this->listingPath(HepsiburadaEndpoints::LISTING_LIST),
+                query: ['offset' => 0, 'limit' => count($chunk), 'hbSkuList' => implode(',', $chunk)],
+                headers: $this->defaultHeaders(),
+            );
+
+            $response->throw();
+
+            foreach ((array) ($response->json('listings') ?? []) as $row) {
+                if (is_array($row) && isset($row['hepsiburadaSku'])) {
+                    $rows[(string) $row['hepsiburadaSku']] = $row;
+                }
+            }
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Listing kimliğinden `merchantSku` — içe aktarmanın `channel_metadata`'ya
+     * yazdığı değer, yoksa varyant SKU'su.
+     *
+     * @param  list<string>  $listingIds
+     * @return array<string, string>
+     */
+    private function merchantSkusFor(array $listingIds): array
+    {
+        $out = [];
+
+        foreach (Listing::query()->with('variant')->whereIn('id', $listingIds)->get() as $listing) {
+            $sku = $listing->channel_metadata['merchant_sku'] ?? $listing->variant?->sku;
+
+            if (is_string($sku) && $sku !== '') {
+                $out[$listing->id] = strtoupper($sku);
+            }
+        }
+
+        return $out;
     }
 
     public function fetchOrders(CarbonInterface $since, ?string $cursor = null): OrderPage
