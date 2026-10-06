@@ -157,7 +157,7 @@ final class EtsyCatalogImportTest extends TestCase
                 'channel_type_code' => 'etsy',
                 'external_account_id' => 'etsy-'.uniqid(),
                 'status' => 'active',
-                'settings' => [EtsyAdapter::KEYSTRING_KEY => 'key-abc', EtsyAdapter::SHOP_ID_KEY => '777'],
+                'settings' => [EtsyAdapter::SHOP_ID_KEY => '777'],
             ]);
 
             app(CredentialVault::class)->store($this->connection, ['access_token' => '12345.token', 'refresh_token' => '12345.refresh']);

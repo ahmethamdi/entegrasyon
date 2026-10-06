@@ -56,7 +56,8 @@ final class EtsyAdapterTest extends TestCase
 
         $this->adapter()->healthCheck();
 
-        Http::assertSent(fn ($request): bool => $request->hasHeader('x-api-key', 'key-abc')
+        // Etsy 9 Şub 2026'dan beri `keystring:shared_secret` ister.
+        Http::assertSent(fn ($request): bool => $request->hasHeader('x-api-key', 'key-abc:sir-xyz')
             && $request->hasHeader('Authorization', 'Bearer 12345.token'));
     }
 
@@ -426,16 +427,15 @@ final class EtsyAdapterTest extends TestCase
     ): array {
         $tenant = $this->makeTenant();
 
-        $connection = $this->asTenant($tenant, function () use ($keystring, $shopId, $refreshToken): ChannelConnection {
+        // Uygulama anahtarı bağlantıda değil SUNUCU AYARINDA (`EtsyApp`).
+        config(['services.etsy.keystring' => $keystring]);
+
+        $connection = $this->asTenant($tenant, function () use ($shopId, $refreshToken): ChannelConnection {
             $connection = ChannelConnection::factory()->create([
                 'channel_type_code' => 'etsy',
                 'external_account_id' => 'etsy-shop-'.uniqid(),
                 'status' => 'active',
                 'settings' => array_filter([
-                    // ⚠️ `settings` ŞİFRESİZDİR — buraya YALNIZCA KİMLİK
-                    // yazılır. Keystring uygulamanın kimliğidir, sır değil
-                    // (§19 · madde 4). Token'lar kasadadır.
-                    EtsyAdapter::KEYSTRING_KEY => $keystring,
                     EtsyAdapter::SHOP_ID_KEY => $shopId,
                 ], static fn (mixed $v): bool => $v !== null),
             ]);

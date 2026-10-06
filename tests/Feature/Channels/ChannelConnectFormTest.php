@@ -77,14 +77,14 @@ final class ChannelConnectFormTest extends TestCase
      * yaşar (§19 · madde 4).
      */
     #[Test]
-    public function etsy_asks_for_identity_only_and_never_for_a_secret(): void
+    public function etsy_asks_for_nothing_the_app_and_shop_come_from_oauth(): void
     {
+        // 7 Eki 2026: keystring 34Pazar'ın tek uygulamasından (`EtsyApp`),
+        // shop_id OAuth dönüşünden gelir — satıcıya hiçbir alan sorulmaz.
         $this->assertSame([], ChannelConnectForm::secretFields('etsy'));
-
-        $this->assertSame(
-            [EtsyAdapter::KEYSTRING_KEY, EtsyAdapter::SHOP_ID_KEY],
-            array_column(ChannelConnectForm::identityFields('etsy'), 'name'),
-        );
+        $this->assertSame([], ChannelConnectForm::identityFields('etsy'));
+        $this->assertFalse(ChannelConnectForm::asksStoreUrl('etsy'));
+        $this->assertTrue(ChannelConnectForm::accountFromOauth('etsy'));
     }
 
     // ────────────────────────────────────────── eBay (slice 4.2 · §13 · §17)
@@ -357,9 +357,6 @@ final class ChannelConnectFormTest extends TestCase
         $response = $this->actingAs($user)->post('/channels', [
             'channel_type_code' => 'etsy',
             'label' => 'Etsy Mağazam',
-            'store_url' => 'magazam.etsy.com',
-            EtsyAdapter::KEYSTRING_KEY => 'keystring-abc',
-            EtsyAdapter::SHOP_ID_KEY => '12345678',
         ]);
 
         $connection = $this->connectionFor('etsy');
@@ -417,9 +414,6 @@ final class ChannelConnectFormTest extends TestCase
             ->post('/channels', [
                 'channel_type_code' => 'etsy',
                 'label' => 'Etsy',
-                'store_url' => 'magazam.etsy.com',
-                EtsyAdapter::KEYSTRING_KEY => 'keystring-abc',
-                EtsyAdapter::SHOP_ID_KEY => '12345678',
             ]);
 
         $response->assertStatus(409);
@@ -432,32 +426,29 @@ final class ChannelConnectFormTest extends TestCase
     }
 
     /**
-     * ⚠️ KEYSTRING VE SHOP_ID `settings`'E YAZILIR — adapter oradan okur.
-     *
-     * `shop_id` bugüne kadar HİÇBİR kod yolundan yazılmıyordu (yalnızca
-     * testlerde elle tohumlanıyordu) ve Etsy'nin sağlık kontrolü onsuz
-     * SAĞLIKSIZ döner: "mağaza seçilmedi". Yani OAuth turu kusursuz
-     * tamamlansa bile bağlantı `pending` kalırdı.
+     * Etsy bağlantısı GEÇİCİ hesap kimliğiyle açılır; asıl kimlik (shop_id)
+     * OAuth dönüşünde yazılır (`EtsyOAuthFlowTest`). Yarım kalmış önceki
+     * deneme yenisi açılırken silinir — kalsaydı kanal kotasına sayılırdı.
      */
     #[Test]
-    public function the_etsy_identity_reaches_the_settings_column(): void
+    public function etsy_opens_a_pending_connection_and_replaces_an_abandoned_one(): void
     {
         [$user] = $this->tenantWithChannels();
 
         Http::fake();
 
-        $this->actingAs($user)->post('/channels', [
-            'channel_type_code' => 'etsy',
-            'label' => 'Etsy',
-            'store_url' => 'magazam.etsy.com',
-            EtsyAdapter::KEYSTRING_KEY => 'keystring-abc',
-            EtsyAdapter::SHOP_ID_KEY => '12345678',
-        ]);
+        $this->actingAs($user)->post('/channels', ['channel_type_code' => 'etsy', 'label' => 'Etsy']);
+        $first = $this->connectionFor('etsy');
 
-        $settings = $this->connectionFor('etsy')->settings;
+        $this->assertStringStartsWith(ChannelConnectForm::PENDING_ACCOUNT_PREFIX, (string) $first->external_account_id);
 
-        $this->assertSame('keystring-abc', $settings[EtsyAdapter::KEYSTRING_KEY] ?? null);
-        $this->assertSame('12345678', $settings[EtsyAdapter::SHOP_ID_KEY] ?? null);
+        $this->actingAs($user)->post('/channels', ['channel_type_code' => 'etsy', 'label' => 'Etsy']);
+
+        $ids = $this->asSystem(fn (): array => ChannelConnection::query()
+            ->where('channel_type_code', 'etsy')->pluck('id')->all());
+
+        $this->assertCount(1, $ids, 'Yarım kalan deneme silinmeli.');
+        $this->assertNotSame($first->id, $ids[0]);
     }
 
     /**
@@ -478,9 +469,6 @@ final class ChannelConnectFormTest extends TestCase
         $this->actingAs($user)->post('/channels', [
             'channel_type_code' => 'etsy',
             'label' => 'Etsy',
-            'store_url' => 'magazam.etsy.com',
-            EtsyAdapter::KEYSTRING_KEY => 'keystring-abc',
-            EtsyAdapter::SHOP_ID_KEY => '12345678',
         ]);
 
         Http::assertNothingSent();
@@ -504,70 +492,23 @@ final class ChannelConnectFormTest extends TestCase
     }
 
     /**
-     * ⚠️ EKSİK `shop_id` ALAN HATASIDIR ve bağlantı AÇILMAZ.
-     *
-     * Açılsaydı satıcı OAuth turunu tamamlar, token kasaya yazılır ve
-     * sağlık kontrolü yine "mağaza seçilmedi" derdi — tüm el sıkışma
-     * boşa gitmiş olurdu.
+     * 34Pazar'ın Etsy uygulaması sunucuda tanımsızsa bağlantı AÇILMAZ:
+     * satıcı Etsy'nin "bilinmeyen uygulama" sayfasına giderdi.
      */
     #[Test]
-    public function etsy_without_a_shop_id_is_a_field_error(): void
+    public function etsy_is_refused_while_the_app_is_not_configured(): void
     {
         [$user] = $this->tenantWithChannels();
+
+        config(['services.etsy.shared_secret' => null]);
 
         $this->actingAs($user)
-            ->post('/channels', [
-                'channel_type_code' => 'etsy',
-                'label' => 'Etsy',
-                'store_url' => 'magazam.etsy.com',
-                EtsyAdapter::KEYSTRING_KEY => 'keystring-abc',
-            ])
-            ->assertSessionHasErrors(EtsyAdapter::SHOP_ID_KEY);
+            ->post('/channels', ['channel_type_code' => 'etsy', 'label' => 'Etsy'])
+            ->assertSessionHasErrors('channel_type_code');
 
         $this->assertNull($this->connectionFor('etsy'));
-    }
-
-    /**
-     * ⚠️ YENİDEN BAĞLAMA YENİ SATIR AÇMAZ — anahtar yenileme akışı.
-     *
-     * Etsy'de bu ayrıca REFRESH TOKEN'IN süresi dolduğunda tek çıkış
-     * yoludur: satıcı aynı mağazayı yeniden bağlar ve OAuth turunu
-     * tekrarlar. Yeni satır açılsaydı `(tenant, type, account)` kısıtı
-     * ihlal edilir ve listing'ler eski bağlantıda asılı kalırdı.
-     */
-    #[Test]
-    public function reconnecting_etsy_reuses_the_same_row(): void
-    {
-        [$user] = $this->tenantWithChannels();
-
-        Http::fake();
-
-        $payload = [
-            'channel_type_code' => 'etsy',
-            'label' => 'Etsy',
-            'store_url' => 'magazam.etsy.com',
-            EtsyAdapter::KEYSTRING_KEY => 'keystring-abc',
-            EtsyAdapter::SHOP_ID_KEY => '12345678',
-        ];
-
-        $this->actingAs($user)->post('/channels', $payload);
-        $first = $this->connectionFor('etsy');
-
-        $this->actingAs($user)->post('/channels', [
-            ...$payload,
-            EtsyAdapter::KEYSTRING_KEY => 'keystring-YENI',
-        ]);
-
-        $this->assertSame(
-            1,
-            $this->asSystem(fn (): int => ChannelConnection::query()
-                ->where('channel_type_code', 'etsy')->count()),
-        );
-
-        $again = $this->connectionFor('etsy');
-
-        $this->assertSame($first->id, $again->id);
-        $this->assertSame('keystring-YENI', $again->settings[EtsyAdapter::KEYSTRING_KEY]);
+        $this->assertFalse(ChannelConnectForm::present('etsy')['connectable']);
+        $this->assertTrue(ChannelConnectForm::present('etsy')['appMissing']);
     }
 
     /**

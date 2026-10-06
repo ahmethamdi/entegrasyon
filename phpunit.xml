@@ -42,6 +42,8 @@
         <env name="DB_PASSWORD" value="secret"/>
         <env name="DB_URL" value=""/>
 
+        <env name="ETSY_KEYSTRING" value="key-abc"/>
+        <env name="ETSY_SHARED_SECRET" value="sir-xyz"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

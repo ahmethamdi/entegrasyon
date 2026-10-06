@@ -6,12 +6,15 @@ namespace App\Http\Controllers;
 
 use App\Domain\Channels\Actions\CheckChannelHealth;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
+use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Etsy\EtsyAuth;
 use App\Domain\Channels\Adapters\Etsy\EtsyEndpoints;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Support\ChannelConnectForm;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Actions\RecordAuditLog;
 use App\Domain\Identity\Enums\AuditAction;
+use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -87,7 +90,7 @@ final class EtsyOAuthController extends Controller
         $request->session()->put(self::SESSION_CONNECTION, $connection->id);
 
         $target = EtsyAuth::authorizeUrl(
-            keystring: $this->keystring($connection),
+            keystring: EtsyApp::keystring(),
             redirectUri: route('channels.etsy.callback'),
             state: $handshake['state'],
             codeVerifier: $handshake['code_verifier'],
@@ -181,6 +184,33 @@ final class EtsyOAuthController extends Controller
             );
         }
 
+        // Mağaza kimliği SATICIYA SORULMAZ: token'ın sahibi olan hesabın
+        // mağazası Etsy'den okunur ve bağlantının ASIL kimliği olur.
+        try {
+            $shopId = $this->shopIdFor($secrets['secrets']['access_token']);
+        } catch (Throwable $e) {
+            Log::warning('etsy.oauth.shop_lookup_failed', ['connection' => $connection->id, 'error' => $e->getMessage()]);
+
+            return redirect()->route('channels.index')->with(
+                'success',
+                __('Etsy kimlik bilgisi alınamadı. Lütfen yeniden deneyin.'),
+            );
+        }
+
+        if ($shopId === null) {
+            $this->discardPending($connection);
+
+            return redirect()->route('channels.index')
+                ->with('success', __('Etsy hesabında açık bir mağaza bulunamadı.'));
+        }
+
+        $connection = $this->adoptShop($connection, $shopId);
+
+        if ($connection === null) {
+            return redirect()->route('channels.index')
+                ->with('success', __('Bu mağaza başka bir hesaba bağlı.'));
+        }
+
         DB::transaction(function () use ($connection, $secrets): void {
             // Kimlik bilgisi KASAYA yazılır — `settings`'e ASLA (§19 · 3).
             $this->vault->store(
@@ -227,7 +257,7 @@ final class EtsyOAuthController extends Controller
             ->post(
                 EtsyEndpoints::url(EtsyEndpoints::TOKEN),
                 EtsyAuth::tokenRequest(
-                    keystring: $this->keystring($connection),
+                    keystring: EtsyApp::keystring(),
                     redirectUri: route('channels.etsy.callback'),
                     code: $code,
                     codeVerifier: $verifier,
@@ -282,21 +312,68 @@ final class EtsyOAuthController extends Controller
     }
 
     /**
-     * Uygulama anahtarı — `settings` içinde, KİMLİK olarak.
+     * Token sahibinin mağaza kimliği — `GET /users/me` → `shop_id`.
+     * Mağazası olmayan Etsy hesabında null.
      *
-     * Sır değildir (§19 · madde 4: kimlik ≠ sır); token'lar kasadadır.
+     * İstemci (`ChannelHttpClient`) kullanılmaz: token henüz kasada değil.
      */
-    private function keystring(ChannelConnection $connection): string
+    private function shopIdFor(string $accessToken): ?string
     {
-        $settings = $connection->settings;
-        $keystring = is_array($settings) ? ($settings[EtsyAdapter::KEYSTRING_KEY] ?? null) : null;
+        $response = Http::acceptJson()
+            ->timeout(15)
+            ->withToken($accessToken)
+            ->withHeaders(['x-api-key' => EtsyApp::apiKey()])
+            ->get(EtsyEndpoints::url(EtsyEndpoints::ME));
 
-        if (! is_string($keystring) || $keystring === '') {
-            throw new \RuntimeException(
-                'Etsy uygulama anahtarı (keystring) tanımsız.'
-            );
+        $response->throw();
+
+        $shopId = $response->json('shop_id');
+
+        return is_scalar($shopId) && (string) $shopId !== '' && (string) $shopId !== '0' ? (string) $shopId : null;
+    }
+
+    /**
+     * Bağlantıyı mağazaya bağlar ve YAZILACAK bağlantıyı döner.
+     *
+     *   · Mağaza BAŞKA kiracıya bağlı → geçici bağlantı silinir, null.
+     *   · Mağaza bu kiracıda ZATEN bağlı (yeniden bağlama) → token'lar o
+     *     bağlantıya yazılır, geçici olan silinir. İkinci satır açılsaydı
+     *     listing'ler eskisinde asılı kalır, iki bağlantı aynı mağazayı
+     *     yoklardı.
+     *   · Değilse geçici kimlik `shop_id` ile değiştirilir.
+     */
+    private function adoptShop(ChannelConnection $connection, string $shopId): ?ChannelConnection
+    {
+        $owner = TenantContext::runAsSystem(fn (): ?ChannelConnection => ChannelConnection::query()
+            ->where('channel_type_code', 'etsy')
+            ->where('external_account_id', $shopId)
+            ->first());
+
+        if ($owner !== null && $owner->tenant_id !== $connection->tenant_id) {
+            Log::warning('etsy.oauth.shop_owned_elsewhere', ['connection' => $connection->id]);
+            $this->discardPending($connection);
+
+            return null;
         }
 
-        return $keystring;
+        if ($owner !== null && $owner->id !== $connection->id) {
+            $this->discardPending($connection);
+            $connection = $owner;
+        }
+
+        $connection->forceFill([
+            'external_account_id' => $shopId,
+            'settings' => [...$connection->settings ?? [], EtsyAdapter::SHOP_ID_KEY => $shopId],
+        ])->save();
+
+        return $connection;
+    }
+
+    /** Hiç yetkilendirilmemiş (geçici kimlikli) bağlantıyı siler. */
+    private function discardPending(ChannelConnection $connection): void
+    {
+        if (str_starts_with((string) $connection->external_account_id, ChannelConnectForm::PENDING_ACCOUNT_PREFIX)) {
+            $connection->delete();
+        }
     }
 }

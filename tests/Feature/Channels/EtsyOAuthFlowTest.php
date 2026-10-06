@@ -7,6 +7,7 @@ namespace Tests\Feature\Channels;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Channels\Support\ChannelConnectForm;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
@@ -178,7 +179,7 @@ final class EtsyOAuthFlowTest extends TestCase
                 'refresh_token' => '12345.yeni-refresh',
                 'expires_in' => 3600,
             ], 200),
-            '*' => Http::response(['user_id' => 12345], 200),
+            '*' => Http::response(['user_id' => 12345, 'shop_id' => 777], 200),
         ]);
 
         $this->actingAs($user)
@@ -225,7 +226,7 @@ final class EtsyOAuthFlowTest extends TestCase
                 'refresh_token' => '12345.refresh',
                 'expires_in' => 3600,
             ], 200),
-            '*' => Http::response(['user_id' => 12345], 200),
+            '*' => Http::response(['user_id' => 12345, 'shop_id' => 777], 200),
         ]);
 
         $this->actingAs($user)
@@ -340,6 +341,115 @@ final class EtsyOAuthFlowTest extends TestCase
     }
 
     /** @return array{0: User, 1: ChannelConnection} */
+    // ───────────────────────────────── mağaza kimliği OAuth'tan (7 Eki 2026)
+
+    /**
+     * Satıcıya mağaza kimliği SORULMAZ: dönüşte `/users/me`'den okunur,
+     * geçici hesap kimliğinin yerine yazılır. İstek `keystring:secret` taşır.
+     */
+    #[Test]
+    public function the_shop_id_is_read_from_etsy_and_becomes_the_account(): void
+    {
+        [$user, $connection] = $this->pendingShop();
+
+        $this->fakeEtsy(shopId: 555);
+        $this->returnFromEtsy($user, $connection);
+
+        $fresh = TenantContext::runAsSystem(fn () => ChannelConnection::query()->find($connection->id));
+
+        $this->assertSame('555', $fresh->external_account_id);
+        $this->assertSame('555', $fresh->settings[EtsyAdapter::SHOP_ID_KEY]);
+        $this->assertSame('12345.yeni-access', $this->storedSecrets($connection)['access_token'] ?? null);
+        Http::assertSent(static fn ($r): bool => str_contains($r->url(), '/users/me')
+            && $r->hasHeader('x-api-key', 'key-abc:sir-xyz')
+            && $r->hasHeader('Authorization', 'Bearer 12345.yeni-access'));
+    }
+
+    /** Mağaza başka kiracıya bağlıysa geçici bağlantı silinir, token yazılmaz. */
+    #[Test]
+    public function a_shop_owned_by_another_tenant_is_refused(): void
+    {
+        [, $other] = $this->connectedShop();
+        TenantContext::runAsSystem(fn () => $other->forceFill(['external_account_id' => '555'])->save());
+
+        [$user, $connection] = $this->pendingShop();
+
+        $this->fakeEtsy(shopId: 555);
+        $this->returnFromEtsy($user, $connection);
+
+        $this->assertNull(TenantContext::runAsSystem(fn () => ChannelConnection::query()->find($connection->id)));
+        $this->assertNull($this->storedSecrets($other), 'Başkasının bağlantısına token yazılmamalı.');
+    }
+
+    /**
+     * Aynı kiracı mağazayı yeniden bağlarsa ikinci satır AÇILMAZ: token'lar
+     * mevcut bağlantıya gider, geçici olan silinir.
+     */
+    #[Test]
+    public function reconnecting_the_same_shop_reuses_the_existing_connection(): void
+    {
+        [$user, $pending] = $this->pendingShop();
+
+        $existing = TenantContext::runAsSystem(fn () => ChannelConnection::factory()->create([
+            'tenant_id' => $pending->tenant_id,
+            'channel_type_code' => 'etsy',
+            'external_account_id' => '555',
+            'status' => 'active',
+            'settings' => [EtsyAdapter::SHOP_ID_KEY => '555'],
+        ]));
+
+        $this->fakeEtsy(shopId: 555);
+        $this->returnFromEtsy($user, $pending);
+
+        $this->assertNull(TenantContext::runAsSystem(fn () => ChannelConnection::query()->find($pending->id)));
+        $this->assertSame('12345.yeni-access', $this->storedSecrets($existing)['access_token'] ?? null);
+    }
+
+    /** Mağazası olmayan Etsy hesabı: geçici bağlantı silinir. */
+    #[Test]
+    public function an_account_without_a_shop_is_not_connected(): void
+    {
+        [$user, $connection] = $this->pendingShop();
+
+        $this->fakeEtsy(shopId: null);
+        $this->returnFromEtsy($user, $connection);
+
+        $this->assertNull(TenantContext::runAsSystem(fn () => ChannelConnection::query()->find($connection->id)));
+    }
+
+    private function fakeEtsy(?int $shopId): void
+    {
+        Http::fake([
+            '*/oauth/token' => Http::response(['access_token' => '12345.yeni-access', 'refresh_token' => '12345.yeni-refresh', 'expires_in' => 3600], 200),
+            '*' => Http::response(array_filter(['user_id' => 12345, 'shop_id' => $shopId]), 200),
+        ]);
+    }
+
+    private function returnFromEtsy(User $user, ChannelConnection $connection): void
+    {
+        $this->actingAs($user)
+            ->withSession([
+                'etsy.oauth.state' => 'ayni-deger',
+                'etsy.oauth.code_verifier' => 'ver-123',
+                'etsy.oauth.connection' => $connection->id,
+            ])
+            ->get(route('channels.etsy.callback', ['code' => 'yetki-kodu', 'state' => 'ayni-deger']))
+            ->assertRedirect(route('channels.index'));
+    }
+
+    /** @return array{0: User, 1: ChannelConnection} */
+    private function pendingShop(): array
+    {
+        [$user, $connection] = $this->connectedShop();
+
+        TenantContext::runAsSystem(fn () => $connection->forceFill([
+            'external_account_id' => ChannelConnectForm::PENDING_ACCOUNT_PREFIX.uniqid(),
+            'settings' => [],
+        ])->save());
+
+        return [$user, $connection];
+    }
+
     private function connectedShop(): array
     {
         $this->asSystem(fn (): ChannelType => ChannelType::query()->updateOrCreate(
@@ -362,7 +472,6 @@ final class EtsyOAuthFlowTest extends TestCase
             'status' => 'pending',
             'settings' => [
                 // Keystring KİMLİKTİR, sır DEĞİL (§19 · madde 4).
-                EtsyAdapter::KEYSTRING_KEY => 'key-abc',
                 EtsyAdapter::SHOP_ID_KEY => '777',
             ],
         ]));

@@ -50,4 +50,13 @@ return [
         'install_url' => env('SHOPIFY_INSTALL_URL', 'https://apps.shopify.com/34pazar'),
     ],
 
+    // 34Pazar Etsy uygulaması (developers.etsy.com → Your Apps) — tek
+    // uygulama, bütün satıcılar OAuth ile bununla bağlanır. Etsy 9 Şub
+    // 2026'dan beri her istekte `x-api-key: keystring:shared_secret` ister.
+    // Boşsa Etsy bağlantısı açılmaz (EtsyApp::configured()).
+    'etsy' => [
+        'keystring' => env('ETSY_KEYSTRING'),
+        'shared_secret' => env('ETSY_SHARED_SECRET'),
+    ],
+
 ];

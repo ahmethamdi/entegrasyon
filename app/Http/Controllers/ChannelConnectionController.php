@@ -21,6 +21,7 @@ use App\Domain\Channels\Support\TokenStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -145,9 +146,34 @@ final class ChannelConnectionController extends Controller
 
         $fields = $request->validate($rules);
 
+        // Uygulaması sunucuda tanımsız kanal bağlanmaz (form zaten göstermez;
+        // doğrudan POST da reddedilir) — yoksa satıcı Etsy'nin "bilinmeyen
+        // uygulama" sayfasına gider ve geride yarım bağlantı kalırdı.
+        if (ChannelConnectForm::isDefined($code) && ! ChannelConnectForm::appConfigured($code)) {
+            throw ValidationException::withMessages([
+                'channel_type_code' => __('Bu kanalın 34Pazar uygulaması henüz etkin değil. Kısa süre içinde açılacak.'),
+            ]);
+        }
+
         $storeUrl = $fields['store_url'] ?? null;
         $accountField = ChannelConnectForm::accountField($code);
         $accountId = $accountField !== null ? (string) $fields[$accountField] : null;
+
+        // Hesap kimliği OAuth dönüşünde öğrenilen kanal (Etsy `shop_id`):
+        // bağlantı GEÇİCİ kimlikle açılır, callback asıl kimliği yazar.
+        //
+        // Yarım kalmış önceki deneme (satıcı izin ekranından vazgeçti)
+        // SİLİNİR: hiç token almamış satırdır, ama kalsaydı kanal kotasına
+        // sayılır ve tek kanal hakkı olan satıcı bir daha bağlanamazdı.
+        if (ChannelConnectForm::accountFromOauth($code)) {
+            ChannelConnection::query()
+                ->where('channel_type_code', $code)
+                ->where('external_account_id', 'like', ChannelConnectForm::PENDING_ACCOUNT_PREFIX.'%')
+                ->get()
+                ->each->delete();
+
+            $accountId = ChannelConnectForm::PENDING_ACCOUNT_PREFIX.Str::uuid()->toString();
+        }
 
         // Hata, satıcının GÖRDÜĞÜ alana yazılır: adres sorulmayan kanalda
         // `store_url` hatası ekranda hiçbir yerde çıkmazdı.

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Support;
 
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
-use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
+use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
@@ -62,6 +62,13 @@ use InvalidArgumentException;
  */
 final class ChannelConnectForm
 {
+    /**
+     * Hesap kimliği OAuth dönüşünde öğrenilen kanalın GEÇİCİ kimliği
+     * (`accountFromOauth`). Callback asıl kimliği (Etsy `shop_id`) yazar;
+     * bu önekle kalan bağlantı yetkilendirilmemiştir.
+     */
+    public const PENDING_ACCOUNT_PREFIX = 'oauth-bekliyor:';
+
     /**
      * Kanal başına alan tanımları.
      *
@@ -249,39 +256,20 @@ final class ChannelConnectForm
         ],
 
         'etsy' => [
-            // ⚠️ FORMDAN HİÇ SIR İSTENMEZ. Etsy OAuth 2 + PKCE kullanır
-            // ve token'ları `EtsyOAuthController::callback()` kasaya
-            // yazar. Burada bir "access token" alanı olsaydı satıcı Etsy
-            // panelinde OLMAYAN bir değeri arar, rastgele bir şey girer
-            // ve o ölü sır OAuth turuna kadar kasada dururdu.
+            // ⚠️ FORMDAN HİÇBİR ŞEY İSTENMEZ (7 Eki 2026). Önceden
+            // keystring ve shop ID satıcıya soruluyordu: satıcı kendi Etsy
+            // geliştirici uygulamasını açmak zorundaydı. Artık uygulama
+            // 34Pazar'ın (`EtsyApp`, sunucu ayarı); token'ları ve mağaza
+            // kimliğini `EtsyOAuthController::callback()` yazar.
+            //
+            // Mağaza adresi de SORULMAZ: `www.etsy.com/shop/X` biçiminde
+            // hesap kimliği alan adı olurdu ve her satıcı `www.etsy.com`
+            // ile çakışırdı. Gerçek kimlik (`shop_id`) OAuth dönüşünde gelir.
             'secrets' => [],
-            'identity' => [
-                [
-                    'name' => EtsyAdapter::KEYSTRING_KEY,
-                    'label' => 'Uygulama anahtarı (keystring)',
-                    'placeholder' => '',
-                    // Keystring UYGULAMANIN kimliğidir (`x-api-key`) ve
-                    // yenilenmez; SIR DEĞİLDİR (§11.2 · iki ayrı kimlik
-                    // başlığı).
-                    'hint' => 'Etsy geliştirici hesabındaki uygulamanın '
-                        .'keystring değeri. Bu bir parola değildir; '
-                        .'uygulamanın kimliğidir.',
-                ],
-                [
-                    'name' => EtsyAdapter::SHOP_ID_KEY,
-                    'label' => 'Mağaza kimliği (shop ID)',
-                    'placeholder' => '12345678',
-                    // ⚠️ `shop_id` YOL ÜZERİNDE taşınır (§19) ve sipariş
-                    // yoklaması ile katalog okuması onsuz ÇALIŞAMAZ.
-                    // Sağlık kontrolü onu bulamazsa bağlantıyı SAĞLIKSIZ
-                    // sayar — yani OAuth turu kusursuz tamamlansa bile
-                    // bağlantı `pending` kalırdı.
-                    'hint' => 'Etsy mağaza yöneticisinde Ayarlar → Bilgiler '
-                        .'ve görünüm altında görünen sayısal kimlik. Sipariş '
-                        .'ve katalog çağrıları bu kimlik üzerinden yapılır.',
-                ],
-            ],
+            'identity' => [],
             'oauth' => true,
+            'account_from_oauth' => true,
+            'app_configured' => [EtsyApp::class, 'configured'],
             'help' => 'Kaydettikten sonra Etsy\'nin yetkilendirme ekranına '
                 .'yönlendirileceksin. Anahtar girmene gerek yok — izni '
                 .'Etsy üzerinden vereceksin.',
@@ -466,7 +454,29 @@ final class ChannelConnectForm
 
     public static function asksStoreUrl(string $channelTypeCode): bool
     {
-        return self::accountField($channelTypeCode) === null;
+        return self::accountField($channelTypeCode) === null && ! self::accountFromOauth($channelTypeCode);
+    }
+
+    /**
+     * Hesap kimliği OAuth dönüşünde mi öğreniliyor (Etsy `shop_id`)? Öyleyse
+     * bağlantı geçici kimlikle açılır, callback asıl kimliği yazar.
+     */
+    public static function accountFromOauth(string $channelTypeCode): bool
+    {
+        return self::isDefined($channelTypeCode)
+            && (self::definition($channelTypeCode)['account_from_oauth'] ?? false) === true;
+    }
+
+    /**
+     * Kanalın 34Pazar uygulaması sunucuda tanımlı mı? Tanımsızsa bağlantı
+     * açılmaz: satıcı yetkilendirme ekranına gider, Etsy "bilinmeyen
+     * uygulama" der ve geride yarım bir bağlantı kalırdı.
+     */
+    public static function appConfigured(string $channelTypeCode): bool
+    {
+        $check = self::isDefined($channelTypeCode) ? (self::definition($channelTypeCode)['app_configured'] ?? null) : null;
+
+        return $check === null || (bool) $check();
     }
 
     /**
@@ -549,7 +559,10 @@ final class ChannelConnectForm
             'oauth' => self::usesOauth($channelTypeCode),
             'help' => $help !== null ? __($help) : null,
             'asksStoreUrl' => self::asksStoreUrl($channelTypeCode),
-            'connectable' => true,
+            // Uygulaması sunucuda tanımsız kanal formu göstermez; ekran
+            // sebebini ayrıca yazar (`appMissing`).
+            'connectable' => self::appConfigured($channelTypeCode),
+            'appMissing' => ! self::appConfigured($channelTypeCode),
             'installUrl' => self::installUrl($channelTypeCode),
         ];
     }

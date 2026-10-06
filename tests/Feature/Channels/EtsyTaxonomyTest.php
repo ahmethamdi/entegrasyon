@@ -482,7 +482,6 @@ final class EtsyTaxonomyTest extends TestCase
                 'external_account_id' => 'etsy-'.uniqid(),
                 'status' => 'active',
                 'settings' => [
-                    EtsyAdapter::KEYSTRING_KEY => 'key-abc',
                     EtsyAdapter::SHOP_ID_KEY => '777',
                 ],
             ]);

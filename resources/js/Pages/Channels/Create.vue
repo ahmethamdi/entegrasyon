@@ -218,7 +218,9 @@ function submit() {
                     {{ t(':channel panelden bağlanamıyor', { channel: selected?.name ?? '' }) }}
                 </p>
                 <p class="mt-1 text-sm text-amber-800">
-                    {{ t('Bu kanalın kimlik biçimi panelde tanımlı değil.') }}
+                    {{ selected?.appMissing
+                        ? t('Bu kanalın 34Pazar uygulaması henüz etkin değil. Kısa süre içinde açılacak.')
+                        : t('Bu kanalın kimlik biçimi panelde tanımlı değil.') }}
                 </p>
             </div>
 

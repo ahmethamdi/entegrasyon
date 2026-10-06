@@ -760,5 +760,7 @@
     "Uygulama Shopify mağazasından kaldırıldı.": "The app was uninstalled from the Shopify store.",
     "Shopify mağaza verisinin silinmesini istedi (shop/redact).": "Shopify requested deletion of the store's data (shop/redact).",
     ":count ürün kanalda arşivde olduğu için içe aktarılmadı. Satışa açmak için ürünü kanalda arşivden çıkarıp yeniden çekin.": ":count products were not imported because they are archived on the channel. Unarchive them on the channel and import again.",
-    "Kategorinin zorunlu özellikleri kanaldan alınamadı; birazdan eşleştirmeyi yeniden kaydedin.": "We couldn't load this category's required attributes from the channel; please save the mapping again in a moment."
+    "Kategorinin zorunlu özellikleri kanaldan alınamadı; birazdan eşleştirmeyi yeniden kaydedin.": "We couldn't load this category's required attributes from the channel; please save the mapping again in a moment.",
+    "Bu kanalın 34Pazar uygulaması henüz etkin değil. Kısa süre içinde açılacak.": "This channel's 34Pazar app isn't active yet. It will be available soon.",
+    "Etsy hesabında açık bir mağaza bulunamadı.": "No open shop was found on this Etsy account."
 }

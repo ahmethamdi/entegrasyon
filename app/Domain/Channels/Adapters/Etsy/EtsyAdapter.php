@@ -75,7 +75,8 @@ use Throwable;
  * ⚠️ İKİ AYRI KİMLİK BAŞLIĞI VARDIR (§11.2)
  * ─────────────────────────────────────────────────────────────────────
  * `Authorization: Bearer {token}` SATICININ kimliğidir ve YENİLENİR.
- * `x-api-key: {keystring}` UYGULAMANIN kimliğidir ve YENİLENMEZ.
+ * `x-api-key: {keystring}:{shared_secret}` UYGULAMANIN kimliğidir,
+ * YENİLENMEZ ve sunucu ayarındadır (`EtsyApp`) — satıcı başına değil.
  *
  * İkisi karıştırılırsa yenileme çalışır ama istek yine 401 alır — ve o
  * 401 `AUTHENTICATION` KALICI sayılır, listing'ler "anahtarın yanlış"
@@ -133,16 +134,9 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
     private const ORDER_PAGE_SIZE = 100;
 
     /**
-     * Uygulama anahtarının `settings` içindeki yeri.
-     *
-     * ⚠️ `settings` ŞİFRESİZDİR ve panele Inertia prop'u olarak gider —
-     * oraya YALNIZCA keystring yazılır ve o bir SIR DEĞİL, uygulamanın
-     * KİMLİĞİDİR (§19 · madde 4: "kimlik ≠ sır"). Access ve refresh
-     * token'lar `channel_credentials` kasasındadır.
+     * Mağaza kimliğinin `settings` içindeki yeri — yol üzerinde taşınır.
+     * Satıcıya SORULMAZ: OAuth dönüşünde `GET /users/me`'den yazılır.
      */
-    public const KEYSTRING_KEY = 'etsy_keystring';
-
-    /** Mağaza kimliğinin `settings` içindeki yeri — yol üzerinde taşınır. */
     public const SHOP_ID_KEY = 'shop_id';
 
     /**
@@ -1576,7 +1570,7 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
 
         $response = $this->client->post(
             EtsyEndpoints::url(EtsyEndpoints::TOKEN),
-            EtsyAuth::refreshRequest($this->keystring(), $refreshToken),
+            EtsyAuth::refreshRequest(EtsyApp::keystring(), $refreshToken),
         );
 
         $response->throw();
@@ -1660,33 +1654,20 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
     // ────────────────────────────────────────────────────────── yardımcılar
 
     /**
-     * `x-api-key` başlığı — UYGULAMANIN kimliği.
+     * `x-api-key` başlığı — UYGULAMANIN kimliği: `keystring:shared_secret`
+     * (`EtsyApp`). Bağlantı başına değil, 34Pazar'ın tek Etsy uygulaması.
      *
-     * ⚠️ ANAHTAR YOKSA İSTEK HİÇ ATILMAZ. Boş başlıkla giden istek 401
-     * alır, `AUTHENTICATION` KALICI sayılır ve listing "anahtarın yanlış"
-     * diyerek ölür — oysa anahtar YOKTUR, yanlış değildir. Hepsiburada'nın
-     * "satıcı kimliği yoksa istek atılmaz" kuralının aynısı.
+     * ⚠️ ANAHTAR YOKSA İSTEK HİÇ ATILMAZ (`EtsyApp` fırlatır). Boş ya da
+     * eksik başlıkla giden istek 401 alır, `AUTHENTICATION` KALICI sayılır
+     * ve listing "anahtarın yanlış" diyerek ölür — oysa sorun sunucu
+     * ayarıdır. Hepsiburada'nın "satıcı kimliği yoksa istek atılmaz"
+     * kuralının aynısı.
      *
      * @return array<string, string>
      */
     private function apiKeyHeader(): array
     {
-        return ['x-api-key' => $this->keystring()];
-    }
-
-    private function keystring(): string
-    {
-        $settings = $this->connection->settings;
-        $keystring = is_array($settings) ? ($settings[self::KEYSTRING_KEY] ?? null) : null;
-
-        if (! is_string($keystring) || $keystring === '') {
-            throw new RuntimeException(
-                'Etsy uygulama anahtarı (keystring) tanımsız — istek kimliksiz '.
-                'gider ve kanal 401 döner; sebep hiçbir yerde görünmezdi.'
-            );
-        }
-
-        return $keystring;
+        return ['x-api-key' => EtsyApp::apiKey()];
     }
 
     /** Mağaza kimliği — yol üzerinde taşınır (§19). */
