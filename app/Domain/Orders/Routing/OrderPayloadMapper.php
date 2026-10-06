@@ -97,7 +97,7 @@ final class OrderPayloadMapper
             shippingTotal: (string) ($payload['shipping_total'] ?? '0'),
             taxTotal: (string) ($payload['tax_total'] ?? '0'),
             grandTotal: (string) ($payload['grand_total'] ?? '0'),
-            placedAt: $normalized->occurredAt,
+            placedAt: $normalized->placedAt,
             customerRef: $payload['customer_ref'] ?? [],
             inboxMessageId: $inboxMessageId,
         );

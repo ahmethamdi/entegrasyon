@@ -137,6 +137,8 @@ final class OrderEventRouter
             return;
         }
 
+        $this->syncHeaderStatus($order, $normalized);
+
         $lines = OrderPayloadMapper::toAffectedLines($normalized, $order);
 
         if ($lines === []) {
@@ -165,6 +167,8 @@ final class OrderEventRouter
         if ($order === null) {
             return;
         }
+
+        $this->syncHeaderStatus($order, $normalized);
 
         $lines = OrderPayloadMapper::toAffectedLines($normalized, $order);
 
@@ -204,8 +208,8 @@ final class OrderEventRouter
      * ⚠️ YALNIZCA BAĞLANTIDAN SONRA VERİLEN SİPARİŞ. Bağlantıdan önce
      * verilmiş sipariş, kanaldan içe aktarılan açılış stoğuna ZATEN
      * yansımıştır; onu şimdi yaratmak aynı satışı İKİNCİ kez düşerdi.
-     * Ölçüt olayın `occurredAt`'idir — bütün normalizer'lar onu siparişin
-     * YARATILMA tarihinden doldurur (güncellenme tarihinden değil).
+     * Ölçüt olayın `placedAt`'idir — siparişin
+     * YARATILMA anı (olayın güncellenme anı değil).
      * Tarih ya da bağlantı zamanı bilinmiyorsa YARATILMAZ: emin
      * olunamayan durumda çift düşüş, kaçırılan düşüşten kötüdür.
      *
@@ -228,7 +232,7 @@ final class OrderEventRouter
         }
 
         $connectedAt = $message->connection?->connected_at;
-        $placedAt = $normalized->occurredAt;
+        $placedAt = $normalized->placedAt;
 
         if ($connectedAt === null || $placedAt === null || $placedAt < $connectedAt->toDateTimeImmutable()) {
             return null;
@@ -250,6 +254,31 @@ final class OrderEventRouter
             ->where('channel_connection_id', $message->channel_connection_id)
             ->where('external_id', $normalized->externalOrderId)
             ->first();
+    }
+
+    /**
+     * İptal/iade siparişin BAŞLIK durumunu da günceller.
+     *
+     * Bu yollar kalemleri ve stoğu işler ama başlığa dokunmuyordu: gerçek
+     * Trendyol iptalinde kalem "1 iptal" gösterirken sipariş hâlâ
+     * "ReadyToShip" yazıyordu (6 Eki). Kalem eşleşmese bile başlık
+     * güncellenir — satıcı siparişin iptal olduğunu görmeli.
+     */
+    private function syncHeaderStatus(Order $order, NormalizedOrderEvent $normalized): void
+    {
+        $changes = [];
+
+        foreach (['status', 'financial_status'] as $field) {
+            $value = $normalized->payload[$field] ?? null;
+
+            if (is_string($value) && $value !== '' && $order->{$field} !== $value) {
+                $changes[$field] = $value;
+            }
+        }
+
+        if ($changes !== []) {
+            $order->forceFill($changes)->save();
+        }
     }
 
     private function resolveOrder(NormalizedOrderEvent $normalized, InboxMessage $message): ?Order

@@ -24,6 +24,7 @@ use App\Domain\Orders\Models\OrderLine;
 use App\Domain\Orders\Routing\OrderEventRouter;
 use App\Domain\Orders\Support\PollChannelOrders;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
@@ -376,6 +377,88 @@ final class TrendyolOrderSliceTest extends TestCase
             $this->warehouse($tenant)->id,
             $variant->id,
         );
+
+        // Başlık da iptal görünür (gerçek iptalde "ReadyToShip"te kalmıştı).
+        $status = $this->asTenant($tenant, fn () => Order::query()->where('external_id', 'PKG-1')->value('status'));
+        $this->assertSame('Cancelled', $status);
+    }
+
+    /**
+     * ⚠️ `orderDate` TÜRKİYE SAATİNİ UTC GİBİ TAŞIR — 3 saat düzeltilir.
+     *
+     * Olay anı ise `lastModifiedDate`'tir: iptal, siparişin verildiği
+     * dakikada değil iptal edildiği anda görünür. Gerçek siparişte panel
+     * 16:52'de verilen siparişi ve sonraki iptalini 18:51 gösteriyordu.
+     */
+    #[Test]
+    public function order_and_event_times_are_read_correctly(): void
+    {
+        [$tenant, $connection] = $this->setUpConnection();
+        $this->connectedAt($tenant, $connection, '-1 day');
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        $placed = now()->subHours(2)->startOfSecond();
+        $cancelledAt = now()->subMinutes(10)->startOfSecond();
+
+        $package = fn (string $status, $modified): array => [
+            'shipmentPackageId' => 6001, 'orderNumber' => 'TY-60',
+            'shipmentPackageStatus' => $status,
+            'orderDate' => $placed->copy()->addHours(3)->getTimestampMs(),
+            'lastModifiedDate' => $modified->getTimestampMs(),
+            'lines' => [['lineId' => 1, 'barcode' => 'BARKOD-A', 'quantity' => 1]],
+        ];
+
+        Http::fake(['*' => Http::sequence()
+            ->push(['content' => [$package('Created', $placed)], 'totalPages' => 1], 200)
+            ->push(['content' => [$package('Cancelled', $cancelledAt)], 'totalPages' => 1], 200),
+        ]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $order = $this->asTenant($tenant, fn () => Order::query()->where('external_id', '6001')->firstOrFail());
+        $this->assertSame($placed->toIso8601String(), $order->placed_at->toIso8601String());
+
+        $cancelEvent = $this->asTenant($tenant, fn () => DB::table('order_events')
+            ->where('order_id', $order->id)->where('type', 'cancelled')->value('occurred_at'));
+        $this->assertSame($cancelledAt->format('Y-m-d H:i:s'), Carbon::parse($cancelEvent)->format('Y-m-d H:i:s'));
+    }
+
+    /**
+     * ⚠️ +3 SAAT KAYMASI "BAĞLANTIDAN SONRA" SANILMAZ (A14 sınırı).
+     *
+     * Bağlantıdan 2 saat ÖNCE verilmiş sipariş, ham `orderDate`'e göre
+     * bağlantıdan 1 saat SONRA görünür. Düzeltilmeseydi kaçırılmış sipariş
+     * diye yaratılır ve açılış stoğuna zaten yansımış satış ikinci kez
+     * düşerdi.
+     */
+    #[Test]
+    public function the_order_date_offset_does_not_adopt_a_pre_connection_order(): void
+    {
+        [$tenant, $connection] = $this->setUpConnection();
+        $this->connectedAt($tenant, $connection, '-1 hour');
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        Http::fake(['*' => Http::response(['content' => [[
+            'shipmentPackageId' => 6002, 'orderNumber' => 'TY-61',
+            'shipmentPackageStatus' => 'Shipped',
+            // Gerçekte 3 saat önce; ham değer bağlantıdan SONRA görünür.
+            'orderDate' => now()->subHours(3)->addHours(3)->getTimestampMs(),
+            'lastModifiedDate' => now()->subMinutes(5)->getTimestampMs(),
+            'lines' => [['lineId' => 1, 'barcode' => 'BARKOD-A', 'quantity' => 3]],
+        ]], 'totalPages' => 1], 200)]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(10, $this->availableFor($tenant, $variant));
+        $this->assertNull($this->asTenant($tenant, fn () => Order::query()->where('external_id', '6002')->first()));
     }
 
     /**

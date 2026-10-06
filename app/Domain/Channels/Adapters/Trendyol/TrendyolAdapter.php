@@ -168,6 +168,9 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
      * oluştuğunda zaten düşülmüştür; kargo aşamaları yalnızca anlık
      * görüntüyü tazeler.
      */
+    /** `orderDate` Türkiye saatini UTC gibi taşır (`placedAt`). */
+    private const ORDER_DATE_OFFSET_HOURS = 3;
+
     private const STATUS_TO_TYPE = [
         'Created' => 'created',
         'Awaiting' => 'created',
@@ -1197,7 +1200,11 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
             // Çıpa DURUMU taşır — aynı paketin iki olayı çakışamaz.
             externalRef: $message->external_event_id ?? "{$package}:{$status}",
             payload: $this->toCanonicalOrderPayload($payload, $type, $orderNumber, $status),
-            occurredAt: $this->parseOrderDate($payload),
+            // Olay anı = paketin son değişikliği (gerçek UTC); sipariş
+            // anı ayrı. İkisi aynı alandan okunuyordu: iptal de siparişin
+            // verildiği dakikada görünüyordu.
+            occurredAt: self::epochMs($payload['lastModifiedDate'] ?? null) ?? $this->placedAt($payload),
+            placedAt: $this->placedAt($payload),
         );
     }
 
@@ -1235,8 +1242,7 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
     /**
      * Sipariş kalemleri.
      *
-     * SKU BARKODDUR: Trendyol ürünü barkodla tanır ve listing'in
-     * `external_id`'si de odur (`ListingMapper`). Eşleşmezse
+     * SKU `stockCode`, boşsa barkod (`lineSku`). Eşleşmezse
      * `order_lines.variant_id` NULL kalır, satır PENDING olur ve sipariş
      * KAYBEDİLMEZ (Karar 24).
      *
@@ -1313,17 +1319,35 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
         return (string) ($payload['shipmentPackageStatus'] ?? $payload['status'] ?? '');
     }
 
-    /** @param array<string, mixed> $payload */
-    private function parseOrderDate(array $payload): ?DateTimeImmutable
+    /**
+     * Siparişin verildiği an.
+     *
+     * ⚠️ `orderDate` TÜRKİYE SAATİNİ UTC GİBİ taşır (+3 saat ileri). Gerçek
+     * siparişte ölçüldü (6 Eki): `orderDate` 16:51:50Z, aynı anın
+     * `lastModifiedDate`'i 13:52:11Z, sipariş gerçekte 16:52 TR'de
+     * verildi. Düzeltilmeseydi panel saati 3 saat ileri gösterir ve
+     * "bağlantıdan sonra mı verildi" kararı (A14) 3 saatlik pencerede
+     * yanlış tarafa düşerdi — bağlantıdan önce verilmiş sipariş yeniden
+     * yaratılıp stok iki kez düşebilirdi.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function placedAt(array $payload): ?DateTimeImmutable
     {
-        $raw = $payload['orderDate'] ?? $payload['lastModifiedDate'] ?? null;
+        $orderDate = self::epochMs($payload['orderDate'] ?? null);
 
+        return $orderDate?->modify('-'.self::ORDER_DATE_OFFSET_HOURS.' hours')
+            ?? self::epochMs($payload['lastModifiedDate'] ?? null);
+    }
+
+    /** Kanal milisaniye epoch gönderir. */
+    private static function epochMs(mixed $raw): ?DateTimeImmutable
+    {
         if (! is_numeric($raw)) {
             return null;
         }
 
-        // Kanal milisaniye epoch gönderir.
-        return (new DateTimeImmutable)->setTimestamp(intdiv((int) $raw, 1000));
+        return new DateTimeImmutable('@'.intdiv((int) $raw, 1000));
     }
 
     public function acknowledgeOrder(Order $order): AdapterResult

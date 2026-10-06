@@ -31,6 +31,17 @@ final readonly class NormalizedOrderEvent
      */
     public ?\DateTimeImmutable $occurredAt;
 
+    /**
+     * Siparişin VERİLDİĞİ an — DAİMA UTC; verilmezse `occurredAt`.
+     *
+     * Olay anından AYRIDIR: iptal saatler sonra olur ama sipariş yine aynı
+     * anda verilmiştir. `placed_at` ve "bağlantıdan önce mi verildi"
+     * kararı (kaçırılmış sipariş) BUNA bakar; olay anına baksaydı
+     * bağlantıdan önce verilmiş ama sonra güncellenmiş sipariş yeniden
+     * yaratılır ve stok ikinci kez düşerdi.
+     */
+    public ?\DateTimeImmutable $placedAt;
+
     /** @param array<string, mixed> $payload */
     public function __construct(
         public string $type,              // created | updated | cancelled | returned
@@ -38,7 +49,10 @@ final readonly class NormalizedOrderEvent
         public ?string $externalRef,      // kanalın olay kimliği
         public array $payload,
         ?\DateTimeImmutable $occurredAt = null,
+        ?\DateTimeImmutable $placedAt = null,
     ) {
-        $this->occurredAt = $occurredAt?->setTimezone(new \DateTimeZone('UTC'));
+        $utc = new \DateTimeZone('UTC');
+        $this->occurredAt = $occurredAt?->setTimezone($utc);
+        $this->placedAt = ($placedAt ?? $occurredAt)?->setTimezone($utc);
     }
 }
