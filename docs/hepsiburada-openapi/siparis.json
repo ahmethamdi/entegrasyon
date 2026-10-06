@@ -1,0 +1,3601 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "contact": {},
+        "version": "",
+        "title": "HEPSIBURADA - S\u0130PAR\u0130\u015e OLU\u015eTURMA ENTEGRASYONU"
+    },
+    "paths": {
+        "/delivery/changeablecargocompanies/merchantid/{merchantId}/orderlineid/{orderLineId}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Siparisin Kargo Bilgisini Degistirme"
+                ],
+                "summary": "Paketlenecek Siparisin Hangi Kargo Firmasi Ile Degistirilebilecegini Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Order Line Id",
+                        "name": "orderLineId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/git.hepsiburada.com_oms_fulfilment-projections_application_api_portal_model.ChangeableCargoCompanyRepresentation"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/lineitems/merchantid/{merchantId}/id/{lineId}/cancelbymerchant": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Iptal Bilgisi Gonderme"
+                ],
+                "summary": "Iptal Bilgisi Gonderme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Line Id",
+                        "name": "lineId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.CancelByMerchantRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.ExternalCancelResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/lineitems/merchantid/{merchantId}/orderlineid/{id}/cargocompany": {
+            "put": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Siparisin Kargo Bilgisini Degistirme"
+                ],
+                "summary": "Paketlenecek Siparisin Kargo Firmasini Degistirme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Order Line Id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "$ref": "#/components/requestBodies/model.ChangeLineCargoCompanyRequest"
+                },
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/lineitems/merchantid/{merchantId}/packageablewith/lineitemid/{lineItemId}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Paket Surecleri"
+                ],
+                "summary": "Ayni Pakete Konulabilecek Kalemleri Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Line Item Id",
+                        "name": "lineItemId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.ExternalLineItemsRepresentation"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/merchantid/{merchantId}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Statu Bazl\u0131 Siparis Bilgileri"
+                ],
+                "summary": "Odemesi Tamamlanmis Siparisleri Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.OpenLineItemsRepresentationWithPaging"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/merchantid/{merchantId}/cancelled": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Statu Bazl\u0131 Siparis Bilgileri"
+                ],
+                "summary": "Iptal Siparis Bilgileri Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.CancelledOrderLineItemsRepresentationWithPaging"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/merchantid/{merchantId}/ordernumber/{orderNumber}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Siparise Ait Detay Listeleme"
+                ],
+                "summary": "Siparise Ait Detay Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Order Number",
+                        "name": "orderNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.OrderRepresentation"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/merchantid/{merchantId}/paymentawaiting": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Statu Bazl\u0131 Siparis Bilgileri"
+                ],
+                "summary": "Odemesi Beklenen Siparisleri Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.PaymentAwaitingOrderLinesItemsRepresentationWithPaging"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Paket Surecleri"
+                ],
+                "summary": "Saticiya Ait Paket Bilgilerini Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Timespan",
+                        "name": "timespan",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "Offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/model.ExternalRawPackageRepresentation"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Paket Surecleri"
+                ],
+                "summary": "Kalem veya Kalemleri Paketleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.CreatePackageRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.CreateDeliveryResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/delivered": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Statu Bazl\u0131 Siparis Bilgileri"
+                ],
+                "summary": "Teslim Edilen Siparislerin Listelenmesi",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.DeliveredDeliveriesRepresentationWithPaging"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packageNumber}/changablecargocompanies": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Siparisin Kargo Bilgisini Degistirme"
+                ],
+                "summary": "Paketli Siparisin Hangi Kargo Firmasi Ile Degistirilebilecegini Listeleme",
+                "parameters": [
+                    {
+                        "description": "Package Number",
+                        "name": "packageNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/git.hepsiburada.com_oms_fulfilment-projections_application_api_external_model.ChangeableCargoCompanyRepresentation"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packageNumber}/changecargocompany": {
+            "put": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Siparisin Kargo Bilgisini Degistirme"
+                ],
+                "summary": "Paketli Siparisin Kargo Firmasini Degistirme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packageNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "$ref": "#/components/requestBodies/model.ChangeLineCargoCompanyRequest"
+                },
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packageNumber}/invoice": {
+            "put": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Fatura Linki Gonderme"
+                ],
+                "summary": "Fatura Linki Gonderme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packageNumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.AddInvoiceOfPackageRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Paket Icin Kargo Bilgilerini Listeleme"
+                ],
+                "summary": "Paket Icin Kargo Bilgilerini Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.ExternalTrackingInfoRepresentation"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}/deliver": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Magaza Hesabi Teslimat Statu Iletimi"
+                ],
+                "summary": "Teslimat Statusu Iletme (Teslim Edildi)",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.ExternalDeliverRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}/intransit": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Magaza Hesabi Teslimat Statu Iletimi"
+                ],
+                "summary": "Teslimat Statusu Iletme(Kargoda)",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.ExternalInfoRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}/labels": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Ortak Barkod Olusturma"
+                ],
+                "summary": "Ortak Barkod Olusturma",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Format",
+                        "name": "format",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/deliveryinternal.BarcodeData"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}/split": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Paket Surecleri"
+                ],
+                "summary": "Paket Bolme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.SplitPackageRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}/undeliver": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Magaza Hesabi Teslimat Statu Iletimi"
+                ],
+                "summary": "Teslimat Statusu Iletme(Teslim Edilemedi)",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.ExternalUnDeliverRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}/unpack": {
+            "post": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Paket Surecleri"
+                ],
+                "summary": "Paket Bozma",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/shipped": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Statu Bazl\u0131 Siparis Bilgileri"
+                ],
+                "summary": "Kargoya Verilen Siparislerin Listelenmesi",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.ShippedDeliveriesRepresentationWithPaging"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/status/unpacked": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Statu Bazl\u0131 Siparis Bilgileri"
+                ],
+                "summary": "Bozulan (Unpack) Paket Bilgilerini Listeleme",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "Offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/endor.DeletedDeliveriesWithPagination"
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/undelivered": {
+            "get": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Statu Bazl\u0131 Siparis Bilgileri"
+                ],
+                "summary": "Teslim Edilemedi Siparislerin Listelenmesi",
+                "parameters": [
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Begin Date",
+                        "name": "begindate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "End Date",
+                        "name": "enddate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/model.UndeliveredDeliveriesRepresentationWithPaging"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/packages/merchantid/{merchantId}/packagenumber/{packagenumber}/warehouse": {
+            "put": {
+                "security": [
+                    {
+                        "BasicAuth": []
+                    }
+                ],
+                "tags": [
+                    "Paket Bilgilerinde Depo Bilgisi G\u00fcncelleme"
+                ],
+                "summary": "Paket Bilgilerinde Depo Bilgisi G\u00fcncelleme",
+                "parameters": [
+                    {
+                        "description": "Package Number",
+                        "name": "packagenumber",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Merchant Id",
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/model.UpdateDeliveryWarehouseRequest"
+                            }
+                        }
+                    },
+                    "description": "body",
+                    "required": true
+                },
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "servers": [
+        {
+            "url": "//oms-external-sit.hepsiburada.com"
+        }
+    ],
+    "components": {
+        "requestBodies": {
+            "model.ChangeLineCargoCompanyRequest": {
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "#/components/schemas/model.ChangeLineCargoCompanyRequest"
+                        }
+                    }
+                },
+                "description": "body",
+                "required": true
+            }
+        },
+        "securitySchemes": {
+            "BasicAuth": {
+                "type": "http",
+                "scheme": "basic"
+            }
+        },
+        "schemas": {
+            "deliveryinternal.BarcodeData": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "format": {
+                        "type": "string"
+                    },
+                    "hasMerchantMutualBarcode": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "endor.DeletedDeliveriesWithPagination": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/endor.UnpackedDelivery"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "type": "integer"
+                    },
+                    "pageCount": {
+                        "type": "integer"
+                    },
+                    "totalCount": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "endor.UnpackedDelivery": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "packageNumber": {
+                        "type": "string"
+                    },
+                    "unpackedDate": {
+                        "type": "string"
+                    }
+                }
+            },
+            "endor.VariantProperty": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "value": {
+                        "type": "string"
+                    }
+                }
+            },
+            "git.hepsiburada.com_oms_fulfilment-projections_application_api_external_model.ChangeableCargoCompanyRepresentation": {
+                "type": "object",
+                "properties": {
+                    "Id": {
+                        "type": "integer"
+                    },
+                    "IsActive": {
+                        "type": "boolean"
+                    },
+                    "LogoUrl": {
+                        "type": "string"
+                    },
+                    "Name": {
+                        "type": "string"
+                    },
+                    "ShortName": {
+                        "type": "string"
+                    }
+                }
+            },
+            "git.hepsiburada.com_oms_fulfilment-projections_application_api_portal_model.ChangeableCargoCompanyRepresentation": {
+                "type": "object",
+                "properties": {
+                    "Id": {
+                        "type": "integer"
+                    },
+                    "IsActive": {
+                        "type": "boolean"
+                    },
+                    "LogoUrl": {
+                        "type": "string"
+                    },
+                    "Name": {
+                        "type": "string"
+                    },
+                    "ShortName": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.AddInvoiceOfPackageRequest": {
+                "type": "object",
+                "properties": {
+                    "arrangementDate": {
+                        "type": "string"
+                    },
+                    "invoiceLink": {
+                        "type": "string"
+                    },
+                    "rowNumber": {
+                        "type": "string"
+                    },
+                    "serialNumber": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.UpdateDeliveryWarehouseRequest": {
+                "type": "object",
+                "properties": {
+                    "shippingAddressLabel": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.AddressRepresentation": {
+                "type": "object",
+                "properties": {
+                    "address": {
+                        "type": "string"
+                    },
+                    "addressId": {
+                        "type": "string"
+                    },
+                    "alternatePhoneNumber": {
+                        "type": "string"
+                    },
+                    "city": {
+                        "type": "string"
+                    },
+                    "countryCode": {
+                        "type": "string"
+                    },
+                    "directions": {
+                        "type": "string"
+                    },
+                    "district": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "phoneNumber": {
+                        "type": "string"
+                    },
+                    "postalCode": {
+                        "type": "string"
+                    },
+                    "town": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.CancelByMerchantRequest": {
+                "type": "object",
+                "properties": {
+                    "reasonId": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.CancelledItem": {
+                "type": "object",
+                "properties": {
+                    "cancelReasonId": {
+                        "type": "integer"
+                    },
+                    "orderLineId": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.CancelledOrderLineItemsRepresentationWithPaging": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.CancelledOrderLineRepresentation"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "type": "integer"
+                    },
+                    "pageCount": {
+                        "type": "integer"
+                    },
+                    "totalCount": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.CancelledOrderLineRepresentation": {
+                "type": "object",
+                "properties": {
+                    "cancelDate": {
+                        "type": "string"
+                    },
+                    "cancelReasonCode": {
+                        "type": "string"
+                    },
+                    "cancelledBy": {
+                        "type": "string"
+                    },
+                    "lineItemId": {
+                        "type": "string"
+                    },
+                    "merchantId": {
+                        "type": "string"
+                    },
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "orderNumber": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "sku": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.CargoCompanyRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "logoUrl": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "shortName": {
+                        "type": "string"
+                    },
+                    "trackingUrl": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ChangeLineCargoCompanyRequest": {
+                "type": "object",
+                "properties": {
+                    "CargoCompanyShortName": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.CreateDeliveryResponse": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "packageNumber": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.CreatePackageRequest": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "cargoCompany": {
+                        "type": "string"
+                    },
+                    "carrier": {
+                        "type": "string"
+                    },
+                    "creationReason": {
+                        "type": "string"
+                    },
+                    "deci": {
+                        "type": "number"
+                    },
+                    "lineItemRequests": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.LineItemCreatePackageRequest"
+                        }
+                    },
+                    "parcelQuantity": {
+                        "type": "integer"
+                    },
+                    "warehouse": {
+                        "$ref": "#/components/schemas/model.Warehouse"
+                    }
+                }
+            },
+            "model.CustomerRepresentation": {
+                "type": "object",
+                "properties": {
+                    "customerId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.DeliveredDeliveriesRepresentation": {
+                "type": "object",
+                "properties": {
+                    "Barcode": {
+                        "type": "string"
+                    },
+                    "DeliveredDate": {
+                        "type": "string"
+                    },
+                    "Id": {
+                        "type": "string"
+                    },
+                    "MerchantId": {
+                        "type": "string"
+                    },
+                    "OrderNumber": {
+                        "type": "string"
+                    },
+                    "PackageNumber": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.DeliveredDeliveriesRepresentationWithPaging": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.DeliveredDeliveriesRepresentation"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "type": "integer"
+                    },
+                    "pageCount": {
+                        "type": "integer"
+                    },
+                    "totalCount": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.DiscountInfo": {
+                "type": "object",
+                "properties": {
+                    "campaignDiscountRate": {
+                        "type": "number"
+                    },
+                    "campaignId": {
+                        "type": "integer"
+                    },
+                    "campaignName": {
+                        "type": "string"
+                    },
+                    "campaignType": {
+                        "type": "integer"
+                    },
+                    "conditionOrAward": {
+                        "type": "integer"
+                    },
+                    "correlationId": {
+                        "type": "string"
+                    },
+                    "discountTotal": {
+                        "type": "number"
+                    },
+                    "isProtectedCampaign": {
+                        "type": "boolean"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.ExternalCancelResponse": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ExternalDeliverRequest": {
+                "type": "object",
+                "properties": {
+                    "digitalCodes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "receivedBy": {
+                        "type": "string"
+                    },
+                    "receivedDate": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ExternalInfoRequest": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "cargoCompany": {
+                        "type": "string"
+                    },
+                    "cost": {
+                        "type": "number"
+                    },
+                    "deci": {
+                        "type": "number"
+                    },
+                    "estimatedArrivalDate": {
+                        "type": "string"
+                    },
+                    "packageNumber": {
+                        "type": "string"
+                    },
+                    "shippedDate": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "tax": {
+                        "type": "number"
+                    },
+                    "trackingNumber": {
+                        "type": "string"
+                    },
+                    "trackingPhoneNumber": {
+                        "type": "string"
+                    },
+                    "trackingUrl": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ExternalLineItemsRepresentation": {
+                "type": "object",
+                "properties": {
+                    "lineItems": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.ExternalPackageableWithRepresentation"
+                        }
+                    }
+                }
+            },
+            "model.ExternalPackageableWithRepresentation": {
+                "type": "object",
+                "properties": {
+                    "lineItemId": {
+                        "type": "string"
+                    },
+                    "orderNumber": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.ExternalRawPackageRepresentation": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "billingAddress": {
+                        "type": "string"
+                    },
+                    "billingCity": {
+                        "type": "string"
+                    },
+                    "billingDistrict": {
+                        "type": "string"
+                    },
+                    "billingPostalCode": {
+                        "type": "string"
+                    },
+                    "billingTown": {
+                        "type": "string"
+                    },
+                    "cargoCompany": {
+                        "type": "string"
+                    },
+                    "companyName": {
+                        "type": "string"
+                    },
+                    "customerId": {
+                        "type": "string"
+                    },
+                    "customerName": {
+                        "type": "string"
+                    },
+                    "customsTotalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "dueDate": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "identityNo": {
+                        "type": "string"
+                    },
+                    "isCargoChangable": {
+                        "type": "boolean"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.PackageLine"
+                        }
+                    },
+                    "orderDate": {
+                        "type": "string"
+                    },
+                    "packageNumber": {
+                        "type": "string"
+                    },
+                    "phoneNumber": {
+                        "type": "string"
+                    },
+                    "recipientName": {
+                        "type": "string"
+                    },
+                    "shippingAddressDetail": {
+                        "type": "string"
+                    },
+                    "shippingCity": {
+                        "type": "string"
+                    },
+                    "shippingCountryCode": {
+                        "type": "string"
+                    },
+                    "shippingDistrict": {
+                        "type": "string"
+                    },
+                    "shippingTotalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "shippingTown": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "taxNumber": {
+                        "type": "string"
+                    },
+                    "taxOffice": {
+                        "type": "string"
+                    },
+                    "totalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "unpackedDate": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ExternalTrackingInfoRepresentation": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "cargoCompany": {
+                        "type": "string"
+                    },
+                    "packageNumber": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "trackingInfoCode": {
+                        "type": "string"
+                    },
+                    "trackingInfoUrl": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ExternalUnDeliverRequest": {
+                "type": "object",
+                "properties": {
+                    "undeliveredDate": {
+                        "type": "string"
+                    },
+                    "undeliveredReason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.HbDiscount": {
+                "type": "object",
+                "properties": {
+                    "totalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "unitPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    }
+                }
+            },
+            "model.InvoiceRepresentation": {
+                "type": "object",
+                "properties": {
+                    "address": {
+                        "$ref": "#/components/schemas/model.AddressRepresentation"
+                    },
+                    "taxNumber": {
+                        "type": "string"
+                    },
+                    "taxOffice": {
+                        "type": "string"
+                    },
+                    "turkishIdentityNumber": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.LineItemCreatePackageRequest": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "serialNumbers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "model.LineRepresentation": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "bnplCommissionAmount": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "canCreatePackage": {
+                        "type": "boolean"
+                    },
+                    "cargoCompany": {
+                        "type": "string"
+                    },
+                    "cargoCompanyModel": {
+                        "$ref": "#/components/schemas/model.CargoCompanyRepresentation"
+                    },
+                    "commission": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "commissionRate": {
+                        "type": "number"
+                    },
+                    "commissionType": {
+                        "type": "integer"
+                    },
+                    "creationReason": {
+                        "type": "string"
+                    },
+                    "creditCardHolderName": {
+                        "type": "string"
+                    },
+                    "customerId": {
+                        "type": "string"
+                    },
+                    "customerName": {
+                        "type": "string"
+                    },
+                    "customizedText01": {
+                        "type": "string"
+                    },
+                    "customizedText02": {
+                        "type": "string"
+                    },
+                    "customizedText03": {
+                        "type": "string"
+                    },
+                    "customizedText04": {
+                        "type": "string"
+                    },
+                    "customizedTextX": {
+                        "type": "string"
+                    },
+                    "deliveryNote": {
+                        "$ref": "#/components/schemas/model.Note"
+                    },
+                    "deliveryOptionId": {
+                        "type": "integer"
+                    },
+                    "deliveryType": {
+                        "type": "string"
+                    },
+                    "deptorDifferenceAmount": {
+                        "type": "number"
+                    },
+                    "discountInfo": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.DiscountInfo"
+                        }
+                    },
+                    "discountToBeBilledToHB": {
+                        "type": "number"
+                    },
+                    "dispatchTime": {
+                        "type": "integer"
+                    },
+                    "dueDate": {
+                        "type": "string"
+                    },
+                    "hbDiscount": {
+                        "$ref": "#/components/schemas/model.HbDiscount"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "invoice": {
+                        "$ref": "#/components/schemas/model.InvoiceRepresentation"
+                    },
+                    "isCancellable": {
+                        "type": "boolean"
+                    },
+                    "isCancellableByHbAdmin": {
+                        "type": "boolean"
+                    },
+                    "isCargoChangable": {
+                        "type": "boolean"
+                    },
+                    "isCustomized": {
+                        "type": "boolean"
+                    },
+                    "isJetDelivery": {
+                        "type": "boolean"
+                    },
+                    "lastStatusUpdateDate": {
+                        "type": "string"
+                    },
+                    "merchantDiscount": {
+                        "$ref": "#/components/schemas/model.MerchantDiscount"
+                    },
+                    "merchantId": {
+                        "type": "string"
+                    },
+                    "merchantSKU": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "orderDate": {
+                        "type": "string"
+                    },
+                    "orderId": {
+                        "type": "string"
+                    },
+                    "orderNumber": {
+                        "type": "string"
+                    },
+                    "packageNumber": {
+                        "type": "string"
+                    },
+                    "paymentTermInDays": {
+                        "type": "integer"
+                    },
+                    "pickUpTime": {
+                        "type": "string"
+                    },
+                    "productBarcode": {
+                        "type": "string"
+                    },
+                    "properties": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.Property"
+                        }
+                    },
+                    "purchasePrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "sapNumber": {
+                        "type": "string"
+                    },
+                    "shippingAddress": {
+                        "$ref": "#/components/schemas/model.AddressRepresentation"
+                    },
+                    "sku": {
+                        "type": "string"
+                    },
+                    "slot": {
+                        "$ref": "#/components/schemas/model.Slot"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "totalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "unitPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "vat": {
+                        "type": "number"
+                    },
+                    "vatRate": {
+                        "type": "number"
+                    },
+                    "warehouse": {
+                        "$ref": "#/components/schemas/model.WarehouseRepresentation"
+                    }
+                }
+            },
+            "model.MerchantDiscount": {
+                "type": "object",
+                "properties": {
+                    "totalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "unitPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    }
+                }
+            },
+            "model.Money": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "number"
+                    },
+                    "currency": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.Note": {
+                "type": "object",
+                "properties": {
+                    "tags": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "value": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.OpenLineItemsRepresentationWithPaging": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.LineRepresentation"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "type": "integer"
+                    },
+                    "pageCount": {
+                        "type": "integer"
+                    },
+                    "totalCount": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.OrderLine": {
+                "type": "object",
+                "properties": {
+                    "orderLineId": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.OrderRepresentation": {
+                "type": "object",
+                "properties": {
+                    "createdDate": {
+                        "type": "string"
+                    },
+                    "customer": {
+                        "$ref": "#/components/schemas/model.CustomerRepresentation"
+                    },
+                    "deliveryAddress": {
+                        "$ref": "#/components/schemas/model.AddressRepresentation"
+                    },
+                    "invoice": {
+                        "$ref": "#/components/schemas/model.InvoiceRepresentation"
+                    },
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.LineRepresentation"
+                        }
+                    },
+                    "orderDate": {
+                        "type": "string"
+                    },
+                    "orderId": {
+                        "type": "string"
+                    },
+                    "orderNote": {
+                        "$ref": "#/components/schemas/model.Note"
+                    },
+                    "orderNumber": {
+                        "type": "string"
+                    },
+                    "paymentStatus": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.PackageDetail": {
+                "type": "object",
+                "properties": {
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "cargoCompany": {
+                        "type": "string"
+                    },
+                    "carrier": {
+                        "type": "string"
+                    },
+                    "deci": {
+                        "type": "number"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.OrderLine"
+                        }
+                    },
+                    "parcelQuantity": {
+                        "type": "integer"
+                    },
+                    "warehouse": {
+                        "$ref": "#/components/schemas/model.Warehouse"
+                    }
+                }
+            },
+            "model.PackageLine": {
+                "type": "object",
+                "properties": {
+                    "bnplCommissionAmount": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "cargoPaymentInfo": {
+                        "type": "string"
+                    },
+                    "commission": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "commissionRate": {
+                        "type": "number"
+                    },
+                    "creationReason": {
+                        "type": "string"
+                    },
+                    "customerDelivery": {
+                        "type": "string"
+                    },
+                    "customizedText01": {
+                        "type": "string"
+                    },
+                    "customizedText02": {
+                        "type": "string"
+                    },
+                    "customizedText03": {
+                        "type": "string"
+                    },
+                    "customizedText04": {
+                        "type": "string"
+                    },
+                    "deliveryType": {
+                        "type": "string"
+                    },
+                    "deptorDifferenceAmount": {
+                        "type": "number"
+                    },
+                    "discountToBeBilledToHB": {
+                        "type": "number"
+                    },
+                    "gtip": {
+                        "type": "string"
+                    },
+                    "hbSku": {
+                        "type": "string"
+                    },
+                    "lineItemId": {
+                        "type": "string"
+                    },
+                    "listingId": {
+                        "type": "string"
+                    },
+                    "merchantId": {
+                        "type": "string"
+                    },
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "merchantTotalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "merchantUnitPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "orderDate": {
+                        "type": "string"
+                    },
+                    "orderNumber": {
+                        "type": "string"
+                    },
+                    "pickupTime": {
+                        "type": "string"
+                    },
+                    "price": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "productBarcode": {
+                        "type": "string"
+                    },
+                    "productName": {
+                        "type": "string"
+                    },
+                    "properties": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.Property"
+                        }
+                    },
+                    "purchasePrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "quantity": {
+                        "type": "integer"
+                    },
+                    "totalHBDiscount": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "totalMerchantDiscount": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "totalPrice": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "unitHBDiscount": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "unitMerchantDiscount": {
+                        "$ref": "#/components/schemas/model.Money"
+                    },
+                    "vat": {
+                        "type": "number"
+                    },
+                    "vatRate": {
+                        "type": "number"
+                    },
+                    "warehouse": {
+                        "$ref": "#/components/schemas/model.Warehouse"
+                    },
+                    "weight": {
+                        "type": "number"
+                    }
+                }
+            },
+            "model.PaymentAwaitingOrderLineRepresentation": {
+                "type": "object",
+                "properties": {
+                    "Id": {
+                        "type": "string"
+                    },
+                    "MerchantId": {
+                        "type": "string"
+                    },
+                    "MerchantSku": {
+                        "type": "string"
+                    },
+                    "Name": {
+                        "type": "string"
+                    },
+                    "OrderDate": {
+                        "type": "string"
+                    },
+                    "OrderNumber": {
+                        "type": "string"
+                    },
+                    "Properties": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/endor.VariantProperty"
+                        }
+                    },
+                    "Quantity": {
+                        "type": "integer"
+                    },
+                    "Sku": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.PaymentAwaitingOrderLinesItemsRepresentationWithPaging": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.PaymentAwaitingOrderLineRepresentation"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "type": "integer"
+                    },
+                    "pageCount": {
+                        "type": "integer"
+                    },
+                    "totalCount": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.Property": {
+                "type": "object",
+                "properties": {
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "value": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ShippedDeliveriesRepresentation": {
+                "type": "object",
+                "properties": {
+                    "Barcode": {
+                        "type": "string"
+                    },
+                    "Id": {
+                        "type": "string"
+                    },
+                    "MerchantId": {
+                        "type": "string"
+                    },
+                    "OrderNumber": {
+                        "type": "string"
+                    },
+                    "PackageNumber": {
+                        "type": "string"
+                    },
+                    "ShippedDate": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.ShippedDeliveriesRepresentationWithPaging": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.ShippedDeliveriesRepresentation"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "type": "integer"
+                    },
+                    "pageCount": {
+                        "type": "integer"
+                    },
+                    "totalCount": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.Slot": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "timeslot": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.SplitPackageRequest": {
+                "type": "object",
+                "properties": {
+                    "cancelledItems": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.CancelledItem"
+                        }
+                    },
+                    "packageDetails": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.PackageDetail"
+                        }
+                    }
+                }
+            },
+            "model.UndeliveredDeliveriesRepresentation": {
+                "type": "object",
+                "properties": {
+                    "Barcode": {
+                        "type": "string"
+                    },
+                    "Id": {
+                        "type": "string"
+                    },
+                    "MerchantId": {
+                        "type": "string"
+                    },
+                    "OrderNumber": {
+                        "type": "string"
+                    },
+                    "PackageNumber": {
+                        "type": "string"
+                    },
+                    "UndeliveredDate": {
+                        "type": "string"
+                    },
+                    "UndeliveredReason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.UndeliveredDeliveriesRepresentationWithPaging": {
+                "type": "object",
+                "properties": {
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/model.UndeliveredDeliveriesRepresentation"
+                        }
+                    },
+                    "limit": {
+                        "type": "integer"
+                    },
+                    "offset": {
+                        "type": "integer"
+                    },
+                    "pageCount": {
+                        "type": "integer"
+                    },
+                    "totalCount": {
+                        "type": "integer"
+                    }
+                }
+            },
+            "model.Warehouse": {
+                "type": "object",
+                "properties": {
+                    "shippingAddressLabel": {
+                        "type": "string"
+                    },
+                    "shippingModel": {
+                        "type": "string"
+                    }
+                }
+            },
+            "model.WarehouseRepresentation": {
+                "type": "object",
+                "properties": {
+                    "shippingAddressLabel": {
+                        "type": "string"
+                    },
+                    "shippingModel": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

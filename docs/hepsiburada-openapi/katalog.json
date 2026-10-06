@@ -1,0 +1,1651 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "HEPSIBURADA - KATALOG \u00dcR\u00dcN ENTEGRASYONU",
+        "description": "Katalog \u00dcr\u00fcn Entegrasyonu",
+        "version": "1"
+    },
+    "servers": [
+        {
+            "url": "https://mpop-sit.hepsiburada.com/product",
+            "description": "https://mpop-sit.hepsiburada.com/product"
+        }
+    ],
+    "security": [
+        {
+            "Basic": []
+        }
+    ],
+    "tags": [
+        {
+            "name": "Kategori",
+            "description": "Kategori i\u015flemleri"
+        },
+        {
+            "name": "\u00dcr\u00fcn",
+            "description": "\u00dcr\u00fcn i\u015flemleri"
+        }
+    ],
+    "paths": {
+        "/api/products/reject-prematch": {
+            "post": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "E\u015fle\u015fen Stat\u00fc Red",
+                "description": "E\u015fle\u015fen stat\u00fc red endpointi ile e\u015fle\u015fen stat\u00fcdeki \u00fcr\u00fcnlerinize api \u00fczerinden red i\u015flemi yap\u0131labilmektedir. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#e\u015fle\u015fen-stat\u00fc-onayred\">Detayl\u0131 notlar</a>",
+                "operationId": "integratorRejectPreMatch",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/MerchantAndMerchantSkuListDTO"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/products/import": {
+            "post": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "\u00dcr\u00fcn Bilgisi G\u00f6nderme",
+                "description": "Bu metod ile; \u00fcr\u00fcn bilgilerini, \u00fcr\u00fcn giri\u015f s\u00fcrecine dahil olmas\u0131 i\u00e7in Hepsiburada\u2019 ya g\u00f6nderebilirsiniz. \u00dcr\u00fcn bilgilerini bir json dosyas\u0131na yazd\u0131ktan sonra, o dosyay\u0131 bu istek i\u00e7erisinde g\u00f6ndermeniz gerekmektedir. <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#%C3%BCr%C3%BCn-bilgisi-g%C3%B6nderme\">Detayl\u0131 notlar</a> <br/> > integrator.json\n```\n[\n  {\n    \"categoryId\": 18021982,\n    \"merchant\": \"6fc6d90d-ee1d-4372-b3a6-264b1275e9ff\",\n    \"attributes\": {\n      \"merchantSku\": \"SAMPLE-SKU-INT-0\",\n      \"VaryantGroupID\": \"Hepsiburada0\",\n      \"Barcode\": \"1234567891234\",\n      \"UrunAdi\": \"Roth Tyler\",\n      \"UrunAciklamasi\": \"Duis enim duis magna ex veniam elit id Lorem cillum minim nisi id aliquip. Laboris magna id est et deserunt adipisicing tempor eu ea officia ipsum deserunt. Irure occaecat sit aliquip elit ipsum sint dolore quis est amet aute pariatur cupidatat fugiat. Cillum pariatur pariatur occaecat sint. Aliqua qui in exercitation nulla aliquip id ipsum aliquip ad ut excepteur culpa consequat aliquip. Nisi ut ex tempor enim adipisicing anim irure pariatur.\\r\\n\",\n      \"Marka\": \"Nike\",\n      \"GarantiSuresi\": 24,\n      \"kg\": \"1\",\n      \"tax_vat_rate\" : \"5\",\n      \"price\":\"130,50\",\n      \"stock\":\"13\",\n      \"Image1\": \"https://productimages.hepsiburada.net/s/27/552/10194862145586.jpg\",\n      \"Image2\": \"https://productimages.hepsiburada.net/s/27/552/10194862145586.jpg\",\n      \"Image3\": \"https://productimages.hepsiburada.net/s/27/552/10194862145586.jpg\",\n      \"Image4\": \"https://productimages.hepsiburada.net/s/27/552/10194862145586.jpg\",\n      \"Image5\": \"https://productimages.hepsiburada.net/s/27/552/10194862145586.jpg\",\n      \"Video1\": \"https://images.hepsiburada.net/assets/videos/ProductVideos/iphone11.mp4\",\n      \"renk_variant_property\": \"Siyah\",\n      \"ebatlar_variant_property\": \"B\u00fcy\u00fck Ebat\"\n    }\n  }\n]\n```",
+                "operationId": "uploadProductViaFile",
+                "parameters": [
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "default": 1
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "required": [
+                                    "file"
+                                ],
+                                "type": "object",
+                                "properties": {
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ResponseObject"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/fastlisting": {
+            "post": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "H\u0131zl\u0131 \u00dcr\u00fcn Y\u00fckleme",
+                "description": "Bu method ile HB katalogunda kay\u0131tl\u0131 olan ve global barkod i\u00e7eren \u00fcr\u00fcnleri mapping s\u00fcrecine gerek kalmadan h\u0131zl\u0131 bir \u015fekilde ma\u011fazan\u0131za y\u00fckleyebilirsiniz. HB katalogunda kay\u0131tl\u0131 olmayan \u00fcr\u00fcnler bu method kullan\u0131ld\u0131\u011f\u0131nda y\u00fcklenmeyecektir. HB katalogunda kay\u0131tl\u0131 olmayan ilk defa a\u00e7\u0131lacak \u00fcr\u00fcnler i\u00e7in \u201c\u00dcr\u00fcn Bilgisi G\u00f6nderme\u201d methodu kullan\u0131lmal\u0131d\u0131r. S\u00fcre\u00e7 a\u015fa\u011f\u0131da a\u015famalar\u0131yla birlikte anlat\u0131lm\u0131\u015ft\u0131r.",
+                "operationId": "uploadFastListingProduct",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/FastListingRequestDTO"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/delete-process": {
+            "post": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "Aksiyon Bekleyen \u00dcr\u00fcn Silme",
+                "description": "Bu metod ile katalog entegrasyon ile giri\u015fi yap\u0131lm\u0131\u015f olan ancak herhangi bir nedenden dolay\u0131 onaylanmam\u0131\u015f, envantere yans\u0131mayan \u00fcr\u00fcnleri aksiyon bekleyenlerden silmenize yarar. Katalog s\u00fcrecinde, yarat\u0131ld\u0131, sat\u0131\u015fa haz\u0131r durumdaki \u00fcr\u00fcnler silinemez. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#aksiyon-bekleyen-\u00fcr\u00fcn-silme\">Detayl\u0131 notlar</a>",
+                "operationId": "deleteByMerchantAndMerchantSkuList",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/MerchantAndMerchantSkuDTO"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/check-product-status": {
+            "post": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "\u00dcr\u00fcne Ait Stat\u00fc Bilgisi \u00c7ekme",
+                "description": "Bu method ile bir Merchant'a ait \u00fcr\u00fcnlerin stat\u00fc bilgilerine ula\u015fabilirsiniz. \u0130stek limiti her bir IP ba\u015f\u0131na \u201c500 istek/1 saniye\u201d  <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#%C3%BCr%C3%BCne-ait-stat%C3%BC-bilgisi-%C3%A7ekme\">Detayl\u0131 notlar</a>",
+                "operationId": "checkProductStatus",
+                "parameters": [
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "default": 1
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/MerchantAndMerchantSkuListDTO"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ResponseListProductStatusResponseDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/approve-prematch": {
+            "post": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "E\u015fle\u015fen Stat\u00fc Onay",
+                "description": "E\u015fle\u015fen stat\u00fc onay endpointi ile e\u015fle\u015fen stat\u00fcdeki \u00fcr\u00fcnlerinize api \u00fczerinden onay i\u015flemi yap\u0131labilmektedir. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#e\u015fle\u015fen-stat\u00fc-onayred\">Detayl\u0131 notlar</a>",
+                "operationId": "integratorApprovePreMatch",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/MerchantAndMerchantSkuListDTO"
+                                }
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK"
+                    }
+                }
+            }
+        },
+        "/api/categories/{categoryId}/attributes": {
+            "get": {
+                "tags": [
+                    "Kategori"
+                ],
+                "summary": "Kategori \u00d6zelliklerini Alma",
+                "description": "Bu metod ile Hepsiburada\u2019 daki u\u00e7 kategorilerin \u00f6zellik bilgilerini alabilirsiniz. Kategori \u00f6zellikleri, sadece \u2018leaf\u2019 ve \u2018available\u2019 de\u011ferleri \u2018true\u2019 olan kategorilerde mevcuttur. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#kategori-\u00f6zelliklerini-alma\">Detayl\u0131 notlar</a>",
+                "operationId": "getAllAttributesByCategory",
+                "parameters": [
+                    {
+                        "name": "categoryId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "modifiedAtSince",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "description": "version",
+                            "default": 2
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ResponseAttributeResponse"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/categories/{categoryId}/attribute/{attributeId}/values": {
+            "get": {
+                "tags": [
+                    "Kategori"
+                ],
+                "summary": "\u00d6zellik De\u011ferini Alma",
+                "description": "Bu metod ile \u2018type\u2019 alan\u0131 de\u011feri \u2018enum\u2019 olan \u00f6zellikler i\u00e7in kullan\u0131labilecek de\u011ferleri alabilirsiniz. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#\u00f6zellik-de\u011ferini-alma\">Detayl\u0131 notlar</a>",
+                "operationId": "getAllAttributeValuesByCategoryIdAndAttributeId",
+                "parameters": [
+                    {
+                        "name": "categoryId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32"
+                        }
+                    },
+                    {
+                        "name": "attributeId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "modifiedAtSince",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "description": "version",
+                            "default": 5
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                        "schema": {
+                            "title": "Sayfa numaras\u0131",
+                            "type": "integer",
+                            "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                        "schema": {
+                            "title": "Sayfa boyutu",
+                            "type": "integer",
+                            "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                            "default": 1000
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/trackingId-history": {
+            "get": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "TrackingId Ge\u00e7mi\u015fini Sorgulama",
+                "description": "Bu metod ile, daha \u00f6nce alm\u0131\u015f oldu\u011funuz \u2018trackingId\u2019 bilgilerini alabilirsiniz.Pagination yap\u0131s\u0131 ve s\u0131ralama \u00f6zelli\u011fi geli\u015ftirilmi\u015ftir. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#trackingid-ge%C3%A7mi%C5%9Fini-sorgulama\">Detayl\u0131 notlar</a>",
+                "operationId": "getTrackingList",
+                "parameters": [
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "default": 2
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                        "schema": {
+                            "title": "Sayfa numaras\u0131",
+                            "type": "integer",
+                            "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                        "schema": {
+                            "title": "Sayfa boyutu",
+                            "type": "integer",
+                            "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                            "default": 1000
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Response"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/status/{trackingId}": {
+            "get": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "\u00dcr\u00fcn Durumu Sorgulama",
+                "description": "Bu metod ile; \u2018trackingId\u2019 bilgisine sahip oldu\u011funuz \u00fcr\u00fcnlerin durumlar\u0131n\u0131 alabilirsiniz. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#\u00fcr\u00fcn-durumu-sorgulama\">Detayl\u0131 notlar</a>",
+                "operationId": "getProductStatusByTraceId",
+                "parameters": [
+                    {
+                        "name": "trackingId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                        "schema": {
+                            "title": "Sayfa numaras\u0131",
+                            "type": "integer",
+                            "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                        "schema": {
+                            "title": "Sayfa boyutu",
+                            "type": "integer",
+                            "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                            "default": 1000
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PageResponseImportStatusDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/products-by-merchant-and-status": {
+            "get": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "Stat\u00fc Bazl\u0131 \u00dcr\u00fcn Bilgisi \u00c7ekme",
+                "description": "Bu method ile bir Merchanta ait \u00fcr\u00fcnlerin stat\u00fc bazl\u0131 \u00fcr\u00fcn bilgilerine ula\u015fabilirsiniz. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#stat\u00fc-bazl\u0131-\u00fcr\u00fcn-bilgisi-\u00e7ekme\">Detayl\u0131 notlar</a>",
+                "operationId": "getProductByMerchantIdAndStatus",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "productStatus",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "WAITING",
+                                "IN_EXTERNAL_PROGRESS",
+                                "PRE_MATCHED",
+                                "MATCHED",
+                                "REJECTED",
+                                "MATCHED_WITH_STAGED",
+                                "MISSING_INFO",
+                                "CREATED",
+                                "BLOCKED"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "taskStatus",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                        "schema": {
+                            "title": "Sayfa numaras\u0131",
+                            "type": "integer",
+                            "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                        "schema": {
+                            "title": "Sayfa boyutu",
+                            "type": "integer",
+                            "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                            "default": 1000
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PageResponseImportProductInformationDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/delete-process/{trackingId}": {
+            "get": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "Aksiyon Bekleyen \u00dcr\u00fcn Silme \u0130\u015flem Kontrol\u00fc",
+                "description": "Silme iste\u011finin sonucunu kontrol i\u00e7in trackingid de\u011ferini sorgulaman\u0131z gerekir.  <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#aksiyon-bekleyen-\u00fcr\u00fcn-silme-i\u0307\u015flem-kontrol\u00fc\">Detayl\u0131 notlar</a>",
+                "operationId": "getDeleteProcess",
+                "parameters": [
+                    {
+                        "name": "trackingId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/DeleteProcess"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/products/all-products-of-merchant/{merchantId}": {
+            "get": {
+                "tags": [
+                    "\u00dcr\u00fcn"
+                ],
+                "summary": "Ma\u011faza Bazl\u0131 \u00dcr\u00fcn Bilgisi Listeleme",
+                "description": "Bu metod ile ma\u011fazalar\u0131n t\u00fcm \u00fcr\u00fcnlerinin (\u00fcr\u00fcn \u00f6zellik de\u011ferleriyle birlikte) api \u00fczerinden listeleyebilirsiniz. Bu servisle art\u0131k ma\u011fazalar\u0131n entegrat\u00f6r de\u011fi\u015fikli\u011fi yapt\u0131\u011f\u0131 durumlarda eski \u00e7al\u0131\u015ft\u0131\u011f\u0131 entegrat\u00f6rden \u00fcr\u00fcn bilgilerini talep etmesine gerek kalmayacak, Hepsiburada API servisi \u00fczerinden b\u00fct\u00fcn \u00fcr\u00fcn bilgilerini listeleyebilecektir. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#ma\u011faza-bazl\u0131-\u00fcr\u00fcn-bilgisi-listeleme\">Detayl\u0131 notlar</a>",
+                "operationId": "getAllProductsByMerchantId",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "barcode",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "merchantSku",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "hbSku",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                        "schema": {
+                            "title": "Sayfa numaras\u0131",
+                            "type": "integer",
+                            "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                        "schema": {
+                            "title": "Sayfa boyutu",
+                            "type": "integer",
+                            "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                            "default": 1000
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PageResponseIntegratorProductInformation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/categories/get-all-categories": {
+            "get": {
+                "tags": [
+                    "Kategori"
+                ],
+                "summary": "Kategori Bilgilerini Alma",
+                "description": "Bu metod ile Hepsiburada kategorileri bilgilerini alabilirsiniz. <br/> <a href=\"/hepsiburada/reference/katalog-onemli-bilgiler#kategori-bilgilerini-alma\">Detayl\u0131 notlar</a>",
+                "operationId": "getAllCategoriesByParameters",
+                "parameters": [
+                    {
+                        "name": "leaf",
+                        "in": "query",
+                        "description": "'true' olarak g\u00f6nderilmeli",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "description": "'true' olarak g\u00f6nderilmeli",
+                            "default": true,
+                            "enum": [
+                                "true",
+                                "false",
+                                ""
+                            ]
+                        }
+                    },
+                    {
+                        "name": "status",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "ACTIVE",
+                            "enum": [
+                                "ACTIVE",
+                                "INACTIVE",
+                                "ARCHIVED"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "available",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": true,
+                            "enum": [
+                                "true",
+                                "false",
+                                ""
+                            ]
+                        }
+                    },
+                    {
+                        "name": "type",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "HX",
+                                "HB",
+                                "HC"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "version",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "description": "version",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                        "schema": {
+                            "title": "Sayfa numaras\u0131",
+                            "type": "integer",
+                            "description": "Datas\u0131n\u0131 g\u00f6rmek istedi\u011finiz sayfa numaras\u0131",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "size",
+                        "in": "query",
+                        "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                        "schema": {
+                            "title": "Sayfa boyutu",
+                            "type": "integer",
+                            "description": "Her sayfada g\u00f6rmek istedi\u011finiz data say\u0131s\u0131",
+                            "default": 1000
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PageResponseBaseCategoryDTO"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "MerchantAndMerchantSkuListDTO": {
+                "required": [
+                    "merchant",
+                    "merchantSkuList"
+                ],
+                "type": "object",
+                "properties": {
+                    "merchant": {
+                        "type": "string"
+                    },
+                    "merchantSkuList": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "ResponseObject": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "FastListingRequestDTO": {
+                "required": [
+                    "barcode",
+                    "merchant",
+                    "merchantSku",
+                    "productName"
+                ],
+                "type": "object",
+                "properties": {
+                    "merchant": {
+                        "type": "string"
+                    },
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "productName": {
+                        "type": "string"
+                    },
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "stock": {
+                        "type": "string"
+                    },
+                    "price": {
+                        "type": "string"
+                    },
+                    "itemOrderID": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "MerchantAndMerchantSkuDTO": {
+                "required": [
+                    "merchant",
+                    "merchantSku"
+                ],
+                "type": "object",
+                "properties": {
+                    "merchant": {
+                        "type": "string"
+                    },
+                    "merchantSku": {
+                        "type": "string"
+                    }
+                }
+            },
+            "MerchantSkuStatusDTO": {
+                "type": "object",
+                "properties": {
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ProductStatusResponseDTO": {
+                "type": "object",
+                "properties": {
+                    "merchant": {
+                        "type": "string"
+                    },
+                    "skuStatusList": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MerchantSkuStatusDTO"
+                        }
+                    }
+                }
+            },
+            "ResponseListProductStatusResponseDTO": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductStatusResponseDTO"
+                        }
+                    }
+                }
+            },
+            "AttributeDTO": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "string"
+                    },
+                    "mandatory": {
+                        "type": "boolean"
+                    },
+                    "type": {
+                        "type": "string"
+                    },
+                    "multiValue": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "AttributeResponse": {
+                "type": "object",
+                "properties": {
+                    "baseAttributes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AttributeDTO"
+                        }
+                    },
+                    "attributes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AttributeDTO"
+                        }
+                    },
+                    "variantAttributes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/AttributeDTO"
+                        }
+                    }
+                }
+            },
+            "ResponseAttributeResponse": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "$ref": "#/components/schemas/AttributeResponse"
+                    }
+                }
+            },
+            "Response": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "data": {
+                        "type": "object"
+                    }
+                }
+            },
+            "ImportMessageDTO": {
+                "type": "object",
+                "properties": {
+                    "severity": {
+                        "type": "string",
+                        "enum": [
+                            "INFORMATION",
+                            "ERROR",
+                            "WARNING"
+                        ]
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ImportStatusDTO": {
+                "type": "object",
+                "properties": {
+                    "itemOrderID": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "merchant": {
+                        "type": "string"
+                    },
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "hbSku": {
+                        "type": "string"
+                    },
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "productStatus": {
+                        "type": "string"
+                    },
+                    "productName": {
+                        "type": "string"
+                    },
+                    "variantGroupId": {
+                        "type": "string"
+                    },
+                    "taskDetails": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskDetailDTO"
+                        }
+                    },
+                    "validationResults": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductValidationResultDTO"
+                        }
+                    },
+                    "rejectReasonsMessages": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "importStatus": {
+                        "type": "string",
+                        "enum": [
+                            "SUCCESS",
+                            "FAILED",
+                            "PROCESSING"
+                        ]
+                    },
+                    "importMessages": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ImportMessageDTO"
+                        }
+                    },
+                    "matchedHbProductInfo": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MatchedProductInfoDTO"
+                        }
+                    },
+                    "videoStatus": {
+                        "type": "string"
+                    }
+                }
+            },
+            "MatchedProductInfoDTO": {
+                "type": "object",
+                "properties": {
+                    "hbSku": {
+                        "type": "string"
+                    },
+                    "productName": {
+                        "type": "string"
+                    },
+                    "brand": {
+                        "type": "string"
+                    },
+                    "images": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "variantTypeAttributes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/VariantClassificationDTO"
+                        }
+                    }
+                }
+            },
+            "PageResponseImportStatusDTO": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "totalElements": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "totalPages": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "numberOfElements": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "first": {
+                        "type": "boolean"
+                    },
+                    "last": {
+                        "type": "boolean"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ImportStatusDTO"
+                        }
+                    }
+                }
+            },
+            "ProductValidationResultDTO": {
+                "type": "object",
+                "properties": {
+                    "attributeName": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TaskCommentDTO": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "type": "string"
+                    }
+                }
+            },
+            "TaskDetailDTO": {
+                "type": "object",
+                "properties": {
+                    "reason": {
+                        "type": "string"
+                    },
+                    "url": {
+                        "type": "string"
+                    },
+                    "commentList": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskCommentDTO"
+                        }
+                    }
+                }
+            },
+            "VariantClassificationDTO": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "value": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ImportProductInformationDTO": {
+                "type": "object",
+                "properties": {
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "hbSku": {
+                        "type": "string"
+                    },
+                    "variantGroupId": {
+                        "type": "string"
+                    },
+                    "productName": {
+                        "type": "string"
+                    },
+                    "productStatus": {
+                        "type": "string"
+                    },
+                    "taskDetails": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskDetailDTO"
+                        }
+                    },
+                    "validationResults": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductValidationResultDTO"
+                        }
+                    },
+                    "matchedHbProductInfo": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MatchedProductInfoDTO"
+                        }
+                    },
+                    "rejectReasonsMessages": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "videoStatus": {
+                        "type": "string"
+                    }
+                }
+            },
+            "PageResponseImportProductInformationDTO": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "totalElements": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "totalPages": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "numberOfElements": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "first": {
+                        "type": "boolean"
+                    },
+                    "last": {
+                        "type": "boolean"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ImportProductInformationDTO"
+                        }
+                    }
+                }
+            },
+            "DeleteProcess": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "createdBy": {
+                        "type": "string"
+                    },
+                    "modifiedBy": {
+                        "type": "string"
+                    },
+                    "trackingId": {
+                        "type": "string"
+                    },
+                    "deletedProductList": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DeletedProductReference"
+                        }
+                    },
+                    "completed": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "DeletedProductReference": {
+                "type": "object",
+                "properties": {
+                    "merchant": {
+                        "type": "string"
+                    },
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "deleted": {
+                        "type": "boolean"
+                    },
+                    "errorMessage": {
+                        "type": "string"
+                    }
+                }
+            },
+            "IntegratorProductInformation": {
+                "type": "object",
+                "properties": {
+                    "merchantSku": {
+                        "type": "string"
+                    },
+                    "barcode": {
+                        "type": "string"
+                    },
+                    "hbSku": {
+                        "type": "string"
+                    },
+                    "variantGroupId": {
+                        "type": "string"
+                    },
+                    "productName": {
+                        "type": "string"
+                    },
+                    "brand": {
+                        "type": "string"
+                    },
+                    "images": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "categoryId": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "categoryName": {
+                        "type": "string"
+                    },
+                    "tax": {
+                        "type": "string"
+                    },
+                    "price": {
+                        "type": "string"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "WAITING",
+                            "IN_EXTERNAL_PROGRESS",
+                            "PRE_MATCHED",
+                            "MATCHED",
+                            "REJECTED",
+                            "MATCHED_WITH_STAGED",
+                            "MISSING_INFO",
+                            "CREATED",
+                            "BLOCKED"
+                        ]
+                    },
+                    "baseAttributes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/VariantAttributesDTO"
+                        }
+                    },
+                    "variantTypeAttributes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/VariantAttributesDTO"
+                        }
+                    },
+                    "productAttributes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/VariantAttributesDTO"
+                        }
+                    },
+                    "validationResults": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductValidationResultDTO"
+                        }
+                    },
+                    "rejectReasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "PageResponseIntegratorProductInformation": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "totalElements": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "totalPages": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "numberOfElements": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "first": {
+                        "type": "boolean"
+                    },
+                    "last": {
+                        "type": "boolean"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/IntegratorProductInformation"
+                        }
+                    }
+                }
+            },
+            "VariantAttributesDTO": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "value": {
+                        "type": "string"
+                    },
+                    "mandatory": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "BaseCategoryDTO": {
+                "type": "object",
+                "properties": {
+                    "categoryId": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "displayName": {
+                        "type": "string"
+                    },
+                    "parentCategoryId": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "paths": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "leaf": {
+                        "type": "boolean"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "HX",
+                            "HB",
+                            "HC"
+                        ]
+                    },
+                    "sortId": {
+                        "type": "string"
+                    },
+                    "merge": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PageResponseBaseCategoryDTO": {
+                "type": "object",
+                "properties": {
+                    "success": {
+                        "type": "boolean"
+                    },
+                    "code": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "version": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "totalElements": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "totalPages": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "number": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "numberOfElements": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "first": {
+                        "type": "boolean"
+                    },
+                    "last": {
+                        "type": "boolean"
+                    },
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/BaseCategoryDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "securitySchemes": {
+            "Basic": {
+                "type": "http",
+                "scheme": "basic"
+            }
+        }
+    }
+}

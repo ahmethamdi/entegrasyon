@@ -1,0 +1,1921 @@
+{
+    "openapi": "3.0.1",
+    "info": {
+        "title": "HEPSIBURADA - LISTELEME ENTEGRASYONU",
+        "version": "v1"
+    },
+    "servers": [
+        {
+            "url": "https://listing-external-sit.hepsiburada.com"
+        }
+    ],
+    "paths": {
+        "/buybox-orders/merchantid/{merchantId}": {
+            "get": {
+                "tags": [
+                    "Buybox"
+                ],
+                "summary": "Buybox S\u0131ralama Sorgulama",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin sat\u0131\u015f s\u0131ras\u0131na ula\u015fman\u0131za olanak sa\u011flar.",
+                "operationId": "Buybox S\u0131ralama Sorgulama",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "skuList",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}": {
+            "get": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Bilgilerini Sorgulama",
+                "description": "Bu metod sat\u0131c\u0131ya ait listing bilgilerine ula\u015fman\u0131za olanak tan\u0131r.",
+                "operationId": "Listing Bilgilerini Sorgulama",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "offset",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "default": 10
+                        }
+                    },
+                    {
+                        "name": "hbSkuList",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "merchantSkuList",
+                        "in": "query",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "salable-listings",
+                        "in": "query",
+                        "schema": {
+                            "type": "boolean"
+                        }
+                    },
+                    {
+                        "name": "updateStartDate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "updateEndDate",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExternalListingsRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExternalListingsRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExternalListingsRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExternalListingsRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ExternalListingsRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/inventory-uploads": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Envanter G\u00fcncelleme",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin stok, fiyat, kargolama s\u00fcresi ve teslimat profili gibi bilgilerini g\u00fcncelleyebilmenize olanak tan\u0131r.",
+                "operationId": "Listing Envanter G\u00fcncelleme",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/InventoryUploadRequestModel"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/inventory-uploads/id/{inventoryUploadId}": {
+            "get": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Envanter G\u00fcncelleme Sorgulama",
+                "description": "Bu metod listing envanter g\u00fcncelleme i\u00e7in g\u00f6ndermi\u015f oldu\u011funuz isteklerin ba\u015far\u0131l\u0131/ba\u015far\u0131s\u0131z durumlar\u0131n\u0131 kontrol etmenize olanak tan\u0131r.",
+                "operationId": "Listing Envanter G\u00fcncelleme Sorgulama",
+                "parameters": [
+                    {
+                        "name": "inventoryUploadId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/stock-uploads": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Stok G\u00fcncelleme",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin stok bilgilerini g\u00fcncelleyebilmenize olanak tan\u0131r.",
+                "operationId": "Listing Stok G\u00fcncelleme",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json-patch+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StockUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StockUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StockUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StockUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StockUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StockUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/StockUploadRequestModel"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/stock-uploads/id/{id}": {
+            "get": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Stok G\u00fcncelleme Sorgulama",
+                "description": "Bu metod listing stok bilgilerini g\u00fcncelleme i\u00e7in g\u00f6ndermi\u015f oldu\u011funuz isteklerin ba\u015far\u0131l\u0131/ba\u015far\u0131s\u0131z durumlar\u0131n\u0131 kontrol etmenize olanak tan\u0131r.",
+                "operationId": "Listing Stok G\u00fcncelleme Sorgulama",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadResultRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadResultRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadResultRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadResultRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StockUploadResultRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/price-uploads": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Fiyat G\u00fcncelleme",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin fiyat bilgilerini g\u00fcncelleyebilmenize olanak tan\u0131r.",
+                "operationId": "Listing Fiyat G\u00fcncelleme",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json-patch+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PriceUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PriceUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PriceUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PriceUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PriceUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PriceUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/PriceUploadRequestModel"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/price-uploads/id/{id}": {
+            "get": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Fiyat G\u00fcncelleme Sorgulama",
+                "description": "Bu metod listing fiyat bilgilerini g\u00fcncelleme i\u00e7in g\u00f6ndermi\u015f oldu\u011funuz isteklerin ba\u015far\u0131l\u0131/ba\u015far\u0131s\u0131z durumlar\u0131n\u0131 kontrol etmenize olanak tan\u0131r.",
+                "operationId": "Listing Fiyat G\u00fcncelleme Sorgulama",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadResultRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadResultRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadResultRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadResultRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PriceUploadResultRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/shipping-info-uploads": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Teslimat G\u00fcncelleme",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin kargolama s\u00fcresi, teslimat profili gibi bilgilerini g\u00fcncelleyebilmenize olanak tan\u0131r.",
+                "operationId": "Listing Teslimat G\u00fcncelleme",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json-patch+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRequestModel"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/shipping-info-uploads/id/{id}": {
+            "get": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Teslimat G\u00fcncelleme Sorgulama",
+                "description": "Bu metod listing teslimat bilgilerini g\u00fcncelleme i\u00e7in g\u00f6ndermi\u015f oldu\u011funuz isteklerin ba\u015far\u0131l\u0131/ba\u015far\u0131s\u0131z durumlar\u0131n\u0131 kontrol etmenize olanak tan\u0131r.",
+                "operationId": "Listing Teslimat G\u00fcncelleme Sorgulama",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadResultRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadResultRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadResultRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadResultRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ShippingInfoUploadResultRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/additional-info-uploads": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Ek Bilgiler G\u00fcncelleme",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin \u00f6zelle\u015ftirilebilir \u00fcr\u00fcn bilgilerini g\u00fcncelleyebilmenize olanak tan\u0131r.",
+                "operationId": "Listing Ek Bilgiler G\u00fcncelleme",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json-patch+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "text/xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRequestModel"
+                                }
+                            }
+                        },
+                        "application/*+xml": {
+                            "schema": {
+                                "type": "array",
+                                "items": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRequestModel"
+                                }
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/additional-info-uploads/id/{id}": {
+            "get": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Ek Bilgiler G\u00fcncelleme Sorgulama",
+                "description": "Bu metod listing ek bilgilerini g\u00fcncelleme i\u00e7in g\u00f6ndermi\u015f oldu\u011funuz isteklerin ba\u015far\u0131l\u0131/ba\u015far\u0131s\u0131zdurumlar\u0131n\u0131 kontrol etmenize olanak tan\u0131r.",
+                "operationId": "Listing Ek Bilgiler G\u00fcncelleme Sorgulama",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "text/plain": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadResultRepresentation"
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadResultRepresentation"
+                                }
+                            },
+                            "text/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadResultRepresentation"
+                                }
+                            },
+                            "application/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadResultRepresentation"
+                                }
+                            },
+                            "text/xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AdditionalInfoUploadResultRepresentation"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/sku/{sku}/activate": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Activate",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin sat\u0131\u015fa a\u00e7man\u0131za olanak tan\u0131r.",
+                "operationId": "Listing Activate",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "sku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/sku/{sku}/deactivate": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Deactivate",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin sat\u0131\u015fa a\u00e7man\u0131za veya kapatman\u0131za olanak tan\u0131r.",
+                "operationId": "Listing Deactivate",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "sku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/sku/{sku}/merchantsku/{merchantSku}": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Tekil Fiyat/Stok G\u00fcncelleme",
+                "description": "Bu metod tek bir listingin fiyat, stok ve kargolama s\u00fcresi bilgilerini ayn\u0131 anda g\u00fcncelleme olana\u011f\u0131 tan\u0131r.",
+                "operationId": "Listing Tekil Fiyat/Stok G\u00fcncelleme",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "sku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "merchantSku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json-patch+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateListingRequestBodyModel"
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateListingRequestBodyModel"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateListingRequestBodyModel"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateListingRequestBodyModel"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateListingRequestBodyModel"
+                            }
+                        },
+                        "text/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateListingRequestBodyModel"
+                            }
+                        },
+                        "application/*+xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateListingRequestBodyModel"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Listing Silme",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin silinmesine olanak tan\u0131r.",
+                "operationId": "Listing Silme",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    {
+                        "name": "sku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "merchantSku",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        },
+        "/Listings/merchantid/{merchantId}/bulk-unlock": {
+            "post": {
+                "tags": [
+                    "Listings"
+                ],
+                "summary": "Toplu Kilit Kald\u0131rma",
+                "description": "Bu metod sat\u0131c\u0131ya ait listinglerin g\u00fcncelleme i\u015flemi sonras\u0131 al\u0131nan MinLock ve MaxLock uyar\u0131l\u0131r\u0131 sonras\u0131nda girilen fiyatlardan dolay\u0131 kilitlenen \u00fcr\u00fcnlerin api \u00fczerinden toplu olarak girilen fiyatlarla kilitinin kald\u0131r\u0131lmas\u0131 ve sat\u0131\u015fa a\u00e7\u0131lmas\u0131 i\u015flemi i\u00e7in kullan\u0131lmaktad\u0131r.MinLock: D\u00fc\u015f\u00fck fiyat sebebiyle kilitlendi. Yap\u0131lan fiyat de\u011fi\u015fimi platform genelindeki fiyat aral\u0131klar\u0131 d\u0131\u015f\u0131ndad\u0131r, \u00fcr\u00fcn\u00fcn\u00fcz kilitlenmi\u015ftir. Girmi\u015f oldu\u011funuz fiyattan eminseniz \u00fcr\u00fcn\u00fcn kilidini Envanter ekran\u0131ndan toplu olarak kald\u0131rabilir veya \u00f6nerilen aral\u0131klarda tekrar fiyat giri\u015fi yapabilirsiniz.MaxLock: Y\u00fcksek fiyat sebebiyle kilitlendi. Yap\u0131lan fiyat de\u011fi\u015fimi platform genelindeki fiyat aral\u0131klar\u0131 d\u0131\u015f\u0131ndad\u0131r, \u00fcr\u00fcn\u00fcn\u00fcz kilitlenmi\u015ftir. Girmi\u015f oldu\u011funuz fiyattan eminseniz \u00fcr\u00fcn\u00fcn kilidini Envanter ekran\u0131ndan toplu olarak kald\u0131rabilir veya \u00f6nerilen aral\u0131klarda tekrar fiyat giri\u015fi yapabilirsiniz.",
+                "operationId": "Toplu Kilit Kald\u0131rma",
+                "parameters": [
+                    {
+                        "name": "merchantId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json-patch+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkUnlockRequestModel"
+                            }
+                        },
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkUnlockRequestModel"
+                            }
+                        },
+                        "text/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkUnlockRequestModel"
+                            }
+                        },
+                        "application/*+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkUnlockRequestModel"
+                            }
+                        },
+                        "application/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkUnlockRequestModel"
+                            }
+                        },
+                        "text/xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkUnlockRequestModel"
+                            }
+                        },
+                        "application/*+xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BulkUnlockRequestModel"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AdditionalInfoUploadRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "AdditionalInfoUploadRequestModel": {
+                "type": "object",
+                "properties": {
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "customizationTextType": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "customizationTextLength": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "hasInstallation": {
+                        "type": "boolean",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "AdditionalInfoUploadResultRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Error"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "BulkUnlockRequestModel": {
+                "type": "object",
+                "properties": {
+                    "hbSkuList": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "CreateTokenRequestModel": {
+                "type": "object",
+                "properties": {
+                    "appKey": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "username": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "hash": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "additionalClaims": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "CustomizablePropertyRepresentation": {
+                "type": "object",
+                "properties": {
+                    "displayName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "displayLength": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "displayDescription": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "DiscountDebtDistributionRepresentation": {
+                "type": "object",
+                "properties": {
+                    "debtor": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "amount": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "Error": {
+                "type": "object",
+                "properties": {
+                    "elementNo": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ExternalListingsRepresentation": {
+                "type": "object",
+                "properties": {
+                    "listings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Listing"
+                        },
+                        "nullable": true
+                    },
+                    "totalCount": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "InventoryUploadRequestModel": {
+                "type": "object",
+                "properties": {
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "price": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "fixedShippingPrice": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "availableStock": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "cargoCompany1": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cargoCompany2": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cargoCompany3": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "shippingAddressLabel": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "claimAddressLabel": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "maximumPurchasableQuantity": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "customizationTextType": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "customizationTextLength": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "btCargoCompany": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "ytCargoCompany": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "availableWarehouses": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "shippingProfileName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "hasInstallation": {
+                        "type": "boolean",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "Listing": {
+                "type": "object",
+                "properties": {
+                    "listingId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "uniqueIdentifier": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "price": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "availableStock": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "dispatchTime": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "cargoCompany1": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cargoCompany2": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cargoCompany3": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "shippingAddressLabel": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "shippingProfileName": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "claimAddressLabel": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "maximumPurchasableQuantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "minimumPurchasableQuantity": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "pricings": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ListingPricingRepresentation"
+                        },
+                        "nullable": true
+                    },
+                    "isSalable": {
+                        "type": "boolean"
+                    },
+                    "customizableProperties": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/CustomizablePropertyRepresentation"
+                        },
+                        "nullable": true
+                    },
+                    "deactivationReasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "isSuspended": {
+                        "type": "boolean"
+                    },
+                    "isLocked": {
+                        "type": "boolean"
+                    },
+                    "lockReasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "isFrozen": {
+                        "type": "boolean"
+                    },
+                    "freezeReasons": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "commissionRate": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "availableWarehouses": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "nullable": true
+                    },
+                    "isFulfilledByHB": {
+                        "type": "boolean"
+                    },
+                    "priceIncreaseDisabled": {
+                        "type": "boolean"
+                    },
+                    "priceDecreaseDisabled": {
+                        "type": "boolean"
+                    },
+                    "stockDecreaseDisabled": {
+                        "type": "boolean"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ListingPricingRepresentation": {
+                "type": "object",
+                "properties": {
+                    "finalPrice": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "startDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "endDate": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "debtors": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DiscountDebtDistributionRepresentation"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "MoneyRequestModel": {
+                "type": "object",
+                "properties": {
+                    "currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "amount": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "PriceUploadRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "PriceUploadRequestModel": {
+                "type": "object",
+                "properties": {
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "price": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "PriceUploadResultRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Error"
+                        },
+                        "nullable": true
+                    },
+                    "priceValidations": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PriceValidation"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "PriceValidation": {
+                "type": "object",
+                "properties": {
+                    "elementNo": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "type": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "minPrice": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "maxPrice": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "description": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ShippingInfoUploadRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ShippingInfoUploadRequestModel": {
+                "type": "object",
+                "properties": {
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "dispatchTime": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "fixedShippingPrice": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true
+                    },
+                    "claimAddressLabel": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "shippingAddressLabel": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cargoCompany1": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cargoCompany2": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "cargoCompany3": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "btCargoCompany": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "ytCargoCompany": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "availableWarehouses": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "shippingProfileName": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "ShippingInfoUploadResultRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Error"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "StockUploadRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "additionalProperties": false
+            },
+            "StockUploadRequestModel": {
+                "type": "object",
+                "properties": {
+                    "hepsiburadaSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "merchantSku": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "availableStock": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "maximumPurchasableQuantity": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "StockUploadResultRepresentation": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "total": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "errors": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Error"
+                        },
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            },
+            "UpdateListingRequestBodyModel": {
+                "type": "object",
+                "properties": {
+                    "newAvailableStock": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    },
+                    "newPrice": {
+                        "$ref": "#/components/schemas/MoneyRequestModel"
+                    },
+                    "newDispatchTime": {
+                        "type": "integer",
+                        "format": "int32",
+                        "nullable": true
+                    }
+                },
+                "additionalProperties": false
+            }
+        },
+        "securitySchemes": {
+            "basic": {
+                "type": "http",
+                "description": "Basic Authorization",
+                "scheme": "basic"
+            }
+        }
+    },
+    "security": [
+        {
+            "basic": []
+        }
+    ]
+}
