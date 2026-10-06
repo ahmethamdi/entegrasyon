@@ -21,6 +21,8 @@ use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
+use App\Domain\Channels\Models\CategoryMapping;
+use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -136,6 +138,18 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
     private const ORDER_PAGE_SIZE = 100;
 
     /**
+     * Etsy beyanları ve profiller — bağlantı ayarı (`settings`). Beyanlar
+     * (`who_made`, `when_made`) satıcının YASAL beyanıdır, uydurulmaz.
+     */
+    public const WHO_MADE_KEY = 'etsy_who_made';
+
+    public const WHEN_MADE_KEY = 'etsy_when_made';
+
+    public const SHIPPING_PROFILE_KEY = 'etsy_shipping_profile_id';
+
+    public const READINESS_KEY = 'etsy_readiness_state_id';
+
+    /**
      * Mağaza kimliğinin `settings` içindeki yeri — yol üzerinde taşınır.
      * Satıcıya SORULMAZ: OAuth dönüşünde `GET /users/me`'den yazılır.
      */
@@ -190,7 +204,7 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
     private const IMPORT_PAGE_SIZE = 100;
 
     /** İçe aktarılan ilan durumları, SIRAYLA (`fetchProductPage`). */
-    private const IMPORT_STATES = ['active', 'sold_out', 'inactive'];
+    private const IMPORT_STATES = ['active', 'sold_out', 'inactive', 'expired'];
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -368,32 +382,70 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
     // ------------------------------------------------------------- katalog
 
     /**
-     * Yeni ilan açar — İKİ ADIM, ve bu KAÇINILMAZDIR (§11.1 · §11.3).
+     * Yeni ilan açar — TASLAK olarak (Etsy taslak dışında yaratmaz).
      *
-     * ⚠️ ETSY İÇERİK VE ENVANTERİ AYRI UÇ NOKTALARDA TUTAR. İlan gövdesi
-     * fiyat ve stok TAŞIMAZ; ikisi de `listings/{id}/inventory` altında
-     * yaşar. Tek çağrıda birleştirilemez — Shopify'ın `productSet`'i gibi
-     * bir "hepsi bir arada" mutation'ı Etsy'de YOKTUR.
+     * 7 Eki 2026, ilk gerçek mağaza öncesi Etsy OAS'a göre yeniden yazıldı.
+     * Önceki hâl hiç çalışamazdı:
+     *   · zorunlu `price`/`quantity` gönderilmiyordu,
+     *   · `taxonomy_id` olarak 34Pazar'ın İÇ kategori kimliği gidiyordu,
+     *   · zorunlu `who_made`/`when_made` hiçbir yerden dolmuyordu,
+     *   · fizikselde zorunlu `shipping_profile_id` yoktu,
+     *   · gövde JSON'du; uç nokta form (`x-www-form-urlencoded`) bekler.
      *
-     * ⚠️ ARA BAŞARISIZLIK KABUKLU İLAN BIRAKIR ve bu DÜRÜST bir sınırdır:
-     * ilan yaratıldı ama envanteri yazılamadıysa kanalda TASLAK bir ilan
-     * kalır. `state => draft` ile açılmasının sebebi tam budur — taslak
-     * ilan YAYINDA DEĞİLDİR ve satıcı stoksuz ürün satmaz. Sonraki tur
-     * `external_parent_id`'yi görür ve UPDATE yoluna girer; kopya ilan
-     * AÇILMAZ.
+     * ⚠️ BEYAN UYDURULMAZ: `who_made` ("bunu kim yaptı") ve `when_made`
+     * satıcının Etsy'ye YASAL beyanıdır; bağlantı ayarında yoksa ilan
+     * açılmaz ve sebep söylenir. Kargo ve hazırlık profili mağazada TEK ise
+     * o seçilir, birden çoksa ayardan okunur.
      *
-     * Bu slice ENVANTER YAZMAZ (o slice 3.5'tir ve oku-birleştir-yaz
-     * gerektirir). Kimlik üçlüsünden `offering_id` ancak envanter
-     * yazıldıktan sonra dolar; o güne kadar `external_id` de boş kalabilir
-     * ve `PushListing` bunu VALIDATION hatası olarak görür — sessizce
-     * başarı DÖNÜLMEZ.
+     * ⚠️ ADET YER TUTUCUDUR (1): Etsy sıfır kabul etmez ve ilan taslaktır,
+     * satılmaz; gerçek stok envanter yazımıyla gider.
+     *
+     * Yaratma sonrası envanter okunur: tek varyantın SKU'su boşsa BİZİM
+     * SKU'muz yazılır (sonraki eşleşmeler için) ve kimlik (`product_id`,
+     * `offering_id`) bu okumadan alınır — yaratma yanıtı envanter taşımaz.
      */
     public function createListing(ListingPayload $payload): AdapterResult
     {
-        $response = $this->client->post(
+        $variant = $payload->listing->variant;
+        $taxonomyId = $this->taxonomyIdFor($payload);
+
+        if ($taxonomyId === null) {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Ürünün kategorisi Etsy\'de eşleştirilmemiş; kategori eşleştirme ekranından tamamlanmalı.');
+        }
+
+        $whoMade = $this->setting(self::WHO_MADE_KEY);
+        $whenMade = $this->setting(self::WHEN_MADE_KEY);
+
+        if ($whoMade === null || $whenMade === null) {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Etsy bağlantı ayarında "kim yaptı" ve "ne zaman yapıldı" beyanı eksik; Etsy bu beyan olmadan ilan açmaz.');
+        }
+
+        $price = $variant?->price;
+
+        if (! is_numeric($price) || (float) $price <= 0) {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Ürünün fiyatı yok; Etsy fiyatsız ilan açmaz.');
+        }
+
+        $shippingProfileId = $this->setting(self::SHIPPING_PROFILE_KEY) ?? $this->onlyProfileId(EtsyEndpoints::SHIPPING_PROFILES, 'shipping_profile_id');
+
+        if ($shippingProfileId === null) {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Etsy mağazasında kargo profili seçilemedi (hiç yok ya da birden çok); bağlantı ayarından seçilmeli.');
+        }
+
+        $response = $this->client->request(
+            'POST',
             EtsyEndpoints::url(EtsyEndpoints::SHOP_LISTINGS, ['shop_id' => $this->requireShopId()]),
-            EtsyProductMapper::toListingBody($payload),
+            body: EtsyProductMapper::toDraftBody(
+                $payload,
+                taxonomyId: $taxonomyId,
+                whoMade: $whoMade,
+                whenMade: $whenMade,
+                price: (string) $price,
+                shippingProfileId: $shippingProfileId,
+                readinessStateId: $this->setting(self::READINESS_KEY) ?? $this->onlyProfileId(EtsyEndpoints::READINESS_STATES, 'readiness_state_definition_id'),
+            ),
             headers: $this->apiKeyHeader(),
+            asForm: true,
         );
 
         $response->throw();
@@ -411,19 +463,26 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
             );
         }
 
-        return AdapterResult::success($this->withNewImages($payload, (string) $body['listing_id'], EtsyProductMapper::toIdentityResult(
-            $body,
-            $payload->listing->variant?->sku,
+        $listingId = (string) $body['listing_id'];
+        $products = $this->claimSingleVariantSku($listingId, (string) ($variant?->sku ?? ''));
+
+        return AdapterResult::success($this->withNewImages($payload, $listingId, EtsyProductMapper::toIdentityResult(
+            ['listing_id' => $listingId, 'inventory' => ['products' => $products]],
+            $variant?->sku,
         )));
     }
 
     /**
-     * Var olan ilanı GÜNCELLER.
+     * Var olan ilanı GÜNCELLER — başlık, açıklama, (eşleştirildiyse) kategori.
      *
-     * ⚠️ HEDEF `listing_id`'DİR (`external_parent_id`), `product_id`
-     * DEĞİL. İçerik İLAN seviyesindedir; `external_id` (product_id) tek
-     * başına ilan uç noktasına verilemez — istek var olmayan bir ilana
-     * gider ve 404 alınır.
+     * ⚠️ YOL MAĞAZA ALTINDADIR (`SHOP_LISTING`); mağazasız yol PATCH kabul
+     * etmez. Gövde form biçimindedir.
+     *
+     * ⚠️ DURUM (`state`) GÖNDERİLMEZ. Önceki gövde her güncellemede
+     * `state => draft` taşıyordu: içe aktarılmış YAYINDAKİ bir ilanın
+     * başlığı düzeltilince ilan satıştan düşmeye zorlanırdı.
+     *
+     * ⚠️ HEDEF `listing_id`'DİR (`external_parent_id`), `product_id` DEĞİL.
      */
     public function updateListing(ListingPayload $payload): AdapterResult
     {
@@ -438,9 +497,10 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
 
         $response = $this->client->request(
             'PATCH',
-            EtsyEndpoints::url(EtsyEndpoints::LISTING, ['listing_id' => $listingId]),
-            body: EtsyProductMapper::toListingBody($payload),
+            EtsyEndpoints::url(EtsyEndpoints::SHOP_LISTING, ['shop_id' => $this->requireShopId(), 'listing_id' => $listingId]),
+            body: EtsyProductMapper::toUpdateBody($payload, $this->taxonomyIdFor($payload)),
             headers: $this->apiKeyHeader(),
+            asForm: true,
         );
 
         $response->throw();
@@ -452,6 +512,111 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
             $body,
             $payload->listing->variant?->sku,
         )));
+    }
+
+    /**
+     * Ürünün iç kategorisinin Etsy karşılığı (taksonomi kimliği); eşleştirme
+     * yoksa null. Kategori ağacı KİRACISIZDIR (kanalın gerçeği).
+     */
+    private function taxonomyIdFor(ListingPayload $payload): ?int
+    {
+        $internal = $payload->categoryId;
+
+        if ($internal === null || trim($internal) === '') {
+            return null;
+        }
+
+        // Adapter bağlamsız da çağrılır (kuyruk, tarama): eşleştirme
+        // kiracıya bağlıdır → sistem bağlamında BAĞLANTININ kiracısıyla süzülür.
+        $external = TenantContext::runAsSystem(function () use ($internal): mixed {
+            $mapping = CategoryMapping::query()
+                ->where('tenant_id', $this->connection->tenant_id)
+                ->where('internal_category_id', $internal)
+                ->where('channel_type_code', 'etsy')
+                ->first();
+
+            return $mapping === null ? null : ChannelCategory::query()->find($mapping->channel_category_id)?->external_id;
+        });
+
+        return is_numeric($external) ? (int) $external : null;
+    }
+
+    /**
+     * Mağazada TEK profil varsa onun kimliği; yoksa ya da birden çoksa null.
+     * Okuma hatası null döner — çağıran sebebi söyler, tahmin yapılmaz.
+     */
+    private function onlyProfileId(string $template, string $idField): ?string
+    {
+        try {
+            $response = $this->client->get(
+                EtsyEndpoints::url($template, ['shop_id' => $this->requireShopId()]),
+                headers: $this->apiKeyHeader(),
+            );
+        } catch (Throwable) {
+            return null;
+        }
+
+        $results = $response->successful() ? (array) ($response->json('results') ?? []) : [];
+
+        return count($results) === 1 && isset($results[0][$idField]) ? (string) $results[0][$idField] : null;
+    }
+
+    /**
+     * Yeni ilanın envanterini okur; TEK varyantlıysa ve SKU'su boşsa bizim
+     * SKU'muzu yazar (oku-birleştir-yaz, fiyat/adet korunur). Son envanter
+     * ürünlerini döner — kimlik buradan okunur.
+     *
+     * Yazma başarısız olursa okunan envanterle devam edilir: ilan açıldı,
+     * kimliği yine alınmalı (eşleşme `product_id` ile de çalışır).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function claimSingleVariantSku(string $listingId, string $sku): array
+    {
+        $read = $this->client->get(
+            EtsyEndpoints::url(EtsyEndpoints::LISTING_INVENTORY, ['listing_id' => $listingId]),
+            headers: $this->apiKeyHeader(),
+        );
+
+        if (! $read->successful()) {
+            return [];
+        }
+
+        /** @var list<array<string, mixed>> $products */
+        $products = array_values(array_filter((array) ($read->json('products') ?? []), 'is_array'));
+
+        if ($sku === '' || count($products) !== 1 || (string) ($products[0]['sku'] ?? '') !== '') {
+            return $products;
+        }
+
+        $products[0]['sku'] = $sku;
+
+        try {
+            $write = $this->client->request(
+                'PUT',
+                EtsyEndpoints::url(EtsyEndpoints::LISTING_INVENTORY, ['listing_id' => $listingId]),
+                body: ['products' => EtsyInventoryMerger::merge($products, [])],
+                headers: $this->apiKeyHeader(),
+            );
+
+            $write->throw();
+
+            $after = array_values(array_filter((array) ($write->json('products') ?? []), 'is_array'));
+
+            return $after !== [] ? $after : $products;
+        } catch (Throwable $e) {
+            Log::warning('etsy.sku_claim_failed', ['connection' => $this->connection->id, 'listing' => $listingId, 'error' => $e->getMessage()]);
+
+            return $products;
+        }
+    }
+
+    /** Bağlantı ayarı (`settings`) — boşsa null. */
+    private function setting(string $key): ?string
+    {
+        $value = $this->connection->settings[$key] ?? null;
+
+        return is_scalar($value) && trim((string) $value) !== '' ? trim((string) $value) : null;
     }
 
     /**
@@ -611,9 +776,10 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
 
         $response = $this->client->request(
             'PATCH',
-            EtsyEndpoints::url(EtsyEndpoints::LISTING, ['listing_id' => $listingId]),
+            EtsyEndpoints::url(EtsyEndpoints::SHOP_LISTING, ['shop_id' => $this->requireShopId(), 'listing_id' => $listingId]),
             body: ['state' => 'inactive'],
             headers: $this->apiKeyHeader(),
+            asForm: true,
         );
 
         $response->throw();
@@ -762,9 +928,13 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
      * ⚠️ `state` TEK DEĞER ALIR ve varsayılanı yalnız `active`'tir. Yalnız
      * aktifler çekilseydi stoğu bitmiş (`sold_out`) ilanlar — satıcının
      * kataloğunun gerçek parçası — 34Pazar'a hiç gelmez, stok gelince de
-     * kanala bağlı görünmezdi. Sıra: active → sold_out → inactive. Taslak
-     * ve süresi dolmuş (`draft`, `expired`) ilanlar ALINMAZ: satışta
-     * değiller ve satıcının yarım bıraktığı denemeler olabilirler.
+     * kanala bağlı görünmezdi. Sıra: active → sold_out → inactive → expired.
+     *
+     * SÜRESİ DOLMUŞ (`expired`) DA ALINIR (7 Eki 2026, ilk gerçek mağaza:
+     * 0 aktif, 14 süresi dolmuş ilan → içe aktarma "0 ürün" diyordu). Süresi
+     * dolan ilan satıcının ürünüdür, yenilenince satışa döner; içe aktarma
+     * onu YENİLEMEZ (Etsy'de ücretli). Taslak (`draft`) ALINMAZ: yarım
+     * bırakılmış denemeler olabilir.
      *
      * Silinmiş product ve kapalı offering ALINMAZ: Etsy'de o seçenek
      * satılmıyor; alınsaydı panelde kanalda karşılığı olmayan varyant

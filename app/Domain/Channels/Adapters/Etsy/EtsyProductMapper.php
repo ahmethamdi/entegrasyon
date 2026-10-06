@@ -36,43 +36,67 @@ final class EtsyProductMapper
     public const OFFERING_ID_KEY = 'offering_id';
 
     /**
-     * İlan gövdesi — `POST/PATCH listings`.
+     * Taslak ilan gövdesi — `POST shops/{id}/listings` (form biçiminde).
      *
-     * ⚠️ FİYAT VE STOK BU GÖVDEDE GİTMEZ. Etsy'de ikisi de ENVANTER
-     * uç noktasında yaşar (§11.3) ve o çağrı ayrıdır. Buraya konsaydı
-     * ilan yaratma anında bir fiyat yazılır, ardından envanter çağrısı
-     * onu EZER ve iki gerçek kaynağı doğardı.
+     * Zorunlular (Etsy OAS): quantity, title, description, price, who_made,
+     * when_made, taxonomy_id; fizikselde shipping_profile_id. `state` bu uç
+     * noktada YOKTUR — Etsy her zaman taslak yaratır.
      *
-     * @return array<string, mixed>
+     * Açıklama boşsa başlık yazılır: Etsy boş açıklamayı reddeder.
+     *
+     * @return array<string, scalar>
      */
-    public static function toListingBody(ListingPayload $payload): array
-    {
-        $attributes = $payload->attributes;
-
+    public static function toDraftBody(
+        ListingPayload $payload,
+        int $taxonomyId,
+        string $whoMade,
+        string $whenMade,
+        string $price,
+        string $shippingProfileId,
+        ?string $readinessStateId = null,
+    ): array {
         return array_filter([
-            'title' => $payload->title,
-            'description' => $payload->description,
-
-            // ⚠️ TAKSONOMİ KİMLİĞİ YAPRAKTIR. Ara kategori gönderilirse
-            // Etsy `VALIDATION` döner ve o hata KALICIDIR; ön koşul kapısı
-            // bunu zaten eler ama gövdede de doğru alan kullanılmalıdır.
-            'taxonomy_id' => $payload->categoryId === null
-                ? null
-                : (int) $payload->categoryId,
-
-            // Etsy'nin zorunlu alanları — satıcı bunları eşleştirme
-            // ekranından verir. UYDURULMAZ: varsayılan bir değer yazmak
-            // (ör. "who_made => i_did") satıcı adına YASAL bir beyanda
-            // bulunmak olurdu.
-            'who_made' => $attributes['who_made'] ?? null,
-            'when_made' => $attributes['when_made'] ?? null,
-            'taxonomy_attributes' => $attributes['taxonomy_attributes'] ?? null,
-
-            // Yeni ilan TASLAK doğar: `PushListing` canlı işaretini kanal
-            // onayından SONRA yazar. `active` gönderilseydi ilan stok
-            // yazılmadan yayına girer ve satıcı stoksuz ürün satardı.
-            'state' => $attributes['state'] ?? 'draft',
+            'title' => self::title($payload->title),
+            'description' => self::description($payload),
+            'quantity' => 1,
+            'price' => round((float) $price, 2),
+            'who_made' => $whoMade,
+            'when_made' => $whenMade,
+            'taxonomy_id' => $taxonomyId,
+            'type' => 'physical',
+            'shipping_profile_id' => (int) $shippingProfileId,
+            'readiness_state_id' => $readinessStateId === null ? null : (int) $readinessStateId,
         ], static fn (mixed $v): bool => $v !== null);
+    }
+
+    /**
+     * Güncelleme gövdesi — `PATCH shops/{id}/listings/{id}` (form biçiminde).
+     *
+     * ⚠️ DURUM (`state`) TAŞIMAZ: yayındaki ilan içerik güncellemesiyle
+     * satıştan düşmemeli. Kategori yalnız eşleştirme varsa gider.
+     *
+     * @return array<string, scalar>
+     */
+    public static function toUpdateBody(ListingPayload $payload, ?int $taxonomyId): array
+    {
+        return array_filter([
+            'title' => self::title($payload->title),
+            'description' => self::description($payload),
+            'taxonomy_id' => $taxonomyId,
+        ], static fn (mixed $v): bool => $v !== null);
+    }
+
+    /** Etsy başlığı en fazla 140 karakter. */
+    private static function title(string $title): string
+    {
+        return mb_substr(trim($title), 0, 140);
+    }
+
+    private static function description(ListingPayload $payload): string
+    {
+        $text = trim(strip_tags((string) $payload->description));
+
+        return $text !== '' ? $text : trim($payload->title);
     }
 
     /**

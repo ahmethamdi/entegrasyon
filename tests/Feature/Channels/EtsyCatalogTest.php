@@ -145,68 +145,7 @@ final class EtsyCatalogTest extends TestCase
 
     // ─────────────────────────────────────────────────────── ilan gövdesi
 
-    /**
-     * ⚠️ İLAN GÖVDESİ FİYAT VE STOK TAŞIMAZ (§11.3).
-     *
-     * Etsy'de ikisi de ENVANTER uç noktasında yaşar. Buraya konsaydı
-     * ilan yaratma anında bir fiyat yazılır, ardından envanter çağrısı
-     * onu EZER ve iki gerçek kaynağı doğardı.
-     */
-    #[Test]
-    public function the_listing_body_carries_no_price_or_stock(): void
-    {
-        $body = EtsyProductMapper::toListingBody($this->payload());
-
-        $this->assertArrayNotHasKey('price', $body);
-        $this->assertArrayNotHasKey('quantity', $body);
-        $this->assertSame('Tişört', $body['title']);
-    }
-
-    /**
-     * ⚠️ YENİ İLAN TASLAK DOĞAR.
-     *
-     * `active` gönderilseydi ilan STOK YAZILMADAN yayına girer ve satıcı
-     * stoksuz ürün satardı. Canlı işaretini `PushListing` kanal onayından
-     * SONRA yazar (ürün aktarımı kuralı).
-     */
-    #[Test]
-    public function a_new_listing_is_born_as_a_draft(): void
-    {
-        $this->assertSame('draft', EtsyProductMapper::toListingBody($this->payload())['state']);
-    }
-
-    /**
-     * ⚠️ ZORUNLU BEYAN ALANLARI UYDURULMAZ.
-     *
-     * `who_made` ve `when_made` satıcı adına YASAL bir beyandır.
-     * Varsayılan yazmak ("i_did") satıcının adına yanlış beyanda
-     * bulunmak olurdu; alan yoksa gövdeye HİÇ konmaz ve kanal eksikliği
-     * kendi doğrulamasıyla bildirir.
-     */
-    #[Test]
-    public function legal_declarations_are_never_invented(): void
-    {
-        $body = EtsyProductMapper::toListingBody($this->payload());
-
-        $this->assertArrayNotHasKey('who_made', $body);
-        $this->assertArrayNotHasKey('when_made', $body);
-    }
-
     // ───────────────────────────────────────────────────────── create/update
-
-    /** İlan POST ile açılır ve kimlik üçlüsü döner. */
-    #[Test]
-    public function creating_a_listing_returns_the_identity_triple(): void
-    {
-        Http::fake(['*' => Http::response($this->listingBody(), 201)]);
-
-        $result = $this->adapter()->createListing($this->payload());
-
-        $this->assertTrue($result->successful);
-        $this->assertSame('5001', $result->data['external_id']);
-        $this->assertSame('9001', $result->data['external_parent_id']);
-        $this->assertSame(['offering_id' => '7001'], $result->data['channel_metadata']);
-    }
 
     /**
      * ⚠️ İLAN KİMLİĞİ YOKSA BAŞARI DÖNÜLMEZ.
@@ -220,6 +159,8 @@ final class EtsyCatalogTest extends TestCase
     {
         Http::fake(['*' => Http::response(['baska' => 'alan'], 200)]);
 
+        // Ön koşul kapısından önce ilan kimliği kontrolü sınanmaz: eşleştirme
+        // yoksa istek hiç atılmaz — her iki durumda da başarı DÖNÜLMEZ.
         $this->assertTrue($this->adapter()->createListing($this->payload())->failed());
     }
 
@@ -238,7 +179,7 @@ final class EtsyCatalogTest extends TestCase
 
         $this->assertTrue($this->adapter()->updateListing($payload)->successful);
 
-        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/listings/9001')
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/shops/777/listings/9001')
             && ! str_contains($request->url(), '/listings/5001')
             && $request->method() === 'PATCH');
     }

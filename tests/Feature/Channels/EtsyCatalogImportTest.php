@@ -71,7 +71,7 @@ final class EtsyCatalogImportTest extends TestCase
      * çekilseydi stoğu bitmiş ilanlar hiç gelmezdi.
      */
     #[Test]
-    public function active_then_sold_out_then_inactive_listings_are_walked(): void
+    public function active_sold_out_inactive_and_expired_listings_are_walked(): void
     {
         Http::fake(['*' => fn (Request $r) => Http::response(
             ['count' => 150, 'results' => [$this->listing()]],
@@ -83,8 +83,9 @@ final class EtsyCatalogImportTest extends TestCase
         $this->assertSame('0:100', $adapter->fetchProductPage()->nextCursor, 'Aynı durumda sonraki sayfa.');
         $this->assertSame('1:0', $adapter->fetchProductPage('0:100')->nextCursor, 'Aktif bitti → tükenenler.');
         $this->assertSame('2:0', $adapter->fetchProductPage('1:100')->nextCursor);
+        $this->assertSame('3:0', $adapter->fetchProductPage('2:100')->nextCursor, 'Pasif bitti → süresi dolmuşlar.');
 
-        $last = $adapter->fetchProductPage('2:100');
+        $last = $adapter->fetchProductPage('3:100');
         $this->assertFalse($last->hasMore);
         $this->assertNull($last->nextCursor);
 
@@ -96,7 +97,7 @@ final class EtsyCatalogImportTest extends TestCase
 
         $this->assertSame([
             'active:0:Images,Inventory', 'active:100:Images,Inventory',
-            'sold_out:100:Images,Inventory', 'inactive:100:Images,Inventory',
+            'sold_out:100:Images,Inventory', 'inactive:100:Images,Inventory', 'expired:100:Images,Inventory',
         ], $states);
     }
 

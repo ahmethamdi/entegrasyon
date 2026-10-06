@@ -80,6 +80,19 @@ final class EtsyEndpoints
      *
      * Bu yüzden yazma yolu daima OKU-BİRLEŞTİR-YAZ'dır.
      */
+    /**
+     * İlan GÜNCELLEME/yayından çekme — YALNIZ mağaza altındaki yolda vardır.
+     * `LISTING` (mağazasız) yalnız GET/DELETE kabul eder; PATCH oraya
+     * gönderilseydi her güncelleme reddedilirdi (Etsy OAS, 7 Eki 2026).
+     */
+    public const SHOP_LISTING = '/v3/application/shops/{shop_id}/listings/{listing_id}';
+
+    /** Mağazanın kargo profilleri — fiziksel ilan yaratmada ZORUNLU. */
+    public const SHIPPING_PROFILES = '/v3/application/shops/{shop_id}/shipping-profiles';
+
+    /** Mağazanın hazırlık (processing) profilleri. */
+    public const READINESS_STATES = '/v3/application/shops/{shop_id}/readiness-state-definitions';
+
     public const LISTING_INVENTORY = '/v3/application/listings/{listing_id}/inventory';
 
     /** İlanın görselleri (okuma). */
