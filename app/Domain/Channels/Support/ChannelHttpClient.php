@@ -131,11 +131,14 @@ final class ChannelHttpClient
             // "invalid_request" döner; sebebi de gövdede görünmez.
             $bodyKey = $asForm ? 'form_params' : 'json';
 
-            $pending = $this->pendingRequest($headers, $asForm);
+            $pending = $this->pendingRequest($headers, $asForm, multipart: $multipart !== null);
 
-            $response = ($multipart !== null ? $pending->asMultipart() : $pending)->withOptions($pin)->send($method, $url, array_filter([
+            // Multipart'ta `$body` YALNIZ GÜNLÜK ÖZETİDİR (`upload()`), isteğe
+            // girmez: Guzzle `json` seçeneğini görünce başlığı JSON yapar ve
+            // dosya gövdesini EZER (Etsy: "valid image file must be provided").
+            $response = $pending->withOptions($pin)->send($method, $url, array_filter([
                 'query' => $query,
-                $bodyKey => $body,
+                $bodyKey => $multipart === null ? $body : null,
                 'multipart' => $multipart,
             ], static fn (mixed $v): bool => $v !== null && $v !== []));
         } catch (ConnectionException $e) {
@@ -328,7 +331,7 @@ final class ChannelHttpClient
      * @param  array<string, string>  $headers  Adapter'ın eklediği başlıklar
      * @param  bool  $asForm  Gövde form-encoded gitsin
      */
-    private function pendingRequest(array $headers = [], bool $asForm = false): PendingRequest
+    private function pendingRequest(array $headers = [], bool $asForm = false, bool $multipart = false): PendingRequest
     {
         $secrets = $this->secrets();
 
@@ -346,7 +349,17 @@ final class ChannelHttpClient
         // `if ($channel === 'ebay')` YAZILMAZ — biçimi ADAPTER bilir ve
         // söyler, istemci yalnızca uygular (`User-Agent` başlığı kararının
         // aynısı).
-        $request = $asForm ? $request->asForm() : $request->asJson();
+        //
+        // ⚠️ MULTIPART'TA `asJson()` ÇAĞRILMAZ: o `Content-Type:
+        // application/json` başlığını yazar ve sonradan `asMultipart()`
+        // başlığı SİLMEZ — dosya gövdesi JSON diye etiketlenir, kanal
+        // dosyayı göremez ("Either a valid image file ... must be provided",
+        // Etsy, 7 Eki 2026 ilk gerçek yükleme).
+        $request = match (true) {
+            $multipart => $request->asMultipart(),
+            $asForm => $request->asForm(),
+            default => $request->asJson(),
+        };
 
         // ADAPTER BAŞLIKLARI — istemci HANGİ KANAL olduğunu BİLMEZ.
         //

@@ -67,6 +67,8 @@ final class EtsyImageUploadTest extends TestCase
         $this->assertSame('yeni.jpg', $parts['image']['filename']);
         $this->assertSame('JPEGVERI', (string) $parts['image']['contents']);
         $this->assertTrue($uploads[0]->hasHeader('x-api-key', 'key-abc:sir-xyz'));
+        // ⚠️ JSON başlığı kalsaydı Etsy dosyayı görmez (ilk gerçek yükleme).
+        $this->assertStringStartsWith('multipart/form-data', $uploads[0]->header('Content-Type')[0] ?? '');
         $this->assertStringContainsString('/shops/777/listings/9001/images', $uploads[0]->url());
 
         Http::assertNotSent(static fn (Request $r): bool => str_contains($r->url(), 'kardes.jpg'));

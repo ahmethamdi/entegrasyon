@@ -213,6 +213,11 @@ final class EtsyInventoryMerger
                 // `is_enabled` varyantın satışa açık olup olmadığıdır ve
                 // SATICININ kararıdır — korunur.
                 'is_enabled' => (bool) ($offering['is_enabled'] ?? true),
+
+                // ⚠️ HAZIRLIK PROFİLİ KORUNUR. Etsy offering'i onsuz REDDEDER:
+                // "All offerings need readiness state" (ilk gerçek mağaza,
+                // 7 Eki 2026). Atılsaydı Etsy'ye HİÇBİR stok/fiyat gitmezdi.
+                'readiness_state_id' => isset($offering['readiness_state_id']) ? (int) $offering['readiness_state_id'] : null,
             ], static fn (mixed $v): bool => $v !== null);
         }
 

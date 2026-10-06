@@ -496,6 +496,18 @@ final class EtsyInventoryTest extends TestCase
         Http::assertNotSent(static fn ($request): bool => $request->method() === 'PUT');
     }
 
+    /**
+     * ⚠️ HAZIRLIK PROFİLİ GERİ YAZILIR — Etsy offering'i onsuz reddeder
+     * ("All offerings need readiness state", ilk gerçek mağaza 7 Eki 2026).
+     */
+    #[Test]
+    public function the_readiness_state_is_written_back(): void
+    {
+        $body = $this->pushAndCaptureBody(['TSH-S' => 9]);
+
+        $this->assertSame(1404873261637, $this->offeringOf($body, 'TSH-S')['readiness_state_id']);
+    }
+
     /** SKU → Etsy product_id. */
     private const PRODUCT_IDS = ['TSH-S' => '5000', 'TSH-M' => '5001', 'TSH-L' => '5002'];
 
@@ -525,6 +537,7 @@ final class EtsyInventoryTest extends TestCase
                     'offering_id' => 7000,
                     'quantity' => 3,
                     'is_enabled' => true,
+                    'readiness_state_id' => 1404873261637,
                     'price' => ['amount' => 1990, 'divisor' => 100, 'currency_code' => 'TRY'],
                 ]],
             ],
