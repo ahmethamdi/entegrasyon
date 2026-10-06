@@ -22,6 +22,7 @@ use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Routing\OrderEventRouter;
 use App\Domain\Orders\Support\PollChannelOrders;
+use App\Domain\Sync\Models\Listing;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -277,6 +278,64 @@ final class HepsiburadaOrderSliceTest extends TestCase
         ], $windows);
 
         Carbon::setTestNow();
+    }
+
+    /**
+     * Onaylanmış iade stoğu geri ekler; yeni (yoldaki) talep eklemez.
+     *
+     * ⚠️ Talepteki `sku` HB kodudur (HBV…); sipariş satırı satıcı SKU'sunu
+     * taşır. İlanın `merchant_sku`'suna çevrilmeseydi iade hiçbir satırla
+     * tutmaz ve stok dönmezdi. Aynı talep ikinci turda yine gelir, stok
+     * ikinci kez eklenmez.
+     */
+    #[Test]
+    public function an_accepted_claim_returns_stock_and_a_new_request_does_not(): void
+    {
+        [$tenant, $connection] = $this->setUpConnection();
+
+        $kupa = $this->variant($tenant, 'KUPA-01');
+        $tabak = $this->variant($tenant, 'TABAK-01');
+        $this->seedStock($tenant, $kupa, 10);
+        $this->seedStock($tenant, $tabak, 10);
+
+        $this->asTenant($tenant, fn () => Listing::factory()->create([
+            'channel_connection_id' => $connection->id,
+            'variant_id' => $kupa->id,
+            'external_id' => 'HBV-KUPA',
+            'channel_metadata' => ['merchant_sku' => 'kupa-01'],
+        ]));
+
+        $line = fn (string $id, string $sku, int $qty): array => [
+            'id' => $id, 'orderNumber' => '4100000007', 'orderDate' => '2026-10-06T10:00:00Z', 'merchantSKU' => $sku,
+            'quantity' => $qty, 'unitPrice' => ['amount' => 10, 'currency' => 'TRY'], 'totalPrice' => ['amount' => 10 * $qty, 'currency' => 'TRY'],
+        ];
+
+        Http::fake(function (Request $request) use ($line) {
+            $url = $request->url();
+
+            return match (true) {
+                str_contains($url, '/claims/merchantId/') => Http::response([
+                    ['number' => 'T-1', 'orderNumber' => '4100000007', 'sku' => 'HBV-KUPA', 'quantity' => 2, 'status' => 'Accepted', 'claimType' => 'Return', 'claimDate' => '2026-10-07T09:00:00Z'],
+                    ['number' => 'T-2', 'orderNumber' => '4100000007', 'sku' => 'TABAK-01', 'quantity' => 1, 'status' => 'NewRequest'],
+                ], 200),
+                str_contains($url, '/cancelled') || str_contains($url, '/packages/') => Http::response(['totalCount' => 0, 'items' => []], 200),
+                str_contains($url, '/ordernumber/') => Http::response('', 404),
+                str_contains($url, '/orders/merchantid/') => Http::response(['totalCount' => 2, 'items' => [$line('L-1', 'KUPA-01', 3), $line('L-2', 'TABAK-01', 1)]], 200),
+                default => Http::response([], 404),
+            };
+        });
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(9, $this->availableFor($tenant, $kupa), 'Satış 3, onaylı iade 2.');
+        $this->assertSame(9, $this->availableFor($tenant, $tabak), 'Yoldaki talep stok eklemez.');
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(9, $this->availableFor($tenant, $kupa), 'Aynı talep ikinci kez stok eklemez.');
+        $this->assertLedgerMatchesProjection($tenant->id, $this->warehouse($tenant)->id, $kupa->id);
     }
 
     /** Sorgu penceresi 3 saat geriye genişletilir (saat dilimi belgesiz). */

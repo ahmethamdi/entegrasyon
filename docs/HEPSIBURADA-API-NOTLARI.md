@@ -153,8 +153,18 @@ yalnız HB'nin önceden yüklediği ürünlerle açılır.
   boş + `hepsiburada.packages_not_found` uyarısı) · sayfalama başlığının adı
   · `begindate` paket mi sipariş tarihine mi bakıyor · detaydaki iptal
   durum adları (`cancel` içeren süzülüyor).
-- ⏭️ Açık: iadeler (`/claims`), webhook, upload sonucunu okuma
-  (`…-uploads/id/{id}` errors), saat dilimi ölçümü, gerçek SIT testi.
+- ✅ ⑥ iadeler (`/claims`): yoklamanın dördüncü listesi. Yalnız `Accepted`
+  stoğa döner (Refunded ürün dönmeden de olabilir). Tarih süzgeci talep
+  AÇILIŞINA bakar → son 30 gün sorulur, olay kimliği `{no}:return:{talep}`.
+  Talepteki `sku` HB kodu sayılıp ilanın `merchant_sku`'suna çevrilir.
+  404 → boş + `hepsiburada.claims_not_found`.
+- ⚠️ SIT'te doğrulanacak: talep `sku`'su HB kodu mu satıcı kodu mu ·
+  `claimType` değerleri (kayıp/hasarlı ürün "Accepted" olursa stoğa dönmemeli
+  mi?) · talep listesinin tarih aralığı sınırı.
+- ⏸️ Upload sonucunu okuma (`…-uploads/id/{id}` errors) BİLİNÇLİ ERTELENDİ:
+  `errors[]` öğesinin hangi SKU'ya ait olduğunu nasıl söylediği belgesiz;
+  tahminle eşlemek hatayı yanlış ürüne yazardı. SIT'te gerçek redle yazılacak.
+- ⏭️ Açık: webhook, saat dilimi ölçümü, gerçek SIT testi.
 
 ## Koddaki sapmalar (6 Eki tespiti — ①'de düzeltildi)
 

@@ -152,6 +152,9 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
     /** Paket sorgusunun tarih aralığı — belgeli üst sınır 24 saat. */
     private const PACKAGE_WINDOW_HOURS = 24;
 
+    /** İade talepleri için geriye bakış — talep açılışından onaya kadar geçen süreyi kapsar. */
+    private const CLAIM_LOOKBACK_DAYS = 30;
+
     /** Saat dilimi belgelenmediği için sorgu penceresinin genişletilmesi. */
     private const ORDER_DATE_SLACK_HOURS = 3;
 
@@ -661,9 +664,9 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
     }
 
     /**
-     * Sipariş yoklaması — üç liste sırayla: açık (paketlenmemiş) kalemler,
-     * paketler, iptaller. İmleç `open:{offset}` · `packages:{pencere}:{offset}`
-     * · `cancelled:{offset}`.
+     * Sipariş yoklaması — dört liste sırayla: açık (paketlenmemiş) kalemler,
+     * paketler, iptaller, onaylanmış iadeler. İmleç `open:{offset}` ·
+     * `packages:{pencere}:{offset}` · `cancelled:{offset}` · `claims:{offset}`.
      *
      * SİPARİŞ BİRİMİ `orderNumber`, kalem `id` (lineItemId). Görülen her YENİ
      * sipariş tek "created" olayı olur ve kalemleri sipariş DETAYINDAN
@@ -685,6 +688,7 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
             'open' => $this->fetchOpenLines($since, $offset),
             'packages' => $this->fetchPackages($since, $window, $offset),
             'cancelled' => $this->fetchCancelledLines($since, $offset),
+            'claims' => $this->fetchAcceptedClaims($offset),
         };
     }
 
@@ -797,11 +801,115 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
         $total = (int) ($response->json('totalCount') ?? 0);
         $more = $offset + count($items) < $total && $items !== [];
 
+        // İptaller bitti → iadeler.
         return new OrderPage(
             orders: array_map(static fn (array $line): array => ['_kind' => 'cancelled', ...$line], $items),
-            nextCursor: $more ? 'cancelled:'.($offset + count($items)) : null,
+            nextCursor: $more ? 'cancelled:'.($offset + count($items)) : 'claims:0',
+            hasMore: true,
+        );
+    }
+
+    /**
+     * Onaylanmış iade talepleri — `GET /claims` (talep-iade servisi).
+     *
+     * ⚠️ YALNIZ `Accepted` STOĞA DÖNER: satıcı ürünü teslim alıp iadeyi
+     * onaylamıştır. `Refunded` tek başına ürünün döndüğünü söylemez (ürün
+     * gelmeden para iadesi olabilir); `NewRequest`/`AwaitingAction` henüz
+     * yolda. Erken stoğa eklenseydi gelmeyen ürün satılırdı.
+     *
+     * ⚠️ TARİH SÜZGECİ TALEBİN AÇILIŞINA bakar, onayına değil: talep günler
+     * sonra onaylanır. Bu yüzden pencere yoklama imlecinden değil, son
+     * {@see CLAIM_LOOKBACK_DAYS} günden kurulur; aynı talep her turda yine
+     * gelir ve olay kimliğiyle (`{no}:return:{talep no}`) elenir.
+     *
+     * ⚠️ TALEPTEKİ `sku` HB'NİN KODUDUR (HBV…), sipariş satırı ise satıcının
+     * SKU'sunu taşır — doğrudan eşlenseydi iade hiçbir satırla tutmaz ve
+     * stok dönmezdi. Kod, ilanın `merchant_sku`'suna çevrilir.
+     */
+    private function fetchAcceptedClaims(int $offset): OrderPage
+    {
+        $response = $this->client->get(
+            endpoint: $this->orderPath(HepsiburadaEndpoints::CLAIMS),
+            query: [
+                'offset' => $offset,
+                'limit' => self::ORDER_PAGE_SIZE,
+                'beginDate' => now()->subDays(self::CLAIM_LOOKBACK_DAYS)->setTimezone(self::CHANNEL_TIMEZONE)->format('Y-m-d H:i'),
+                'endDate' => now()->addHours(self::ORDER_DATE_SLACK_HOURS)->setTimezone(self::CHANNEL_TIMEZONE)->format('Y-m-d H:i'),
+            ],
+            headers: $this->defaultHeaders(),
+        );
+
+        // Paket listesiyle aynı karar: 404 turu düşürmez (açık sipariş ve
+        // iptaller yine işlensin) ama günlüğe yazılır.
+        if ($response->status() === 404) {
+            Log::warning('hepsiburada.claims_not_found', ['connection' => $this->connection->id]);
+
+            return new OrderPage(orders: [], nextCursor: null, hasMore: false);
+        }
+
+        $response->throw();
+
+        $body = $response->json();
+        $claims = array_values(array_filter(array_is_list((array) $body) ? (array) $body : (array) ($body['items'] ?? []), 'is_array'));
+        $accepted = array_values(array_filter($claims, static fn (array $claim): bool => ($claim['status'] ?? null) === 'Accepted'));
+        $skus = $this->merchantSkusByHbSku(array_map(static fn (array $c): string => trim((string) ($c['sku'] ?? '')), $accepted));
+
+        $orders = [];
+
+        foreach ($accepted as $claim) {
+            $hbSku = trim((string) ($claim['sku'] ?? ''));
+
+            $orders[] = [
+                '_kind' => 'returned',
+                'orderNumber' => (string) ($claim['orderNumber'] ?? ''),
+                'claimNumber' => (string) ($claim['number'] ?? $claim['id'] ?? ''),
+                'sku' => $skus[$hbSku] ?? strtoupper($hbSku),
+                'quantity' => (int) ($claim['quantity'] ?? 0),
+                'claimType' => $claim['claimType'] ?? null,
+                'claimDate' => $claim['claimDate'] ?? null,
+            ];
+        }
+
+        $more = count($claims) >= self::ORDER_PAGE_SIZE;
+
+        return new OrderPage(
+            orders: $orders,
+            nextCursor: $more ? 'claims:'.($offset + count($claims)) : null,
             hasMore: $more,
         );
+    }
+
+    /**
+     * HB kodu → satıcı SKU'su (büyük harf), bu bağlantının ilanlarından.
+     *
+     * @param  list<string>  $hbSkus
+     * @return array<string, string>
+     */
+    private function merchantSkusByHbSku(array $hbSkus): array
+    {
+        $hbSkus = array_values(array_unique(array_filter($hbSkus)));
+
+        if ($hbSkus === []) {
+            return [];
+        }
+
+        $listings = TenantContext::runAsSystem(fn () => Listing::query()
+            ->with('variant')
+            ->where('channel_connection_id', $this->connection->id)
+            ->whereIn('external_id', $hbSkus)
+            ->get());
+
+        $out = [];
+
+        foreach ($listings as $listing) {
+            $sku = $listing->channel_metadata['merchant_sku'] ?? $listing->variant?->sku;
+
+            if (is_string($sku) && $sku !== '') {
+                $out[(string) $listing->external_id] = strtoupper($sku);
+            }
+        }
+
+        return $out;
     }
 
     /** `{items, totalCount}` biçimli sipariş listesi (açık / iptal). */
@@ -984,14 +1092,14 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
         return [array_map(static fn (array $group): array => $group['lines'], $groups), $consumed];
     }
 
-    /** @return array{0: 'open'|'packages'|'cancelled', 1: int, 2: int} [liste, pencere, offset] */
+    /** @return array{0: 'open'|'packages'|'cancelled'|'claims', 1: int, 2: int} [liste, pencere, offset] */
     private function orderCursor(?string $cursor): array
     {
         if ($cursor !== null && preg_match('/^packages:(\d+):(\d+)$/', $cursor, $m) === 1) {
             return ['packages', (int) $m[1], (int) $m[2]];
         }
 
-        if ($cursor !== null && preg_match('/^(open|cancelled):(\d+)$/', $cursor, $m) === 1) {
+        if ($cursor !== null && preg_match('/^(open|cancelled|claims):(\d+)$/', $cursor, $m) === 1) {
             return [$m[1], 0, (int) $m[2]];
         }
 
@@ -1020,6 +1128,11 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
             'cancelled' => isset($order['lineItemId']) && (string) $order['lineItemId'] !== ''
                 ? "{$number}:cancel:{$order['lineItemId']}"
                 : null,
+            // İade TALEP başınadır: aynı siparişin iki kalemi ayrı taleplerle
+            // dönebilir; sipariş numarasına bağlansaydı ikincisi yutulurdu.
+            'returned' => ($order['claimNumber'] ?? '') !== ''
+                ? "{$number}:return:{$order['claimNumber']}"
+                : null,
             default => null,
         };
     }
@@ -1041,6 +1154,21 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport,
         }
 
         $ref = $message->external_event_id ?? $this->pollingEventIdFor($payload);
+
+        if (($payload['_kind'] ?? null) === 'returned') {
+            return new NormalizedOrderEvent(
+                type: 'returned',
+                externalOrderId: $number,
+                externalRef: $ref,
+                // Talep kalem kimliği taşımaz; satır SKU ile eşlenir. BAŞLIK
+                // durumu yazılmaz — tek kalemin iadesi siparişi "iade" yapmaz.
+                payload: ['lines' => [[
+                    'sku' => (string) ($payload['sku'] ?? ''),
+                    'quantity' => (int) ($payload['quantity'] ?? 0),
+                ]], 'claim_type' => $payload['claimType'] ?? null],
+                occurredAt: self::channelDate($payload['claimDate'] ?? null),
+            );
+        }
 
         if (($payload['_kind'] ?? null) === 'cancelled') {
             return new NormalizedOrderEvent(
