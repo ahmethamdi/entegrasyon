@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Channels;
 
+use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
@@ -489,6 +490,28 @@ final class ChannelConnectFormTest extends TestCase
 
         $this->assertSame('unknown', $connection->health_status);
         $this->assertNull($connection->last_error);
+    }
+
+    /**
+     * ⚠️ KOTA HATASI GÖRÜNEN ALANA YAZILIR (7 Eki 2026, canlıda bulundu).
+     *
+     * Etsy formunda adres alanı yok; hata `store_url`'e yazılınca satıcı
+     * "Etsy ile bağlan"a basıyor ve form SESSİZCE geri dönüyordu.
+     */
+    #[Test]
+    public function the_etsy_quota_error_lands_on_a_visible_field(): void
+    {
+        [$user, $tenant] = $this->tenantWithChannels();
+
+        Plan::query()->updateOrCreate(['code' => 'free'], ['name' => 'Ücretsiz', 'price_monthly' => 0, 'limits' => ['channels' => 1]]);
+        TenantContext::runAsSystem(fn () => ChannelConnection::factory()->create(['tenant_id' => $tenant->id, 'channel_type_code' => 'woocommerce']));
+
+        $this->actingAs($user)
+            ->post('/channels', ['channel_type_code' => 'etsy', 'label' => 'Etsy'])
+            ->assertSessionHasErrors('channel_type_code')
+            ->assertSessionDoesntHaveErrors('store_url');
+
+        $this->assertNull($this->connectionFor('etsy'));
     }
 
     /**

@@ -177,7 +177,12 @@ final class ChannelConnectionController extends Controller
 
         // Hata, satıcının GÖRDÜĞÜ alana yazılır: adres sorulmayan kanalda
         // `store_url` hatası ekranda hiçbir yerde çıkmazdı.
-        $errorKey = $accountField ?? 'store_url';
+        //
+        // Adres de sorulmayan kanalda (Etsy: kimlik OAuth'tan) hata kanal
+        // seçim alanına yazılır. 7 Eki 2026 canlıda bulundu: kota hatası
+        // `store_url`'e yazılıyordu, Etsy formunda o alan yok — satıcı
+        // "Etsy ile bağlan"a basıyor, form sessizce geri dönüyordu.
+        $errorKey = $accountField ?? (ChannelConnectForm::asksStoreUrl($code) ? 'store_url' : 'channel_type_code');
 
         // Shopify'da hesap kimliği `xxx.myshopify.com`'dur; özel alan adı
         // (magazam.com) OAuth'ta KULLANILAMAZ. Bağlantı açılmadan reddedilir —
