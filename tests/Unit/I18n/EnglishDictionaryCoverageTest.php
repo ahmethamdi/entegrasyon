@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\I18n;
 
+use App\Domain\Channels\Routing\ChannelLifecycleRouter;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
@@ -24,6 +25,25 @@ use RecursiveIteratorIterator;
 final class EnglishDictionaryCoverageTest extends TestCase
 {
     private const ROOT = __DIR__.'/../../..';
+
+    /**
+     * Kanal yaşam döngüsü sebepleri `last_error`'a Türkçe YAZILIR ve panelde
+     * `t(connection.lastError)` ile çevrilir; `__()` içinde olmadıkları için
+     * yukarıdaki tarama onları görmez. Videoda "Uygulama Shopify mağazasından
+     * kaldırıldı." İngilizce panelde Türkçe çıkmıştı (6 Eki 2026).
+     */
+    #[Test]
+    public function channel_lifecycle_reasons_have_an_english_translation(): void
+    {
+        $topics = (new \ReflectionClassConstant(ChannelLifecycleRouter::class, 'LIFECYCLE_TOPICS'))->getValue();
+        $dictionary = $this->dictionary();
+
+        foreach ($topics as $channel => $reasons) {
+            foreach ($reasons as $topic => $reason) {
+                $this->assertArrayHasKey($reason, $dictionary, "{$channel} {$topic} sebebinin İngilizcesi yok.");
+            }
+        }
+    }
 
     #[Test]
     public function every_marked_panel_string_has_an_english_translation(): void

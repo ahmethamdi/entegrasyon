@@ -756,5 +756,7 @@
     "“Kalıcı hata” ile “geçici hata” farkı ne?": "What's the difference between a “permanent error” and a “temporary error”?",
     "“Kanal onayları” ekranında red sebebi yazılıdır — genellikle eksik bir bilgi ya da kanal kurallarına uymayan bir görseldir. Ürünü düzeltip kanala yeniden gönderin; sonraki kontrol turunda durum güncellenir. Reddedilen satır kendiliğinden düzelmez.": "The “Channel approvals” screen shows why — usually missing information or an image that doesn't meet the channel's rules. Fix the product and send it to the channel again; the status updates at the next check. A rejected product won't fix itself.",
     "“Kanalınki kalsın” dersem ne olur?": "What happens if I choose “Keep channel price”?",
-    "Plan değişikliği :plan olarak gönderildi; ödeme sağlayıcısı onaylayınca birkaç saniye içinde görünür. Fark orantılı faturalanır.": "Your plan change to :plan has been sent; it will appear within a few seconds once the payment provider confirms. The difference is prorated."
+    "Plan değişikliği :plan olarak gönderildi; ödeme sağlayıcısı onaylayınca birkaç saniye içinde görünür. Fark orantılı faturalanır.": "Your plan change to :plan has been sent; it will appear within a few seconds once the payment provider confirms. The difference is prorated.",
+    "Uygulama Shopify mağazasından kaldırıldı.": "The app was uninstalled from the Shopify store.",
+    "Shopify mağaza verisinin silinmesini istedi (shop/redact).": "Shopify requested deletion of the store's data (shop/redact)."
 }
