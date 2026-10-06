@@ -60,7 +60,7 @@ class Order extends Model
             'tax_total' => 'decimal:2',
             'grand_total' => 'decimal:2',
             'placed_at' => 'datetime',
-            'customer_ref' => 'array',
+            'customer_ref' => 'encrypted:array',
         ];
     }
 

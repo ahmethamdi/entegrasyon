@@ -14,6 +14,7 @@ use App\Domain\Identity\Models\User;
 use App\Domain\Messaging\Jobs\ProcessInboxMessage;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Support\PollChannelOrders;
+use App\Support\Privacy\SealedJson;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -77,7 +78,10 @@ final class PollChannelOrdersTest extends TestCase
 
         app(PollChannelOrders::class)->run();
 
-        $stored = (string) $this->asTenant($tenant, fn () => DB::table('inbox_messages')->value('payload'));
+        $sealed = (string) $this->asTenant($tenant, fn () => DB::table('inbox_messages')->value('payload'));
+        // Diskte şifreli; maske şifrenin İÇİNDE de geçerli olmalı.
+        $this->assertStringNotContainsString('PKG-9', $sealed);
+        $stored = json_encode(SealedJson::open($sealed), JSON_UNESCAPED_UNICODE);
 
         $this->assertStringContainsString('PKG-9', $stored);
         $this->assertStringContainsString('SKU-9', $stored);

@@ -14,6 +14,7 @@ use App\Domain\Orders\Models\OrderEvent;
 use App\Domain\Orders\Models\OrderLine;
 use App\Domain\Orders\Support\CancellationEvent;
 use App\Domain\Orders\Support\CancelledLine;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -137,7 +138,7 @@ final class ApplyOrderCancellation
             'order_id' => $order->id,
             'type' => OrderEventType::CANCELLED->value,
             'external_ref' => $event->externalRef,
-            'payload' => json_encode($event->payload, JSON_THROW_ON_ERROR),
+            'payload' => SealedJson::seal($event->payload),
             'occurred_at' => $event->occurredAt ?? $now,
             'source' => 'webhook',
             'inbox_message_id' => $event->inboxMessageId,

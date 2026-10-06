@@ -59,7 +59,7 @@ class OrderEvent extends Model
         return [
             'type' => OrderEventType::class,
             'quantity' => 'integer',
-            'payload' => 'array',
+            'payload' => 'encrypted:array',
             'occurred_at' => 'datetime',
         ];
     }

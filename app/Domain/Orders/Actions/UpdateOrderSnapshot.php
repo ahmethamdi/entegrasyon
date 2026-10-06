@@ -8,6 +8,7 @@ use App\Domain\Orders\Enums\OrderEventType;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Models\OrderEvent;
 use App\Domain\Orders\Support\OrderSnapshotEvent;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -107,7 +108,7 @@ final class UpdateOrderSnapshot
             'order_id' => $order->id,
             'type' => OrderEventType::UPDATED->value,
             'external_ref' => $event->externalRef,
-            'payload' => json_encode($event->payload, JSON_THROW_ON_ERROR),
+            'payload' => SealedJson::seal($event->payload),
             'occurred_at' => $event->occurredAt ?? $now,
             'source' => 'channel',
             'inbox_message_id' => $event->inboxMessageId,

@@ -13,6 +13,8 @@ use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\User;
+use App\Domain\Messaging\Actions\IngestInboxMessage;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -272,7 +274,7 @@ final class ShopifyOAuthFlowTest extends TestCase
         $this->assertNull($refs['1001']);
         $this->assertNotNull($refs['1002']);
 
-        $payloads = DB::table('inbox_messages')->get()->keyBy(fn ($m) => json_decode($m->payload, true)['id'] ?? 'x');
+        $payloads = DB::table('inbox_messages')->get()->keyBy(fn ($m) => SealedJson::open($m->payload)['id'] ?? 'x');
         $this->assertArrayHasKey('1002', $payloads->all());
         $this->assertArrayNotHasKey('1001', $payloads->all());
     }
@@ -401,23 +403,19 @@ final class ShopifyOAuthFlowTest extends TestCase
             'tenant_id' => $connection->tenant_id,
             'channel_connection_id' => $connection->id,
             'external_id' => $externalId,
-            'customer_ref' => json_encode(['name' => 'Ayşe Yılmaz', 'email' => 'ayse@example.com']),
+            'customer_ref' => SealedJson::seal(['name' => 'Ayşe Yılmaz', 'email' => 'ayse@example.com']),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        $payload = json_encode(['id' => (int) $externalId, 'email' => 'ayse@example.com']);
-        DB::table('inbox_messages')->insert([
-            'id' => (string) Str::uuid7(),
-            'tenant_id' => $connection->tenant_id,
-            'channel_connection_id' => $connection->id,
-            'source' => 'webhook',
-            'event_type' => 'orders/create',
-            'payload' => $payload,
-            'payload_hash' => hash('sha256', $payload),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        // Gerçek giriş yolu: `resource_id`'yi (redact'in aradığı kolon) o doldurur.
+        app(IngestInboxMessage::class)->run(
+            $connection,
+            'webhook',
+            'evt-'.$externalId,
+            'orders/create',
+            (string) json_encode(['id' => (int) $externalId, 'email' => 'ayse@example.com']),
+        );
     }
 
     private function fresh(ChannelConnection $connection): ChannelConnection

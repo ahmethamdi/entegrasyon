@@ -53,6 +53,7 @@ class InboxMessage extends Model
         'event_type',
         'payload',
         'payload_hash',
+        'resource_id',
         'signature_valid',
         'received_at',
         'processed_at',
@@ -67,7 +68,7 @@ class InboxMessage extends Model
     protected function casts(): array
     {
         return [
-            'payload' => 'array',
+            'payload' => 'encrypted:array',
             'signature_valid' => 'boolean',
             'attempt_count' => 'integer',
             'received_at' => 'datetime',

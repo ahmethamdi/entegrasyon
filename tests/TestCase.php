@@ -7,8 +7,13 @@ namespace Tests;
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Channels\Support\OutboundUrlGuard;
 use App\Domain\Identity\Models\Tenant;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\Support\Billing\FakePaymentGateway;
 
@@ -50,9 +55,49 @@ abstract class TestCase extends BaseTestCase
 
     protected function tearDown(): void
     {
-        TenantContext::clear();
+        try {
+            $this->assertOrderDataEncryptedAtRest();
+        } finally {
+            TenantContext::clear();
 
-        parent::tearDown();
+            parent::tearDown();
+        }
+    }
+
+    /**
+     * ⚠️ SİPARİŞ VERİSİ DİSKTE ŞİFRELİ DURUR — HER TESTİN SONUNDA ÖLÇÜLÜR.
+     *
+     * App Store formunda "encrypt at rest = evet" dendi (6 Eki 2026). Bu
+     * kolonlara yazımların çoğu `DB::table()` ile yapılır ve modelin
+     * `encrypted:array` cast'inden GEÇMEZ; `SealedJson::seal()` unutulan
+     * bir yol satırı sessizce DÜZ METİN yazar. Tek bir senaryo testi yalnız
+     * kendi yolunu görürdü; bu değişmez test takımının sürdüğü HER yolu
+     * (bugünküleri ve ileride eklenecekleri) yakalar.
+     */
+    private function assertOrderDataEncryptedAtRest(): void
+    {
+        if (! in_array(RefreshDatabase::class, class_uses_recursive($this), true)
+            || $this->status()->isFailure() || $this->status()->isError()) {
+            return;
+        }
+
+        foreach (['orders' => 'customer_ref', 'order_events' => 'payload', 'inbox_messages' => 'payload'] as $table => $column) {
+            try {
+                $rows = DB::table($table)->whereNotNull($column)->pluck($column, 'id');
+            } catch (QueryException) {
+                // Test bilerek bir DB hatası üretti ve transaction "aborted"
+                // kaldı: okunamaz, ölçülecek bir şey de yok.
+                return;
+            }
+
+            foreach ($rows as $id => $value) {
+                try {
+                    SealedJson::open((string) $value);
+                } catch (DecryptException) {
+                    $this->fail("{$table}.{$column} ({$id}) diskte ŞİFRESİZ: ham yazımda SealedJson::seal() unutulmuş.");
+                }
+            }
+        }
     }
 
     /**

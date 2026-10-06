@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Domain\Channels\Actions\RevokeChannelAccess;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -102,13 +103,14 @@ final class ShopifyComplianceController extends Controller
                     DB::table('order_events')->whereIn('order_id', $orderIds)->update(['payload' => null]);
                 }
 
-                // Ham webhook gövdesi: Shopify sipariş gövdesinde kimlik `id`.
+                // Ham webhook gövdesi: Shopify sipariş gövdesinde kimlik `id`, gelişte
+                // `resource_id`'ye yazılır (gövde şifreli, içinde sorgulanamaz).
                 // İSTENEN kimliklerle eşlenir, bulunan siparişlerle değil:
                 // henüz işlenmemiş sipariş yalnız burada durur.
                 DB::table('inbox_messages')
                     ->whereIn('channel_connection_id', $connectionIds)
-                    ->when($externalOrderIds !== null, fn ($q) => $q->whereIn(DB::raw("payload->>'id'"), $externalOrderIds))
-                    ->update(['payload' => json_encode(['redacted' => true])]);
+                    ->when($externalOrderIds !== null, fn ($q) => $q->whereIn('resource_id', $externalOrderIds))
+                    ->update(['payload' => SealedJson::seal(['redacted' => true])]);
             });
         });
     }

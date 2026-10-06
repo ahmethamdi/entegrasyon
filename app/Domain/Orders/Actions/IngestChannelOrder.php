@@ -16,6 +16,7 @@ use App\Domain\Orders\Models\OrderEvent;
 use App\Domain\Orders\Models\OrderLine;
 use App\Domain\Orders\Support\IncomingOrder;
 use App\Domain\Orders\Support\IncomingOrderLine;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -118,7 +119,7 @@ final class IngestChannelOrder
             'tax_total' => $incoming->taxTotal,
             'grand_total' => $incoming->grandTotal,
             'placed_at' => $incoming->placedAt ?? $now,
-            'customer_ref' => json_encode($incoming->customerRef, JSON_THROW_ON_ERROR),
+            'customer_ref' => SealedJson::seal($incoming->customerRef),
             'created_at' => $now,
             'updated_at' => $now,
         ]);

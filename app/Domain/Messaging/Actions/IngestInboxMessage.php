@@ -7,6 +7,7 @@ namespace App\Domain\Messaging\Actions;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Support\Privacy\PersonalDataMask;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -57,6 +58,7 @@ final class IngestInboxMessage
             $connection, $source, $externalEventId, $eventType, $payload, $signatureValid, $tenantId,
         ): InboxMessage {
             $hash = InboxMessage::hashPayload($payload);
+            $decoded = json_decode($payload, true);
             $now = now();
             $id = InboxMessage::generateUuidV7();
 
@@ -73,8 +75,9 @@ final class IngestInboxMessage
                 'source' => $source,
                 'external_event_id' => $externalEventId,
                 'event_type' => $eventType,
-                'payload' => $this->encodePayload($payload),
+                'payload' => $this->encodePayload($payload, $decoded),
                 'payload_hash' => $hash,
+                'resource_id' => $this->resourceId($decoded),
                 'signature_valid' => $signatureValid,
                 'received_at' => $now,
                 'status' => 'pending',
@@ -126,22 +129,37 @@ final class IngestInboxMessage
     }
 
     /**
-     * Ham gövdeyi jsonb kolonuna hazırlar.
+     * Ham gövdeyi saklanacak biçime getirir: maskeli ve ŞİFRELİ.
      *
      * Geçersiz JSON gelirse ham metin sarmalanır: mesaj KAYBEDİLMEZ,
      * ayrıştırma hatası işleme aşamasında görülür ve satır failed olur.
      */
-    private function encodePayload(string $payload): string
+    private function encodePayload(string $payload, mixed $decoded): string
     {
-        $decoded = json_decode($payload, true);
-
         // Alıcının kişisel verisi SAKLANMAZ (gizlilik politikası §2.3).
         // Tekillik özeti (`payload_hash`) ham gövdeden hesaplanır; maske
         // yalnız saklanan kopyaya uygulanır.
-        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-            return json_encode(PersonalDataMask::apply($decoded), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        //
+        // Kalan gövde de diskte şifreli durur (SealedJson): `DB::table()`
+        // modelin `encrypted:array` cast'inden geçmez.
+        if (is_array($decoded)) {
+            return (string) SealedJson::seal(PersonalDataMask::apply($decoded));
         }
 
-        return json_encode(['_raw' => $payload], JSON_THROW_ON_ERROR);
+        return (string) SealedJson::seal(['_raw' => $payload]);
+    }
+
+    /**
+     * Gövdenin üst düzey `id`'si (Shopify sipariş webhook'unda sipariş kimliği).
+     *
+     * Gövde şifreli olduğu için `payload->>'id'` artık sorgulanamaz;
+     * Shopify'ın `customers/redact` isteği siparişi bu kolondan bulur
+     * (ShopifyComplianceController).
+     */
+    private function resourceId(mixed $decoded): ?string
+    {
+        $id = is_array($decoded) ? ($decoded['id'] ?? null) : null;
+
+        return is_int($id) || (is_string($id) && $id !== '') ? mb_substr((string) $id, 0, 191) : null;
     }
 }

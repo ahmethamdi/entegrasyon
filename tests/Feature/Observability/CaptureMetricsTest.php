@@ -18,6 +18,7 @@ use App\Domain\Sync\Models\Listing;
 use App\Support\Observability\CaptureMetrics;
 use App\Support\Observability\Metric;
 use App\Support\Observability\MetricScope;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -903,7 +904,7 @@ final class CaptureMetricsTest extends TestCase
             'source' => 'webhook',
             'external_event_id' => uniqid('evt', true),
             'event_type' => 'order.created',
-            'payload' => json_encode(['x' => 1]),
+            'payload' => SealedJson::seal(['x' => 1]),
             'payload_hash' => hash('sha256', uniqid('', true)),
             'signature_valid' => true,
             'received_at' => now()->subSeconds($receivedAgo),

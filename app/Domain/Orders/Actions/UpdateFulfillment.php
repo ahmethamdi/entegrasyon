@@ -9,6 +9,7 @@ use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Models\OrderEvent;
 use App\Domain\Orders\Support\FulfillmentEvent;
+use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 
@@ -149,7 +150,7 @@ final class UpdateFulfillment
             'order_id' => $order->id,
             'type' => OrderEventType::FULFILLED->value,
             'external_ref' => $externalRef,
-            'payload' => json_encode($event->payload, JSON_THROW_ON_ERROR),
+            'payload' => SealedJson::seal($event->payload),
             'occurred_at' => $event->occurredAt ?? $now,
             'source' => 'channel',
             'inbox_message_id' => $event->inboxMessageId,
