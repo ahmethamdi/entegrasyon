@@ -506,6 +506,8 @@ final class EtsyInventoryTest extends TestCase
         $body = $this->pushAndCaptureBody(['TSH-S' => 9]);
 
         $this->assertSame(1404873261637, $this->offeringOf($body, 'TSH-S')['readiness_state_id']);
+        // Okuma-özel `scale_name` geri gönderilmez (Etsy reddeder).
+        $this->assertArrayNotHasKey('scale_name', $this->productOf($body, 'TSH-S')['property_values'][0]);
     }
 
     /** SKU → Etsy product_id. */
@@ -532,7 +534,7 @@ final class EtsyInventoryTest extends TestCase
             [
                 'product_id' => 5000,
                 'sku' => 'TSH-S',
-                'property_values' => [['property_id' => 100, 'value_ids' => [1], 'values' => ['S']]],
+                'property_values' => [['property_id' => 100, 'property_name' => 'Size', 'scale_id' => null, 'scale_name' => null, 'value_ids' => [1], 'values' => ['S']]],
                 'offerings' => [[
                     'offering_id' => 7000,
                     'quantity' => 3,

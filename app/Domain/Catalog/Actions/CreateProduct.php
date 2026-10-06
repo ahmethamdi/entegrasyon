@@ -61,6 +61,7 @@ final class CreateProduct
         string $currency = 'TRY',
         ?string $barcode = null,
         ?string $internalCategoryId = null,
+        ?string $originConnectionId = null,
     ): Product {
         $tenantId = TenantContext::idOrFail();
 
@@ -73,7 +74,7 @@ final class CreateProduct
         try {
             return DB::transaction(function () use (
                 $tenantId, $sku, $title, $price, $openingStock, $warehouseId,
-                $description, $brand, $currency, $barcode, $internalCategoryId,
+                $description, $brand, $currency, $barcode, $internalCategoryId, $originConnectionId,
             ): Product {
                 $normalizedCategory = $internalCategoryId === null
                     ? null
@@ -122,6 +123,12 @@ final class CreateProduct
                         idempotencyKey: MovementKey::import((string) new UuidV7),
                         sourceType: 'product_creation',
                         sourceId: $product->id,
+                        // KANALDAN İÇE AKTARMADA KAYNAK BAĞLANTI taşınır: yankı
+                        // bastırma bu alana bakar. Boş kalsaydı açılış stoğu
+                        // geldiği kanala GERİ yazılırdı — 7 Eki 2026 ilk gerçek
+                        // Etsy içe aktarmasında 579 gereksiz PUT kuyruğa girdi
+                        // (süresi dolmuş ilanlara; hepsi reddedildi).
+                        channelConnectionId: $originConnectionId,
                         note: 'Açılış stoğu',
                     );
                 }

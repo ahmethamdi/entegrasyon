@@ -225,7 +225,15 @@ final class EtsyInventoryMerger
             'sku' => (string) ($product['sku'] ?? ''),
             // ⚠️ VARYANT ÖZELLİKLERİ (beden/renk) KORUNUR. Atılsaydı çok
             // varyantlı ürün tek varyanta ÇÖKER ve ötekiler silinirdi.
-            'property_values' => $product['property_values'] ?? null,
+            // Yalnız YAZILABİLİR anahtarlar: okunan `scale_name` geri
+            // gönderilince Etsy "Array contains invalid keys: scale_name" ile
+            // reddeder (ilk gerçek mağaza, 7 Eki 2026) — çok varyantlı her
+            // ilanda stok yazımı başarısız olurdu.
+            'property_values' => isset($product['property_values']) && is_array($product['property_values'])
+                ? array_map(static fn (mixed $pv): mixed => is_array($pv)
+                    ? array_intersect_key($pv, array_flip(['property_id', 'value_ids', 'scale_id', 'property_name', 'values']))
+                    : $pv, $product['property_values'])
+                : null,
             'offerings' => $rebuilt,
         ], static fn (mixed $v): bool => $v !== null);
     }

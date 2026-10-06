@@ -178,7 +178,7 @@ final class ImportProductsFromChannel
                         continue;
                     }
 
-                    $new = $this->applyCreate($product, $sku, $warehouseId);
+                    $new = $this->applyCreate($product, $sku, $warehouseId, $connection->id);
                     $created++;
 
                     if ($remaining !== null) {
@@ -356,7 +356,7 @@ final class ImportProductsFromChannel
      * Kanala giden yol ayrıca `lifecycle_status = 'live'` kapısından geçer,
      * yani 0 fiyat kazara kanala gitmez.
      */
-    private function applyCreate(RemoteProduct $product, string $sku, string $warehouseId): Product
+    private function applyCreate(RemoteProduct $product, string $sku, string $warehouseId, string $originConnectionId): Product
     {
         return $this->createProduct->run(
             sku: $sku,
@@ -372,6 +372,7 @@ final class ImportProductsFromChannel
             currency: $product->currency ?? 'TRY',
             barcode: $product->barcode,
             internalCategoryId: null,
+            originConnectionId: $originConnectionId,
         );
     }
 
