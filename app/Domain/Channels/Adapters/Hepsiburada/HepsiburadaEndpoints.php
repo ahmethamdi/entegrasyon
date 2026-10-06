@@ -71,6 +71,14 @@ final class HepsiburadaEndpoints
 
     public const PRICE_UPLOAD_STATUS = '/Listings/merchantid/{merchantId}/price-uploads/id/{id}';
 
+    // ───────────────────────────────────────────────── katalog (MPOP)
+
+    /**
+     * Satıcının ürün bilgisi (ad, marka, görsel, barkod) — SKU ile süzülür.
+     * İlan listesi bunları TAŞIMAZ; içe aktarma ilanı bununla zenginleştirir.
+     */
+    public const CATALOG_MERCHANT_PRODUCTS = '/api/products/all-products-of-merchant/{merchantId}';
+
     // ───────────────────────────────────────────────── sipariş (OMS)
 
     /** Ödemesi tamamlanmış, paketlenecek sipariş kalemleri. */

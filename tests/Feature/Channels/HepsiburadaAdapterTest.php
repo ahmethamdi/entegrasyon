@@ -8,6 +8,7 @@ use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaEndpoints;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -75,6 +76,7 @@ final class HepsiburadaAdapterTest extends TestCase
         $this->assertInstanceOf(SupportsInventory::class, $adapter);
         $this->assertInstanceOf(SupportsPricing::class, $adapter);
         $this->assertInstanceOf(SupportsOrders::class, $adapter);
+        $this->assertInstanceOf(SupportsCatalogImport::class, $adapter);
 
         // Bu ikisi HENÜZ yazılmadı ve ilan EDİLMEMELİ.
         $this->assertNotInstanceOf(SupportsCatalog::class, $adapter);
@@ -295,6 +297,79 @@ final class HepsiburadaAdapterTest extends TestCase
         ]));
     }
 
+    // ─────────────────────────────────────────── içe aktarma
+
+    /**
+     * İlan listesi + katalog: ad, marka, barkod, HTTPS görsel kataloğdan;
+     * fiyat, stok, SKU'lar ilandan. Kimlik `hepsiburadaSku`, `merchantSku`
+     * stok/fiyat gönderimi için `channel_metadata`'da. İmleç offset'tir.
+     */
+    #[Test]
+    public function a_listing_page_is_imported_with_catalog_details(): void
+    {
+        Http::fake([
+            'listing-external.hepsiburada.com/*' => Http::response([
+                'totalCount' => 120,
+                'listings' => [[
+                    'listingId' => 'L-1', 'hepsiburadaSku' => 'HBV00000ABC', 'merchantSku' => 'KUPA-01',
+                    'price' => 149.9, 'availableStock' => 7, 'isSalable' => true, 'isLocked' => false,
+                ]],
+            ], 200),
+            'mpop.hepsiburada.com/*' => Http::response(['data' => [[
+                'hbSku' => 'HBV00000ABC', 'productName' => 'Seramik Kupa', 'brand' => 'Kupacı',
+                'barcode' => '8690000000011', 'description' => 'El yapımı',
+                'images' => ['https://cdn.example/1.jpg', 'http://guvensiz/2.jpg'],
+            ]]], 200),
+        ]);
+
+        $page = $this->adapter(merchantId: 'M-IMP')->fetchProductPage('50');
+        $product = $page->products[0];
+
+        $this->assertSame('HBV00000ABC', $product->externalId);
+        $this->assertSame('KUPA-01', $product->sku);
+        $this->assertSame('Seramik Kupa', $product->title);
+        $this->assertSame('Kupacı', $product->brand);
+        $this->assertSame('8690000000011', $product->barcode);
+        $this->assertSame('149.9', $product->price);
+        $this->assertSame(7, $product->quantity);
+        $this->assertSame('on_sale', $product->status);
+        $this->assertSame(['https://cdn.example/1.jpg'], $product->images);
+        $this->assertSame('HBV00000ABC', $product->listingIdentity['external_id']);
+        $this->assertSame('KUPA-01', $product->listingIdentity['channel_metadata']['merchant_sku']);
+        $this->assertSame('100', $page->nextCursor);
+        $this->assertTrue($page->hasMore);
+
+        Http::assertSent(static fn ($r): bool => str_contains($r->url(), '/Listings/merchantid/M-IMP')
+            && str_contains($r->url(), 'offset=50') && str_contains($r->url(), 'limit=50'));
+        Http::assertSent(static fn ($r): bool => str_starts_with($r->url(), 'https://mpop.hepsiburada.com/product/api/products/all-products-of-merchant/M-IMP')
+            && str_contains($r->url(), 'hbSku=HBV00000ABC'));
+    }
+
+    /**
+     * KATALOG YANIT VERMEZSE İLAN DÜŞMEZ — ad yerine SKU yazılır.
+     *
+     * Düşseydi satıcının satıştaki ürünü 34Pazar'da görünmez olurdu.
+     */
+    #[Test]
+    public function a_listing_is_kept_when_the_catalog_lookup_fails(): void
+    {
+        Http::fake([
+            'listing-external.hepsiburada.com/*' => Http::response([
+                'totalCount' => 1,
+                'listings' => [['hepsiburadaSku' => 'HBV1', 'merchantSku' => 'SKU-1', 'price' => 10, 'availableStock' => 0, 'isSalable' => false, 'isLocked' => true]],
+            ], 200),
+            'mpop.hepsiburada.com/*' => Http::response(['message' => 'hata'], 500),
+        ]);
+
+        $page = $this->adapter(merchantId: 'M-FAIL')->fetchProductPage();
+
+        $this->assertCount(1, $page->products);
+        $this->assertSame('SKU-1', $page->products[0]->title);
+        $this->assertSame('locked', $page->products[0]->status);
+        $this->assertFalse($page->hasMore);
+        $this->assertNull($page->nextCursor);
+    }
+
     // ─────────────────────────────────────────── yazılmamış yetenekler
 
     /**
@@ -499,7 +574,7 @@ final class HepsiburadaAdapterTest extends TestCase
                 'kind' => 'marketplace',
                 'adapter_class' => HepsiburadaAdapter::class,
                 'capabilities' => [
-                    'catalog' => false, 'inventory' => true, 'pricing' => true,
+                    'catalog' => false, 'catalog_import' => true, 'inventory' => true, 'pricing' => true,
                     'orders' => true, 'taxonomy' => false, 'approval' => false,
                     'fulfillment' => false,
                 ],

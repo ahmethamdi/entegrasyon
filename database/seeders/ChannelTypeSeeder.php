@@ -144,6 +144,8 @@ class ChannelTypeSeeder extends Seeder
                     // ama çalışmayan yetenek panelde çalışmayan sekme
                     // demektir.
                     'catalog' => false,
+                    // İlan çekme (6 Eki 2026): /Listings + katalogdan ad/görsel.
+                    'catalog_import' => true,
                     'inventory' => true,
                     'pricing' => true,
                     'orders' => true,
@@ -168,7 +170,7 @@ class ChannelTypeSeeder extends Seeder
                     'max_inventory_batch' => 1000,
                     'max_price_batch' => 1000,
                 ],
-                // Trendyol'un AKSİNE webhook VAR (`X-HB-Signature` HMAC).
+                // Trendyol'un AKSİNE webhook VAR (imzasız, Basic auth).
                 'supports_webhooks' => true,
                 'is_active' => false,
             ],

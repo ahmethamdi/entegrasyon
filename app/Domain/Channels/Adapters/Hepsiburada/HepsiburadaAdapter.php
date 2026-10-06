@@ -9,6 +9,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -25,10 +26,13 @@ use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
+use App\Domain\Sync\Support\RemoteProduct;
+use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -99,7 +103,7 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, SupportsOrders, SupportsPricing
+final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
     use DeclaresRequestQuota;
 
@@ -129,6 +133,13 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
      * yanlış sonuç değil.
      */
     private const MAX_INVENTORY_BATCH = 1000;
+
+    /**
+     * İçe aktarma sayfası. Küçük tutulur: her ilan için katalogdan ayrıca
+     * ad/görsel okunur (ilan listesi bunları taşımaz), yani sayfa başına
+     * 1 + N istek atılır.
+     */
+    private const IMPORT_PAGE_SIZE = 50;
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -294,6 +305,158 @@ final class HepsiburadaAdapter implements ChannelAdapter, SupportsInventory, Sup
     public function extractEventType(array $headers): string
     {
         return $this->header($headers, 'x-hb-event-type') ?? 'unknown';
+    }
+
+    // ------------------------------------------------------------ içe aktarma
+
+    /**
+     * Satıcının Hepsiburada ilanları — `GET /Listings` (offset/limit).
+     *
+     * KİMLİK `hepsiburadaSku`'dur (HB'nin katalog kodu, kanal genelinde
+     * tekil); SKU satıcının `merchantSku`'su. İkisi de stok/fiyat
+     * gönderiminde gerekir; `merchantSku` `channel_metadata`'da saklanır.
+     *
+     * İLAN LİSTESİ AD, MARKA, GÖRSEL TAŞIMAZ. Her ilan katalog servisinden
+     * (`all-products-of-merchant?hbSku=`) zenginleştirilir. Katalog yanıt
+     * vermezse — ya da ilan başka satıcının açtığı bir katalog ürününe
+     * bağlıysa ve kayıt dönmüyorsa (DOĞRULANMADI) — ilan YİNE alınır, ad
+     * yerine SKU yazılır: ilanı düşürmek, satıcının satıştaki ürününü
+     * 34Pazar'da görünmez yapardı.
+     *
+     * İmleç `offset`tir.
+     */
+    public function fetchProductPage(?string $cursor = null): RemoteProductPage
+    {
+        $offset = $cursor === null ? 0 : max(0, (int) $cursor);
+
+        $response = $this->client->get(
+            endpoint: $this->listingPath(HepsiburadaEndpoints::LISTING_LIST),
+            query: ['offset' => $offset, 'limit' => self::IMPORT_PAGE_SIZE],
+            headers: $this->defaultHeaders(),
+        );
+
+        $response->throw();
+
+        $products = [];
+
+        foreach ((array) ($response->json('listings') ?? []) as $listing) {
+            if (! is_array($listing)) {
+                continue;
+            }
+
+            $hbSku = trim((string) ($listing['hepsiburadaSku'] ?? ''));
+
+            if ($hbSku === '') {
+                continue;
+            }
+
+            $products[] = $this->toRemoteProduct($listing, $this->catalogProduct($hbSku));
+        }
+
+        $total = (int) ($response->json('totalCount') ?? 0);
+        $next = $offset + self::IMPORT_PAGE_SIZE;
+        $hasMore = $next < $total;
+
+        return new RemoteProductPage(
+            products: $products,
+            nextCursor: $hasMore ? (string) $next : null,
+            hasMore: $hasMore,
+        );
+    }
+
+    /** Tur başına en fazla 100 sayfa — 50'lik sayfayla 5.000 ilan. */
+    public function maxImportPages(): int
+    {
+        return 100;
+    }
+
+    /**
+     * İlanın katalog bilgisi; bulunamazsa ya da servis hata verirse null.
+     *
+     * Hata YUTULUR ama günlüğe yazılır: zenginleştirme isteğe bağlıdır,
+     * ilanın kendisi kaybolmamalı.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function catalogProduct(string $hbSku): ?array
+    {
+        try {
+            $response = $this->client->get(
+                endpoint: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_CATALOG, $this->isTest())
+                    .HepsiburadaEndpoints::path(
+                        HepsiburadaEndpoints::CATALOG_MERCHANT_PRODUCTS,
+                        ['merchantId' => $this->merchantId()],
+                    ),
+                query: ['hbSku' => $hbSku, 'page' => 0, 'size' => 1],
+                headers: $this->defaultHeaders(),
+            );
+        } catch (Throwable $e) {
+            Log::warning('hepsiburada.catalog_lookup_failed', ['hb_sku' => $hbSku, 'error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        if (! $response->successful()) {
+            Log::warning('hepsiburada.catalog_lookup_failed', ['hb_sku' => $hbSku, 'status' => $response->status()]);
+
+            return null;
+        }
+
+        $first = $response->json('data.0');
+
+        return is_array($first) ? $first : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $listing
+     * @param  array<string, mixed>|null  $catalog
+     */
+    private function toRemoteProduct(array $listing, ?array $catalog): RemoteProduct
+    {
+        $hbSku = trim((string) $listing['hepsiburadaSku']);
+        $merchantSku = trim((string) ($listing['merchantSku'] ?? ''));
+        $text = static function (mixed $value): ?string {
+            $value = is_scalar($value) ? trim((string) $value) : '';
+
+            return $value === '' ? null : $value;
+        };
+
+        $images = [];
+
+        foreach ((array) ($catalog['images'] ?? []) as $image) {
+            $url = is_array($image) ? (string) ($image['url'] ?? '') : (string) $image;
+
+            if (str_starts_with($url, 'https://')) {
+                $images[] = $url;
+            }
+        }
+
+        $salable = ($listing['isSalable'] ?? false) === true;
+        $locked = ($listing['isLocked'] ?? false) === true;
+
+        return new RemoteProduct(
+            externalId: $hbSku,
+            sku: $merchantSku !== '' ? $merchantSku : $hbSku,
+            // Katalog adı yoksa SKU: adsız ürün panelde boş satır olurdu.
+            title: $text($catalog['productName'] ?? null) ?? ($merchantSku !== '' ? $merchantSku : $hbSku),
+            // Fiyat STRING kalır — float dönüşümü kuruş kayması üretir.
+            price: isset($listing['price']) && is_numeric($listing['price']) ? (string) $listing['price'] : null,
+            quantity: (int) ($listing['availableStock'] ?? 0),
+            description: $text($catalog['description'] ?? null),
+            brand: $text($catalog['brand'] ?? null),
+            barcode: $text($catalog['barcode'] ?? null),
+            status: $locked ? 'locked' : ($salable ? 'on_sale' : 'not_on_sale'),
+            images: $images,
+            raw: $listing,
+            listingIdentity: [
+                'external_id' => $hbSku,
+                'channel_metadata' => array_filter([
+                    'merchant_sku' => $merchantSku,
+                    'listing_id' => $text($listing['listingId'] ?? null),
+                ], static fn (?string $v): bool => $v !== null && $v !== ''),
+            ],
+            currency: 'TRY',
+        );
     }
 
     // ------------------------------------------------------------- yetenekler
