@@ -6,25 +6,31 @@ namespace App\Http\Controllers;
 
 use App\Domain\Catalog\Models\OptionDefinition;
 use App\Domain\Catalog\Models\OptionValue;
+use App\Domain\Channels\Actions\FetchLeafAttributes;
 use App\Domain\Channels\Actions\SaveAttributeMapping;
 use App\Domain\Channels\Actions\SaveAttributeValueMapping;
 use App\Domain\Channels\Actions\SaveCategoryMapping;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Models\AttributeMapping;
 use App\Domain\Channels\Models\AttributeValueMapping;
 use App\Domain\Channels\Models\CategoryMapping;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelCategoryAttribute;
+use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Sync\Support\PrerequisiteGate;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * Kategori ve öznitelik eşleştirme ekranı — §13 · Faz 2 · 28 sa.
@@ -111,8 +117,12 @@ final class CategoryMappingController extends Controller
     }
 
     /** Kategori eşleştirmesini kaydeder. */
-    public function storeCategory(Request $request, SaveCategoryMapping $save): RedirectResponse
-    {
+    public function storeCategory(
+        Request $request,
+        SaveCategoryMapping $save,
+        FetchLeafAttributes $fetchAttributes,
+        AdapterRegistry $registry,
+    ): RedirectResponse {
         $validated = $request->validate([
             'internal_category_id' => ['required', 'string', 'max:255'],
             'channel_category_id' => ['required', 'string'],
@@ -140,13 +150,70 @@ final class CategoryMappingController extends Controller
             ]);
         }
 
-        return redirect()->back()->with(
+        $redirect = redirect()->back()->with(
             'success',
             __('":internal" → :category eşleştirildi.', [
                 'internal' => $validated['internal_category_id'],
                 'category' => $category->path ?? $category->name,
             ]),
         );
+
+        if (! $this->ensureAttributes($category, $fetchAttributes, $registry)) {
+            $redirect->with('warning', __('Kategorinin zorunlu özellikleri kanaldan alınamadı; birazdan eşleştirmeyi yeniden kaydedin.'));
+        }
+
+        return $redirect;
+    }
+
+    /**
+     * Yaprağın öznitelikleri hiç çekilmemişse ŞİMDİ çeker.
+     *
+     * Gece taksonomi turu öznitelikleri çekmez (30 bin yaprak). Bu çağrı
+     * olmasaydı ekran zorunlu öznitelikleri hiç göstermez, ön koşul kapısı
+     * "eksik yok" der ve ürün kanalda sessizce reddedilirdi (Trendyol
+     * "Menşei zorunlu" — gerçek hesapta bulundu).
+     *
+     * Çekim başarısızsa eşleştirme YİNE kaydedilir (satıcının seçimi
+     * kaybolmasın); sonuç `false` döner ve kullanıcı uyarılır.
+     */
+    private function ensureAttributes(
+        ChannelCategory $category,
+        FetchLeafAttributes $fetchAttributes,
+        AdapterRegistry $registry,
+    ): bool {
+        if ($category->attributes_fetched_at !== null) {
+            return true;
+        }
+
+        // Kanal isteği satıcının KENDİ bağlantısıyla atılır.
+        $connection = ChannelConnection::query()
+            ->where('channel_type_code', $category->channel_type_code)
+            ->where('status', 'active')
+            ->first();
+
+        if ($connection === null) {
+            return false;
+        }
+
+        try {
+            $adapter = $registry->for($connection);
+
+            if (! $adapter instanceof SupportsTaxonomy) {
+                return true;
+            }
+
+            $fetchAttributes->run($adapter, $category);
+
+            return true;
+        } catch (Throwable $e) {
+            Log::warning('category_mapping.attributes_fetch_failed', [
+                'channel_category' => $category->id,
+                'connection' => $connection->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
+        }
     }
 
     /** Öznitelik eşleştirmesini kaydeder. */

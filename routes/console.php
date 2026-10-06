@@ -130,7 +130,8 @@ Schedule::command('reconcile:prices')
 // satış trafiği en düşük, kota en boş.
 //
 // Öznitelikler burada çekilmez (yaprak başına ayrı istek, 30 bin yaprakta
-// tur saatler sürer); eşleştirme ekranı talebe bağlı çeker.
+// tur saatler sürer); kategori eşleştirmesi kaydedilince o yaprağınki
+// çekilir (`FetchLeafAttributes`).
 Schedule::command('taxonomy:sync')
     ->dailyAt('03:00')
     ->onOneServer()

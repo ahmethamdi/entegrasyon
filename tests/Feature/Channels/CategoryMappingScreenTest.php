@@ -15,11 +15,15 @@ use App\Domain\Channels\Models\AttributeValueMapping;
 use App\Domain\Channels\Models\CategoryMapping;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelCategoryAttribute;
+use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
+use App\Domain\Sync\Support\PrerequisiteGate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -107,6 +111,73 @@ final class CategoryMappingScreenTest extends TestCase
 
         $this->assertSame($dress->id, $mapping->channel_category_id);
         $this->assertSame('v1', $mapping->taxonomy_version);
+    }
+
+    /**
+     * Eşleştirme kaydedilince yaprağın öznitelikleri KANALDAN çekilir — bir kez.
+     *
+     * Gece turu öznitelik çekmez; bu çağrı olmasaydı zorunlu öznitelik
+     * (Trendyol "Menşei") hiç bilinmez, kapı "eksik yok" der ve ürün kanalda
+     * sessizce reddedilirdi (gerçek hesapta bulundu).
+     */
+    #[Test]
+    public function mapping_fetches_leaf_attributes_once(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+        [$dress] = $this->makeTree();
+        $this->makeConnection($tenant);
+
+        Http::fake(['*' => Http::response($this->trendyolAttributes(), 200)]);
+
+        $this->actingAs($user)->post('/mappings/category', [
+            'internal_category_id' => 'giyim',
+            'channel_category_id' => $dress->id,
+        ])->assertRedirect()->assertSessionMissing('warning');
+
+        $attributes = $this->asSystem(fn () => ChannelCategoryAttribute::query()
+            ->where('channel_category_id', $dress->id)->get());
+
+        $this->assertSame(['338'], $attributes->where('is_required', true)->pluck('external_attribute_id')->values()->all());
+        $this->assertNotNull($this->asSystem(fn () => $dress->fresh()->attributes_fetched_at));
+
+        $requestsAfterFirst = count(Http::recorded());
+        $this->assertGreaterThan(0, $requestsAfterFirst);
+
+        // Aynı yaprağa ikinci eşleştirme kanala YENİDEN gitmez.
+        $this->actingAs($user)->post('/mappings/category', [
+            'internal_category_id' => 'elbise',
+            'channel_category_id' => $dress->id,
+        ])->assertRedirect();
+
+        $this->assertCount($requestsAfterFirst, Http::recorded());
+
+        // Ekran zorunlu özniteliği hemen eksik olarak gösterir.
+        $missing = $this->asTenant($tenant, fn () => app(PrerequisiteGate::class)->missingRequiredAttributes($dress->id));
+        $this->assertSame(['Beden'], $missing);
+    }
+
+    /**
+     * Kanal hata verirse eşleştirme YİNE kaydedilir ve kullanıcı uyarılır.
+     *
+     * Satıcının seçimi ağ hatası yüzünden kaybolmamalı; damga atılmadığı
+     * için sonraki kayıtta çekim yeniden denenir.
+     */
+    #[Test]
+    public function mapping_is_saved_with_a_warning_when_attribute_fetch_fails(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+        [$dress] = $this->makeTree();
+        $this->makeConnection($tenant);
+
+        Http::fake(['*' => Http::response(['errors' => [['message' => 'boom']]], 500)]);
+
+        $this->actingAs($user)->post('/mappings/category', [
+            'internal_category_id' => 'giyim',
+            'channel_category_id' => $dress->id,
+        ])->assertRedirect()->assertSessionHas('warning');
+
+        $this->assertSame(1, $this->asTenant($tenant, fn () => CategoryMapping::query()->count()));
+        $this->assertNull($this->asSystem(fn () => $dress->fresh()->attributes_fetched_at));
     }
 
     /**
@@ -463,6 +534,49 @@ final class CategoryMappingScreenTest extends TestCase
 
             return [$dress, $shoe];
         });
+    }
+
+    private function makeConnection(Tenant $tenant): ChannelConnection
+    {
+        return $this->asTenant($tenant, function () use ($tenant): ChannelConnection {
+            $connection = ChannelConnection::factory()->create([
+                'tenant_id' => $tenant->id,
+                'channel_type_code' => 'trendyol',
+                'external_account_id' => '123456',
+                'status' => 'active',
+                'settings' => ['supplier_id' => '123456'],
+            ]);
+
+            app(CredentialVault::class)->store($connection, [
+                'api_key' => 'anahtar',
+                'api_secret' => 'sifre',
+            ]);
+
+            return $connection;
+        });
+    }
+
+    /** @return array<string, mixed> */
+    private function trendyolAttributes(): array
+    {
+        return [
+            'categoryAttributes' => [
+                [
+                    'attribute' => ['id' => 338, 'name' => 'Beden'],
+                    'required' => true,
+                    'varianter' => true,
+                    'allowCustom' => false,
+                    'attributeValues' => [['id' => 1, 'name' => 'S']],
+                ],
+                [
+                    'attribute' => ['id' => 47, 'name' => 'Renk'],
+                    'required' => false,
+                    'varianter' => false,
+                    'allowCustom' => true,
+                    'attributeValues' => [],
+                ],
+            ],
+        ];
     }
 
     /** @param  list<array{id: string, label: string}>  $allowedValues */

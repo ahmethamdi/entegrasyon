@@ -759,5 +759,6 @@
     "Plan değişikliği :plan olarak gönderildi; ödeme sağlayıcısı onaylayınca birkaç saniye içinde görünür. Fark orantılı faturalanır.": "Your plan change to :plan has been sent; it will appear within a few seconds once the payment provider confirms. The difference is prorated.",
     "Uygulama Shopify mağazasından kaldırıldı.": "The app was uninstalled from the Shopify store.",
     "Shopify mağaza verisinin silinmesini istedi (shop/redact).": "Shopify requested deletion of the store's data (shop/redact).",
-    ":count ürün kanalda arşivde olduğu için içe aktarılmadı. Satışa açmak için ürünü kanalda arşivden çıkarıp yeniden çekin.": ":count products were not imported because they are archived on the channel. Unarchive them on the channel and import again."
+    ":count ürün kanalda arşivde olduğu için içe aktarılmadı. Satışa açmak için ürünü kanalda arşivden çıkarıp yeniden çekin.": ":count products were not imported because they are archived on the channel. Unarchive them on the channel and import again.",
+    "Kategorinin zorunlu özellikleri kanaldan alınamadı; birazdan eşleştirmeyi yeniden kaydedin.": "We couldn't load this category's required attributes from the channel; please save the mapping again in a moment."
 }

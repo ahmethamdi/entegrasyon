@@ -6,7 +6,6 @@ namespace App\Domain\Channels\Actions;
 
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Models\ChannelCategory;
-use App\Domain\Channels\Models\ChannelCategoryAttribute;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\TaxonomySyncResult;
@@ -46,6 +45,7 @@ final class SyncTaxonomy
 {
     public function __construct(
         private readonly AdapterRegistry $registry,
+        private readonly FetchLeafAttributes $fetchLeafAttributes,
     ) {}
 
     public function run(ChannelConnection $connection, bool $withAttributes = false): TaxonomySyncResult
@@ -156,33 +156,9 @@ final class SyncTaxonomy
             ->get();
 
         foreach ($leaves as $leaf) {
-            // Ağ çağrısı transaction dışında.
-            $definitions = $adapter->fetchCategoryAttributes($leaf->external_id);
+            // Ağ çağrısı transaction dışında (action içinde).
+            $attributesWritten += $this->fetchLeafAttributes->run($adapter, $leaf);
             $leavesFetched++;
-
-            DB::transaction(function () use ($leaf, $definitions, &$attributesWritten): void {
-                foreach ($definitions as $definition) {
-                    ChannelCategoryAttribute::query()->updateOrCreate(
-                        [
-                            'channel_category_id' => $leaf->id,
-                            'external_attribute_id' => $definition['external_attribute_id'],
-                        ],
-                        [
-                            'name' => $definition['name'],
-                            'is_required' => $definition['is_required'],
-                            'is_variant_defining' => $definition['is_variant_defining'],
-                            'data_type' => $definition['data_type'],
-                            'allowed_values' => $definition['allowed_values'],
-                        ],
-                    );
-
-                    $attributesWritten++;
-                }
-
-                // Damga: hangi yaprakların çekildiği bilinmeden her turda
-                // 30 bin istek yeniden atılırdı.
-                $leaf->forceFill(['attributes_fetched_at' => now()])->save();
-            });
         }
 
         return [$attributesWritten, $leavesFetched];
