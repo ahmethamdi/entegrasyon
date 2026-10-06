@@ -145,8 +145,10 @@ final class ShopifyBillingTest extends TestCase
 
         $this->remoteStatus[self::SUB_1] = 'ACTIVE';
 
-        $this->actingAs($user)->get('/billing/shopify/return?charge_id=111')
-            ->assertRedirect('/billing')->assertSessionHas('success');
+        // İngilizce panel: plan adı da çevrilir ("Your Başlangıç plan" çıkıyordu).
+        $this->actingAs($user)->withHeader('Accept-Language', 'en-US')->get('/billing/shopify/return?charge_id=111')
+            ->assertRedirect('/billing')
+            ->assertSessionHas('success', 'Your Starter plan is active. The charge is added to your Shopify bill.');
 
         $sub = $this->subscriptions($tenant)->sole();
         $this->assertSame('active', $sub->status);

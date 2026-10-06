@@ -175,7 +175,7 @@ final class BillingController extends Controller
 
                 return redirect('/billing')->with(
                     'success',
-                    "Plan değişikliği {$plan->name} olarak gönderildi; ödeme sağlayıcısı onaylayınca birkaç saniye içinde görünür. Fark orantılı faturalanır.",
+                    __('Plan değişikliği :plan olarak gönderildi; ödeme sağlayıcısı onaylayınca birkaç saniye içinde görünür. Fark orantılı faturalanır.', ['plan' => __($plan->name)]),
                 );
             }
 
@@ -325,7 +325,7 @@ final class BillingController extends Controller
         $subscription = $sync->apply((string) $pending->external_ref, $remote['status'], $remote['currentPeriodEnd']);
 
         return redirect('/billing')->with('success', match ($subscription?->status) {
-            'active' => __(':plan planın açıldı. Ücret Shopify faturana eklenir.', ['plan' => $subscription->plan?->name ?? $subscription->plan_code]),
+            'active' => __(':plan planın açıldı. Ücret Shopify faturana eklenir.', ['plan' => __($subscription->plan?->name ?? $subscription->plan_code)]),
             'cancelled' => __('Shopify\'da onay verilmedi; planın değişmedi.'),
             default => __('Shopify onayı bekleniyor.'),
         });
