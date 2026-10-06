@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Etsy;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Adapters\Etsy\Taxonomy\EtsyTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
@@ -42,6 +43,7 @@ use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Throwable;
 
@@ -409,10 +411,10 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
             );
         }
 
-        return AdapterResult::success(EtsyProductMapper::toIdentityResult(
+        return AdapterResult::success($this->withNewImages($payload, (string) $body['listing_id'], EtsyProductMapper::toIdentityResult(
             $body,
             $payload->listing->variant?->sku,
-        ));
+        )));
     }
 
     /**
@@ -446,10 +448,146 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
         /** @var array<string, mixed> $body */
         $body = $response->json() ?? [];
 
-        return AdapterResult::success(EtsyProductMapper::toIdentityResult(
+        return AdapterResult::success($this->withNewImages($payload, (string) $listingId, EtsyProductMapper::toIdentityResult(
             $body,
             $payload->listing->variant?->sku,
-        ));
+        )));
+    }
+
+    /**
+     * Daha önce GÖNDERİLMEMİŞ görselleri ilana yükler (A15 · Etsy adımı).
+     *
+     * ⚠️ ETSY ADRESTEN ALMAZ, DOSYA İSTER: görsel indirilir (iç ağ korumalı,
+     * kimliksiz — `ChannelHttpClient::download`) ve multipart yüklenir.
+     *
+     * ⚠️ GÖRSEL İLANDADIR, VARYANTTA DEĞİL. Kardeş varyantların listing
+     * satırları aynı Etsy ilanını gösterir; her biri kendi listesine bakarak
+     * yükleseydi üç varyantlı ilan her görseli ÜÇ KEZ alırdı. Gönderilenler
+     * aynı ilana bağlı BÜTÜN satırların `pushed_image_urls` birleşimidir.
+     *
+     * ⚠️ YALNIZCA EKLER — Shopify kuralı: satıcının Etsy'deki kendi
+     * görselleri silinmez, bizde silinen görsel Etsy'den silinmez.
+     *
+     * ⚠️ 10 SINIRI İLANIN MEVCUT GÖRSELLERİYLE BİRLİKTE sayılır: satıcının
+     * 8 görseli varsa en fazla 2 yüklenir; sınır aşılınca Etsy hata verir.
+     *
+     * GÖRSEL HATASI ÜRÜNÜ GERİ SAYMAZ: ilan yazıldı, kimliği saklanmalı.
+     * Yüklenemeyen adres listeye EKLENMEZ, sonraki turda yeniden denenir.
+     *
+     * @param  array<string, mixed>  $identity
+     * @return array<string, mixed>
+     */
+    private function withNewImages(ListingPayload $payload, string $listingId, array $identity): array
+    {
+        $variant = $payload->listing->variant;
+
+        if ($variant === null || $listingId === '') {
+            return $identity;
+        }
+
+        $own = (array) ($payload->listing->channel_metadata['pushed_image_urls'] ?? []);
+        $pushed = [...$own, ...$this->pushedForListing($listingId)];
+
+        $new = array_values(array_diff(ChannelImages::urlsFor($variant, 'etsy', $this->connection->id), $pushed));
+
+        if ($new === []) {
+            return $identity;
+        }
+
+        $uploaded = [];
+
+        try {
+            $current = $this->client->get(
+                EtsyEndpoints::url(EtsyEndpoints::LISTING_IMAGES, ['listing_id' => $listingId]),
+                headers: $this->apiKeyHeader(),
+            );
+
+            $current->throw();
+
+            $count = (int) ($current->json('count') ?? count((array) $current->json('results')));
+            $room = max(0, $this->maxImages() - $count);
+
+            foreach (array_slice($new, 0, $room) as $index => $url) {
+                try {
+                    $this->client->upload(
+                        EtsyEndpoints::url(EtsyEndpoints::SHOP_LISTING_IMAGES, [
+                            'shop_id' => $this->requireShopId(),
+                            'listing_id' => $listingId,
+                        ]),
+                        ['rank' => $count + $index + 1],
+                        'image',
+                        $this->client->download($url),
+                        self::imageFilename($url, $index),
+                        headers: $this->apiKeyHeader(),
+                    )->throw();
+
+                    $uploaded[] = $url;
+                } catch (Throwable $e) {
+                    Log::warning('etsy.image_upload_failed', [
+                        'connection' => $this->connection->id,
+                        'listing' => $listingId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if (count($new) > $room) {
+                Log::info('etsy.image_limit_reached', [
+                    'connection' => $this->connection->id,
+                    'listing' => $listingId,
+                    'skipped' => count($new) - $room,
+                ]);
+            }
+        } catch (Throwable $e) {
+            Log::warning('etsy.image_listing_read_failed', [
+                'connection' => $this->connection->id,
+                'listing' => $listingId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        if ($uploaded === []) {
+            return $identity;
+        }
+
+        return [
+            ...$identity,
+            'channel_metadata' => [
+                ...($identity['channel_metadata'] ?? []),
+                'pushed_image_urls' => array_values(array_unique([...$own, ...$uploaded])),
+            ],
+        ];
+    }
+
+    /**
+     * Aynı Etsy ilanına bağlı bütün listing satırlarının gönderdiği görseller.
+     *
+     * @return list<string>
+     */
+    private function pushedForListing(string $listingId): array
+    {
+        $rows = TenantContext::runAsSystem(fn () => Listing::query()
+            ->where('channel_connection_id', $this->connection->id)
+            ->where('external_parent_id', $listingId)
+            ->pluck('channel_metadata'));
+
+        $urls = [];
+
+        foreach ($rows as $metadata) {
+            foreach ((array) ((is_array($metadata) ? $metadata : [])['pushed_image_urls'] ?? []) as $url) {
+                $urls[] = (string) $url;
+            }
+        }
+
+        return $urls;
+    }
+
+    /** Yüklenen dosyanın adı — adresin son parçası, yoksa sıra numarası. */
+    private static function imageFilename(string $url, int $index): string
+    {
+        $name = basename((string) parse_url($url, PHP_URL_PATH));
+
+        return preg_match('/^[\w.-]+\.(jpe?g|png|gif|webp)$/i', $name) === 1 ? $name : 'gorsel-'.($index + 1).'.jpg';
     }
 
     /**

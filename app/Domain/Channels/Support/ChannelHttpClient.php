@@ -85,6 +85,7 @@ final class ChannelHttpClient
      * @param  string|null  $attemptId  Hangi denemeye ait — FK yok, indeks var
      * @param  array<string, string>  $headers  Adapter'a özgü başlıklar
      * @param  bool  $asForm  Gövde form-encoded gitsin (OAuth token uç noktaları)
+     * @param  list<array{name: string, contents: string, filename?: string}>|null  $multipart  Dosya yükleme gövdesi (`upload()`)
      *
      * @throws ConnectionException Ağ hatası çağırana yükseltilir
      */
@@ -96,6 +97,7 @@ final class ChannelHttpClient
         ?string $attemptId = null,
         array $headers = [],
         bool $asForm = false,
+        ?array $multipart = null,
     ): Response {
         $method = strtoupper($method);
         $url = $this->urlFor($endpoint);
@@ -129,9 +131,12 @@ final class ChannelHttpClient
             // "invalid_request" döner; sebebi de gövdede görünmez.
             $bodyKey = $asForm ? 'form_params' : 'json';
 
-            $response = $this->pendingRequest($headers, $asForm)->withOptions($pin)->send($method, $url, array_filter([
+            $pending = $this->pendingRequest($headers, $asForm);
+
+            $response = ($multipart !== null ? $pending->asMultipart() : $pending)->withOptions($pin)->send($method, $url, array_filter([
                 'query' => $query,
                 $bodyKey => $body,
+                'multipart' => $multipart,
             ], static fn (mixed $v): bool => $v !== null && $v !== []));
         } catch (ConnectionException $e) {
             // Yanıt HİÇ gelmedi. Kayıt yine de yazılır: sonuç belirsizdir
@@ -200,6 +205,86 @@ final class ChannelHttpClient
     public function put(string $endpoint, array $body, ?string $attemptId = null, array $headers = []): Response
     {
         return $this->request('PUT', $endpoint, body: $body, attemptId: $attemptId, headers: $headers);
+    }
+
+    /**
+     * Dosya yükler — `multipart/form-data` (Etsy görsel yükleme).
+     *
+     * Günlüğe dosya İÇERİĞİ yazılmaz: `api_calls` gövdesinde yalnız alan
+     * adları ve bayt sayısı durur. İkili veri günlüğü şişirir ve maskelemeden
+     * geçemez.
+     *
+     * @param  array<string, string|int>  $fields  Düz alanlar (rank vb.)
+     * @param  array<string, string>  $headers
+     */
+    public function upload(
+        string $endpoint,
+        array $fields,
+        string $fileField,
+        string $contents,
+        string $filename,
+        array $headers = [],
+    ): Response {
+        $parts = [['name' => $fileField, 'contents' => $contents, 'filename' => $filename]];
+
+        foreach ($fields as $name => $value) {
+            $parts[] = ['name' => (string) $name, 'contents' => (string) $value];
+        }
+
+        return $this->request(
+            'POST',
+            $endpoint,
+            body: ['multipart' => [...array_keys($fields), "{$fileField} ({$filename}, ".strlen($contents).' bayt)']],
+            headers: $headers,
+            multipart: $parts,
+        );
+    }
+
+    /**
+     * Kanala yüklenecek bir dosyayı (görsel) indirir — KİMLİKSİZ ve DENETİMLİ.
+     *
+     * ⚠️ İÇ AĞ KORUMASINDAN GEÇER (B3 · SSRF): içe aktarılan görsel adresleri
+     * kanallardan gelir; kötü niyetli bir mağaza görsel adresi olarak
+     * `http://169.254.169.254/` verirse sunucu iç ağı okuyup Etsy'ye
+     * yüklerdi. Yönlendirme kapalı, bağlantı denetlenen IP'ye sabit.
+     *
+     * ⚠️ KANAL KİMLİĞİ GİTMEZ: `pendingRequest()` kullanılmaz — kasadaki
+     * token/anahtar görselin barındığı üçüncü tarafa sızardı.
+     *
+     * Yanıt 200 değilse, görsel değilse ya da sınırı aşıyorsa istisna.
+     */
+    public function download(string $url, int $maxBytes = 20_000_000): string
+    {
+        $startedAt = hrtime(true);
+        $pin = $this->pinDestination($url);
+
+        $response = Http::timeout(self::DEFAULT_TIMEOUT_SECONDS)->withOptions($pin)->get($url);
+
+        // Yanıt nesnesi VERİLMEZ: gövdesi ikili görseldir ve günlüğe yazılırdı.
+        $this->record(
+            method: 'GET',
+            url: $url,
+            body: null,
+            response: null,
+            durationMs: $this->elapsedMs($startedAt),
+            attemptId: null,
+            errorClass: $response->successful() ? null : ErrorClass::NOT_FOUND,
+            errorText: "İndirme HTTP {$response->status()}, ".strlen($response->body()).' bayt',
+        );
+
+        $type = strtolower((string) $response->header('Content-Type'));
+
+        if (! $response->successful() || ! str_starts_with($type, 'image/')) {
+            throw new \RuntimeException("Görsel indirilemedi: HTTP {$response->status()}, tür '{$type}'.");
+        }
+
+        $body = $response->body();
+
+        if (strlen($body) > $maxBytes) {
+            throw new \RuntimeException('Görsel çok büyük: '.strlen($body).' bayt.');
+        }
+
+        return $body;
     }
 
     // ---------------------------------------------------------------- iç

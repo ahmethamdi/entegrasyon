@@ -82,6 +82,12 @@ final class EtsyEndpoints
      */
     public const LISTING_INVENTORY = '/v3/application/listings/{listing_id}/inventory';
 
+    /** İlanın görselleri (okuma). */
+    public const LISTING_IMAGES = '/v3/application/listings/{listing_id}/images';
+
+    /** Görsel yükleme — multipart, `image` dosyası + `rank`. Yol MAĞAZA altında. */
+    public const SHOP_LISTING_IMAGES = '/v3/application/shops/{shop_id}/listings/{listing_id}/images';
+
     // ───────────────────────────────────────────────────────────── sipariş
 
     /**
