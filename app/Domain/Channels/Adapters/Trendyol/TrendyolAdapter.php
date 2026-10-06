@@ -175,6 +175,11 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresImageLimit, Suppo
         'Created' => 'created',
         'Awaiting' => 'created',
         'Picking' => 'updated',
+        // Gerçek hesapta görüldü (6 Eki 2026): haritada yoktu, "bilinmeyen"
+        // dalından `updated` sayılıyordu. Davranış aynı, artık bilinçli:
+        // stok sipariş oluşunca düşülmüştür; ilk kez bu durumda görülen
+        // sipariş `adoptMissedOrder` ile alınır.
+        'ReadyToShip' => 'updated',
         'Invoiced' => 'updated',
         'Shipped' => 'updated',
         'Delivered' => 'updated',
