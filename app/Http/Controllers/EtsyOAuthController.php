@@ -217,6 +217,7 @@ final class EtsyOAuthController extends Controller
                 $connection,
                 $secrets['secrets'],
                 expiresAt: $secrets['expires_at'],
+                refreshExpiresAt: now()->addDays(EtsyAuth::REFRESH_TOKEN_LIFETIME_DAYS)->toDateTimeImmutable(),
             );
 
             // DENETİM KAYDI — YÜKE SIR KONMAZ, yalnızca anahtar ADLARI.

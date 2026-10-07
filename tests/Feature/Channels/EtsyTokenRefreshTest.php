@@ -117,6 +117,37 @@ final class EtsyTokenRefreshTest extends TestCase
     }
 
     /**
+     * ⚠️ YENİLEME TOKEN'ININ 90 GÜNLÜK ÖMRÜ YAZILIR.
+     *
+     * Etsy yanıtta bu süreyi vermez. Yazılmasaydı panel rozeti 1 saatlik
+     * erişim token'ına bakar ve çalışan bağlantıya hep "yakında dolacak"
+     * derdi (canlıda görüldü).
+     */
+    #[Test]
+    public function the_refresh_token_lifetime_is_persisted(): void
+    {
+        [, $connection] = $this->etsyConnection(expiresInSeconds: 300);
+
+        Http::fake(['*' => Http::response([
+            'access_token' => '12345.taze',
+            'refresh_token' => '12345.taze-refresh',
+            'expires_in' => 3600,
+        ], 200)]);
+
+        app(TokenRefresher::class)->run();
+
+        $refreshExpiresAt = TenantContext::runAsSystem(
+            fn () => DB::table('channel_credentials')
+                ->where('channel_connection_id', $connection->id)
+                ->whereNull('revoked_at')
+                ->value('refresh_expires_at')
+        );
+
+        $this->assertNotNull($refreshExpiresAt);
+        $this->assertGreaterThan(time() + 89 * 86400, strtotime((string) $refreshExpiresAt));
+    }
+
+    /**
      * ⚠️ SÜRESİ UZAK OLAN SATIRA DOKUNULMAZ.
      *
      * Adapter'ın payı 900 sn'dir. Bir saatlik pay varmış gibi

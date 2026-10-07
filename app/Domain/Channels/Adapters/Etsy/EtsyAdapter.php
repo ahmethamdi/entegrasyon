@@ -9,6 +9,7 @@ use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Adapters\Etsy\Taxonomy\EtsyTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
@@ -25,6 +26,7 @@ use App\Domain\Channels\Models\CategoryMapping;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
+use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
@@ -101,7 +103,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -629,6 +631,189 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
         $value = $this->connection->settings[$key] ?? null;
 
         return is_scalar($value) && trim((string) $value) !== '' ? trim((string) $value) : null;
+    }
+
+    /**
+     * Etsy'nin `who_made` / `when_made` değerleri — Etsy OAS'tan (7 Eki 2026).
+     *
+     * ⚠️ `when_made` YILLIK DEĞİŞİR: en yeni aralık her yıl uzar
+     * (`2020_2025` → `2020_2026`). Eski değer kayıtlıysa seçenek listesinde
+     * bulunmaz, ekran onu "seçilmemiş" gösterir ve satıcı yeniden seçer;
+     * eski değerle ilan açmak Etsy'de 400 olurdu.
+     */
+    private const WHO_MADE_VALUES = ['i_did', 'someone_else', 'collective'];
+
+    private const WHEN_MADE_VALUES = [
+        'made_to_order', '2020_2026', '2010_2019', '2007_2009', 'before_2007', '2000_2006',
+        '1990s', '1980s', '1970s', '1960s', '1950s', '1940s', '1930s', '1920s', '1910s', '1900s',
+        '1800s', '1700s', 'before_1700',
+    ];
+
+    public function missingConnectionSettings(): array
+    {
+        return array_values(array_filter(
+            [self::WHO_MADE_KEY, self::WHEN_MADE_KEY, self::SHIPPING_PROFILE_KEY],
+            fn (string $key): bool => $this->setting($key) === null,
+        ));
+    }
+
+    public function connectionSettingFields(): array
+    {
+        [$profiles, $profilesError] = $this->readShopList(EtsyEndpoints::SHIPPING_PROFILES);
+        [$readiness, $readinessError] = $this->readShopList(EtsyEndpoints::READINESS_STATES);
+
+        return [
+            new ConnectionSettingField(
+                key: self::WHO_MADE_KEY,
+                label: __('Ürünleri kim yapıyor?'),
+                options: [
+                    ['value' => 'i_did', 'label' => __('Ben yaptım'), 'usable' => true],
+                    ['value' => 'collective', 'label' => __('Ekibimden biri yaptı'), 'usable' => true],
+                    ['value' => 'someone_else', 'label' => __('Başka bir firma ya da kişi yaptı'), 'usable' => true],
+                ],
+                value: $this->settingIn(self::WHO_MADE_KEY, self::WHO_MADE_VALUES),
+                hint: __('Etsy\'nin yasal beyanı; her yeni ilana yazılır. Etsy kuralları gereği doğru beyan senin sorumluluğunda.'),
+            ),
+            new ConnectionSettingField(
+                key: self::WHEN_MADE_KEY,
+                label: __('Ürünler ne zaman yapıldı?'),
+                options: array_map(fn (string $value): array => [
+                    'value' => $value,
+                    'label' => $this->whenMadeLabel($value),
+                    'usable' => true,
+                ], self::WHEN_MADE_VALUES),
+                value: $this->settingIn(self::WHEN_MADE_KEY, self::WHEN_MADE_VALUES),
+            ),
+            new ConnectionSettingField(
+                key: self::SHIPPING_PROFILE_KEY,
+                label: __('Kargo profili'),
+                options: array_map(fn (array $profile): array => $this->shippingProfileOption($profile), $profiles),
+                value: $this->setting(self::SHIPPING_PROFILE_KEY),
+                hint: __('Yeni ilanlar bu profille açılır. Profilleri Etsy\'de Ayarlar → Kargo ayarları\'ndan düzenleyebilirsin.'),
+                optionsError: $profilesError,
+            ),
+            new ConnectionSettingField(
+                key: self::READINESS_KEY,
+                label: __('Hazırlık süresi'),
+                options: array_map(fn (array $state): array => [
+                    'value' => (string) ($state['readiness_state_id'] ?? ''),
+                    'label' => $this->readinessLabel($state),
+                    'usable' => isset($state['readiness_state_id']),
+                ], $readiness),
+                value: $this->setting(self::READINESS_KEY),
+                required: false,
+                hint: __('Boş bırakırsan mağazanda tek hazırlık profili varsa o kullanılır.'),
+                optionsError: $readinessError,
+            ),
+        ];
+    }
+
+    /** Kayıtlı değer hâlâ geçerli kümede mi — değilse null (yeniden seçilir). */
+    private function settingIn(string $key, array $allowed): ?string
+    {
+        $value = $this->setting($key);
+
+        return $value !== null && in_array($value, $allowed, true) ? $value : null;
+    }
+
+    /**
+     * Mağaza düzeyindeki bir listeyi okur: [sonuçlar, hata metni].
+     *
+     * ⚠️ HATA BOŞ LİSTEYE DÖNÜŞMEZ: "mağazada profil yok" ile "Etsy'ye
+     * ulaşılamadı" ayrı şeylerdir ve satıcı farkı görmelidir.
+     *
+     * @return array{0: list<array<string, mixed>>, 1: string|null}
+     */
+    private function readShopList(string $template): array
+    {
+        try {
+            $response = $this->client->get(
+                EtsyEndpoints::url($template, ['shop_id' => $this->requireShopId()]),
+                headers: $this->apiKeyHeader(),
+            );
+
+            $response->throw();
+        } catch (Throwable $e) {
+            Log::warning('etsy.settings_options_unavailable', [
+                'connection' => $this->connection->id,
+                'endpoint' => $template,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [[], __('Etsy\'den okunamadı. Bağlantının izinli olduğundan emin ol ve sayfayı yenile.')];
+        }
+
+        /** @var list<array<string, mixed>> $results */
+        $results = array_values(array_filter((array) ($response->json('results') ?? []), 'is_array'));
+
+        return [$results, null];
+    }
+
+    /**
+     * Kargo profili seçeneği — Etsy'nin YAYINLAMA kuralıyla.
+     *
+     * ⚠️ TASLAK AÇILIR AMA YAYINLANAMAZ: eksik profille Etsy ilanı taslak
+     * olarak kabul eder, `state=active` anında 400 verir ("Postal Code is
+     * required … You must provide either a carrier and mail class or
+     * min/max delivery days", canlıda 7 Eki — Printful profilleri). Hata
+     * ancak satıcı yayınlamaya kalkınca çıkardı; burada baştan söylenir.
+     *
+     * @param  array<string, mixed>  $profile
+     * @return array{value: string, label: string, usable: bool, note: string|null}
+     */
+    private function shippingProfileOption(array $profile): array
+    {
+        $problems = [];
+
+        if (trim((string) ($profile['origin_postal_code'] ?? '')) === '') {
+            $problems[] = __('çıkış posta kodu yok');
+        }
+
+        foreach ((array) ($profile['shipping_profile_destinations'] ?? []) as $destination) {
+            $hasCarrier = (int) ($destination['shipping_carrier_id'] ?? 0) > 0
+                && trim((string) ($destination['mail_class'] ?? '')) !== '';
+            $hasDays = isset($destination['min_delivery_days'], $destination['max_delivery_days']);
+
+            if (! $hasCarrier && ! $hasDays) {
+                $problems[] = __('teslim süresi ya da kargo firması eksik');
+
+                break;
+            }
+        }
+
+        $origin = trim((string) ($profile['origin_country_iso'] ?? ''));
+
+        return [
+            'value' => (string) ($profile['shipping_profile_id'] ?? ''),
+            'label' => trim((string) ($profile['title'] ?? '')).($origin !== '' ? " · {$origin}" : ''),
+            'usable' => $problems === [] && isset($profile['shipping_profile_id']),
+            'note' => $problems === []
+                ? null
+                : __('Etsy bu profille ilan yayınlamaz: :problems', ['problems' => implode(', ', $problems)]),
+        ];
+    }
+
+    /** @param  array<string, mixed>  $state */
+    private function readinessLabel(array $state): string
+    {
+        $kind = ($state['readiness_state'] ?? null) === 'made_to_order'
+            ? __('Siparişe göre üretim')
+            : __('Hazır ürün');
+        $days = trim((string) ($state['processing_days_display_label'] ?? ''));
+
+        return $days !== '' ? "{$kind} · {$days}" : $kind;
+    }
+
+    private function whenMadeLabel(string $value): string
+    {
+        return match (true) {
+            $value === 'made_to_order' => __('Siparişe göre yapılıyor'),
+            str_starts_with($value, 'before_') => __(':year öncesi', ['year' => substr($value, 7)]),
+            // "1900s" ON YILDIR (listede "1910s" de var); yalnız "1800s" ve
+            // "1700s" yüzyıldır.
+            preg_match('/^(\d{4})s$/', $value, $m) === 1 => $m[1].'–'.((int) $m[1] + (in_array($value, ['1800s', '1700s'], true) ? 99 : 9)),
+            default => str_replace('_', '–', $value),
+        };
     }
 
     /**
@@ -1956,6 +2141,11 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
                     : $refreshToken,
             ],
             expiresAt: $this->expiryFrom($body),
+            // Yalnız YENİ refresh token geldiyse ömür baştan başlar; eskisi
+            // korunduysa kayıttaki bitiş tarihi de korunur (null ezmez).
+            refreshExpiresAt: is_string($newRefresh) && $newRefresh !== ''
+                ? now()->addDays(EtsyAuth::REFRESH_TOKEN_LIFETIME_DAYS)->toDateTimeImmutable()
+                : null,
         );
     }
 

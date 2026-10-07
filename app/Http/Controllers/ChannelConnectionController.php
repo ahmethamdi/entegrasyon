@@ -11,6 +11,7 @@ use App\Domain\Channels\Actions\CheckChannelHealth;
 use App\Domain\Channels\Actions\ConnectChannel;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
+use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
@@ -21,6 +22,7 @@ use App\Domain\Channels\Support\TokenStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -447,6 +449,11 @@ final class ChannelConnectionController extends Controller
             'connectedAt' => $connection->connected_at?->toIso8601String(),
             'capabilities' => $this->capabilitiesOrEmpty($connection),
 
+            // Bağlantı sonrası ayar ekranı var mı ve zorunlu ayar eksik mi.
+            // Ağ çağrısı YOKTUR (`missingConnectionSettings`): liste her
+            // açılışta kanala istek atsaydı kota boşa giderdi.
+            ...$this->settingsSummary($connection),
+
             // Çok depolu Shopify mağazasında seçim bekleyen depolar (ad +
             // kimlik — sır değil). Depo seçildiyse ya da kanal Shopify
             // değilse boş: kartta seçim kutusu yalnız gerektiğinde çıkar.
@@ -467,6 +474,11 @@ final class ChannelConnectionController extends Controller
             // kendisi ASLA (§19 · madde 3): `channel_credentials`
             // şifreli kasadır ve bu dizi Inertia prop'u olarak
             // TARAYICIYA ulaşır.
+            // OAuth kanalında izin YOKSA ya da süresi bittiyse "Tekrar dene"
+            // anlamsızdır — sağlık kontrolü aynı yetkisiz isteği tekrarlar.
+            // Kartta yerine "İzin ver" çıkar ve satıcı kanala yönlendirilir.
+            'authorizeUrl' => $this->authorizeUrl($connection, $tokenStatus),
+
             'tokenStatus' => $tokenStatus?->value,
             'tokenStatusLabel' => $tokenStatus !== null ? __($tokenStatus->label()) : null,
             'tokenExpiresAt' => $expiresAt?->toIso8601String(),
@@ -499,6 +511,50 @@ final class ChannelConnectionController extends Controller
 
             return [];
         }
+    }
+
+    /**
+     * Yeniden izin adresi — yalnızca izin GEREKİYORSA ve kanalın OAuth
+     * rotası VARSA (`channels.{kod}.authorize`). Kanal adı kontrol edilmez.
+     */
+    private function authorizeUrl(ChannelConnection $connection, ?TokenStatus $tokenStatus): ?string
+    {
+        $route = "channels.{$connection->channel_type_code}.authorize";
+
+        if (! Route::has($route)) {
+            return null;
+        }
+
+        $neverAuthorized = str_starts_with(
+            (string) $connection->external_account_id,
+            ChannelConnectForm::PENDING_ACCOUNT_PREFIX,
+        );
+
+        return $neverAuthorized || $tokenStatus === TokenStatus::EXPIRED
+            ? route($route, ['connection' => $connection->id], absolute: false)
+            : null;
+    }
+
+    /**
+     * @return array{hasSettings: bool, settingsMissing: int}
+     */
+    private function settingsSummary(ChannelConnection $connection): array
+    {
+        try {
+            $adapter = $this->registry->for($connection);
+        } catch (Throwable) {
+            // Gerekçe `capabilitiesOrEmpty`'de günlüğe yazılır.
+            return ['hasSettings' => false, 'settingsMissing' => 0];
+        }
+
+        if (! $adapter instanceof DeclaresConnectionSettings) {
+            return ['hasSettings' => false, 'settingsMissing' => 0];
+        }
+
+        return [
+            'hasSettings' => true,
+            'settingsMissing' => count($adapter->missingConnectionSettings()),
+        ];
     }
 
     /** @return array<int, array<string, mixed>> */

@@ -124,6 +124,23 @@ function saveLocation(id) {
     });
 }
 
+// Yeniden izin yönlendirmesi POST'tur (GET ön yüklemesi el sıkışmayı
+// habersiz başlatırdı). Sunucu Inertia isteğine `Inertia::location` ile
+// kanalın izin ekranına tam sayfa yönlendirme döner.
+const authorizing = ref(null);
+
+function authorize(connection) {
+    if (authorizing.value !== null) return;
+
+    authorizing.value = connection.id;
+
+    router.post(connection.authorizeUrl, {}, {
+        onFinish: () => {
+            authorizing.value = null;
+        },
+    });
+}
+
 function recheck(id) {
     if (checking.value !== null) return;
 
@@ -225,14 +242,54 @@ function formatDate(iso) {
                         </p>
                     </div>
 
-                    <button
-                        type="button"
-                        class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="checking !== null"
-                        @click="recheck(connection.id)"
+                    <div class="flex shrink-0 items-center gap-2">
+                        <Link
+                            v-if="connection.hasSettings"
+                            :href="`/channels/${connection.id}/settings`"
+                            class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                        >
+                            {{ t('Ayarlar') }}
+                        </Link>
+
+                        <!--
+                            İzin yoksa ya da süresi bittiyse "Tekrar dene"
+                            aynı yetkisiz isteği tekrarlar; satıcıyı kanalın
+                            izin ekranına götüren düğme çıkar.
+                        -->
+                        <button
+                            v-if="connection.authorizeUrl"
+                            type="button"
+                            class="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="authorizing !== null"
+                            @click="authorize(connection)"
+                        >
+                            {{ authorizing === connection.id ? t('Yönlendiriliyor…') : t('İzin ver') }}
+                        </button>
+                        <button
+                            v-else
+                            type="button"
+                            class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="checking !== null"
+                            @click="recheck(connection.id)"
+                        >
+                            {{ checking === connection.id ? t('Kontrol ediliyor…') : t('Tekrar dene') }}
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    v-if="connection.settingsMissing > 0 && !connection.authorizeUrl"
+                    class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
+                >
+                    <p class="text-sm text-amber-900">
+                        {{ t('İlan açabilmek için :count ayar eksik.', { count: connection.settingsMissing }) }}
+                    </p>
+                    <Link
+                        :href="`/channels/${connection.id}/settings`"
+                        class="text-sm font-medium text-amber-900 underline"
                     >
-                        {{ checking === connection.id ? t('Kontrol ediliyor…') : t('Tekrar dene') }}
-                    </button>
+                        {{ t('Ayarları tamamla') }}
+                    </Link>
                 </div>
 
                 <!--

@@ -68,6 +68,14 @@ final class EtsyAuth
      * `transactions_r` sipariş yoklaması, `listings_w` katalog ve stok
      * yazma, `shops_r` mağaza kimliği içindir.
      */
+    /**
+     * Etsy yenileme token'ının ömrü — 90 gün (Etsy OAuth belgesi). Yanıtta
+     * süre ALANI YOKTUR; yazılmazsa panel rozeti 1 saatlik erişim token'ına
+     * bakar ve çalışan bağlantıya hep "yakında dolacak" derdi. Her yenileme
+     * YENİ bir refresh token verir ve sayaç baştan başlar.
+     */
+    public const REFRESH_TOKEN_LIFETIME_DAYS = 90;
+
     public const SCOPES = ['listings_r', 'listings_w', 'transactions_r', 'shops_r', 'email_r'];
 
     /**

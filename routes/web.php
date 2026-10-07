@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
+use App\Http\Controllers\ChannelSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EbayOAuthController;
 use App\Http\Controllers\EtsyOAuthController;
@@ -128,6 +129,13 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::post('/channels', [ChannelConnectionController::class, 'store'])->name('channels.store');
     Route::post('/channels/{connection}/health', [ChannelConnectionController::class, 'health'])
         ->name('channels.health');
+
+    // Bağlantı SONRASI kanal ayarları (Etsy beyanları, kargo profili). GET
+    // ekranı kanaldan seçenek okur — yan etkisi yoktur, yalnızca okur.
+    Route::get('/channels/{connection}/settings', [ChannelSettingsController::class, 'edit'])
+        ->name('channels.settings.edit');
+    Route::put('/channels/{connection}/settings', [ChannelSettingsController::class, 'update'])
+        ->name('channels.settings.update');
 
     // ETSY OAUTH 2 + PKCE (V3.0 · §11.2 · §19 · P0-10) — projede İLK
     // OAuth akışı ve BİLİNÇLİ olarak `web` grubundadır: webhook
