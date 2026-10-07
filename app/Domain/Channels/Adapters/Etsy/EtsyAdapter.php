@@ -2150,19 +2150,22 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
     }
 
     /**
-     * Süre dolmadan 15 dakika önce yenile.
+     * Süre dolmadan 40 dakika önce yenile.
      *
-     * ⚠️ PAY TARAMA SIKLIĞINDAN KÜÇÜK OLAMAZ. Tarama 15 dakikada bir
-     * koşar (§20); pay 15 dakikadan KISA olsaydı token, iki tur arasında
-     * hem "henüz aday değil" hem "artık ölmüş" olabilirdi ve o aralıktaki
-     * her çağrı 401 alırdı.
+     * ⚠️ PAY TARAMA SIKLIĞININ (15 dk, §20) KATI OLMALIDIR, EŞİTİ DEĞİL.
+     * Eski pay 900 sn'ydi ve "üç deneme hakkı" sanılıyordu; gerçekte TEK
+     * deneme veriyordu: yenileme turun birkaç saniye geçesinde olur, yeni
+     * token bir sonraki saatin aynı saniyesinde dolar ve önceki tur onu
+     * "15 dk 4 sn kaldı" diye ATLAR. Geriye dolmasına 4 saniye kala koşan
+     * tek tur kalır. 7 Eki 09:00'da o tur deploy yüzünden kaçtı, token
+     * öldü ve sipariş/stok çağrıları 401 aldı.
      *
-     * 1 saatlik token için 15 dakikalık pay ÜÇ DENEME hakkı verir (§20:
-     * "sıklık en kısa TTL'in dörtte biridir").
+     * 40 dakika :30, :45 ve :00 turlarına ÜÇ gerçek deneme verir; bedeli
+     * saatte iki yenilemedir (günde ~48 çağrı, 10.000'lik kotada önemsiz).
      */
     public function refreshLeadSeconds(): int
     {
-        return 900;
+        return 2400;
     }
 
     // ──────────────────────────────────────────────── kota ve ölçüm (§25)

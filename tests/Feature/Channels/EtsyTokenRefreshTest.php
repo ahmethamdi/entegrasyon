@@ -148,9 +148,31 @@ final class EtsyTokenRefreshTest extends TestCase
     }
 
     /**
+     * ⚠️ BİR TUR KAÇSA DA TOKEN ÖLMEZ — pay tarama aralığının katıdır.
+     *
+     * Saat başı yenilenen token bir sonraki saatin :45 turunda 15 dk 4 sn
+     * ömürlüdür; eski 900 sn'lik pay onu ATLIYOR ve tek şans dolmasına
+     * saniyeler kala koşan :00 turu kalıyordu (canlıda 7 Eki 09:00 token
+     * öldü). Bu satır artık yenilenir.
+     */
+    #[Test]
+    public function a_token_just_over_one_scan_interval_from_expiry_is_refreshed(): void
+    {
+        [, $connection] = $this->etsyConnection(expiresInSeconds: 15 * 60 + 4);
+
+        Http::fake(['*' => Http::response([
+            'access_token' => '12345.taze',
+            'refresh_token' => '12345.taze-refresh',
+            'expires_in' => 3600,
+        ], 200)]);
+
+        $this->assertSame(1, app(TokenRefresher::class)->run()['refreshed']);
+    }
+
+    /**
      * ⚠️ SÜRESİ UZAK OLAN SATIRA DOKUNULMAZ.
      *
-     * Adapter'ın payı 900 sn'dir. Bir saatlik pay varmış gibi
+     * Adapter'ın payı 2400 sn'dir. Bir saatlik pay varmış gibi
      * davranılsaydı her tur her bağlantıyı yeniler ve Etsy'nin tek
      * kullanımlık refresh token'ı boşuna tüketilirdi.
      */
