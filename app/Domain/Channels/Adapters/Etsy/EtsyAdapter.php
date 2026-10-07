@@ -120,13 +120,25 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
      *
      * `completed` stok hareketi ÜRETMEZ: stok sipariş oluştuğunda zaten
      * düşülmüştür ve tamamlanma yalnızca anlık görüntüyü tazeler.
+     *
+     * ⚠️ ANAHTARLAR NORMALLEŞTİRİLMİŞ BİÇİMDEDİR (`statusKey()`). Etsy
+     * durumu "Payment Processing", "Paid", "Canceled", "Fully Refunded"
+     * biçiminde gönderir (canlıda 7 Eki ölçüldü). Ham değerle bakılsaydı
+     * HİÇBİR durum eşleşmez, her sipariş `updated` sayılır ve iptal
+     * edilen siparişin stoğu GERİ EKLENMEZDİ.
+     *
+     * `payment_processing` `created`'dır: Etsy stoğu sipariş anında düşer,
+     * ödeme onayını beklemez — biz de beklersek iki kanal arasında
+     * fazla satış penceresi açılır.
      */
     private const STATUS_TO_TYPE = [
         'paid' => 'created',
         'open' => 'created',
+        'payment_processing' => 'created',
         'completed' => 'updated',
         'processing' => 'updated',
         'refunded' => 'updated',
+        'fully_refunded' => 'updated',
         'partially_refunded' => 'updated',
         'canceled' => 'cancelled',
         'cancelled' => 'cancelled',
@@ -859,9 +871,14 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
             return null;
         }
 
+        // ⚠️ `includes=Inventory` BU UÇTA GEÇERSİZDİR. Mağaza listesi
+        // (`/shops/{id}/listings`) kabul eder, tekil ilan kabul ETMEZ:
+        // canlıda 400 "Invalid value (inventory) for enum(images, shop,
+        // user, translations, videos, personalization, buyerprice)"
+        // döndü (7 Eki) ve mutabakat her Etsy ilanında çöküyordu.
+        // Envanter ayrı uçtan okunur.
         $response = $this->client->get(
             EtsyEndpoints::url(EtsyEndpoints::LISTING, ['listing_id' => $listingId]),
-            query: ['includes' => 'Inventory'],
             headers: $this->apiKeyHeader(),
         );
 
@@ -879,6 +896,8 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
         if (! isset($body['listing_id'])) {
             return null;
         }
+
+        $body['inventory'] = ['products' => $this->readInventoryProducts((string) $listingId)];
 
         return $this->toRemoteListing(
             $body,
@@ -1556,13 +1575,21 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
                 // SANİYE epoch — Trendyol milisaniye ister, Etsy saniye.
                 // Karıştırılsaydı pencere 1970'e düşer ve her tur TÜM
                 // geçmişi çekerdi.
-                'min_created' => $since->getTimestamp(),
+                //
+                // ⚠️ PENCERE SON DEĞİŞİKLİĞE GÖREDİR, OLUŞTURMAYA GÖRE DEĞİL.
+                // `min_created` ile sipariş yalnız oluştuğu turda görülür;
+                // sonradan gelen "Paid", "Completed" ve özellikle
+                // "Canceled" pencere dışında kalır — iptal edilen
+                // siparişin stoğu HİÇ geri eklenmezdi. Aynı durumun
+                // tekrar okunması zararsızdır: olay kimliği
+                // `{receipt_id}:{status}` ve inbox tekilleştirir.
+                'min_last_modified' => $since->getTimestamp(),
                 'limit' => self::ORDER_PAGE_SIZE,
                 'offset' => $offset,
                 // Eskiden yeniye: tur yarıda kalırsa imleç en eski
                 // işlenmemiş siparişin gerisinde kalır ve hiçbir şey
                 // atlanmaz.
-                'sort_on' => 'created',
+                'sort_on' => 'updated',
                 'sort_order' => 'asc',
             ],
             headers: $this->apiKeyHeader(),
@@ -1655,7 +1682,7 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
 
         $receiptId = (string) $receiptId;
         $status = (string) ($payload['status'] ?? '');
-        $type = self::STATUS_TO_TYPE[$status] ?? 'updated';
+        $type = self::STATUS_TO_TYPE[self::statusKey($status)] ?? 'updated';
 
         return new NormalizedOrderEvent(
             type: $type,
@@ -1667,6 +1694,12 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
             payload: $this->toCanonicalOrderPayload($payload, $type, $receiptId),
             occurredAt: $this->receiptDate($payload),
         );
+    }
+
+    /** "Payment Processing" → "payment_processing" (`STATUS_TO_TYPE` anahtarı). */
+    private static function statusKey(string $status): string
+    {
+        return str_replace([' ', '-'], '_', strtolower(trim($status)));
     }
 
     /**
@@ -1691,8 +1724,17 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
             'status' => (string) ($payload['status'] ?? 'pending'),
             // İade AYRI bir tip üretmez ama finansal durum GÖRÜNÜR kalır:
             // satıcı panelde neyin iade edildiğini görebilmelidir.
-            'financial_status' => ($payload['status'] ?? null) === 'refunded' ? 'refunded' : null,
-            'currency' => (string) ($payload['currency_code'] ?? 'TRY'),
+            'financial_status' => in_array(self::statusKey((string) ($payload['status'] ?? '')), ['refunded', 'fully_refunded'], true)
+                ? 'refunded'
+                : null,
+            // ⚠️ RECEIPT'İN ÜST DÜZEYİNDE `currency_code` YOKTUR; para
+            // birimi para nesnelerinin içindedir. Yalnız üst düzeye
+            // bakılsaydı USD mağazanın $5.95'lik siparişi panelde 5,95 TL
+            // görünürdü (canlıda 7 Eki oldu).
+            'currency' => (string) ($payload['grandtotal']['currency_code']
+                ?? $payload['total_price']['currency_code']
+                ?? $payload['currency_code']
+                ?? 'TRY'),
             'subtotal' => $this->money($payload['total_price'] ?? null) ?? '0',
             'shipping_total' => $this->money($payload['total_shipping_cost'] ?? null) ?? '0',
             'tax_total' => $this->money($payload['total_tax_cost'] ?? null) ?? '0',
@@ -1733,6 +1775,14 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsC
             $lines[] = [
                 'external_line_id' => (string) ($item['transaction_id'] ?? ''),
                 'sku' => (string) ($item['sku'] ?? ''),
+                // ⚠️ SKU YEDEĞİ: Etsy kalemi SKU'yu çoğu zaman BOŞ getirir
+                // (canlıda 7 Eki: ilanda SKU varken kalemde ""). Kalem
+                // `product_id` taşır ve o bizim `listings.external_id`'mizdir;
+                // `OrderPayloadMapper` SKU tutmazsa onu bu bağlantının
+                // listing'lerinde arar. Gönderilmeseydi satır eşleşmez, stok
+                // DÜŞMEZ ve sonraki mutabakat Etsy'nin düştüğü stoğu eski
+                // değerle EZERDİ — fazla satış.
+                'external_variant_id' => isset($item['product_id']) ? (string) $item['product_id'] : null,
                 'title' => (string) ($item['title'] ?? $item['sku'] ?? ''),
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,

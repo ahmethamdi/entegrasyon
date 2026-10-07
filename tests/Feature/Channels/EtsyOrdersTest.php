@@ -22,6 +22,7 @@ use App\Domain\Messaging\Jobs\ProcessInboxMessage;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\PollChannelOrders;
+use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Support\Logging\PayloadRedactor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -170,8 +171,12 @@ final class EtsyOrdersTest extends TestCase
     /**
      * ⚠️ İSTEK MAĞAZANIN RECEIPTS UÇ NOKTASINA GİDER ve PENCERE TAŞIR.
      *
-     * `min_created` gönderilmeseydi her tur TÜM sipariş geçmişini çeker
-     * ve Etsy'nin GÜNLÜK kotasını (§21) tek turda yakardı.
+     * Pencere gönderilmeseydi her tur TÜM sipariş geçmişini çeker ve
+     * Etsy'nin GÜNLÜK kotasını (§21) tek turda yakardı.
+     *
+     * ⚠️ PENCERE `min_last_modified`'DİR, `min_created` DEĞİL: oluşturmaya
+     * göre bakılsaydı sonradan iptal edilen sipariş bir daha okunmaz ve
+     * stoğu geri eklenmezdi.
      */
     #[Test]
     public function the_poll_asks_the_shop_receipts_endpoint_with_a_window(): void
@@ -184,7 +189,8 @@ final class EtsyOrdersTest extends TestCase
 
         Http::assertSent(function ($request): bool {
             return str_contains($request->url(), '/shops/777/receipts')
-                && str_contains($request->url(), 'min_created=');
+                && str_contains($request->url(), 'min_last_modified=')
+                && ! str_contains($request->url(), 'min_created=');
         });
     }
 
@@ -610,6 +616,117 @@ final class EtsyOrdersTest extends TestCase
         return (int) $this->asTenant($tenant, fn () => InventoryLevel::query()
             ->where('variant_id', $variant->id)
             ->value('on_hand'));
+    }
+
+    // ═══════════════════════════ GERÇEK ETSY BİÇİMİ (canlı sipariş, 7 Eki)
+
+    /**
+     * ⚠️ ETSY DURUMU BÜYÜK HARFLİ VE BOŞLUKLU GELİR.
+     *
+     * Canlıda ilk gerçek siparişte "Payment Processing" geldi; küçük harfli
+     * anahtarlarla bakılınca HİÇBİR durum eşleşmiyor, her sipariş `updated`
+     * sayılıyordu — iptal edilen siparişin stoğu geri eklenmezdi.
+     */
+    #[Test]
+    public function real_etsy_status_spelling_maps_to_the_right_event(): void
+    {
+        $this->assertSame('created', $this->parse($this->receipt('9001', 'Payment Processing'))->type);
+    }
+
+    #[Test]
+    public function a_title_case_paid_receipt_is_created(): void
+    {
+        $this->assertSame('created', $this->parse($this->receipt('9001', 'Paid'))->type);
+    }
+
+    #[Test]
+    public function a_title_case_canceled_receipt_is_cancelled(): void
+    {
+        $this->assertSame('cancelled', $this->parse($this->receipt('9001', 'Canceled'))->type);
+    }
+
+    #[Test]
+    public function a_fully_refunded_receipt_is_an_update_with_refunded_finance(): void
+    {
+        $event = $this->parse($this->receipt('9001', 'Fully Refunded'));
+
+        $this->assertSame('updated', $event->type);
+        $this->assertSame('refunded', $event->payload['financial_status']);
+    }
+
+    /**
+     * ⚠️ PARA BİRİMİ PARA NESNESİNDEN OKUNUR.
+     *
+     * Gerçek receipt'in üst düzeyinde `currency_code` YOK; USD mağazanın
+     * $5.95'lik siparişi panelde TRY görünüyordu.
+     */
+    #[Test]
+    public function the_currency_comes_from_the_money_object(): void
+    {
+        $receipt = $this->receipt('9001', 'Paid');
+        unset($receipt['currency_code']);
+        $receipt['grandtotal']['currency_code'] = 'USD';
+
+        $this->assertSame('USD', $this->parse($receipt)->payload['currency']);
+    }
+
+    /**
+     * ⚠️ SKU'SUZ ETSY KALEMİ `product_id` İLE EŞLEŞİR VE STOK DÜŞER — uçtan uca.
+     *
+     * Canlıda kalem SKU'yu "" getirdi; satır eşleşmedi, stok düşmedi ve
+     * sonraki mutabakat Etsy'nin düştüğü stoğu eski değerle EZDİ (fazla
+     * satış). `product_id` bizim `listings.external_id`'mizdir.
+     */
+    #[Test]
+    public function a_skuless_line_matches_by_product_id_and_reduces_stock(): void
+    {
+        [$tenant, $connection] = $this->connected();
+
+        $variant = $this->asTenant($tenant, fn (): Variant => Variant::factory()->create(['sku' => 'TEST-60']));
+
+        $this->asTenant($tenant, fn () => Listing::factory()->create([
+            'channel_connection_id' => $connection->id,
+            'variant_id' => $variant->id,
+            'external_id' => '34751296583',
+            'external_parent_id' => '4589989939',
+        ]));
+
+        $warehouseId = (string) $this->asTenant(
+            $tenant,
+            fn () => Warehouse::query()->where('is_default', true)->value('id')
+        );
+
+        $this->asTenant($tenant, fn () => app(ApplyMovement::class)->run(
+            warehouseId: $warehouseId,
+            variantId: $variant->id,
+            type: MovementType::IMPORT,
+            quantity: 2,
+            idempotencyKey: 'import:'.$variant->id,
+            sourceType: 'test',
+        ));
+
+        $receipt = $this->receipt('4193927841', 'Payment Processing');
+        $receipt['transactions'] = [[
+            'transaction_id' => 88001,
+            'listing_id' => 4589989939,
+            'product_id' => 34751296583,
+            'sku' => '',
+            'title' => 'Test Masaj Kremi',
+            'quantity' => 1,
+            'price' => ['amount' => 500, 'divisor' => 100, 'currency_code' => 'USD'],
+        ]];
+
+        $this->fakeReceipts([$receipt]);
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $order = $this->asTenant($tenant, fn (): Order => Order::query()->firstOrFail());
+        $line = $this->asTenant($tenant, fn () => $order->lines()->firstOrFail());
+
+        $this->assertSame($variant->id, $line->variant_id);
+        $this->assertSame('TEST-60', $line->sku);
+        $this->assertSame(1, $this->onHand($tenant, $variant));
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
     }
 
     // ═══════════════════════════════════════════════════ yetenek

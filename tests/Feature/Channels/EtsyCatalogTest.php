@@ -310,6 +310,36 @@ final class EtsyCatalogTest extends TestCase
         $this->assertSame('19.90', $remote->price);
     }
 
+    /**
+     * ⚠️ TEKİL İLAN UCUNA `includes=Inventory` GÖNDERİLMEZ.
+     *
+     * Etsy o uçta `inventory` değerini kabul etmez ve 400 döner (canlıda
+     * 7 Eki) — mutabakat her Etsy ilanında çökerdi. Envanter ayrı uçtan
+     * okunur ve kimlik çözümü yine ondan beslenir.
+     */
+    #[Test]
+    public function the_listing_read_does_not_send_an_invalid_include_and_reads_inventory_separately(): void
+    {
+        Http::fake([
+            '*/listings/9001/inventory*' => Http::response(['products' => [[
+                'product_id' => 34751296583,
+                'sku' => 'TSH-M',
+                'offerings' => [['offering_id' => 1, 'quantity' => 2, 'is_enabled' => true,
+                    'price' => ['amount' => 1990, 'divisor' => 100, 'currency_code' => 'USD']]],
+            ]]], 200),
+            '*' => Http::response($this->listingBody(), 200),
+        ]);
+
+        $listing = new Listing;
+        $listing->external_parent_id = '9001';
+
+        $remote = $this->adapter()->fetchListing($listing);
+
+        $this->assertNotNull($remote);
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), 'includes='));
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), '/listings/9001/inventory'));
+    }
+
     /** Yetenek `instanceof` ile okunur. */
     #[Test]
     public function the_adapter_declares_the_catalog_capability(): void
