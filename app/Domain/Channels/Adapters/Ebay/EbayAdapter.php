@@ -8,6 +8,7 @@ use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Adapters\Ebay\Taxonomy\EbayTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
@@ -101,7 +102,7 @@ use Throwable;
  * okur; `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
  * GELMEZDİ.
  */
-final class EbayAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -1062,6 +1063,12 @@ final class EbayAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsI
     }
 
     /** Bağlantının marketplace kimliği — `settings`'ten. */
+    /** Pazaryerinin birimi (EBAY_DE → EUR); tanımsız pazaryerinde null. */
+    public function channelCurrency(): ?string
+    {
+        return EbayMarketplace::currencyFor($this->marketplaceId());
+    }
+
     private function marketplaceId(): string
     {
         $settings = $this->connection->settings;

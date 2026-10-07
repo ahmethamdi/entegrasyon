@@ -796,5 +796,18 @@
     "Siparişe göre yapılıyor": "Made to order",
     ":year öncesi": "Before :year",
     ":count seçenek kullanılamaz.": ":count option(s) can't be used.",
-    "Hangileri?": "Which ones?"
+    "Hangileri?": "Which ones?",
+    "Bu kanaldaki fiyat": "Price on this channel",
+    "Boş bırakırsan ürünün fiyatı gider. Kanala özel fiyat girersen yalnız bu kanalda o fiyat kullanılır.": "Leave empty to use the product price. A channel price is used on this channel only.",
+    "Ürün fiyatı": "Product price",
+    ":sku için kanal fiyatı": "Channel price for :sku",
+    "Kanal fiyatı": "Channel price",
+    "Kaldır": "Remove",
+    "Bu kanal :currency ile satıyor, ürünün fiyatı :product. Kanal fiyatı girilmeden fiyat gönderilmez.": "This channel sells in :currency, the product is priced in :product. No price is sent until you enter a channel price.",
+    "Bu kanalda :price kullanılıyor.": ":price is used on this channel.",
+    "Bu kanal :currency ile satıyor, ürünün fiyatı :product. Önce kanala gönder (ilan fiyatsız açılmaz ve hata verir), sonra burada çıkan alana :currency fiyat gir ve Yeniden gönder düğmesine bas.": "This channel sells in :currency, the product is priced in :product. Send it to the channel first (the listing won't open without a price and shows an error), then enter a :currency price in the field that appears here and press Resend.",
+    "Kanalın para birimi okunamadı; birazdan yeniden dene.": "Couldn't read the channel's currency; please try again shortly.",
+    ":channel için kanal fiyatı kaldırıldı; ürün fiyatı geçerli.": "Channel price removed for :channel; the product price applies.",
+    ":channel fiyatı kaydedildi. Yayındaysa birkaç dakika içinde güncellenir.": ":channel price saved. If the listing is live it updates within a few minutes.",
+    "Kanal fiyatı değişti": "Channel price changed"
 }

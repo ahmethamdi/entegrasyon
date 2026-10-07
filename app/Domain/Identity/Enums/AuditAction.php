@@ -72,6 +72,13 @@ enum AuditAction: string
      */
     case PRICE_CONFLICT_RESOLVED = 'price.conflict_resolved';
 
+    /**
+     * Satıcı bir kanal için ayrı fiyat girdi ya da kaldırdı. Yükte eski ve
+     * yeni değer para birimiyle taşınır: "Etsy'de neden $12.90" sorusunun
+     * cevabı buradan okunur.
+     */
+    case CHANNEL_PRICE_SET = 'price.channel_set';
+
     /** Panelde gösterilecek Türkçe ad. */
     public function label(): string
     {
@@ -82,6 +89,7 @@ enum AuditAction: string
             self::STOCK_ADJUSTED => 'Stok elle düzeltildi',
             self::TENANT_CREATED => 'Hesap oluşturuldu',
             self::PRICE_CONFLICT_RESOLVED => 'Fiyat çakışması çözüldü',
+            self::CHANNEL_PRICE_SET => 'Kanal fiyatı değişti',
         });
     }
 }

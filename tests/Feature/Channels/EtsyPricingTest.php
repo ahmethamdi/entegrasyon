@@ -624,6 +624,62 @@ final class EtsyPricingTest extends TestCase
         $this->assertSame(ErrorClass::VALIDATION->value, $operation->last_error_class);
     }
 
+    /**
+     * ⚠️ KANAL FİYATI MAĞAZA BİRİMİYLE GİRİLDİYSE KORUMA GEÇER — uçtan uca.
+     *
+     * Varyant USD, mağaza TRY; satıcı Etsy için 31,50 TL girdi. Koruma hâlâ
+     * varyantın birimine baksaydı satıcının doğru girdiği fiyat da hiç
+     * gitmezdi; varyantın fiyatı (29.90 USD) gönderilseydi yanlış fiyat çıkardı.
+     */
+    #[Test]
+    public function a_channel_price_in_the_shop_currency_is_sent(): void
+    {
+        $this->fakeInventory();
+
+        [$tenant, $connection] = $this->connected();
+
+        $operationId = $this->asTenant($tenant, function () use ($connection): string {
+            $variant = Variant::factory()->create(['sku' => 'TSH-M', 'price' => '29.90', 'currency' => 'USD']);
+
+            $listing = Listing::factory()->create([
+                'channel_connection_id' => $connection->id,
+                'variant_id' => $variant->id,
+                'external_id' => '5001',
+                'external_parent_id' => '9001',
+                'lifecycle_status' => 'live',
+                'channel_price' => '31.50',
+                'channel_price_currency' => 'TRY',
+            ]);
+
+            return app(OpenSyncOperation::class)->run(
+                listing: $listing,
+                domain: SyncDomain::PRICE,
+                eventVersion: 2,
+            )->id;
+        });
+
+        (new PushPrices($operationId, $tenant->id))->handle(
+            app(PriceBatchBuilder::class),
+            app(SyncResultRecorder::class),
+            app(AdapterRegistry::class),
+        );
+
+        $written = null;
+        Http::recorded(function ($request) use (&$written): bool {
+            if ($request->method() === 'PUT') {
+                $written = $request->data();
+            }
+
+            return true;
+        });
+
+        $this->assertIsArray($written, 'Kanal fiyatı girilmiş kalem gönderilmedi.');
+        $this->assertSame(31.50, $this->offeringOf($written, 'TSH-M')['price']);
+
+        $operation = $this->asTenant($tenant, fn () => SyncOperation::query()->findOrFail($operationId));
+        $this->assertSame(SyncOperationStatus::COMPLETED, $operation->status);
+    }
+
     /** Aynı partide birimi DOĞRU olan kalem yine gider; yanlış olan kanaldaki değerde kalır. */
     #[Test]
     public function only_the_mismatched_item_is_held_back(): void

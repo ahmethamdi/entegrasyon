@@ -9,6 +9,7 @@ use App\Domain\Catalog\Support\ChannelImages;
 use App\Domain\Channels\Adapters\Etsy\Taxonomy\EtsyTaxonomyClient;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
@@ -103,7 +104,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -442,13 +443,14 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
             return AdapterResult::failure(ErrorClass::VALIDATION, 'Etsy bağlantı ayarında "kim yaptı" ve "ne zaman yapıldı" beyanı eksik; Etsy bu beyan olmadan ilan açmaz.');
         }
 
-        $price = $variant?->price;
+        // Kanal fiyatı girildiyse o (`Listing::effectivePrice`).
+        $price = $payload->listing->effectivePrice();
 
         if (! is_numeric($price) || (float) $price <= 0) {
             return AdapterResult::failure(ErrorClass::VALIDATION, 'Ürünün fiyatı yok; Etsy fiyatsız ilan açmaz.');
         }
 
-        if (($blocked = $this->currencyGuard($variant?->currency)) !== null) {
+        if (($blocked = $this->currencyGuard($payload->listing->effectiveCurrency())) !== null) {
             return $blocked;
         }
 
@@ -1693,7 +1695,8 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
             ->whereIn('id', $listingIds)
             ->with('variant:id,currency')
             ->get()
-            ->mapWithKeys(fn (Listing $listing): array => [(string) $listing->id => $listing->variant?->currency])
+            // Kanal fiyatı girildiyse ONUN birimi (`effectiveCurrency`).
+            ->mapWithKeys(fn (Listing $listing): array => [(string) $listing->id => $listing->effectiveCurrency()])
             ->all());
 
         $operationByListing = [];
@@ -1741,7 +1744,13 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
     private function currencyMessage(string $productCurrency, string $shopCurrency): string
     {
         return "Ürünün fiyatı {$productCurrency}, Etsy mağazan {$shopCurrency}. "
-            .'Rakam olduğu gibi gönderilirse yanlış fiyat çıkar; bu yüzden gönderilmedi.';
+            .'Rakam olduğu gibi gönderilirse yanlış fiyat çıkar; bu yüzden gönderilmedi. '
+            ."Ürünün Kanallar sayfasından Etsy için {$shopCurrency} fiyat gir.";
+    }
+
+    public function channelCurrency(): ?string
+    {
+        return $this->shopCurrency();
     }
 
     /** Mağaza para birimi — önbellekten, yoksa Etsy'den (ve önbelleğe). */

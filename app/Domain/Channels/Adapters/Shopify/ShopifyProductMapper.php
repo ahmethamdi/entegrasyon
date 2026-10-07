@@ -127,7 +127,7 @@ final class ShopifyProductMapper
                 // Fiyat STRING taşınır — para float taşımaz (yuvarlama
                 // kuruş kayması üretir). `decimal(12,2)` PHP'ye zaten
                 // string döner; (float) dönüşümü YAPILMAZ.
-                'price' => (string) $variant->price,
+                'price' => (string) $payload->listing->effectivePrice(),
                 // Stok BURADA GÖNDERİLMEZ ve bu bilinçlidir: içerik
                 // aktarımı stoğa dokunmaz (v2.2 · katalog kuralı).
                 // Stok kendi domainindedir ve `PushInventory` üzerinden

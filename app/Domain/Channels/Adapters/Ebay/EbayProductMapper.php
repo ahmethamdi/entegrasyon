@@ -200,12 +200,14 @@ final class EbayProductMapper
             (string) ($settings[EbayAdapter::MARKETPLACE_ID_KEY] ?? ''),
         );
 
-        if ($variant?->price !== null && $currency !== null) {
+        $price = $payload->listing->effectivePrice();
+
+        if ($price !== null && $currency !== null) {
             $body['pricingSummary'] = [
                 'price' => [
                     // Fiyat STRING taşınır — para float taşımaz
                     // (yuvarlama kuruş kayması üretir).
-                    'value' => (string) $variant->price,
+                    'value' => $price,
                     'currency' => $currency,
                 ],
             ];

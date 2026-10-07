@@ -3,7 +3,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
-import { k, useI18n } from '../../lib/i18n';
+import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     product: { type: Object, required: true },
@@ -149,6 +149,55 @@ const sorted = computed(() =>
         return rank(a) - rank(b);
     }),
 );
+
+/**
+ * KANAL FİYATI — varyant × kanal başına, GÖNDERİLEN fiyat.
+ *
+ * Alan boşsa ürünün fiyatı gider. Kanalın para birimi ürününkinden farklıysa
+ * (USD Etsy mağazası, TL ürün) fiyat girilmeden HİÇ gönderilmez; satıcıya
+ * bu satırda söylenir.
+ */
+const priceInputs = ref(Object.fromEntries(
+    props.channels.flatMap((channel) => (channel.prices ?? []).map((row) => [row.listingId, row.channelPrice ?? ''])),
+));
+const savingPrice = ref(null);
+const priceErrors = computed(() => page.props.errors ?? {});
+
+function money(amount, currency) {
+    if (amount === null || amount === undefined || amount === '') return '—';
+    if (!currency) return String(amount);
+
+    try {
+        return new Intl.NumberFormat(intlLocale(), { style: 'currency', currency }).format(Number(amount));
+    } catch {
+        return `${amount} ${currency}`;
+    }
+}
+
+function savePrice(row, clear = false) {
+    if (savingPrice.value !== null) return;
+
+    savingPrice.value = row.listingId;
+
+    router.put(
+        `/products/${props.product.id}/listings/${row.listingId}/price`,
+        { price: clear ? null : (priceInputs.value[row.listingId] === '' ? null : priceInputs.value[row.listingId]) },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                if (clear) priceInputs.value[row.listingId] = '';
+            },
+            onFinish: () => {
+                savingPrice.value = null;
+            },
+        },
+    );
+}
+
+/** Gönderilmemiş kanalda: kanal başka birimle satıyorsa önceden söylenir. */
+function currencyDiffers(channel) {
+    return Boolean(channel.currency && props.product.currency && channel.currency !== props.product.currency.toUpperCase());
+}
 
 function send(connectionId) {
     sending.value = connectionId;
@@ -359,6 +408,82 @@ function send(connectionId) {
                     class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
                 >
                     {{ t('Kanal reddetti: :reason', { reason: channel.rejectionReason }) }}
+                </p>
+
+                <!-- KANAL FİYATI: varyant başına; boşsa ürün fiyatı gider. -->
+                <section
+                    v-if="channel.prices?.length"
+                    class="mt-4 border-t border-stone-100 pt-4"
+                >
+                    <h3 class="text-xs font-medium text-stone-900">{{ t('Bu kanaldaki fiyat') }}</h3>
+                    <p class="mt-0.5 text-xs text-stone-500">
+                        {{ t('Boş bırakırsan ürünün fiyatı gider. Kanala özel fiyat girersen yalnız bu kanalda o fiyat kullanılır.') }}
+                    </p>
+
+                    <ul class="mt-3 space-y-3">
+                        <li v-for="row in channel.prices" :key="row.listingId">
+                            <div class="flex flex-wrap items-end gap-3">
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate font-mono text-xs text-stone-500">{{ row.sku }}</p>
+                                    <p class="text-xs text-stone-700">
+                                        {{ t('Ürün fiyatı') }}: {{ money(row.variantPrice, row.variantCurrency) }}
+                                    </p>
+                                </div>
+
+                                <label class="block">
+                                    <span class="sr-only">{{ t(':sku için kanal fiyatı', { sku: row.sku ?? '' }) }}</span>
+                                    <span class="flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                                        <input
+                                            v-model="priceInputs[row.listingId]"
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            inputmode="decimal"
+                                            :placeholder="t('Kanal fiyatı')"
+                                            class="w-32 rounded-l-md border-0 px-3 py-1.5 text-sm focus:outline-none"
+                                        >
+                                        <span class="px-2 font-mono text-xs text-stone-500">
+                                            {{ row.channelPriceCurrency ?? channel.currency ?? row.variantCurrency ?? '' }}
+                                        </span>
+                                    </span>
+                                </label>
+
+                                <button
+                                    type="button"
+                                    :disabled="savingPrice !== null"
+                                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    @click="savePrice(row)"
+                                >
+                                    {{ savingPrice === row.listingId ? t('Kaydediliyor…') : t('Kaydet') }}
+                                </button>
+                                <button
+                                    v-if="row.channelPrice !== null"
+                                    type="button"
+                                    :disabled="savingPrice !== null"
+                                    class="text-sm text-stone-600 underline disabled:opacity-50"
+                                    @click="savePrice(row, true)"
+                                >
+                                    {{ t('Kaldır') }}
+                                </button>
+                            </div>
+
+                            <p v-if="row.needsChannelPrice" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
+                                {{ t('Bu kanal :currency ile satıyor, ürünün fiyatı :product. Kanal fiyatı girilmeden fiyat gönderilmez.', { currency: channel.currency, product: row.variantCurrency }) }}
+                            </p>
+                            <p v-else-if="row.channelPrice !== null" class="mt-1 text-xs text-emerald-800">
+                                {{ t('Bu kanalda :price kullanılıyor.', { price: money(row.channelPrice, row.channelPriceCurrency) }) }}
+                            </p>
+                        </li>
+                    </ul>
+
+                    <p v-if="priceErrors.price" class="mt-2 text-sm text-red-700">{{ priceErrors.price }}</p>
+                </section>
+
+                <p
+                    v-else-if="!channel.published && currencyDiffers(channel)"
+                    class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                >
+                    {{ t('Bu kanal :currency ile satıyor, ürünün fiyatı :product. Önce kanala gönder (ilan fiyatsız açılmaz ve hata verir), sonra burada çıkan alana :currency fiyat gir ve Yeniden gönder düğmesine bas.', { currency: channel.currency, product: product.currency }) }}
                 </p>
 
                 <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">

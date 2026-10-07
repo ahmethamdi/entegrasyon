@@ -142,6 +142,32 @@ final class PriceConflictTest extends TestCase
     }
 
     /**
+     * ⚠️ KANAL FİYATI GİRİLMİŞ İLAN KANAL FİYATIYLA KARŞILAŞTIRILIR.
+     *
+     * Varyant fiyatıyla karşılaştırılsaydı satıcının BİLEREK girdiği kanal
+     * fiyatı her turda sahte "fiyat çakışması" olarak önüne düşerdi.
+     */
+    #[Test]
+    public function a_listing_with_a_channel_price_is_compared_with_that_price(): void
+    {
+        [$tenant, $variant, $connection] = $this->makeContext(price: '199.90');
+
+        $listing = $this->listing($tenant, $variant, $connection, externalId: '10');
+        $this->asTenant($tenant, fn () => $listing->forceFill([
+            'channel_price' => '5.00',
+            'channel_price_currency' => 'USD',
+        ])->save());
+        $this->markPriceStale($tenant, $listing);
+
+        ProgrammableInventoryAdapter::remotePrice('woocommerce', '10', '5.00');
+
+        $this->reconcilePrices($tenant, $connection);
+
+        $item = $this->itemFor($tenant, $listing);
+        $this->assertSame(ItemStatus::MATCHED->value, $item->status, 'Kanal fiyatı girilmiş ilan sahte çakışma verdi.');
+    }
+
+    /**
      * Fiyat turu STOK kalemi YAZMAZ ve stok bakiyesine DOKUNMAZ.
      *
      * İki domain aynı akışı paylaşır ama ayrı defter tutar; karışsalardı

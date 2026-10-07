@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Catalog\Actions\SetChannelPrice;
 use App\Domain\Catalog\Actions\SetImageChannelExclusion;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductImage;
+use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
@@ -67,6 +69,8 @@ final class ProductChannelController extends Controller
                 'sku' => $model->sku,
                 'title' => $model->title,
                 'contentVersion' => $model->content_version,
+                // Kanal kartındaki "bu kanal başka birimle satar" notu için.
+                'currency' => $model->variants->first()?->currency,
             ],
             'channels' => $this->channelsFor($model),
             'images' => $this->imagesFor($model),
@@ -104,6 +108,53 @@ final class ProductChannelController extends Controller
         return redirect("/products/{$model->id}/channels")->with(
             'success',
             __('Görsel seçimi kaydedildi. Kanalda görünmesi için ürünü yeniden gönder.'),
+        );
+    }
+
+    /**
+     * Bir varyantın o kanaldaki fiyatı — boş gönderilirse kaldırılır.
+     *
+     * Para birimi İSTEKTEN ALINMAZ, kanaldan okunur: satıcıya gösterilen
+     * birimle saklanan birim ayrışamaz.
+     */
+    public function updatePrice(
+        Request $request,
+        string $product,
+        string $listing,
+        SetChannelPrice $setPrice,
+    ): RedirectResponse {
+        $model = Product::query()->with('variants')->findOrFail($product);
+
+        // Listing BU ÜRÜNÜN varyantına ait olmalı (kiracı scope'u + ürün).
+        $listingModel = Listing::query()
+            ->with(['variant', 'connection.channelType:code,name,adapter_class'])
+            ->whereIn('variant_id', $model->variants->pluck('id')->all())
+            ->findOrFail($listing);
+
+        $validated = $request->validate([
+            'price' => ['nullable', 'numeric', 'gt:0', 'max:99999999'],
+        ]);
+
+        $price = $validated['price'] ?? null;
+        $currency = null;
+
+        if ($price !== null) {
+            $currency = $this->channelCurrency($listingModel->connection) ?? $listingModel->variant?->currency;
+
+            if ($currency === null) {
+                throw ValidationException::withMessages([
+                    'price' => __('Kanalın para birimi okunamadı; birazdan yeniden dene.'),
+                ]);
+            }
+        }
+
+        $setPrice->run($listingModel, $price === null ? null : (string) $price, $currency, $request->user()?->id);
+
+        return redirect("/products/{$model->id}/channels")->with(
+            'success',
+            $price === null
+                ? __(':channel için kanal fiyatı kaldırıldı; ürün fiyatı geçerli.', ['channel' => $listingModel->connection?->label ?? ''])
+                : __(':channel fiyatı kaydedildi. Yayındaysa birkaç dakika içinde güncellenir.', ['channel' => $listingModel->connection?->label ?? '']),
         );
     }
 
@@ -305,10 +356,69 @@ final class ProductChannelController extends Controller
                 // neyi düzelteceğini bilemez.
                 'rejectionReason' => $forConnection->first()?->approval_rejection_reason,
                 ...$this->syncSummary($forConnection, $states),
+                ...$this->pricesFor($connection, $forConnection, $product),
             ];
         }
 
         return $rows;
+    }
+
+    /**
+     * Kanalın para birimi ve varyant başına fiyat satırları.
+     *
+     * `needsChannelPrice`: kanalın birimi ürününkinden farklı ve kanal fiyatı
+     * girilmemiş — bu satırın fiyatı GÖNDERİLMEZ (adapter koruması), satıcıya
+     * neden ve ne yapacağı söylenir.
+     *
+     * @param  Collection<int, Listing>  $listings
+     * @return array{currency: string|null, prices: list<array<string, mixed>>}
+     */
+    private function pricesFor(ChannelConnection $connection, Collection $listings, Product $product): array
+    {
+        $currency = $this->channelCurrency($connection);
+        $variants = $product->variants->keyBy('id');
+
+        $prices = $listings->map(function (Listing $listing) use ($currency, $variants): array {
+            $variant = $variants->get($listing->variant_id);
+            $variantCurrency = $variant?->currency;
+
+            return [
+                'listingId' => $listing->id,
+                'sku' => $variant?->sku,
+                'variantPrice' => $variant?->price !== null ? (string) $variant->price : null,
+                'variantCurrency' => $variantCurrency,
+                'channelPrice' => $listing->channel_price !== null ? (string) $listing->channel_price : null,
+                'channelPriceCurrency' => $listing->channel_price_currency,
+                'needsChannelPrice' => $currency !== null
+                    && $variantCurrency !== null
+                    && strtoupper($variantCurrency) !== $currency
+                    && $listing->channel_price === null,
+            ];
+        })->values()->all();
+
+        return ['currency' => $currency, 'prices' => $prices];
+    }
+
+    /** Kanalın bildirdiği para birimi; bildirmiyor ya da kurulamıyorsa null. */
+    private function channelCurrency(?ChannelConnection $connection): ?string
+    {
+        if ($connection === null) {
+            return null;
+        }
+
+        try {
+            $adapter = $this->registry->for($connection);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! $adapter instanceof DeclaresChannelCurrency) {
+            return null;
+        }
+
+        $currency = $adapter->channelCurrency();
+
+        return $currency === null ? null : strtoupper($currency);
     }
 
     /**

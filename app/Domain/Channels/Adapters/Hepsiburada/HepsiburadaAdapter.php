@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Adapters\Hepsiburada;
 
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
@@ -105,8 +106,14 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
+    /** Türk pazaryeri — fiyatlar yalnızca TL. */
+    public function channelCurrency(): ?string
+    {
+        return 'TRY';
+    }
+
     use DeclaresRequestQuota;
 
     /** Satıcı kimliğinin (GUID) `settings` içindeki yeri. */

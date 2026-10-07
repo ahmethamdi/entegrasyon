@@ -376,7 +376,9 @@ final class ReconcileConnection
      */
     private function comparePrice(Listing $listing, RemotePriceSnapshot $snapshot): array
     {
-        $ourPrice = (string) ($listing->variant?->price ?? '0');
+        // Kanal fiyatı girildiyse karşılaştırma ONUNLA yapılır; varyant
+        // fiyatıyla yapılsaydı her tur sahte PRICE_CONFLICT üretirdi.
+        $ourPrice = (string) ($listing->effectivePrice() ?? '0');
 
         $observedPrice = $listing->external_id === null
             ? null

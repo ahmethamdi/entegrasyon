@@ -51,6 +51,8 @@ final class RequestResync
 
     public const REASON_CONTENT_CORRECTED = 'content_corrected';
 
+    public const REASON_CHANNEL_PRICE_CHANGED = 'channel_price_changed';
+
     /**
      * @param  string  $reason  Neden resync istendi — yükte taşınır
      */

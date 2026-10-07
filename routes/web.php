@@ -217,6 +217,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     // tarayıcı ön yüklemesi ürünü habersiz kanala gönderirdi.
     Route::get('/products/{product}/channels', [ProductChannelController::class, 'index'])
         ->name('products.channels.index');
+    Route::put('/products/{product}/listings/{listing}/price', [ProductChannelController::class, 'updatePrice'])
+        ->name('products.listings.price');
     Route::post('/products/{product}/channels', [ProductChannelController::class, 'store'])
         ->name('products.channels.store');
     Route::post('/products/{product}/images/{image}/channels', [ProductChannelController::class, 'updateImageChannel'])

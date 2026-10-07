@@ -130,10 +130,9 @@ final class PriceBatchBuilder
             $items[] = [
                 'listing_id' => $listing->id,
                 'external_id' => $listing->external_id,
-                'price' => (string) $variant->price,
-                'compare_at_price' => $variant->compare_at_price !== null
-                    ? (string) $variant->compare_at_price
-                    : null,
+                // Kanal fiyatı girildiyse o gider (`Listing::effectivePrice`).
+                'price' => (string) $listing->effectivePrice(),
+                'compare_at_price' => $listing->effectiveCompareAtPrice(),
                 'version' => $operation->entity_version,
             ];
         }

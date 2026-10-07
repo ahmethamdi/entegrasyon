@@ -58,6 +58,8 @@ class Listing extends Model
         'delisted_at',
         'approval_rejection_reason',
         'approval_checked_at',
+        'channel_price',
+        'channel_price_currency',
     ];
 
     protected function casts(): array
@@ -67,7 +69,48 @@ class Listing extends Model
             'delisted_at' => 'datetime',
             'approval_checked_at' => 'datetime',
             'channel_metadata' => 'array',
+            'channel_price' => 'decimal:2',
         ];
+    }
+
+    /**
+     * Bu kanala GİDECEK fiyat — TEK KAYNAK.
+     *
+     * Satıcı kanal fiyatı girdiyse o, yoksa varyantın fiyatı. Gönderim
+     * (`PriceBatchBuilder`), ilan açma (adapter eşleyicileri) ve mutabakat
+     * (`ReconcileConnection`) HEPSİ buradan okur: biri varyant fiyatını
+     * okusaydı kanal fiyatı girilmiş ilan her mutabakatta sahte "fiyat
+     * çakışması" verir ya da ilk açılışta yanlış fiyatla çıkardı.
+     */
+    public function effectivePrice(): ?string
+    {
+        if ($this->channel_price !== null) {
+            return (string) $this->channel_price;
+        }
+
+        return $this->variant?->price !== null ? (string) $this->variant->price : null;
+    }
+
+    /**
+     * Üstü çizili fiyat — kanal fiyatı varken GÖNDERİLMEZ: varyantın
+     * karşılaştırma fiyatı varyantın para birimindedir ve kanal fiyatının
+     * yanında anlamsız (hatta küçük) kalırdı.
+     */
+    public function effectiveCompareAtPrice(): ?string
+    {
+        if ($this->channel_price !== null) {
+            return null;
+        }
+
+        return $this->variant?->compare_at_price !== null ? (string) $this->variant->compare_at_price : null;
+    }
+
+    /** Giden fiyatın para birimi. */
+    public function effectiveCurrency(): ?string
+    {
+        return $this->channel_price !== null
+            ? $this->channel_price_currency
+            : $this->variant?->currency;
     }
 
     public function connection(): BelongsTo
