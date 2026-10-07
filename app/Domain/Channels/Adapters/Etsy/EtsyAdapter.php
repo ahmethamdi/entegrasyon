@@ -164,6 +164,14 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
     public const READINESS_KEY = 'etsy_readiness_state_id';
 
     /**
+     * Mağazanın para birimi — `GET /shops/{id}`'den bir kez okunur, sonra
+     * `settings`'te tutulur. Satıcı Etsy'de para birimini değiştirirse
+     * bağlantı yeniden kurulana dek eski değer kalır; bu yüzden ayar
+     * ekranında DEĞİL, yalnızca fiyat korumasında kullanılır.
+     */
+    public const SHOP_CURRENCY_KEY = 'etsy_shop_currency';
+
+    /**
      * Mağaza kimliğinin `settings` içindeki yeri — yol üzerinde taşınır.
      * Satıcıya SORULMAZ: OAuth dönüşünde `GET /users/me`'den yazılır.
      */
@@ -438,6 +446,10 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
 
         if (! is_numeric($price) || (float) $price <= 0) {
             return AdapterResult::failure(ErrorClass::VALIDATION, 'Ürünün fiyatı yok; Etsy fiyatsız ilan açmaz.');
+        }
+
+        if (($blocked = $this->currencyGuard($variant?->currency)) !== null) {
+            return $blocked;
         }
 
         $shippingProfileId = $this->setting(self::SHIPPING_PROFILE_KEY) ?? $this->onlyProfileId(EtsyEndpoints::SHIPPING_PROFILES, 'shipping_profile_id');
@@ -1581,6 +1593,17 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
 
         $parents = $this->parentListingIdsForPrices($batch);
 
+        // ⚠️ PARA BİRİMİ KORUMASI — kanonik fiyat mağazanınkiyle aynı
+        // birimde değilse O KALEM GÖNDERİLMEZ (kalem düzeyinde başarısızlık;
+        // aynı partideki doğru kalemler gider). Rakam olduğu gibi
+        // gönderilseydi 199,90 TL'lik ürün Etsy'de $199.90 olurdu (7 Eki
+        // canlıda taslakta oldu).
+        $currencyFailures = $this->currencyFailuresFor($batch);
+
+        if ($currencyFailures instanceof AdapterResult) {
+            return $currencyFailures;
+        }
+
         // Kalemler İLAN BAŞINA gruplanır — stoktakiyle aynı gerekçe:
         // gruplanmasaydı ikinci çağrı birincinin yazdığını OKUMADAN
         // ezerdi.
@@ -1588,6 +1611,10 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
         $missing = [];
 
         foreach ($batch->items as $item) {
+            if (isset($currencyFailures['listings'][(string) $item['listing_id']])) {
+                continue;
+            }
+
             $parentId = $parents[(string) $item['listing_id']] ?? null;
 
             if ($parentId === null) {
@@ -1597,6 +1624,16 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
             }
 
             $byListing[$parentId][(string) $item['external_id']] = (string) $item['price'];
+        }
+
+        // Bütün kalemler para birimi yüzünden durduysa sonuç kalem
+        // düzeyinde kalır: her operasyon kendi nedenini taşır.
+        if ($byListing === [] && $currencyFailures['operations'] !== []) {
+            return AdapterResult::partial(
+                failedOperations: $currencyFailures['operations'],
+                data: ['pushed' => 0],
+                errorClass: ErrorClass::VALIDATION,
+            );
         }
 
         if ($byListing === []) {
@@ -1617,11 +1654,130 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresConnectionSettings, D
             $pushed += count($priceByProductId);
         }
 
-        return AdapterResult::success(array_filter([
+        $data = array_filter([
             'pushed' => $pushed,
             // Kimliği çözülemeyen kalemler SESSİZCE yutulmaz.
             'skipped_external_ids' => $missing === [] ? null : $missing,
-        ], static fn (mixed $v): bool => $v !== null));
+        ], static fn (mixed $v): bool => $v !== null);
+
+        return $currencyFailures['operations'] === []
+            ? AdapterResult::success($data)
+            : AdapterResult::partial(
+                failedOperations: $currencyFailures['operations'],
+                data: $data,
+                errorClass: ErrorClass::VALIDATION,
+            );
+    }
+
+    /**
+     * Para birimi mağazanınkiyle uyuşmayan kalemler.
+     *
+     * Mağaza para birimi OKUNAMAZSA bütün parti geçici hatayla durur: hiçbir
+     * fiyatın doğru birimde olduğu doğrulanamaz ve tahminle göndermek yanlış
+     * fiyatı canlıya çıkarmak olurdu.
+     *
+     * @return AdapterResult|array{listings: array<string, true>, operations: array<string, string>}
+     */
+    private function currencyFailuresFor(PricePushBatch $batch): AdapterResult|array
+    {
+        $shopCurrency = $this->shopCurrency();
+
+        if ($shopCurrency === null) {
+            return AdapterResult::failure(ErrorClass::NETWORK, 'Etsy mağazasının para birimi okunamadı; fiyat gönderimi ertelendi.');
+        }
+
+        $listingIds = array_map(static fn (array $item): string => (string) $item['listing_id'], $batch->items);
+
+        /** @var array<string, string|null> $currencies */
+        $currencies = TenantContext::runAsSystem(fn (): array => Listing::query()
+            ->whereIn('id', $listingIds)
+            ->with('variant:id,currency')
+            ->get()
+            ->mapWithKeys(fn (Listing $listing): array => [(string) $listing->id => $listing->variant?->currency])
+            ->all());
+
+        $operationByListing = [];
+
+        foreach ($batch->operations() as $operation) {
+            $operationByListing[(string) $operation->entity_id] = $operation;
+        }
+
+        $listings = [];
+        $operations = [];
+
+        foreach ($listingIds as $listingId) {
+            $currency = strtoupper(trim((string) ($currencies[$listingId] ?? '')));
+
+            if ($currency === '' || $currency === $shopCurrency) {
+                continue;
+            }
+
+            $listings[$listingId] = true;
+
+            if (isset($operationByListing[$listingId])) {
+                $operations[(string) $operationByListing[$listingId]->id] = $this->currencyMessage($currency, $shopCurrency);
+            }
+        }
+
+        return ['listings' => $listings, 'operations' => $operations];
+    }
+
+    /** İlan açarken aynı koruma — tek ürün için. */
+    private function currencyGuard(?string $variantCurrency): ?AdapterResult
+    {
+        $shopCurrency = $this->shopCurrency();
+
+        if ($shopCurrency === null) {
+            return AdapterResult::failure(ErrorClass::NETWORK, 'Etsy mağazasının para birimi okunamadı; ilan açma ertelendi.');
+        }
+
+        $currency = strtoupper(trim((string) $variantCurrency));
+
+        return $currency !== '' && $currency !== $shopCurrency
+            ? AdapterResult::failure(ErrorClass::VALIDATION, $this->currencyMessage($currency, $shopCurrency))
+            : null;
+    }
+
+    private function currencyMessage(string $productCurrency, string $shopCurrency): string
+    {
+        return "Ürünün fiyatı {$productCurrency}, Etsy mağazan {$shopCurrency}. "
+            .'Rakam olduğu gibi gönderilirse yanlış fiyat çıkar; bu yüzden gönderilmedi.';
+    }
+
+    /** Mağaza para birimi — önbellekten, yoksa Etsy'den (ve önbelleğe). */
+    private function shopCurrency(): ?string
+    {
+        $cached = $this->setting(self::SHOP_CURRENCY_KEY);
+
+        if ($cached !== null) {
+            return strtoupper($cached);
+        }
+
+        try {
+            $response = $this->client->get(
+                EtsyEndpoints::url(EtsyEndpoints::SHOP, ['shop_id' => $this->requireShopId()]),
+                headers: $this->apiKeyHeader(),
+            );
+
+            $response->throw();
+        } catch (Throwable) {
+            return null;
+        }
+
+        $currency = strtoupper(trim((string) ($response->json('currency_code') ?? '')));
+
+        if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+            return null;
+        }
+
+        TenantContext::runAsSystem(function () use ($currency): void {
+            $this->connection->forceFill(['settings' => [
+                ...$this->connection->settings ?? [],
+                self::SHOP_CURRENCY_KEY => $currency,
+            ]])->save();
+        });
+
+        return $currency;
     }
 
     /**

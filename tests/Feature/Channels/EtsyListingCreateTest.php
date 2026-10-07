@@ -16,6 +16,7 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
+use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\ListingPayload;
 use App\Support\Logging\PayloadRedactor;
@@ -124,6 +125,26 @@ final class EtsyListingCreateTest extends TestCase
     }
 
     /**
+     * ⚠️ TRY FİYATLI ÜRÜN USD MAĞAZADA İLAN AÇMAZ.
+     *
+     * 7 Eki canlıda 199,90 TL'lik test ürünü $199.90'lık taslak olarak
+     * açıldı. İlan açılmaz ve neden söylenir; POST hiç atılmaz.
+     */
+    #[Test]
+    public function a_listing_is_not_created_in_another_currency(): void
+    {
+        $this->fakeEtsy();
+        $this->settings([EtsyAdapter::SHOP_CURRENCY_KEY => 'USD']);
+
+        $result = $this->adapter()->createListing($this->payload());
+
+        $this->assertTrue($result->failed());
+        $this->assertSame(ErrorClass::VALIDATION, $result->errorClass);
+        $this->assertStringContainsString('USD', (string) $result->errorMessage);
+        Http::assertNotSent(fn (Request $request): bool => $request->method() === 'POST');
+    }
+
+    /**
      * Güncelleme MAĞAZA altındaki yola, form olarak gider ve DURUM taşımaz —
      * yayındaki ilan başlık düzeltmesiyle satıştan düşmemeli.
      */
@@ -172,6 +193,9 @@ final class EtsyListingCreateTest extends TestCase
                 'status' => 'active',
                 'settings' => [
                     EtsyAdapter::SHOP_ID_KEY => '777',
+                    // Mağaza para birimi varyantla AYNI (factory TRY): para
+                    // birimi koruması bu testlerin konusu değil.
+                    EtsyAdapter::SHOP_CURRENCY_KEY => 'TRY',
                     EtsyAdapter::WHO_MADE_KEY => 'i_did',
                     EtsyAdapter::WHEN_MADE_KEY => 'made_to_order',
                 ],

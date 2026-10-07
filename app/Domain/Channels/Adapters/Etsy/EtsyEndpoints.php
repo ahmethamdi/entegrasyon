@@ -65,6 +65,9 @@ final class EtsyEndpoints
     // ──────────────────────────────────────────────────────────── katalog
 
     /** Mağazanın ilanları — içe aktarma ve katalog okuması. */
+    /** Mağazanın kendisi — para birimi (`currency_code`) buradan okunur. */
+    public const SHOP = '/v3/application/shops/{shop_id}';
+
     public const SHOP_LISTINGS = '/v3/application/shops/{shop_id}/listings';
 
     /** Tek ilan — okuma ve güncelleme. */

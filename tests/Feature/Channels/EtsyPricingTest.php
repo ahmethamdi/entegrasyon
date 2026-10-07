@@ -17,6 +17,7 @@ use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Sync\Actions\OpenSyncOperation;
+use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Jobs\PushPrices;
@@ -575,6 +576,147 @@ final class EtsyPricingTest extends TestCase
         );
     }
 
+    // ═══════════════════════════════════════════════ para birimi koruması
+
+    /**
+     * ⚠️ PARA BİRİMİ UYUŞMAYAN FİYAT GÖNDERİLMEZ — uçtan uca, gerçek iş.
+     *
+     * Rakam olduğu gibi gönderilseydi 199,90 TL'lik ürün USD mağazada
+     * $199.90 olurdu (7 Eki canlıda taslakta oldu). Operasyon tamamlandı
+     * SAYILMAZ ve nedeni taşır; satıcı panelde görür.
+     */
+    #[Test]
+    public function a_price_in_another_currency_is_not_sent(): void
+    {
+        $this->fakeInventory();
+
+        [$tenant, $connection] = $this->connected();
+
+        $operationId = $this->asTenant($tenant, function () use ($connection): string {
+            $variant = Variant::factory()->create(['sku' => 'TSH-M', 'price' => '29.90', 'currency' => 'USD']);
+
+            $listing = Listing::factory()->create([
+                'channel_connection_id' => $connection->id,
+                'variant_id' => $variant->id,
+                'external_id' => '5001',
+                'external_parent_id' => '9001',
+                'lifecycle_status' => 'live',
+            ]);
+
+            return app(OpenSyncOperation::class)->run(
+                listing: $listing,
+                domain: SyncDomain::PRICE,
+                eventVersion: 2,
+            )->id;
+        });
+
+        (new PushPrices($operationId, $tenant->id))->handle(
+            app(PriceBatchBuilder::class),
+            app(SyncResultRecorder::class),
+            app(AdapterRegistry::class),
+        );
+
+        Http::assertNotSent(fn ($request): bool => $request->method() === 'PUT');
+
+        $operation = $this->asTenant($tenant, fn () => SyncOperation::query()->findOrFail($operationId));
+
+        $this->assertNotSame(SyncOperationStatus::COMPLETED, $operation->status);
+        $this->assertSame(ErrorClass::VALIDATION->value, $operation->last_error_class);
+    }
+
+    /** Aynı partide birimi DOĞRU olan kalem yine gider; yanlış olan kanaldaki değerde kalır. */
+    #[Test]
+    public function only_the_mismatched_item_is_held_back(): void
+    {
+        $this->fakeInventory();
+
+        [$tenant, $connection] = $this->connected();
+
+        $this->asTenant($tenant, function () use ($connection): void {
+            $usd = $this->listingFor($connection, '5001', 'TSH-M');
+            $usd->variant->forceFill(['currency' => 'USD'])->save();
+            $try = $this->listingFor($connection, '5002', 'TSH-L');
+
+            $result = $this->adapterFor($connection)->pushPrices(new PricePushBatch(
+                channelConnectionId: $connection->id,
+                items: [
+                    ['listing_id' => $usd->id, 'external_id' => '5001', 'price' => '99.00', 'compare_at_price' => null, 'version' => 1],
+                    ['listing_id' => $try->id, 'external_id' => '5002', 'price' => '30.00', 'compare_at_price' => null, 'version' => 1],
+                ],
+                operations: [
+                    (new SyncOperation)->forceFill(['id' => 'op-usd', 'entity_id' => $usd->id]),
+                    (new SyncOperation)->forceFill(['id' => 'op-try', 'entity_id' => $try->id]),
+                ],
+            ));
+
+            $this->assertSame(['op-usd'], array_keys($result->failedOperations));
+            $this->assertStringContainsString('USD', $result->failedOperations['op-usd']);
+        });
+
+        $written = null;
+        Http::recorded(function ($request) use (&$written): bool {
+            if ($request->method() === 'PUT') {
+                $written = $request->data();
+            }
+
+            return true;
+        });
+
+        $this->assertSame(30.00, $this->offeringOf($written, 'TSH-L')['price']);
+        $this->assertSame(19.90, $this->offeringOf($written, 'TSH-M')['price'], 'USD kalem TRY mağazaya yazıldı.');
+    }
+
+    /**
+     * ⚠️ MAĞAZA PARA BİRİMİ BİR KEZ OKUNUR ve saklanır.
+     *
+     * Her fiyat turunda `GET /shops` atılsaydı Etsy'nin günlük kotası
+     * boşa giderdi.
+     */
+    #[Test]
+    public function the_shop_currency_is_read_once_and_cached(): void
+    {
+        [$tenant, $connection] = $this->connected();
+
+        $this->asSystem(fn () => $connection->forceFill(['settings' => [EtsyAdapter::SHOP_ID_KEY => '777']])->save());
+
+        Http::fake([
+            '*/shops/777' => Http::response(['shop_id' => 777, 'currency_code' => 'usd'], 200),
+            '*' => Http::response(['products' => $this->products()], 200),
+        ]);
+
+        $this->push(['5001' => '29.90']);
+
+        $settings = $this->asSystem(fn () => ChannelConnection::query()->findOrFail($connection->id)->settings);
+        $this->assertSame('USD', $settings[EtsyAdapter::SHOP_CURRENCY_KEY]);
+
+        // TRY varyant + USD mağaza → yazılmadı.
+        Http::assertNotSent(fn ($request): bool => $request->method() === 'PUT');
+    }
+
+    /** Mağaza para birimi okunamazsa hiçbir fiyat gönderilmez; geçici hata. */
+    #[Test]
+    public function an_unknown_shop_currency_holds_every_price(): void
+    {
+        [$tenant, $connection] = $this->connected();
+
+        $this->asSystem(fn () => $connection->forceFill(['settings' => [EtsyAdapter::SHOP_ID_KEY => '777']])->save());
+
+        Http::fake(['*' => Http::response(['error' => 'down'], 503)]);
+
+        $result = $this->asTenant($tenant, function () use ($connection) {
+            $listing = $this->listingFor($connection, '5001');
+
+            return $this->adapterFor($connection->fresh())->pushPrices(new PricePushBatch(
+                channelConnectionId: $connection->id,
+                items: [['listing_id' => $listing->id, 'external_id' => '5001', 'price' => '29.90', 'compare_at_price' => null, 'version' => 1]],
+            ));
+        });
+
+        $this->assertTrue($result->failed());
+        $this->assertSame(ErrorClass::NETWORK, $result->errorClass);
+        Http::assertNotSent(fn ($request): bool => $request->method() === 'PUT');
+    }
+
     // ═══════════════════════════════════════════════════ yetenek
 
     /** Yetenek `instanceof` ile okunur. */
@@ -804,6 +946,9 @@ final class EtsyPricingTest extends TestCase
                 'status' => 'active',
                 'settings' => [
                     EtsyAdapter::SHOP_ID_KEY => '777',
+                    // Mağaza para birimi varyantla AYNI (factory TRY): para
+                    // birimi koruması bu testlerin konusu değil.
+                    EtsyAdapter::SHOP_CURRENCY_KEY => 'TRY',
                 ],
             ]);
 
