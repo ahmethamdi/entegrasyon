@@ -18,9 +18,19 @@ const form = useForm(
 );
 
 // Kullanılamayan seçenekler GİZLENMEZ: satıcı Etsy'de gördüğü profili
-// burada bulamasaydı nedenini bilemezdi. Nedenler alanın altında yazılır.
-function blockedOptions(field) {
-    return field.options.filter((option) => !option.usable && option.note);
+// burada bulamasaydı nedenini bilemezdi. Nedenler alanın altında yazılır,
+// AYNI NEDENE GÖRE GRUPLU: canlı mağazada 18 Printful profili aynı cümleyi
+// tekrarlıyordu ve liste formu boğuyordu.
+function blockedGroups(field) {
+    const groups = new Map();
+
+    field.options
+        .filter((option) => !option.usable && option.note)
+        .forEach((option) => {
+            groups.set(option.note, [...(groups.get(option.note) ?? []), option.label]);
+        });
+
+    return [...groups.entries()].map(([note, labels]) => ({ note, labels }));
 }
 
 function submit() {
@@ -78,14 +88,22 @@ function submit() {
                     {{ field.hint }}
                 </p>
 
-                <ul
-                    v-if="blockedOptions(field).length"
-                    class="mt-2 space-y-1 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                <div
+                    v-for="group in blockedGroups(field)"
+                    :key="group.note"
+                    class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
                 >
-                    <li v-for="option in blockedOptions(field)" :key="option.value">
-                        <span class="font-medium">{{ option.label }}</span>: {{ option.note }}
-                    </li>
-                </ul>
+                    <p>
+                        <span class="font-medium">{{ t(':count seçenek kullanılamaz.', { count: group.labels.length }) }}</span>
+                        {{ group.note }}
+                    </p>
+                    <details class="mt-1">
+                        <summary class="cursor-pointer underline">{{ t('Hangileri?') }}</summary>
+                        <ul class="mt-1 list-disc space-y-0.5 pl-4">
+                            <li v-for="label in group.labels" :key="label">{{ label }}</li>
+                        </ul>
+                    </details>
+                </div>
 
                 <p v-if="form.errors[field.key]" class="mt-1 text-sm text-red-700">
                     {{ form.errors[field.key] }}

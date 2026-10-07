@@ -794,5 +794,7 @@
     "Siparişe göre üretim": "Made to order",
     "Hazır ürün": "Ready to ship",
     "Siparişe göre yapılıyor": "Made to order",
-    ":year öncesi": "Before :year"
+    ":year öncesi": "Before :year",
+    ":count seçenek kullanılamaz.": ":count option(s) can't be used.",
+    "Hangileri?": "Which ones?"
 }
