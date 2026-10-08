@@ -887,5 +887,12 @@
     "Mağaza alan adı": "Store domain",
     "www.magazam.com": "www.mystore.com",
     "Mağazanın açıldığı alan adı, https:// olmadan.": "The domain your store runs on, without https://.",
-    "Ticimax panelinde WS yetki kodu oluştur ve mağaza alan adınla birlikte gir. Web servis erişimi paketinde kapalıysa Ticimax destekten açtırman gerekir.": "Create a WS authorization code in your Ticimax admin and enter it with your store domain. If web service access isn't included in your plan, ask Ticimax support to enable it."
+    "Ticimax panelinde WS yetki kodu oluştur ve mağaza alan adınla birlikte gir. Web servis erişimi paketinde kapalıysa Ticimax destekten açtırman gerekir.": "Create a WS authorization code in your Ticimax admin and enter it with your store domain. If web service access isn't included in your plan, ask Ticimax support to enable it.",
+    "API anahtarı (appKey)": "API key (appKey)",
+    "Satıcı Ofisi (so.n11.com) → Hesabım → API Hesapları → Yeni Hesap Oluştur. Anahtar ekranda görünür.": "Seller Office (so.n11.com) → My Account → API Accounts → Create New Account. The key is shown on screen.",
+    "API şifresi (appSecret)": "API secret (appSecret)",
+    "N11 API şifresini ekranda göstermez, hesabının e-posta adresine gönderir.": "N11 doesn't show the API secret on screen; it emails it to your account address.",
+    "n11 mağaza adı": "n11 store name",
+    "n11'deki mağaza adın. Bağlantıyı ayırt etmek için kullanılır; tek API adresini bütün satıcılar paylaşır.": "Your store name on n11. It identifies this connection, since all sellers share a single API address.",
+    "n11 Satıcı Ofisi → Hesabım → API Hesapları'ndan bir API hesabı oluştur. Anahtarı ekrandan, şifreyi e-postandan alıp buraya gir. n11depom ürün ve siparişleri bu bağlantıya gelmez.": "Create an API account in n11 Seller Office → My Account → API Accounts. Enter the key shown on screen and the secret from your email here. n11depom products and orders don't come through this connection."
 }

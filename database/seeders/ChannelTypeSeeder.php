@@ -258,6 +258,46 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // N11 — pazaryeri (marketplace), REST + iade için tek SOAP (8 Eki 2026).
+        //
+        // ⚠️ `is_active = false`: resmi dokümana (developer.n11.com) ve canlı
+        // WSDL'e göre yazıldı, gerçek mağazayla SINANMADI. Sandbox yok; test
+        // gerçek mağazada yapılır (bkz. `N11Adapter` sınıf notu).
+        $this->upsert(
+            ['code' => 'n11'],
+            [
+                'name' => 'N11',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\N11\\N11Adapter',
+                'capabilities' => [
+                    // Ürün açma (`product-create`) ve kargo adımı bu turda YAZILMADI.
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    'strategy' => 'fixed_window',
+                    // Belgeli sınır yalnız sipariş listelemede (dakikada 1000);
+                    // öteki uçlar belgesiz → tutucu.
+                    // ⚠️ ANAHTAR ADI `requests_per_second`.
+                    'requests_per_second' => 5,
+                    'burst_capacity' => 10,
+                    'window_seconds' => 1,
+                    // `price-stock-update` görev başına en çok 1000 SKU.
+                    'max_inventory_batch' => 1000,
+                    'max_price_batch' => 1000,
+                ],
+                // Webhook yok; sipariş ve iade yalnız yoklamayla.
+                'supports_webhooks' => false,
+                'is_active' => false,
+            ],
+        );
+
         // DÖRDÜNCÜ KANAL — mağaza (storefront). V3.0 · Faz 1 · §06.
         //
         // ⚠️ v2.2'DEN BİLİNÇLİ SAPMA: doküman §2/§11 Shopify'ı ayrı bir

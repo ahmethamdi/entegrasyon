@@ -8,6 +8,7 @@ use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
+use App\Domain\Channels\Adapters\N11\N11Adapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Ticimax\TicimaxAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
@@ -314,6 +315,41 @@ final class ChannelConnectForm
             'oauth' => false,
             'help' => 'Ticimax panelinde WS yetki kodu oluştur ve mağaza alan adınla birlikte gir. '
                 .'Web servis erişimi paketinde kapalıysa Ticimax destekten açtırman gerekir.',
+        ],
+
+        'n11' => [
+            // Mağaza bazlı appKey + appSecret, başlıkta (8 Eki 2026). Partner
+            // onayı yok. ⚠️ Adlar `api_key`/`api_secret` DEĞİL: o çift
+            // `ChannelHttpClient`'ta Basic auth'a çevrilirdi.
+            'secrets' => [
+                [
+                    'name' => N11Adapter::APP_KEY_SECRET,
+                    'label' => 'API anahtarı (appKey)',
+                    'placeholder' => '',
+                    'hint' => 'Satıcı Ofisi (so.n11.com) → Hesabım → API Hesapları → Yeni Hesap Oluştur. Anahtar ekranda görünür.',
+                ],
+                [
+                    'name' => N11Adapter::APP_SECRET_SECRET,
+                    'label' => 'API şifresi (appSecret)',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'N11 API şifresini ekranda göstermez, hesabının e-posta adresine gönderir.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => N11Adapter::SELLER_NAME_KEY,
+                    'label' => 'n11 mağaza adı',
+                    'placeholder' => 'magazam',
+                    // Yalnız hesap kimliği; istek adresine ya da başlığa GİRMEZ.
+                    'rules' => ['regex:/^[\pL\pN][\pL\pN ._\-]{1,63}$/u'],
+                    'hint' => 'n11\'deki mağaza adın. Bağlantıyı ayırt etmek için kullanılır; tek API adresini bütün satıcılar paylaşır.',
+                ],
+            ],
+            'account' => N11Adapter::SELLER_NAME_KEY,
+            'oauth' => false,
+            'help' => 'n11 Satıcı Ofisi → Hesabım → API Hesapları\'ndan bir API hesabı oluştur. '
+                .'Anahtarı ekrandan, şifreyi e-postandan alıp buraya gir. n11depom ürün ve siparişleri bu bağlantıya gelmez.',
         ],
 
         'shopify' => [

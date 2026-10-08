@@ -28,6 +28,7 @@ const channelNames = {
     hepsiburada: 'Hepsiburada',
     ikas: 'ikas',
     ticimax: 'Ticimax',
+    n11: 'N11',
     shopify: 'Shopify',
     woocommerce: 'WooCommerce',
     etsy: 'Etsy',
