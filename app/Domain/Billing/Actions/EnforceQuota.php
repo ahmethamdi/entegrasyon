@@ -139,6 +139,16 @@ final class EnforceQuota
     {
         $subscription = Subscription::query()
             ->whereIn('status', Subscription::ACTIVE_STATUSES)
+            // ELLE ATANMIŞ PLANIN SÜRESİ GEÇTİYSE KOTA VERMEZ: onu hiçbir
+            // ödeme bildirimi kapatmaz (`AssignPlanManually`). Ödeme
+            // sağlayıcılı abonelikte tarih sağlayıcınındır, burada sayılmaz.
+            // `provider` eski satırlarda NULL olabilir; `!= 'manual'` NULL'u
+            // da dışlardı, ayrıca kapsanır.
+            ->where(fn ($q) => $q
+                ->whereNull('provider')
+                ->orWhere('provider', '!=', 'manual')
+                ->orWhereNull('current_period_end')
+                ->orWhere('current_period_end', '>', now()))
             ->with('plan')
             ->first();
 

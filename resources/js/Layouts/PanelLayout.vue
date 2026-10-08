@@ -88,10 +88,15 @@ const navGroups = [
 ];
 
 /* Hesap öğeleri — gezinme listesinin dışında, sidebar altında. */
-const accountNav = [
+const accountNav = computed(() => [
+    /*
+     * Yönetim yalnız süper admin'e görünür. Bu SADECE görünüm: yetki
+     * rotadaki `can:superAdmin`'dedir, bağlantıyı elle yazan 403 alır.
+     */
+    ...(page.props.auth?.user?.isSuperAdmin ? [{ href: '/admin', label: k('Yönetim') }] : []),
     { href: '/billing', label: k('Abonelik') },
     { href: '/help', label: k('Yardım') },
-];
+]);
 
 /* Dil seçenekleri — her biri KENDİ dilinde yazılır. */
 const languages = [

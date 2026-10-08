@@ -7,11 +7,14 @@ namespace App\Providers;
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Support\StripePaymentGateway;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Identity\Models\User;
+use App\Domain\Identity\Support\SuperAdmin;
 use App\Support\Logging\PayloadRedactor;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
@@ -51,6 +54,10 @@ class AppServiceProvider extends ServiceProvider
                 default => 'App\\Domain\\Catalog\\Models\\'.$base,
             };
         });
+
+        // SÜPER ADMIN (/admin) — platformu işleten. Liste sunucu ayarında
+        // (`SuperAdmin`), rol kolonu yok: yetki panelden kazanılamaz.
+        Gate::define('superAdmin', static fn (?User $user = null): bool => SuperAdmin::is($user));
 
         // KİMLİK UÇLARI HIZ SINIRI (B4) — IP başına.
         //

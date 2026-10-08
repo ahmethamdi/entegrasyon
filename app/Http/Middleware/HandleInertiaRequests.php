@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Domain\Identity\Support\OnboardingProgress;
+use App\Domain\Identity\Support\SuperAdmin;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -65,6 +66,9 @@ class HandleInertiaRequests extends Middleware
                     'id' => $request->user()->id,
                     'name' => $request->user()->name,
                     'email' => $request->user()->email,
+                    // Menüdeki "Yönetim" bağlantısı için; yetkinin kendisi
+                    // rotadaki `can:superAdmin`'dedir, bu yalnız görünüm.
+                    'isSuperAdmin' => SuperAdmin::is($request->user()),
                 ],
             ],
 

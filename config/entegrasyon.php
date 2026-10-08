@@ -88,4 +88,11 @@ return [
     | Boşsa üretimde kimse göremez (HorizonServiceProvider).
     */
     'horizon_admin_emails' => env('HORIZON_ADMIN_EMAILS', ''),
+
+    /*
+    | Süper admin (/admin) — virgülle ayrılmış e-postalar. Boşsa Horizon
+    | listesine düşer: iki ayrı yönetici listesi tutulup ayrışmasın diye.
+    | E-postası DOĞRULANMAMIŞ hesap listede olsa bile giremez.
+    */
+    'super_admin_emails' => env('SUPER_ADMIN_EMAILS', env('HORIZON_ADMIN_EMAILS', '')),
 ];

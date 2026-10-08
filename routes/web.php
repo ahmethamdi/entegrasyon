@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
@@ -117,6 +118,18 @@ Route::get('/shopify/auth/callback', [ShopifyInstallController::class, 'callback
 
 // `verified`: doğrulanmamış hesap panele giremez (B4) — gerekçe
 // EmailVerificationController'da.
+// SÜPER ADMIN — platformu işleten. `tenant` ara katmanı YOK (yönetici tüm
+// kiracıların üstünde); yetki `can:superAdmin` (sunucu ayarındaki e-posta
+// listesi, `SuperAdmin`). Yetkisiz kullanıcı 403 alır.
+Route::middleware(['auth', 'verified', 'can:superAdmin'])->prefix('admin')->group(function (): void {
+    Route::get('/', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+    Route::get('/tenants', [AdminController::class, 'tenants'])->name('admin.tenants');
+    Route::get('/tenants/{tenant}', [AdminController::class, 'showTenant'])->name('admin.tenants.show');
+    Route::post('/tenants/{tenant}/plan', [AdminController::class, 'assignPlan'])->name('admin.tenants.plan');
+    Route::get('/plans', [AdminController::class, 'plans'])->name('admin.plans');
+    Route::post('/plans', [AdminController::class, 'storePlan'])->name('admin.plans.store');
+});
+
 Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     // Panel `/panel`'de; `/` herkese açık tanıtım sitesidir (SiteController).
     Route::get('/panel', DashboardController::class)->name('dashboard');
