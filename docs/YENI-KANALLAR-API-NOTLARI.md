@@ -579,6 +579,36 @@ gerçekten kalem bölüyor mu · iade akışında `REFUND_DELIVERED` görünüyo
   yetki kodu olmadan çağrı yapılamaz. Gerçek ya da deneme Ticimax mağazası
   ve yetki kodu gerekiyor.
 
+### Kod durumu (8 Ekim 2026)
+
+`app/Domain/Channels/Adapters/Ticimax/` yazıldı, kanal `is_active = false`.
+Canlı WSDL'e göre; filtre varsayılanları `hasokeyk/ticimax-php`'den teyitli.
+Gerçek mağazayla sınanmadı.
+
+- **SoapClient yok:** zarf `TicimaxSoap` ile metin olarak kurulur,
+  `ChannelHttpClient::postRaw()` ile gider (günlük, maskeleme, SSRF,
+  `Http::fake`). Karmaşık tip alanları ordinal alfabetik yazılır.
+- Bağlantı: alan adı (hesap kimliği) + WS yetki kodu (`uye_kodu`, kasada).
+  Sağlık: `SelectUrunCount`.
+- "Hepsi" filtresi: durum alanları -1, kimlik alanları 0.
+- İçe aktarma: `SelectUrun` (ID artan, ofset), varyasyon = ürün,
+  `external_parent_id` = kart ID, metadata `kdv_dahil`/`kdv_orani`/
+  `para_birimi_id`/`para_birimi`. KDV hariç fiyat brüte çevrilir.
+- Stok: `StokAdediGuncelle` toplu (ID + StokAdedi). Fiyat:
+  `VaryasyonGuncelle` tekil, yalnız fiyat bayrakları, KDV hariçse net yazılır,
+  farklı para biriminde varyasyon yazılmaz.
+- Sipariş: `SelectSiparis` iki geçiş (DuzenlemeTarihiBas, DurumTarihiBas),
+  TR saati, 3 sa pay. Durum 8/9 → bütün kalemler `SelectSiparisUrun`'dan
+  iptal/iade, yalnız sipariş daha önce alındıysa. `EntegrasyonAktarildi`
+  işaretlenmez.
+- Yazılmadı: ürün açma, kargo bildirimi, kısmi kalem iptali (kalem durum
+  kodları belgesiz → `SelectSiparisUrunDurumlari` canlıda okunmalı).
+
+**Gerçek mağazada ilk bakılacaklar:** `StokAdediGuncelle` dönüş sayısının
+anlamı · `VaryasyonGuncelle` yalnız bayraklı alanları mı değiştiriyor ·
+`WebSiparisUrun.Tutar` birim mi toplam mı, KDV dahil mi · tarih filtresi
+saat dilimi · durum değişikliği `DuzenlemeTarihi`'ni güncelliyor mu.
+
 ### Bilinen tuzaklar
 
 1. **PDF ile canlı WSDL farklı.** Sınıflar ve işlemler WSDL'den üretilmeli,

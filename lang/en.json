@@ -881,5 +881,11 @@
     "Panel adresindeki ad: magazam.myikas.com ise \"magazam\".": "The name in your admin address: for mystore.myikas.com enter \"mystore\".",
     "Mağaza para birimi (isteğe bağlı)": "Store currency (optional)",
     "Boş bırakırsan TRY. Fiyatlar bu para birimiyle gönderilir.": "Defaults to TRY. Prices are sent in this currency.",
-    "ikas panelinde Uygulamalar → Uygulamalarım → Özel Uygulamalar → Standart Uygulama ile bir uygulama oluştur; ürün, sipariş ve stok için okuma/yazma izni ver. Çıkan Client ID ve Client Secret'ı buraya yapıştır.": "In your ikas admin, go to Apps → My Apps → Private Apps → Standard App and create an app with read/write access to products, orders and stock. Paste the Client ID and Client Secret here."
+    "ikas panelinde Uygulamalar → Uygulamalarım → Özel Uygulamalar → Standart Uygulama ile bir uygulama oluştur; ürün, sipariş ve stok için okuma/yazma izni ver. Çıkan Client ID ve Client Secret'ı buraya yapıştır.": "In your ikas admin, go to Apps → My Apps → Private Apps → Standard App and create an app with read/write access to products, orders and stock. Paste the Client ID and Client Secret here.",
+    "WS yetki kodu": "WS authorization code",
+    "Ticimax yönetim panelinde \"WS Yetki Kodu Yönetimi\" sayfasından oluştur. Kod süresizdir; sızarsa panelden sil.": "Create it on the \"WS Authorization Code Management\" page of your Ticimax admin. The code never expires; if it leaks, delete it there.",
+    "Mağaza alan adı": "Store domain",
+    "www.magazam.com": "www.mystore.com",
+    "Mağazanın açıldığı alan adı, https:// olmadan.": "The domain your store runs on, without https://.",
+    "Ticimax panelinde WS yetki kodu oluştur ve mağaza alan adınla birlikte gir. Web servis erişimi paketinde kapalıysa Ticimax destekten açtırman gerekir.": "Create a WS authorization code in your Ticimax admin and enter it with your store domain. If web service access isn't included in your plan, ask Ticimax support to enable it."
 }

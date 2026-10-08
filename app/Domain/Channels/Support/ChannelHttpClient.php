@@ -98,6 +98,7 @@ final class ChannelHttpClient
         array $headers = [],
         bool $asForm = false,
         ?array $multipart = null,
+        ?array $raw = null,
     ): Response {
         $method = strtoupper($method);
         $url = $this->urlFor($endpoint);
@@ -131,14 +132,15 @@ final class ChannelHttpClient
             // "invalid_request" döner; sebebi de gövdede görünmez.
             $bodyKey = $asForm ? 'form_params' : 'json';
 
-            $pending = $this->pendingRequest($headers, $asForm, multipart: $multipart !== null);
+            $pending = $this->pendingRequest($headers, $asForm, multipart: $multipart !== null, raw: $raw);
 
             // Multipart'ta `$body` YALNIZ GÜNLÜK ÖZETİDİR (`upload()`), isteğe
             // girmez: Guzzle `json` seçeneğini görünce başlığı JSON yapar ve
             // dosya gövdesini EZER (Etsy: "valid image file must be provided").
             $response = $pending->withOptions($pin)->send($method, $url, array_filter([
                 'query' => $query,
-                $bodyKey => $multipart === null ? $body : null,
+                // Ham gövde `withBody()` ile istekte; `$body` yalnız günlük özetidir.
+                $bodyKey => $multipart === null && $raw === null ? $body : null,
                 'multipart' => $multipart,
             ], static fn (mixed $v): bool => $v !== null && $v !== []));
         } catch (ConnectionException $e) {
@@ -198,6 +200,33 @@ final class ChannelHttpClient
             attemptId: $attemptId,
             headers: $headers,
             asForm: $asForm,
+        );
+    }
+
+    /**
+     * HAM gövdeli POST — SOAP zarfı (Ticimax).
+     *
+     * `SoapClient` bu istemciyi ATLARDI: `api_calls` günlüğü, sır maskeleme,
+     * SSRF koruması ve testlerin `Http::fake()`'i devre dışı kalırdı. Zarf
+     * metin olarak gider; günlüğe `['raw' => …]` biçiminde, kasadaki sırlar
+     * maskelenmiş yazılır.
+     *
+     * @param  array<string, string>  $headers
+     */
+    public function postRaw(
+        string $endpoint,
+        string $body,
+        string $contentType,
+        array $headers = [],
+        ?string $attemptId = null,
+    ): Response {
+        return $this->request(
+            'POST',
+            $endpoint,
+            body: ['raw' => $body],
+            attemptId: $attemptId,
+            headers: $headers,
+            raw: [$body, $contentType],
         );
     }
 
@@ -331,7 +360,7 @@ final class ChannelHttpClient
      * @param  array<string, string>  $headers  Adapter'ın eklediği başlıklar
      * @param  bool  $asForm  Gövde form-encoded gitsin
      */
-    private function pendingRequest(array $headers = [], bool $asForm = false, bool $multipart = false): PendingRequest
+    private function pendingRequest(array $headers = [], bool $asForm = false, bool $multipart = false, ?array $raw = null): PendingRequest
     {
         $secrets = $this->secrets();
 
@@ -356,6 +385,7 @@ final class ChannelHttpClient
         // dosyayı göremez ("Either a valid image file ... must be provided",
         // Etsy, 7 Eki 2026 ilk gerçek yükleme).
         $request = match (true) {
+            $raw !== null => $request->withBody($raw[0], $raw[1]),
             $multipart => $request->asMultipart(),
             $asForm => $request->asForm(),
             default => $request->asJson(),

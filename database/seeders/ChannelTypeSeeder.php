@@ -221,6 +221,43 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // Ticimax — mağaza (storefront), WCF/SOAP (8 Eki 2026).
+        //
+        // ⚠️ `is_active = false`: canlı WSDL'e göre yazıldı, gerçek mağazayla
+        // SINANMADI. Kalem durum kodları belgesiz olduğu için kısmi kalem
+        // iptali stoğa dönmüyor (bkz. `TicimaxAdapter` sınıf notu).
+        $this->upsert(
+            ['code' => 'ticimax'],
+            [
+                'name' => 'Ticimax',
+                'kind' => 'storefront',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Ticimax\\TicimaxAdapter',
+                'capabilities' => [
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    'strategy' => 'fixed_window',
+                    // Sınır belgesiz; servis mağazanın KENDİ sunucusunda.
+                    // ⚠️ ANAHTAR ADI `requests_per_second`.
+                    'requests_per_second' => 2,
+                    'burst_capacity' => 4,
+                    'max_concurrent' => 1,
+                    'window_seconds' => 1,
+                    'max_inventory_batch' => 100,
+                    'max_price_batch' => 1,
+                ],
+                'supports_webhooks' => false,
+                'is_active' => false,
+            ],
+        );
+
         // DÖRDÜNCÜ KANAL — mağaza (storefront). V3.0 · Faz 1 · §06.
         //
         // ⚠️ v2.2'DEN BİLİNÇLİ SAPMA: doküman §2/§11 Shopify'ı ayrı bir

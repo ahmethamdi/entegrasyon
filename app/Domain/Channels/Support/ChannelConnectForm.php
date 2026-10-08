@@ -9,6 +9,7 @@ use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
+use App\Domain\Channels\Adapters\Ticimax\TicimaxAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use InvalidArgumentException;
 
@@ -276,6 +277,43 @@ final class ChannelConnectForm
             'help' => 'ikas panelinde Uygulamalar → Uygulamalarım → Özel Uygulamalar → '
                 .'Standart Uygulama ile bir uygulama oluştur; ürün, sipariş ve stok için '
                 .'okuma/yazma izni ver. Çıkan Client ID ve Client Secret\'ı buraya yapıştır.',
+        ],
+
+        'ticimax' => [
+            // Mağaza alan adı + panelden üretilen WS yetki kodu (8 Eki 2026).
+            // Partner onayı yok; servisler mağazanın kendi alan adında.
+            'secrets' => [
+                [
+                    'name' => TicimaxAdapter::AUTH_CODE_SECRET,
+                    'label' => 'WS yetki kodu',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'Ticimax yönetim panelinde "WS Yetki Kodu Yönetimi" sayfasından oluştur. Kod süresizdir; sızarsa panelden sil.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => TicimaxAdapter::DOMAIN_KEY,
+                    'label' => 'Mağaza alan adı',
+                    'placeholder' => 'www.magazam.com',
+                    // Değer istek ADRESİNE girer; yalnız alan adı kabul edilir
+                    // (şema, yol, port yok).
+                    'rules' => ['regex:/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i'],
+                    'hint' => 'Mağazanın açıldığı alan adı, https:// olmadan.',
+                ],
+                [
+                    'name' => TicimaxAdapter::CURRENCY_KEY,
+                    'label' => 'Mağaza para birimi (isteğe bağlı)',
+                    'placeholder' => TicimaxAdapter::DEFAULT_CURRENCY,
+                    'optional' => true,
+                    'rules' => ['in:TRY,EUR,USD,GBP'],
+                    'hint' => 'Boş bırakırsan TRY. Fiyatlar bu para birimiyle gönderilir.',
+                ],
+            ],
+            'account' => TicimaxAdapter::DOMAIN_KEY,
+            'oauth' => false,
+            'help' => 'Ticimax panelinde WS yetki kodu oluştur ve mağaza alan adınla birlikte gir. '
+                .'Web servis erişimi paketinde kapalıysa Ticimax destekten açtırman gerekir.',
         ],
 
         'shopify' => [
