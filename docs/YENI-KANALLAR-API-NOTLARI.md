@@ -393,6 +393,33 @@ kullanıyor. B sonra eklenebilir.
 - GraphQL Playground var: <https://builders.ikas.com/docs/admin-api/graphql-playground>.
   Şema keşfi buradan yapılmalı.
 
+### Kod durumu (8 Ekim 2026)
+
+`app/Domain/Channels/Adapters/Ikas/` yazıldı, kanal `is_active = false`.
+Şema ikas'ın kendi paketinden alındı (`@ikas/admin-api-client` 2.1.0,
+`dist/api/admin/v2/generated/index.d.ts`), gerçek mağazayla sınanmadı.
+
+- Bağlantı: Private App `client_id`/`client_secret` + mağaza adı (hesap
+  kimliği). İlk token bağlanırken `TokenRefresher::refreshConnection()`,
+  sonrakiler `credentials:refresh` (pay 1 saat). Sağlık kontrolü
+  `getMerchant.storeName` ile mağaza adını karşılaştırır.
+- İçe aktarma: her varyant ayrı ürün, `external_parent_id` = ürün id,
+  SKU'suz varyant `IKAS-{uuid}`. Görsel alınmıyor (şemada yalnız `imageId`).
+- Stok: `saveVariantStocks`, ayar ekranındaki lokasyon; tek lokasyonlu
+  mağazada seçimsiz. Fiyat: `updateVariantPrices` (karşılaştırma fiyatı →
+  `sellPrice`, satış → `discountPrice`), para birimi bağlantı ayarı (TRY).
+- Sipariş: `listOrder(updatedAt ≥, sort updatedAt)`, ms epoch. Kayıt başına
+  `created` + iptal kalemi başına `cancelled` + `REFUND_DELIVERED` kalemi
+  başına `returned`. Kısmi iptalde ikas kalemi böler; iptal SKU ile asıl
+  kaleme düşer.
+- Yazılmadı: ürün açma (`SupportsCatalog`), kargo bildirimi
+  (`fulfillOrder`), webhook.
+
+**Gerçek mağazada ilk bakılacaklar:** `sort: "createdAt"`/`"updatedAt"`
+değerleri kabul ediliyor mu · `Timestamp` gerçekten ms mi · kısmi iptal
+gerçekten kalem bölüyor mu · iade akışında `REFUND_DELIVERED` görünüyor mu ·
+`discountPrice: null` eski indirimi siliyor mu.
+
 ### Bilinen tuzaklar
 
 1. **Hata oranı engeli:** 4xx/5xx dönen istekleri tekrar tekrar göndermek

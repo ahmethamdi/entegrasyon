@@ -6,8 +6,10 @@ namespace App\Domain\Channels\Actions;
 
 use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Support\ChannelConnectForm;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\StoreUrl;
+use App\Domain\Channels\Support\TokenRefresher;
 use App\Domain\Identity\Actions\RecordAuditLog;
 use App\Domain\Identity\Enums\AuditAction;
 use App\Support\Tenancy\TenantContext;
@@ -47,6 +49,7 @@ final class ConnectChannel
         private readonly CheckChannelHealth $checkHealth,
         private readonly RecordAuditLog $audit,
         private readonly RegisterChannelWebhooks $registerWebhooks,
+        private readonly TokenRefresher $tokenRefresher,
     ) {}
 
     /**
@@ -191,6 +194,21 @@ final class ConnectChannel
         // bozuk sanardı. Kontrolü callback yapar (`EtsyOAuthController`),
         // token kasaya yazıldıktan HEMEN sonra.
         if (! $checkHealth) {
+            return $connection;
+        }
+
+        // ⚠️ FORMDAKİ ÇİFT ANAHTAR DEĞİL, ANAHTAR ÜRETİCİSİDİR (ikas):
+        // erişim anahtarı `client_credentials` ile alınır. Alınmadan sağlık
+        // kontrolü koşsaydı istek kimliksiz gider ve doğru çift "yanlış"
+        // görünürdü. Yenileme yolu taramanınkiyle AYNIDIR (kilitli, kasaya
+        // `TokenRefresher` yazar); başarısızlık bağlantıyı `pending` bırakır
+        // ve sebebi (`TokenRefresher`'ın maskelediği kanal cevabı) korunur —
+        // ardından koşan sağlık kontrolü onu "anahtar alınmadı" diye ezerdi.
+        if (ChannelConnectForm::exchangesToken($channelTypeCode)
+            && $this->tokenRefresher->refreshConnection($connection->id) === 'failed') {
+            $connection->refresh();
+            $connection->forceFill(['status' => 'pending', 'health_status' => 'unhealthy'])->save();
+
             return $connection;
         }
 

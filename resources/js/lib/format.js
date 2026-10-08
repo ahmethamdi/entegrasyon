@@ -26,6 +26,7 @@ export function money(value, currency = 'TRY') {
 const channelNames = {
     trendyol: 'Trendyol',
     hepsiburada: 'Hepsiburada',
+    ikas: 'ikas',
     shopify: 'Shopify',
     woocommerce: 'WooCommerce',
     etsy: 'Etsy',

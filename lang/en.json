@@ -869,5 +869,17 @@
     "Ücretli planda": "On a paid plan",
     "Ürün sınırı (boş = sınırsız)": "Product limit (empty = unlimited)",
     "Ürün sınırı": "Product limit",
-    "Plan yönetici tarafından atandı": "Plan assigned by admin"
+    "Plan yönetici tarafından atandı": "Plan assigned by admin",
+    "ikas'tan okunamadı. Bağlantının sağlıklı olduğundan emin ol ve sayfayı yenile.": "Couldn't read from ikas. Make sure the connection is healthy and refresh the page.",
+    "Stok lokasyonu": "Stock location",
+    "34Pazar stoğu ikas'ta bu lokasyona yazar. Birden çok lokasyonun varsa ötekilerdeki stok ayrıca satılabilir kalır; satışı tek lokasyondan yap.": "34Pazar writes stock to this ikas location. If you have several locations, stock in the others stays sellable too, so sell from a single location.",
+    "Client ID": "Client ID",
+    "Client Secret": "Client Secret",
+    "ikas bu değeri yalnız bir kez gösterir. Kaybettiysen yeni bir özel uygulama aç.": "ikas shows this value only once. If you lost it, create a new private app.",
+    "Mağaza adı": "Store name",
+    "magazam": "mystore",
+    "Panel adresindeki ad: magazam.myikas.com ise \"magazam\".": "The name in your admin address: for mystore.myikas.com enter \"mystore\".",
+    "Mağaza para birimi (isteğe bağlı)": "Store currency (optional)",
+    "Boş bırakırsan TRY. Fiyatlar bu para birimiyle gönderilir.": "Defaults to TRY. Prices are sent in this currency.",
+    "ikas panelinde Uygulamalar → Uygulamalarım → Özel Uygulamalar → Standart Uygulama ile bir uygulama oluştur; ürün, sipariş ve stok için okuma/yazma izni ver. Çıkan Client ID ve Client Secret'ı buraya yapıştır.": "In your ikas admin, go to Apps → My Apps → Private Apps → Standard App and create an app with read/write access to products, orders and stock. Paste the Client ID and Client Secret here."
 }

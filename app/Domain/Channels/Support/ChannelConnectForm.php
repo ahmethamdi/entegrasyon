@@ -7,6 +7,7 @@ namespace App\Domain\Channels\Support;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
+use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use InvalidArgumentException;
@@ -232,6 +233,51 @@ final class ChannelConnectForm
                 .'Yetkilendirme İşlemleri"). Gelen bilgilerle bağlan.',
         ],
 
+        'ikas' => [
+            // SATICININ KENDİ ÖZEL UYGULAMASI (8 Eki 2026): Partner onayı
+            // gerekmez. Çift kasaya gider; erişim anahtarı bağlanırken
+            // `client_credentials` ile alınır (`token_exchange`).
+            'secrets' => [
+                [
+                    'name' => IkasAdapter::CLIENT_ID_SECRET,
+                    'label' => 'Client ID',
+                    'placeholder' => '',
+                ],
+                [
+                    'name' => IkasAdapter::CLIENT_SECRET_SECRET,
+                    'label' => 'Client Secret',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'ikas bu değeri yalnız bir kez gösterir. Kaybettiysen yeni bir özel uygulama aç.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => IkasAdapter::STORE_NAME_KEY,
+                    'label' => 'Mağaza adı',
+                    'placeholder' => 'magazam',
+                    // Alt alan adıdır (`{ad}.myikas.com`); sağlık kontrolü
+                    // ikas'ın döndürdüğü mağaza adıyla karşılaştırır.
+                    'rules' => ['regex:/^[a-z0-9][a-z0-9\-]{0,62}$/'],
+                    'hint' => 'Panel adresindeki ad: magazam.myikas.com ise "magazam".',
+                ],
+                [
+                    'name' => IkasAdapter::CURRENCY_KEY,
+                    'label' => 'Mağaza para birimi (isteğe bağlı)',
+                    'placeholder' => IkasAdapter::DEFAULT_CURRENCY,
+                    'optional' => true,
+                    'rules' => ['in:TRY,EUR,USD,GBP'],
+                    'hint' => 'Boş bırakırsan TRY. Fiyatlar bu para birimiyle gönderilir.',
+                ],
+            ],
+            'account' => IkasAdapter::STORE_NAME_KEY,
+            'oauth' => false,
+            'token_exchange' => true,
+            'help' => 'ikas panelinde Uygulamalar → Uygulamalarım → Özel Uygulamalar → '
+                .'Standart Uygulama ile bir uygulama oluştur; ürün, sipariş ve stok için '
+                .'okuma/yazma izni ver. Çıkan Client ID ve Client Secret\'ı buraya yapıştır.',
+        ],
+
         'shopify' => [
             // 34PAZAR UYGULAMASI ÜZERİNDEN (OAuth) — 5 Eki 2026.
             //
@@ -412,6 +458,17 @@ final class ChannelConnectForm
     public static function usesOauth(string $channelTypeCode): bool
     {
         return self::definition($channelTypeCode)['oauth'];
+    }
+
+    /**
+     * Formdaki çift bir ERİŞİM ANAHTARIYLA değiştirilir mi (ikas
+     * `client_credentials`)? Öyleyse `ConnectChannel` sağlık kontrolünden
+     * ÖNCE ilk anahtarı alır; alınmasaydı kontrol kimliksiz giderdi.
+     */
+    public static function exchangesToken(string $channelTypeCode): bool
+    {
+        return self::isDefined($channelTypeCode)
+            && (self::definition($channelTypeCode)['token_exchange'] ?? false) === true;
     }
 
     /** Satıcıya gösterilecek yardım metni. */

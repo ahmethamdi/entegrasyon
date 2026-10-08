@@ -115,6 +115,20 @@ final class TokenRefresher
     }
 
     /**
+     * Tek bağlantıyı HEMEN yeniler — taramayı beklemeden (ikas bağlanırken).
+     *
+     * Aynı kilitli yoldan geçer: tarama aynı anda koşsa bile ikisinden biri
+     * satırı ATLAR, iki paralel yenileme olmaz. Süresi yazılmamış
+     * (`expires_at` NULL) kayıt pay kontrolüne takılmaz.
+     *
+     * @return 'refreshed'|'failed'|'skipped'
+     */
+    public function refreshConnection(string $connectionId): string
+    {
+        return TenantContext::runAsSystem(fn (): string => $this->refreshOne($connectionId));
+    }
+
+    /**
      * Tek bağlantıyı yeniler — KİLİT ALTINDA.
      *
      * Transaction ve `FOR UPDATE SKIP LOCKED` bu metottadır: kilit yalnızca

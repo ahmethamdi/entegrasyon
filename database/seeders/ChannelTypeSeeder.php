@@ -180,6 +180,47 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // ikas — mağaza (storefront), GraphQL Admin API v2 (8 Eki 2026).
+        //
+        // ⚠️ `is_active = false`: şema ikas'ın kendi istemci paketinden
+        // alındı ama gerçek mağazayla SINANMADI. ikas hata oranı yüksek
+        // mağazayı KALICI engelliyor; doğrulanmamış adapter'ı satıcıya
+        // açmak onun mağazasını riske atardı. Test mağazasında uçtan uca
+        // geçince açılacak.
+        $this->upsert(
+            ['code' => 'ikas'],
+            [
+                'name' => 'ikas',
+                'kind' => 'storefront',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Ikas\\IkasAdapter',
+                'capabilities' => [
+                    // Ürün açma ve kargo bildirimi bu turda YAZILMADI.
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    'strategy' => 'fixed_window',
+                    // Belgeli sınır 10 saniyede 50 istek; 429 da hata oranına
+                    // sayıldığı için altında kalınır.
+                    // ⚠️ ANAHTAR ADI `requests_per_second`.
+                    'requests_per_second' => 4,
+                    'burst_capacity' => 8,
+                    'window_seconds' => 10,
+                    'max_inventory_batch' => 100,
+                    'max_price_batch' => 100,
+                ],
+                // Webhook 3 denemeden sonra olayı bırakır; yoklama asıl kaynak.
+                'supports_webhooks' => false,
+                'is_active' => false,
+            ],
+        );
+
         // DÖRDÜNCÜ KANAL — mağaza (storefront). V3.0 · Faz 1 · §06.
         //
         // ⚠️ v2.2'DEN BİLİNÇLİ SAPMA: doküman §2/§11 Shopify'ı ayrı bir
