@@ -398,6 +398,19 @@ function send(connectionId) {
                 </p>
 
                 <!--
+                    Stok/fiyat: kanal toplu işte bu satırı REDDETTİ (sonuç
+                    sonradan okunur). Gönderim hatasından ayrı: ürün kanalda,
+                    ama stoğu ya da fiyatı uygulanmadı.
+                -->
+                <p
+                    v-if="channel.stockPriceError"
+                    class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                >
+                    <span class="font-semibold">{{ t('Stok/fiyat kanalda uygulanmadı:') }}</span>
+                    <span class="font-mono">{{ channel.stockPriceError }}</span>
+                </p>
+
+                <!--
                     RED SEBEBİ AYRI GÖSTERİLİR: senkron hatası "gönderemedik"
                     demektir, red ise "gönderdik ama kanal beğenmedi". İkisi
                     aynı kutuda birleştirilseydi satıcı hangisini

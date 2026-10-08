@@ -336,6 +336,19 @@ final class ProductChannelController extends Controller
                 ->get()
                 ->keyBy('listing_id');
 
+        // Stok/fiyat hataları ayrı okunur: toplu iş sonucunda kanalın
+        // reddettiği satır (geçersiz barkod, fiyat onayı…) INVENTORY/PRICE
+        // durumuna yazılır. İçerik özetine KARIŞTIRILMAZ — rozet anlamı
+        // ("gönderemedik") değişmesin.
+        $stockPriceStates = $listings->isEmpty()
+            ? new Collection
+            : ListingSyncState::query()
+                ->whereIn('listing_id', $listings->pluck('id')->all())
+                ->whereIn('domain', [SyncDomain::INVENTORY->value, SyncDomain::PRICE->value])
+                ->whereIn('status', ['error_permanent', 'error_transient'])
+                ->whereNotNull('last_error')
+                ->get();
+
         $rows = [];
 
         foreach ($this->publishableConnections() as $connection) {
@@ -356,6 +369,7 @@ final class ProductChannelController extends Controller
                 // neyi düzelteceğini bilemez.
                 'rejectionReason' => $forConnection->first()?->approval_rejection_reason,
                 ...$this->syncSummary($forConnection, $states),
+                'stockPriceError' => $this->stockPriceError($forConnection, $stockPriceStates),
                 ...$this->pricesFor($connection, $forConnection, $product),
             ];
         }
@@ -428,6 +442,24 @@ final class ProductChannelController extends Controller
      * @param  Collection<string, ListingSyncState>  $states
      * @return array{syncStatus: string|null, lastError: string|null, pendingWork: bool}
      */
+    /**
+     * Bağlantının listing'lerindeki ilk stok/fiyat hatası — kalıcı olan önce.
+     *
+     * @param  Collection<int, Listing>  $listings
+     * @param  Collection<int, ListingSyncState>  $states
+     */
+    private function stockPriceError(Collection $listings, Collection $states): ?string
+    {
+        $ids = $listings->pluck('id')->all();
+
+        $state = $states
+            ->filter(static fn (ListingSyncState $s): bool => in_array($s->listing_id, $ids, true))
+            ->sortBy(static fn (ListingSyncState $s): int => $s->status === 'error_permanent' ? 0 : 1)
+            ->first();
+
+        return $state?->last_error;
+    }
+
     private function syncSummary(Collection $listings, Collection $states): array
     {
         // Rozet sırası: küçük sayı daha kötü.

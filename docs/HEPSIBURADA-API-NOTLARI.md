@@ -161,9 +161,12 @@ yalnız HB'nin önceden yüklediği ürünlerle açılır.
 - ⚠️ SIT'te doğrulanacak: talep `sku`'su HB kodu mu satıcı kodu mu ·
   `claimType` değerleri (kayıp/hasarlı ürün "Accepted" olursa stoğa dönmemeli
   mi?) · talep listesinin tarih aralığı sınırı.
-- ⏸️ Upload sonucunu okuma (`…-uploads/id/{id}` errors) BİLİNÇLİ ERTELENDİ:
-  `errors[]` öğesinin hangi SKU'ya ait olduğunu nasıl söylediği belgesiz;
-  tahminle eşlemek hatayı yanlış ürüne yazardı. SIT'te gerçek redle yazılacak.
+- ✅ Upload sonucunu okuma (8 Eki, `sync:poll-batches`): OpenAPI
+  `Error` şeması `hepsiburadaSku` + `merchantSku` taşıyor; satır
+  `hepsiburadaSku` ile eşlenir, `elementNo` (sıra) KULLANILMAZ. Kimliksiz
+  hata varsa listelenmeyenler başarılı sayılmaz. DOĞRULANMADI: `status`
+  değerleri (enum yok), `priceValidations`'ın fiyatı reddettiği, saklama
+  süresi (24 sa varsayıldı). SIT'te gerçek redle ölçülecek.
 - ⏭️ Açık: webhook, saat dilimi ölçümü, gerçek SIT testi.
 
 ## Koddaki sapmalar (6 Eki tespiti — ①'de düzeltildi)

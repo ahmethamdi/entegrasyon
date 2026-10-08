@@ -11,6 +11,7 @@ use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
+use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
@@ -22,7 +23,10 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\BatchItemFailure;
+use App\Domain\Sync\Support\BatchStatus;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
@@ -170,7 +174,7 @@ use Throwable;
  *   - satıcı siparişi panelden ya da başka araçtan yönetiyorsa otomatik
  *     onay onun akışını BOZAR.
  */
-final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
+final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -210,6 +214,19 @@ final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
 
     /** Satıcı başına iki stok-fiyat isteği arası (resmi). */
     public const STOCK_PRICE_INTERVAL_SECONDS = 10;
+
+    /**
+     * "İşleniyor" dönen istek en geç 4 saatte sonuçlanır ve batch kimliği 4
+     * saat sonra sorgulanamaz (API notları §6, tuzak 5).
+     */
+    private const BATCH_RETENTION_SECONDS = 4 * 3600;
+
+    /** `lake-projections` satır durumları (API notları §6). */
+    private const LAKE_SUCCESS = 0;
+
+    private const LAKE_PROCESSING = 3;
+
+    private const LAKE_SENT_TO_APPROVAL = 5;
 
     /** Mutabakatta tek tek `Code` sorgusunun üst sınırı; fazlası tam tarama. */
     private const PER_CODE_LOOKUP_LIMIT = 20;
@@ -657,6 +674,126 @@ final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
             'pushed' => count($items),
             'batch_id' => $batchId,
         ]);
+    }
+
+    // ------------------------------------------------------- toplu iş sonucu
+
+    public function batchIdFrom(AdapterResult $result): ?string
+    {
+        $id = $result->data['batch_id'] ?? null;
+
+        return is_scalar($id) && trim((string) $id) !== '' ? (string) $id : null;
+    }
+
+    public function batchRetentionSeconds(SyncDomain $domain): int
+    {
+        return self::BATCH_RETENTION_SECONDS;
+    }
+
+    /**
+     * İşlem sonucu — `GET /listing-state/batch-id/{dataId}/lake-projections
+     * ?page=1&pageSize=3000` (API notları §6, "dataId sorgulama servisi").
+     *
+     * Satır: `code` (barkod — gönderdiğimiz anahtar), alana göre
+     * `stock{status, operationDetail, …}` ya da `price{…}`,
+     * `operationStatusText`. Durumlar: `0` Başarılı · `1` Tamamlanamadı ·
+     * `2` Hata oluştu · `3` İşleniyor · `5` Onaya gönderildi.
+     *
+     * - Tek satır `3` ise iş SÜRÜYOR.
+     * - `5` (%70 indirim fiyat onayı) BAŞARI DEĞİLDİR (tuzak 6): satış eski
+     *   fiyattan sürer → `awaitingApproval`, panelde "Bekliyor".
+     * - `1`/`2` → VALIDATION (sebep `operationDetail`). DOĞRULANMADI: `2`
+     *   "Hata oluştu"nun geçici bir teknik hata olup olmadığı.
+     * - DOĞRULANMADI: satır listesinin zarftaki yeri (`data` dizi mi,
+     *   `data.items`/`data.data`/`data.content` mı) — dördü de denenir.
+     *   Satırın alt nesnesi yoksa üst düzey `status` okunur.
+     * - Sayfa 3000 = istek başına üst sınır; tek sayfa yeter.
+     */
+    public function fetchBatchStatus(string $batchId, SyncDomain $domain): BatchStatus
+    {
+        try {
+            $response = $this->api(
+                'GET',
+                '/listing-state/batch-id/'.rawurlencode($batchId).'/lake-projections',
+                query: ['page' => 1, 'pageSize' => self::MAX_ITEMS_PER_REQUEST],
+            );
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return BatchStatus::expired();
+            }
+
+            throw $e;
+        }
+
+        $data = self::jsonBody($response)['data'] ?? null;
+        $rows = is_array($data) && array_is_list($data)
+            ? self::rows($data)
+            : self::rows(is_array($data) ? ($data['items'] ?? $data['data'] ?? $data['content'] ?? []) : []);
+
+        if ($rows === []) {
+            return BatchStatus::pending();
+        }
+
+        $section = $domain === SyncDomain::PRICE ? 'price' : 'stock';
+        $parsed = [];
+
+        foreach ($rows as $row) {
+            $part = is_array($row[$section] ?? null) ? $row[$section] : [];
+            $status = $part['status'] ?? $row['status'] ?? null;
+
+            if (! is_numeric($status)) {
+                continue;
+            }
+
+            if ((int) $status === self::LAKE_PROCESSING) {
+                return BatchStatus::pending();
+            }
+
+            $reason = trim((string) ($part['operationDetail'] ?? $row['operationDetail'] ?? $row['operationStatusText'] ?? ''));
+            $parsed[] = [trim((string) ($row['code'] ?? '')), (int) $status, $reason];
+        }
+
+        $failed = [];
+        $succeeded = [];
+        $awaiting = [];
+        $unmatched = [];
+
+        foreach ($parsed as [$code, $status, $reason]) {
+            if ($status === self::LAKE_SUCCESS) {
+                if ($code !== '') {
+                    $succeeded[] = $code;
+                }
+
+                continue;
+            }
+
+            if ($status === self::LAKE_SENT_TO_APPROVAL) {
+                if ($code !== '') {
+                    $awaiting[$code] = $reason !== ''
+                        ? $reason
+                        : 'Pazarama fiyatı onaya gönderdi; onaylanana kadar eski fiyat geçerli.';
+                }
+
+                continue;
+            }
+
+            $text = $reason !== '' ? $reason : 'Pazarama satırı işleyemedi (sebep belirtilmedi).';
+
+            if ($code === '') {
+                $unmatched[] = $text;
+
+                continue;
+            }
+
+            $failed[$code] = new BatchItemFailure($text);
+        }
+
+        return BatchStatus::completed(
+            failed: $failed,
+            succeeded: $succeeded,
+            awaitingApproval: $awaiting,
+            unmatched: $unmatched,
+        );
     }
 
     /**

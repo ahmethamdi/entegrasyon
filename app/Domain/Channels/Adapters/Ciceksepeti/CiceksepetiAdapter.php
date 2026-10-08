@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
@@ -20,7 +21,10 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\BatchItemFailure;
+use App\Domain\Sync\Support\BatchStatus;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
@@ -192,7 +196,7 @@ use Throwable;
  * otomatik bir adım satıcının kendi akışını bozardı. `acknowledgeOrder`
  * istek atmaz. Satıcı tarafı iptal/ret ucu da yok (panelden).
  */
-final class CiceksepetiAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class CiceksepetiAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
     use DeclaresRequestQuota;
 
@@ -236,6 +240,12 @@ final class CiceksepetiAdapter implements ChannelAdapter, DeclaresChannelCurrenc
     private const RETURNS_INTERVAL = 5;
 
     private const STOCK_PRICE_INTERVAL = 1;
+
+    /**
+     * Stok/fiyat işi "en geç 4 saatte" biter (API notları §5); sonuç bu
+     * süre içinde okunur, sonra yoklama bırakılır.
+     */
+    private const BATCH_RETENTION_SECONDS = 4 * 3600;
 
     /** Tek seferde beklenebilecek en uzun süre; fazlası RATE_LIMITED. */
     private const MAX_INLINE_WAIT_SECONDS = 30;
@@ -718,6 +728,127 @@ final class CiceksepetiAdapter implements ChannelAdapter, DeclaresChannelCurrenc
             'pushed' => count($items),
             'batch_id' => $batchId,
         ]);
+    }
+
+    // ------------------------------------------------------- toplu iş sonucu
+
+    public function batchIdFrom(AdapterResult $result): ?string
+    {
+        $id = $result->data['batch_id'] ?? null;
+
+        return is_scalar($id) && trim((string) $id) !== '' ? (string) $id : null;
+    }
+
+    public function batchRetentionSeconds(SyncDomain $domain): int
+    {
+        return self::BATCH_RETENTION_SECONDS;
+    }
+
+    /**
+     * İşlem sonucu — `GET /Products/batch-status/{batchId}` (API notları §5).
+     *
+     * Yanıt `{batchId, itemCount, items[{data{stockCode,…}, itemId, status,
+     * failureReasons[{message, code}], lastModificationDate}]}`. Statüler
+     * `Pending` · `Processing` · `Success` · `Failed` · `Warning`.
+     *
+     * - Tek bir satır bile `Pending`/`Processing` ise iş SÜRÜYOR.
+     * - `Warning` = "başarılı ama kontrol edilmeli" → başarılı (fiyat yazıldı;
+     *   ör. üstü çizili fiyat 30 günün en düşüğünden yüksek uyarısı).
+     * - `Failed`: belge "teknik hata, aynı kalem yeniden gönderilmeli" diyor
+     *   AMA örnekteki tek hata bilinmeyen stockCode (`code: 4000`). Bu yüzden
+     *   4xxx kodlu sebep VALIDATION (kalıcı, satıcı düzeltir), kodsuz ya da
+     *   başka kodlu sebep SERVER_ERROR (geçici, mutabakat yeniden gönderir).
+     *   DOĞRULANMADI: kod aralığının anlamı.
+     * - Alan adları harf duyarsız okunur (tuzak 4: `stockCode`/`StockCode`).
+     * - Aynı iş dakikada bir sorgulanabilir — çekirdek turu buna uyar.
+     */
+    public function fetchBatchStatus(string $batchId, SyncDomain $domain): BatchStatus
+    {
+        try {
+            $response = $this->api('GET', '/Products/batch-status/'.rawurlencode($batchId));
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return BatchStatus::expired();
+            }
+
+            throw $e;
+        }
+
+        $items = self::rows(self::pick(self::jsonBody($response), 'items'));
+
+        if ($items === []) {
+            return BatchStatus::pending();
+        }
+
+        foreach ($items as $item) {
+            if (in_array(strtolower((string) self::pick($item, 'status')), ['pending', 'processing'], true)) {
+                return BatchStatus::pending();
+            }
+        }
+
+        $failed = [];
+        $succeeded = [];
+        $unmatched = [];
+
+        foreach ($items as $item) {
+            $data = self::pick($item, 'data');
+            $code = is_array($data) ? trim((string) self::pick($data, 'stockCode')) : '';
+            $status = strtolower((string) self::pick($item, 'status'));
+
+            if (in_array($status, ['success', 'warning'], true)) {
+                if ($code !== '') {
+                    $succeeded[] = $code;
+                }
+
+                continue;
+            }
+
+            if ($status !== 'failed') {
+                continue;
+            }
+
+            $failure = self::batchFailure(self::rows(self::pick($item, 'failureReasons')));
+
+            if ($code === '') {
+                $unmatched[] = $failure->reason;
+
+                continue;
+            }
+
+            $failed[$code] = $failure;
+        }
+
+        return BatchStatus::completed(failed: $failed, succeeded: $succeeded, unmatched: $unmatched);
+    }
+
+    /**
+     * `failureReasons[{message, code}]` → tek sebep ve sınıf (bkz.
+     * `fetchBatchStatus` notu: 4xxx kodu kalıcı, gerisi geçici).
+     *
+     * @param  list<array<string, mixed>>  $reasons
+     */
+    private static function batchFailure(array $reasons): BatchItemFailure
+    {
+        $texts = [];
+        $validation = false;
+
+        foreach ($reasons as $reason) {
+            $message = trim((string) (self::pick($reason, 'message') ?? ''));
+            $code = self::pick($reason, 'code');
+
+            if ($message !== '') {
+                $texts[] = is_scalar($code) && (string) $code !== '' ? "{$message} ({$code})" : $message;
+            }
+
+            if (is_numeric($code) && (int) $code >= 4000 && (int) $code < 5000) {
+                $validation = true;
+            }
+        }
+
+        return new BatchItemFailure(
+            $texts === [] ? 'Çiçeksepeti satırı işleyemedi (sebep belirtilmedi).' : implode(' · ', array_unique($texts)),
+            $validation ? ErrorClass::VALIDATION : ErrorClass::SERVER_ERROR,
+        );
     }
 
     /**

@@ -148,6 +148,21 @@ Schedule::command('approval:track')
     ->onOneServer()
     ->withoutOverlapping();
 
+// ASENKRON TOPLU İŞ SONUCU — stok/fiyat gönderiminin SATIR hükmü.
+//
+// Trendyol, Hepsiburada, N11, Pazarama ve Çiçeksepeti yükü kuyruğa alıp
+// yalnız iş kimliği döner; satır reddi (geçersiz barkod, onaysız ürün, fiyat
+// bandı) ancak bu turla okunur ve listing'e "Sorun var" olarak yazılır.
+// Zamanlanmazsa red SESSİZ kalır: push "başarılı" yazar, mutabakat bir gün
+// "fark var" der ve neden hiçbir yerde görünmez.
+//
+// BEŞ DAKİKA: iş dakikalar içinde biter, en geç 4 saat (Pazarama,
+// Çiçeksepeti). Aynı iş dakikada birden sık sorulmaz (`PollChannelBatches`).
+Schedule::command('sync:poll-batches')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // §13 · Faz 2 · SİPARİŞ YOKLAMASI — webhook göndermeyen kanallar.
 //
 // BEŞ DAKİKA: Trendyol webhook göndermez ve sipariş yalnızca bu turla

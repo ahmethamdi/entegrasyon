@@ -17,6 +17,7 @@ use App\Domain\Reconciliation\Console\ReconcileHotCommand;
 use App\Domain\Reconciliation\Console\ReconcilePricesCommand;
 use App\Domain\Reconciliation\Console\ReconcileWarmCommand;
 use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
+use App\Domain\Sync\Console\PollChannelBatchesCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -66,6 +67,8 @@ return Application::configure(basePath: dirname(__DIR__))
         RegisterWebhooksCommand::class,
         // §13 · Faz 2 · onay durumu takibi. Zamanlaması routes/console.php.
         TrackApprovalStatusCommand::class,
+        // Asenkron kanal toplu işlerinin satır sonucu. Zamanlaması routes/console.php.
+        PollChannelBatchesCommand::class,
         // §13 · Faz 2 · sipariş yoklaması. Zamanlaması routes/console.php.
         PollChannelOrdersCommand::class,
         // A12 · eşleşmemiş sipariş satırları. Zamanlaması routes/console.php.

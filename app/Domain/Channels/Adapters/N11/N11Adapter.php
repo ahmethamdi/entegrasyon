@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
@@ -20,7 +21,10 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\BatchItemFailure;
+use App\Domain\Sync\Support\BatchStatus;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
@@ -134,7 +138,7 @@ use Throwable;
  * kalmaz). Satıcı onayı N11'e otomatiğe de bağlatabilir
  * (`sellerintegration@n11.com`).
  */
-final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
     use DeclaresRequestQuota;
 
@@ -160,6 +164,16 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, Suppo
 
     /** Görev başına en çok 1000 SKU. */
     private const MAX_SKUS_PER_TASK = 1000;
+
+    /**
+     * Görev sonucunun sorgulanabildiği süre — DOĞRULANMADI: belgede
+     * saklama süresi yok, 24 saat varsayıldı. Kanal unutursa 404 döner ve
+     * yoklama zaten bırakılır.
+     */
+    private const TASK_RETENTION_SECONDS = 24 * 3600;
+
+    /** `task-details` sayfa sınırı — görev ≤1000 SKU olduğu için tek sayfa yeter. */
+    private const TASK_DETAIL_MAX_PAGES = 5;
 
     /** Stok üst sınırı (ürün yükleme dokümanı). */
     private const MAX_QUANTITY = 999_999;
@@ -587,6 +601,101 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, Suppo
             'task_id' => (string) $body['id'],
             'task_status' => $status,
         ]);
+    }
+
+    // ------------------------------------------------------- toplu iş sonucu
+
+    public function batchIdFrom(AdapterResult $result): ?string
+    {
+        $id = $result->data['task_id'] ?? null;
+
+        return is_scalar($id) && trim((string) $id) !== '' ? (string) $id : null;
+    }
+
+    public function batchRetentionSeconds(SyncDomain $domain): int
+    {
+        return self::TASK_RETENTION_SECONDS;
+    }
+
+    /**
+     * Görev sonucu — `POST /ms/product/task-details/page-query`
+     * (API notları §4), gövde `{"taskId": N, "pageable": {"page", "size"}}`.
+     *
+     * Görev `status`: `IN_QUEUE` sürüyor · `PROCESSED` bitti · `REJECT`
+     * işlenmedi (TÜM satırlar aynı sebeple başarısız). Satırlar
+     * `skus.content[]`: `itemCode` (= gönderdiğimiz `stockCode`),
+     * `status` `SUCCESS`/`FAIL`, `reasons[]`. Bir görevde başarılı ve
+     * başarısız satır birlikte olabilir.
+     *
+     * DOĞRULANMADI: sayfa alanı adı (`skus.totalPages`, Spring sayfası
+     * varsayıldı) · `taskId`'nin sayı olarak beklendiği (resmi örnek sayı) ·
+     * saklama süresi · bilinmeyen görevde dönen kod (404 varsayıldı).
+     */
+    public function fetchBatchStatus(string $batchId, SyncDomain $domain): BatchStatus
+    {
+        $taskId = ctype_digit($batchId) ? (int) $batchId : $batchId;
+        $failed = [];
+        $succeeded = [];
+
+        for ($page = 0; $page < self::TASK_DETAIL_MAX_PAGES; $page++) {
+            $response = $this->client->post(
+                self::BASE_URL.'/ms/product/task-details/page-query',
+                ['taskId' => $taskId, 'pageable' => ['page' => $page, 'size' => self::MAX_SKUS_PER_TASK]],
+                headers: $this->authHeaders(),
+            );
+
+            if ($response->status() === 404) {
+                return BatchStatus::expired();
+            }
+
+            $response->throw();
+
+            $body = self::jsonBody($response);
+            $status = strtoupper(trim((string) ($body['status'] ?? '')));
+
+            if ($status === 'REJECT') {
+                $reasons = implode(' ', array_map('strval', (array) ($body['reasons'] ?? [])));
+
+                return BatchStatus::rejected(new BatchItemFailure(
+                    'N11 görevi reddetti: '.($reasons !== '' ? $reasons : 'neden yok'),
+                ));
+            }
+
+            if ($status !== 'PROCESSED') {
+                return BatchStatus::pending();
+            }
+
+            $skus = is_array($body['skus'] ?? null) ? $body['skus'] : [];
+
+            foreach (self::rows($skus['content'] ?? []) as $row) {
+                $code = trim((string) ($row['itemCode'] ?? ''));
+
+                if ($code === '') {
+                    continue;
+                }
+
+                $rowStatus = strtoupper((string) ($row['status'] ?? ''));
+
+                if ($rowStatus === 'SUCCESS') {
+                    $succeeded[] = $code;
+                } elseif ($rowStatus === 'FAIL') {
+                    $reasons = implode(' · ', array_filter(array_map(
+                        static fn (mixed $r): string => is_scalar($r) ? trim((string) $r) : '',
+                        (array) ($row['reasons'] ?? []),
+                    )));
+
+                    $failed[$code] = new BatchItemFailure($reasons !== '' ? $reasons : 'N11 satırı reddetti (sebep belirtilmedi).');
+                }
+            }
+
+            $totalPages = (int) ($skus['totalPages'] ?? 1);
+
+            if ($page + 1 >= $totalPages) {
+                break;
+            }
+        }
+
+        return BatchStatus::completed(failed: $failed, succeeded: $succeeded);
     }
 
     /**

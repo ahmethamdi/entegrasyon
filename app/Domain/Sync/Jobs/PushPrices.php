@@ -9,10 +9,12 @@ use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\AdapterReportedFailure;
+use App\Domain\Sync\Support\ChannelBatchRecorder;
 use App\Domain\Sync\Support\PriceBatchBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -72,11 +74,12 @@ final class PushPrices implements ShouldQueue
         AdapterRegistry $registry,
         ?CircuitBreaker $breaker = null,
         ?ChannelRateLimiter $limiter = null,
+        ?ChannelBatchRecorder $batches = null,
     ): void {
         TenantContext::set($this->tenantId);
 
         try {
-            $this->push($builder, $recorder, $registry, $breaker, $limiter);
+            $this->push($builder, $recorder, $registry, $breaker, $limiter, $batches);
         } finally {
             TenantContext::clear();
         }
@@ -88,9 +91,11 @@ final class PushPrices implements ShouldQueue
         AdapterRegistry $registry,
         ?CircuitBreaker $breaker,
         ?ChannelRateLimiter $limiter,
+        ?ChannelBatchRecorder $batches,
     ): void {
         $breaker ??= app(CircuitBreaker::class);
         $limiter ??= app(ChannelRateLimiter::class);
+        $batches ??= app(ChannelBatchRecorder::class);
 
         $operation = SyncOperation::query()->find($this->operationId);
 
@@ -154,6 +159,18 @@ final class PushPrices implements ShouldQueue
             $result = AdapterReportedFailure::throwIfFailed($adapter->pushPrices($batch));
 
             $recorder->recordSuccess($batch->operations(), $attempt, $result);
+
+            // ASENKRON KANAL: iş kimliği saklanır, satır hükmü sonra okunur
+            // (`sync:poll-batches`). `PushInventory` ile AYNI kural: push
+            // kararına karışmaz, istisna fırlatmaz.
+            $batches->remember(
+                $adapter,
+                SyncDomain::PRICE,
+                $connectionId,
+                $batch->operations(),
+                array_column($batch->items, 'external_id', 'listing_id'),
+                $result,
+            );
 
             // ⚠️ KISMİ BAŞARIDA BAŞARISIZ KALEMLER ÖLDÜRÜLÜR — `PushInventory`
             // ile AYNI kural (§13.4). `recordSuccess` onları `retrying`

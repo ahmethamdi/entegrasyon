@@ -80,6 +80,10 @@ final class ScheduledScansTest extends TestCase
             // işlerini yalnızca panele bakarsa öğrenir; §12'nin
             // "günlük özet" maddesi kâğıt üzerinde kalır.
             'alerts:dispatch',
+            // Asenkron kanal toplu işlerinin satır sonucu. Zamanlanmazsa
+            // stok/fiyat reddi SESSİZ kalır: push "başarılı" yazar ve
+            // ürün listesinde "Sorun var" hiç görünmez.
+            'sync:poll-batches',
         ] as $command) {
             $this->assertContains(
                 $command,
@@ -159,6 +163,10 @@ final class ScheduledScansTest extends TestCase
         // çıpaya takılıp boşuna sorgu atardı. Saat İNSAN okusun diye
         // seçildi: gece yarısı giden uyarı sabaha kadar okunmaz.
         $this->assertSame('0 9 * * *', $commands['alerts:dispatch']);
+
+        // Toplu iş sonucu: beş dakikalık. İş en geç 4 saatte biter; saatlik
+        // koşmak 4 saatlik pencerede yalnız dört şans bırakırdı.
+        $this->assertSame('*/5 * * * *', $commands['sync:poll-batches']);
     }
 
     /**

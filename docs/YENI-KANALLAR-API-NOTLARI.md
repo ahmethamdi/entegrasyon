@@ -1678,8 +1678,10 @@ hepsi kırmızı.
   Kişisel veri beyaz listeyle süzülüyor.
 - **Yazılmayanlar (bilinçli):** sipariş onayı ve kargo bildirimi (iki kargo
   modeli satıcıya göre değişiyor, yanlış modelin ucu hata döner;
-  `acknowledgeOrder` istek atmıyor), ürün açma/güncelleme, `batch-status`
-  okuma, fatura gönderimi, iade onay/red.
+  `acknowledgeOrder` istek atmıyor), ürün açma/güncelleme, fatura
+  gönderimi, iade onay/red. (`batch-status` okuma 8 Eki'de eklendi:
+  `SupportsBatchStatus`, `sync:poll-batches`; 4xxx kodlu `Failed` kalıcı,
+  kodsuz `Failed` geçici sayılıyor — DOĞRULANMADI.)
 
 **Bilinen sınırlar:**
 
@@ -2194,8 +2196,11 @@ kırmızı.
 - **Onay (3→12):** `acknowledgeOrder` → `PUT /order/updateOrderStatusList`.
   Yazıldı ama hiçbir akışa bağlı değil (gerekçe sınıf notunda: `12`'de
   kargolanmayan sipariş otomatik iadeye düşüyor ve satıcı puanı düşüyor).
-- **Yazılmayanlar:** ürün açma, kargo/takip bildirme, `lake-projections`
-  ile batch sonucu okuma, `getRefund` ile iade ayrıntısı.
+- **Yazılmayanlar:** ürün açma, kargo/takip bildirme, `getRefund` ile iade
+  ayrıntısı. (`lake-projections` ile batch sonucu okuma 8 Eki'de eklendi:
+  `SupportsBatchStatus`, `sync:poll-batches`; `5` "Onaya gönderildi"
+  başarı sayılmıyor, panelde "Bekliyor". DOĞRULANMADI: satır listesinin
+  zarftaki yeri, `2` "Hata oluştu"nun geçici olup olmadığı.)
 
 **Gerçek mağazada ilk bakılacaklar:**
 

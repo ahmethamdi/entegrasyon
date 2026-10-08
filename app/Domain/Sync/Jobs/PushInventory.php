@@ -10,10 +10,12 @@ use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\AdapterReportedFailure;
+use App\Domain\Sync\Support\ChannelBatchRecorder;
 use App\Domain\Sync\Support\InventoryBatchBuilder;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\RetryPolicy;
@@ -78,11 +80,12 @@ final class PushInventory implements ShouldQueue
         AdapterRegistry $registry,
         ?CircuitBreaker $breaker = null,
         ?ChannelRateLimiter $limiter = null,
+        ?ChannelBatchRecorder $batches = null,
     ): void {
         TenantContext::set($this->tenantId);
 
         try {
-            $this->push($builder, $recorder, $registry, $breaker, $limiter);
+            $this->push($builder, $recorder, $registry, $breaker, $limiter, $batches);
         } finally {
             TenantContext::clear();
         }
@@ -94,9 +97,11 @@ final class PushInventory implements ShouldQueue
         AdapterRegistry $registry,
         ?CircuitBreaker $breaker,
         ?ChannelRateLimiter $limiter,
+        ?ChannelBatchRecorder $batches,
     ): void {
         $breaker ??= app(CircuitBreaker::class);
         $limiter ??= app(ChannelRateLimiter::class);
+        $batches ??= app(ChannelBatchRecorder::class);
 
         $operation = SyncOperation::query()->find($this->operationId);
 
@@ -166,6 +171,19 @@ final class PushInventory implements ShouldQueue
 
             $recorder->recordSuccess($batch->operations(), $attempt, $result);
 
+            // ASENKRON KANAL: iş kimliği saklanır, satır hükmü sonra okunur
+            // (`sync:poll-batches`). Push kararına KARIŞMAZ ve istisna
+            // FIRLATMAZ — buradan sızan hata bu `try`'da kanal hatası
+            // sayılır ve kabul edilmiş yük "başarısız" yazılırdı.
+            $batches->remember(
+                $adapter,
+                SyncDomain::INVENTORY,
+                $connectionId,
+                $batch->operations(),
+                $this->externalIdsOf($batch),
+                $result,
+            );
+
             // ⚠️ KISMİ BAŞARIDA BAŞARISIZ KALEMLER ÖLDÜRÜLÜR (§13.4).
             //
             // `recordSuccess` onları `retrying` bırakır — istisna
@@ -219,6 +237,22 @@ final class PushInventory implements ShouldQueue
 
             $recorder->markDead($batch->operations(), $class);
         }
+    }
+
+    /**
+     * Yükteki kalemlerin kanala giden kimliği — listing_id → external_id.
+     *
+     * @return array<string, string>
+     */
+    private function externalIdsOf(InventoryPushBatch $batch): array
+    {
+        $ids = [];
+
+        foreach ($batch->items as $item) {
+            $ids[$item->listingId] = $item->externalId;
+        }
+
+        return $ids;
     }
 
     /**

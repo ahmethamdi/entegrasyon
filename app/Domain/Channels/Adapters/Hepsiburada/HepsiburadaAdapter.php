@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
@@ -20,7 +21,10 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\BatchItemFailure;
+use App\Domain\Sync\Support\BatchStatus;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
@@ -106,7 +110,7 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -167,6 +171,24 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
 
     /** Ofsetsiz kanal tarihleri için varsayılan dilim (DOĞRULANMADI). */
     private const CHANNEL_TIMEZONE = 'Europe/Istanbul';
+
+    /**
+     * Yükleme sonucunun sorgulanabildiği süre — DOĞRULANMADI: belgede
+     * saklama süresi yok. 24 saat varsayıldı; kanal unutursa 404 döner ve
+     * yoklama zaten bırakılır.
+     */
+    private const UPLOAD_RETENTION_SECONDS = 24 * 3600;
+
+    /**
+     * Yüklemenin BİTTİĞİNİ söyleyen `status` değerleri — DOĞRULANMADI:
+     * OpenAPI alanı serbest metin (`string`, enum yok). Bu listede olmayan
+     * her değer "sürüyor" sayılır; yanlışlıkla bitti saymak, henüz
+     * işlenmemiş satırları "başarılı" ilan ederdi.
+     */
+    private const UPLOAD_DONE_STATUSES = ['done', 'completed', 'complete', 'finished', 'success', 'succeeded', 'processed', 'partiallycompleted', 'failed', 'error'];
+
+    /** Yüklemenin TAMAMEN başarısız bittiğini söyleyen değerler (DOĞRULANMADI). */
+    private const UPLOAD_FAILED_STATUSES = ['failed', 'error'];
 
     public function __construct(
         private readonly ChannelConnection $connection,
@@ -608,6 +630,129 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
             // Asenkron işin kimliği — sonuç `…-uploads/id/{id}`.
             'upload_id' => $response->json('id'),
         ]);
+    }
+
+    // ------------------------------------------------------- toplu iş sonucu
+
+    public function batchIdFrom(AdapterResult $result): ?string
+    {
+        $id = $result->data['upload_id'] ?? null;
+
+        return is_scalar($id) && trim((string) $id) !== '' ? (string) $id : null;
+    }
+
+    public function batchRetentionSeconds(SyncDomain $domain): int
+    {
+        return self::UPLOAD_RETENTION_SECONDS;
+    }
+
+    /**
+     * Yükleme sonucu — `GET /Listings/.../{stock|price}-uploads/id/{id}`.
+     *
+     * Yanıt (OpenAPI `StockUploadResultRepresentation` /
+     * `PriceUploadResultRepresentation`): `{id, status, createdAt, total,
+     * errors[{elementNo, hepsiburadaSku, merchantSku, errors[]}]}`, fiyatta
+     * ek `priceValidations[{hepsiburadaSku, merchantSku, type, minPrice,
+     * maxPrice, description}]`.
+     *
+     * YALNIZ HATALAR LİSTELENİR: listede olmayan satır başarılı sayılır
+     * (`unlistedSucceeded`). Kimliği (`hepsiburadaSku`) olmayan hata
+     * `unmatched` olur ve çıkarım İPTAL edilir — o hata hangi satıra aitse
+     * onu "başarılı" saymak sorunu panelden kaybettirirdi. `elementNo`
+     * (sıra) BİLİNÇLİ kullanılmaz: konumla eşleştirme yasak.
+     *
+     * DOĞRULANMADI: `status` değerleri (bkz. sabitler) · `priceValidations`
+     * satırının fiyatı REDDETTİĞİ (fiyat bandı `OutOfPriceRange` — bant
+     * dışı fiyat yazılmaz varsayıldı) · saklama süresi.
+     */
+    public function fetchBatchStatus(string $batchId, SyncDomain $domain): BatchStatus
+    {
+        $template = $domain === SyncDomain::PRICE
+            ? HepsiburadaEndpoints::PRICE_UPLOAD_STATUS
+            : HepsiburadaEndpoints::STOCK_UPLOAD_STATUS;
+
+        $response = $this->client->get(
+            endpoint: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_LISTING, $this->isTest())
+                .HepsiburadaEndpoints::path($template, ['merchantId' => $this->merchantId(), 'id' => $batchId]),
+            headers: $this->defaultHeaders(),
+        );
+
+        if ($response->status() === 404) {
+            return BatchStatus::expired();
+        }
+
+        $response->throw();
+
+        $status = mb_strtolower(str_replace([' ', '_', '-'], '', (string) ($response->json('status') ?? '')));
+
+        if (! in_array($status, self::UPLOAD_DONE_STATUSES, true)) {
+            return BatchStatus::pending();
+        }
+
+        $failed = [];
+        $unmatched = [];
+
+        foreach ((array) ($response->json('errors') ?? []) as $error) {
+            if (! is_array($error)) {
+                continue;
+            }
+
+            $texts = array_values(array_filter(
+                array_map(static fn (mixed $t): string => is_scalar($t) ? trim((string) $t) : '', (array) ($error['errors'] ?? [])),
+                static fn (string $t): bool => $t !== '',
+            ));
+            $reason = $texts === [] ? 'Hepsiburada satırı reddetti (sebep belirtilmedi).' : implode(' · ', array_unique($texts));
+
+            $this->collectFailure($error, $reason, $failed, $unmatched);
+        }
+
+        if ($domain === SyncDomain::PRICE) {
+            foreach ((array) ($response->json('priceValidations') ?? []) as $validation) {
+                if (! is_array($validation)) {
+                    continue;
+                }
+
+                $range = is_numeric($validation['minPrice'] ?? null) && is_numeric($validation['maxPrice'] ?? null)
+                    ? sprintf(' (izin verilen aralık: %s – %s TL)', $validation['minPrice'], $validation['maxPrice'])
+                    : '';
+                $reason = trim((string) ($validation['description'] ?? $validation['type'] ?? 'Fiyat Hepsiburada fiyat bandı dışında.')).$range;
+
+                $this->collectFailure($validation, $reason, $failed, $unmatched);
+            }
+        }
+
+        // Tamamen başarısız biten yükleme hatasız da gelebilir: o zaman
+        // listelenmeyen satırlar başarılı SAYILMAZ (bilinmiyor kalır).
+        $wholeFailed = in_array($status, self::UPLOAD_FAILED_STATUSES, true);
+
+        return BatchStatus::completed(
+            failed: $failed,
+            unlistedSucceeded: ! $wholeFailed,
+            unmatched: $unmatched,
+        );
+    }
+
+    /**
+     * Hata satırını `hepsiburadaSku` anahtarına yazar; kimlik yoksa
+     * `unmatched`. Aynı SKU'nun birden çok hatası birleştirilir.
+     *
+     * @param  array<string, mixed>  $row
+     * @param  array<string, BatchItemFailure>  $failed
+     * @param  list<string>  $unmatched
+     */
+    private function collectFailure(array $row, string $reason, array &$failed, array &$unmatched): void
+    {
+        $hbSku = trim((string) ($row['hepsiburadaSku'] ?? ''));
+
+        if ($hbSku === '') {
+            $unmatched[] = $reason;
+
+            return;
+        }
+
+        $failed[$hbSku] = new BatchItemFailure(
+            isset($failed[$hbSku]) ? $failed[$hbSku]->reason.' · '.$reason : $reason,
+        );
     }
 
     /**

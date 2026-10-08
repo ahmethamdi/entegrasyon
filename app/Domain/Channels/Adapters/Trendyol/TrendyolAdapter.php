@@ -16,6 +16,7 @@ use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
+use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
@@ -28,8 +29,11 @@ use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\ApprovalStatusBatch;
+use App\Domain\Sync\Support\BatchItemFailure;
+use App\Domain\Sync\Support\BatchStatus;
 use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
@@ -94,7 +98,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -145,6 +149,14 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
 
     /** Üretim entegrasyon adresi (apigw). Eski `sapigw` kapatıldı. */
     public const BASE_URL = 'https://apigw.trendyol.com/integration';
+
+    /**
+     * Toplu iş sonucunun sorgulanabildiği süre. DOĞRULANMADI: ürün işleri
+     * için ~4 saat gözlendi (`batchFailure` notu); stok-fiyat işi için
+     * resmi bir süre bulunamadı, aynısı varsayıldı. Kanal işi unutursa 404
+     * döner ve yoklama zaten bırakılır.
+     */
+    private const BATCH_RETENTION_SECONDS = 4 * 3600;
 
     /** Trendyol sınırı dakika penceresinde bildirir. */
     private const RATE_LIMIT_WINDOW_SECONDS = 60;
@@ -551,6 +563,117 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
             'pushed' => $batch->count(),
             'batch_request_id' => $response->json('batchRequestId'),
         ]);
+    }
+
+    // ------------------------------------------------------- toplu iş sonucu
+
+    public function batchIdFrom(AdapterResult $result): ?string
+    {
+        $id = $result->data['batch_request_id'] ?? null;
+
+        return is_scalar($id) && trim((string) $id) !== '' ? (string) $id : null;
+    }
+
+    public function batchRetentionSeconds(SyncDomain $domain): int
+    {
+        return self::BATCH_RETENTION_SECONDS;
+    }
+
+    /**
+     * Stok-fiyat toplu işinin satır sonucu — `getBatchRequestResult`.
+     *
+     * Ürün yaratmada zaten kullanılan uç nokta (`batchFailure`): stok-fiyat
+     * işi de AYNI `products/batch-requests/{id}` altında sorgulanır
+     * (V3.0 §09.3 "batchRequestId yoklaması").
+     *
+     * - 404 → iş unutuldu, `expired` (red UYDURULMAZ).
+     * - Üst düzey `status` `COMPLETED` değilse iş sürüyor.
+     * - DOĞRULANMADI: stok-fiyat yanıtında üst düzey `status` alanının hep
+     *   geldiği. Gelmezse iş yalnız HER satır SUCCESS/FAILED olduğunda
+     *   bitmiş sayılır.
+     * - Satır anahtarı `requestItem.barcode` (gönderdiğimiz barkod), yoksa
+     *   satırın kendi `barcode`'u. DOĞRULANMADI: alan adı resmi örnekten,
+     *   gerçek hesapta ölçülmedi.
+     * - `failureReasons` metin listesi; nesne gelirse `message`/`reason`.
+     */
+    public function fetchBatchStatus(string $batchId, SyncDomain $domain): BatchStatus
+    {
+        $response = $this->get($this->sellerUrl('product', 'products/batch-requests/'.rawurlencode($batchId)));
+
+        if ($response->status() === 404) {
+            return BatchStatus::expired();
+        }
+
+        $response->throw();
+
+        $items = array_values(array_filter((array) ($response->json('items') ?? []), 'is_array'));
+        $status = strtoupper(trim((string) ($response->json('status') ?? '')));
+        $terminal = static fn (array $item): bool => in_array(
+            strtoupper((string) ($item['status'] ?? '')),
+            ['SUCCESS', 'FAILED'],
+            true,
+        );
+
+        if ($status !== '' && $status !== 'COMPLETED') {
+            return BatchStatus::pending();
+        }
+
+        if ($status === '' && ($items === [] || count(array_filter($items, $terminal)) !== count($items))) {
+            return BatchStatus::pending();
+        }
+
+        $failed = [];
+        $succeeded = [];
+        $unmatched = [];
+
+        foreach ($items as $item) {
+            $request = is_array($item['requestItem'] ?? null) ? $item['requestItem'] : [];
+            $barcode = trim((string) ($request['barcode'] ?? $item['barcode'] ?? ''));
+            $itemStatus = strtoupper((string) ($item['status'] ?? ''));
+
+            if ($itemStatus === 'SUCCESS' && $barcode !== '') {
+                $succeeded[] = $barcode;
+
+                continue;
+            }
+
+            if ($itemStatus !== 'FAILED') {
+                continue;
+            }
+
+            $reason = self::failureText($item['failureReasons'] ?? [])
+                ?? 'Trendyol toplu işi satırı reddetti (sebep belirtilmedi).';
+
+            if ($barcode === '') {
+                $unmatched[] = $reason;
+
+                continue;
+            }
+
+            $failed[$barcode] = new BatchItemFailure($reason);
+        }
+
+        return BatchStatus::completed(failed: $failed, succeeded: $succeeded, unmatched: $unmatched);
+    }
+
+    /**
+     * Sebep listesi → tek metin; boşsa null.
+     */
+    private static function failureText(mixed $reasons): ?string
+    {
+        $out = [];
+
+        foreach ((array) $reasons as $reason) {
+            if (is_array($reason)) {
+                $reason = $reason['message'] ?? $reason['reason'] ?? null;
+            }
+
+            if (is_string($reason) && trim($reason) !== '') {
+                $out[] = trim($reason);
+            }
+        }
+
+        return $out === [] ? null : implode(' · ', array_unique($out));
     }
 
     /**
