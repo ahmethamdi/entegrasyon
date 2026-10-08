@@ -336,6 +336,46 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // Çiçeksepeti — pazaryeri (marketplace), REST + yalnız `x-api-key`
+        // (8 Eki 2026).
+        //
+        // ⚠️ `is_active = false`: resmi dokümana (ciceksepeti.dev) göre
+        // yazıldı, gerçek mağazayla SINANMADI. API Almanya IP'sine HTML 403
+        // dönüyor (ölçüldü) — sunucu IP'si açılmadan bağlantı kurulamaz
+        // (bkz. `CiceksepetiAdapter` sınıf notu).
+        $this->upsert(
+            ['code' => 'ciceksepeti'],
+            [
+                'name' => 'Çiçeksepeti',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Ciceksepeti\\CiceksepetiAdapter',
+                'capabilities' => [
+                    // Ürün açma (`POST /Products`) ve kargo adımı bu turda YAZILMADI.
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    // Resmi: stok-fiyat sn'de 1, listeler 5 sn'de 1, aynı
+                    // stok-fiyat gövdesi 30 dk'da 1. Kova saniyede 1'in
+                    // altını ifade edemez; en sıkı hâl burada, 5 sn ve 30 dk
+                    // kuralları adapter'da.
+                    // ⚠️ ANAHTAR ADI `requests_per_second`.
+                    'requests_per_second' => 1,
+                    'burst_capacity' => 1,
+                    'max_concurrent' => 1,
+                ],
+                // Webhook yok; sipariş, iptal ve iade yalnız yoklamayla.
+                'supports_webhooks' => false,
+                'is_active' => false,
+            ],
+        );
+
         // DÖRDÜNCÜ KANAL — mağaza (storefront). V3.0 · Faz 1 · §06.
         //
         // ⚠️ v2.2'DEN BİLİNÇLİ SAPMA: doküman §2/§11 Shopify'ı ayrı bir

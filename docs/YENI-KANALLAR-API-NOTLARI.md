@@ -1627,6 +1627,93 @@ Müşteriye fatura e-postası gönderilir. Zorunlu olup olmadığı yazmıyor
     false` ya da stok 0. 34Pazar'daki "kanaldan kaldır" işlemi
     Çiçeksepeti'nde "stok 0 + pasif varyant" olarak eşlenmeli.
 
+### Kod durumu
+
+8 Ekim 2026: `app/Domain/Channels/Adapters/Ciceksepeti/CiceksepetiAdapter.php`
+(+ `CiceksepetiFault.php`) yazıldı. Kanal `is_active = false`, gerçek
+mağazayla sınanmadı. **API Almanya'dan erişilemiyor (Tuzaklar 1); sunucu
+IP'si açılmadan ya da Türkiye çıkışlı vekil kurulmadan bağlantı kurulamaz.**
+Testler: `tests/Feature/Channels/CiceksepetiAdapterTest.php` (26) ve
+`tests/Feature/Orders/CiceksepetiOrderSliceTest.php` (10). 26 mutasyonun
+hepsi kırmızı.
+
+**Yapılanlar:**
+
+- **Kimlik:** kasada `ciceksepeti_api_key` (`api_key` değil, Basic auth
+  çiftinin yarısı). `settings`'te `ciceksepeti_seller_id` (yalnız rakam,
+  `User-Agent: <SatıcıId>-34Pazar`'a giriyor) ve isteğe bağlı
+  `ciceksepeti_environment` (`test` = sandbox hostu). Anahtar yoksa istek
+  atılmıyor.
+- **Erişim engeli:** HTML gövdeli 403 ayrı tanınıyor. Kalıcı
+  AUTHENTICATION (devre süresiz açılır) ama mesaj "Çiçeksepeti erişimi
+  IP'yi engelliyor — sunucu IP'sini Çiçeksepeti'ye bildir." Bağlanma
+  ekranında bağlantı `pending` kalıyor ve son hata bunu söylüyor.
+- **Hız sınırları:** farklı istekler arası (ürün/sipariş/iade listesi 5 sn,
+  stok-fiyat 1 sn) bağlantı + uç nokta başına önbellek damgasıyla tutuluyor,
+  erken istek **bekliyor** (`Sleep`). Sağlık kontrolü `SortMethod`'u 1–8
+  döndürüyor (aynı sorgu 10 dk kuralı).
+- **Aynı gövde 30 dk:** stok-fiyat gövdesinin özeti 30 dk tutuluyor.
+  Tekrar gelirse istek atılmıyor, kalan süreyle `RATE_LIMITED` dönüyor.
+  Karar gerekçesi (5→4→5 senaryosu) sınıf notunda: başarı denseydi kanal
+  kalıcı olarak 4'te kalırdı. Bilinen bedel: 4→5→4'te kanal en çok 30 dk
+  fazla stok gösterir. 429 gelirse özet siliniyor.
+- **İçe aktarma:** `GET /Products`, sayfa 1'den, 60'lık, statü süzgeci yok
+  (stoğu tükenen ve satışa kapalı da geliyor). Kimlik `stockCode`, üst
+  kimlik `mainProductCode`. Alan adları harf duyarsız ve çok adlı
+  (`StockQuantity`/`stock`, `salesPrice`/`TotalPrice`). Tur başına 50 sayfa
+  (3000 varyant).
+- **Stok/fiyat:** `PUT /Products/price-and-stock`, ≤200 kalem. Stok yükü
+  yalnız `stockCode` + `stockQuantity`, fiyat yükü yalnız `stockCode` +
+  `salesPrice` (+ indirim %1–%80 aralığındaysa `listPrice`). Sıfır fiyat
+  gönderilmiyor. `batchId` sonuçta `batch_id`; yoksa istisna.
+- **Sipariş:** üç aşama. (a) `GetOrders` aktif satırlar, ≤13 günlük
+  dilimler, iki uçtan 3 saat pay → "created" / durum. İlk görülen sipariş
+  dolu sayfadaysa `orderNo` ile bütünüyle yeniden okunuyor. (b) `GetOrders`
+  `isOrderStatusActive: false`, en az 12 gün geriye → iptal (yalnız açık
+  `false` ve "created"e girmiş satır). (c) `getcanceledorders`, iptal/iade
+  tarihiyle, 27 gün geriye → iade (yalnız `cancelType = 2`, değişim değil,
+  "Bayi Onay" ya da "Müşteri Haklı" + "İade Tedarikçide"). Miktar
+  "created" kaydından. Olay kimlikleri `{orderId}:created`,
+  `:cancel:{orderItemId}`, `:return:{orderItemId}`, `:status:{imza}`.
+  Kişisel veri beyaz listeyle süzülüyor.
+- **Yazılmayanlar (bilinçli):** sipariş onayı ve kargo bildirimi (iki kargo
+  modeli satıcıya göre değişiyor, yanlış modelin ucu hata döner;
+  `acknowledgeOrder` istek atmıyor), ürün açma/güncelleme, `batch-status`
+  okuma, fatura gönderimi, iade onay/red.
+
+**Bilinen sınırlar:**
+
+- İçe aktarma sayfa başına 5 sn bekliyor; `ImportProductsFromChannelJob`
+  300 sn'de kesildiği için ~3000 varyanttan büyük katalog tek turda gelmez.
+  Çekirdekte devam imleci gerekir.
+- Sipariş yoklaması bağlantı başına en az ~10 sn bekliyor (3 istek × 5 sn
+  aralık); `orders:poll` bağlantıları sırayla yokladığı için çok sayıda
+  Çiçeksepeti bağlantısı turu uzatır.
+
+**Gerçek mağazada ilk bakılacaklar:**
+
+1. Sunucudan `curl -s -o /dev/null -w "%{http_code}" -H "x-api-key: x" -A 1
+   https://apis.ciceksepeti.com/api/v1/Products` — 403 HTML mi JSON hata mı.
+   HTML ise Çiçeksepeti'ye IP bildirimi ya da TR vekil.
+2. Yanlış anahtarla dönen HTTP kodu ve gövde (`classifyError` 401/403/
+   "Geçersiz API Key" metnine göre kuruldu).
+3. Ürün listesindeki gerçek alan adları (`StockQuantity` mı `stock` mı,
+   `salesPrice` mı `TotalPrice` mı), `productStatusType` sayı mı metin mi.
+4. İlk stok isteğinin `batchId`'si `GET /Products/batch-status/{id}` ile
+   elle sorgulanıp `Success` görülmeli. İstek alanı `stockQuantity` mı
+   `StockQuantity` mı (örnek ikincisini yazıyor).
+5. Aynı gövde 30 dk içinde gönderilirse Çiçeksepeti ne dönüyor (adapter
+   göndermediği için normalde görülmez; elle denenmeli).
+6. `GetOrders` tarih süzgeci oluşturma mı güncellenme tarihine mi, TR saati
+   mi UTC mi. `orderCreateDate` gerçekten `dd/MM/yyyy` mi.
+7. `isOrderStatusActive: false` isteği iptal satırlarını getiriyor mu,
+   alan yanıtta `false` (boolean) mı.
+8. `getcanceledorders` yanıtında karar/statü sayısal alanları var mı;
+   iade adedi alt siparişin tamamı mı. `pageSize` üst sınırı.
+9. Satır `totalPrice` ile `itemPrice` farkı; `cargoPrice` sipariş başına mı
+   satır başına mı.
+10. Sınır aşılınca dönen kod (429 mu, `Retry-After` var mı).
+
 ---
 
 ## 6. Pazarama (REST + OAuth2 client_credentials)

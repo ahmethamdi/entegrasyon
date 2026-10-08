@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Support;
 
+use App\Domain\Channels\Adapters\Ciceksepeti\CiceksepetiAdapter;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
@@ -395,6 +396,45 @@ final class ChannelConnectForm
             'token_exchange' => true,
             'help' => 'Pazarama satıcı panelinde (isortagim.pazarama.com) Hesabım → Hesap Bilgileri → '
                 .'Entegrasyon Bilgileri → "Yeni API Key Üret" ile Client ID ve Client Secret üret ve buraya gir.',
+        ],
+
+        'ciceksepeti' => [
+            // Mağaza bazlı TEK anahtar, `x-api-key` başlığında (8 Eki 2026).
+            // ⚠️ Ad `api_key` DEĞİL: o ad `ChannelHttpClient`'ın Basic auth
+            // çiftinin yarısıdır.
+            'secrets' => [
+                [
+                    'name' => CiceksepetiAdapter::API_KEY_SECRET,
+                    'label' => 'API anahtarı (x-api-key)',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'Satıcı paneli → Hesap Yönetimi → Entegrasyon Bilgilerim. Daha önce hiç oluşturulmadıysa Çiçeksepeti Destek Ekibi\'nden "API Entegrasyon Süreçleri" konusuyla talep et.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => CiceksepetiAdapter::SELLER_ID_KEY,
+                    'label' => 'Çiçeksepeti satıcı ID',
+                    'placeholder' => '123456',
+                    // ⚠️ YALNIZCA RAKAM: değer `User-Agent` başlığına girer;
+                    // satır sonu ya da denetim karakteri başlık enjeksiyonu olurdu.
+                    'rules' => ['regex:/^[0-9]{1,20}$/'],
+                    'hint' => 'Entegrasyon Bilgilerim sayfasındaki Satıcı ID. Aynı sayfadaki Entegratör Adı alanına 34Pazar yaz.',
+                ],
+                [
+                    'name' => CiceksepetiAdapter::ENVIRONMENT_KEY,
+                    'label' => 'Ortam (isteğe bağlı)',
+                    'placeholder' => 'canli',
+                    'optional' => true,
+                    'rules' => ['in:canli,test'],
+                    'hint' => 'Boş bırakırsan canlı mağaza. Çiçeksepeti\'nden ayrı bir test anahtarı aldıysan test yaz.',
+                ],
+            ],
+            'account' => CiceksepetiAdapter::SELLER_ID_KEY,
+            'oauth' => false,
+            'help' => 'Çiçeksepeti satıcı panelinde Hesap Yönetimi → Entegrasyon Bilgilerim\'den API anahtarını ve Satıcı ID\'ni al, '
+                .'Entegratör Adı alanına 34Pazar yaz. Çiçeksepeti yurt dışı IP\'lerden gelen istekleri engelliyor; '
+                .'bağlantı "erişim engellendi" derse sunucu IP\'mizi Çiçeksepeti\'ye bildirmen gerekir.',
         ],
 
         'shopify' => [

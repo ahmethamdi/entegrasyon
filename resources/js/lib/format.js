@@ -30,6 +30,7 @@ const channelNames = {
     ticimax: 'Ticimax',
     n11: 'N11',
     pazarama: 'Pazarama',
+    ciceksepeti: 'Çiçeksepeti',
     shopify: 'Shopify',
     woocommerce: 'WooCommerce',
     etsy: 'Etsy',
