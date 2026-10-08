@@ -251,3 +251,13 @@ Schedule::command('credentials:refresh')
     ->everyFifteenMinutes()
     ->onOneServer()
     ->withoutOverlapping();
+
+// KANAL SAĞLIK TARAMASI — 8 Eki 2026 canlı olayı: Etsy anahtarı kanal
+// tarafında geçersiz oldu, 31 saat her çağrı 403 aldı ama bağlantı panelde
+// "sağlıklı" kaldı (sağlık yalnız bağlanırken ölçülüyordu). Saatlik: kopuk
+// bağlantı en geç bir saatte kırmızıya döner, düzelince kendiliğinden yeşile.
+// Etsy `GET /users/me` = günde 24 istek, 10.000'lik kotada önemsiz.
+Schedule::command('channels:health')
+    ->hourly()
+    ->onOneServer()
+    ->withoutOverlapping();
