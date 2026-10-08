@@ -894,5 +894,12 @@
     "N11 API şifresini ekranda göstermez, hesabının e-posta adresine gönderir.": "N11 doesn't show the API secret on screen; it emails it to your account address.",
     "n11 mağaza adı": "n11 store name",
     "n11'deki mağaza adın. Bağlantıyı ayırt etmek için kullanılır; tek API adresini bütün satıcılar paylaşır.": "Your store name on n11. It identifies this connection, since all sellers share a single API address.",
-    "n11 Satıcı Ofisi → Hesabım → API Hesapları'ndan bir API hesabı oluştur. Anahtarı ekrandan, şifreyi e-postandan alıp buraya gir. n11depom ürün ve siparişleri bu bağlantıya gelmez.": "Create an API account in n11 Seller Office → My Account → API Accounts. Enter the key shown on screen and the secret from your email here. n11depom products and orders don't come through this connection."
+    "n11 Satıcı Ofisi → Hesabım → API Hesapları'ndan bir API hesabı oluştur. Anahtarı ekrandan, şifreyi e-postandan alıp buraya gir. n11depom ürün ve siparişleri bu bağlantıya gelmez.": "Create an API account in n11 Seller Office → My Account → API Accounts. Enter the key shown on screen and the secret from your email here. n11depom products and orders don't come through this connection.",
+    "Pazarama bu değeri yalnız bir kez gösterir. Yeni anahtar üretirsen eskisi hemen geçersiz olur.": "Pazarama shows this value only once. Generating a new key revokes the old one immediately.",
+    "Pazarama mağaza adı": "Pazarama store name",
+    "Pazarama'daki mağaza adın. Bağlantıyı ayırt etmek için kullanılır; tek API adresini bütün satıcılar paylaşır.": "Your store name on Pazarama. It identifies this connection, since all sellers share a single API address.",
+    "API anahtarının üretildiği gün (isteğe bağlı)": "Day the API key was generated (optional)",
+    "YYYY-AA-GG": "YYYY-MM-DD",
+    "Pazarama API şifresi üretildiği günden 365 gün sonra geçersiz olur. Günü yazarsan bitişe 14 gün kala uyarırız.": "A Pazarama API secret expires 365 days after it was generated. Enter the day and we'll warn you 14 days before it expires.",
+    "Pazarama satıcı panelinde (isortagim.pazarama.com) Hesabım → Hesap Bilgileri → Entegrasyon Bilgileri → \"Yeni API Key Üret\" ile Client ID ve Client Secret üret ve buraya gir.": "In the Pazarama seller panel (isortagim.pazarama.com), go to My Account → Account Information → Integration Information → \"Yeni API Key Üret\" to generate a Client ID and Client Secret, then enter them here."
 }

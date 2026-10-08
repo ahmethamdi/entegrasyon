@@ -21,6 +21,32 @@ abstract class TestCase extends BaseTestCase
 {
     protected FakePaymentGateway $payments;
 
+    /**
+     * RefreshDatabase SİLMEDEN önce: veritabanı adı `_test` ile bitmiyorsa DUR.
+     *
+     * 8 Eki 2026: `bootstrap/cache/config.php` APP_ENV=local ile önbellekte
+     * kaldı, phpunit.xml'in DB_DATABASE'i hiç okunmadı ve takım YEREL
+     * geliştirme veritabanını sıfırladı. Önbellek her zaman temizlenmeyebilir;
+     * bu kontrol hangi sebeple olursa olsun yanlış veritabanının silinmesini
+     * engeller.
+     *
+     * `setUpTraits()` içinde: RefreshDatabase'in kendi `beforeRefreshingDatabase()`
+     * kancası test sınıfındaki trait tarafından EZİLİR (trait > miras).
+     */
+    protected function setUpTraits()
+    {
+        $database = (string) DB::connection()->getDatabaseName();
+
+        if (isset(class_uses_recursive(static::class)[RefreshDatabase::class]) && ! str_ends_with($database, '_test')) {
+            fwrite(STDERR, "\nTEST DURDURULDU: veritabanı '{$database}' — yalnız *_test veritabanı sıfırlanır. "
+                ."bootstrap/cache/config.php'yi sil (php artisan config:clear) ve tekrar koş.\n");
+
+            exit(1);
+        }
+
+        return parent::setUpTraits();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();

@@ -2068,6 +2068,67 @@ kontrolü.
 5. İlk gerçek siparişte doğrulanacaklar: token cevap biçimi, tarih saat
    dilimi, statü filtresi parametresi, 10 sn kuralı aşılınca dönen hata.
 
+### Kod durumu
+
+8 Ekim 2026: `app/Domain/Channels/Adapters/Pazarama/PazaramaAdapter.php`
+yazıldı. Kanal `is_active = false`, gerçek mağazayla sınanmadı. Testler:
+`tests/Feature/Channels/PazaramaAdapterTest.php` (21) ve
+`tests/Feature/Orders/PazaramaOrderSliceTest.php` (10). 22 mutasyonun hepsi
+kırmızı.
+
+**Yapılanlar:**
+
+- **Kimlik:** kasada `client_id` / `client_secret` (ikas'la aynı adlar,
+  `BASIC_AUTH_KEY_PAIRS` içinde yok). Token Basic başlıkla ve form gövdeyle
+  alınıyor. Bağlanırken `token_exchange` ile alınıyor, sonra
+  `credentials:refresh` taraması yeniliyor (payı 40 dk). Hem
+  `access_token` hem `data.accessToken` okunuyor. Süre gelmezse resmi
+  1 saat yazılıyor.
+- **Secret 365 gün:** formda isteğe bağlı "API anahtarının üretildiği gün"
+  alanı var (`pazarama_secret_created_at`). Tarih girildiyse bitiş
+  `refresh_expires_at` olarak yazılıyor. Mevcut rozet (`TokenStatus`) ve
+  `token_expiring_soon` metriği 14 gün kala uyarıyor. Tarih girilmezse
+  rozet 1 saatlik erişim anahtarını gösteriyor (ikas'taki gibi).
+- **İçe aktarma:** yalnız `approved` uç noktası, imleçle, `Size=100`.
+  Kimlik `code` (barkod), üst kimlik `groupCode`, SKU `stockCode`.
+  Onaysız ürünler alınmıyor.
+- **Stok/fiyat:** `updateStock-v2` / `updatePrice-v2`, istek başına
+  ≤3000. Stok yükünde fiyat, fiyat yükünde stok yok. `dataId` sonuçta
+  `batch_id` olarak taşınıyor. 10 sn kuralı adapter'da, bağlantı başına
+  önbellek kilidiyle uygulanıyor: erken gelen yazım istek atmadan
+  `RATE_LIMITED` + kalan süre dönüyor. Çekirdeğin kovası saniyede 1'in
+  altını ifade edemediği için seeder profili 1/sn, patlama 1, tek eşzamanlı.
+- **Sipariş:** `getOrdersForApiV2`. 27 günlük gün dilimleri,
+  `endDate` = yarın, yeniden eskiye. Her turda en az 30 gün geriye
+  bakılıyor (güncellenme filtresi yok). Aynı barkodun kalemleri tek satırda
+  toplanıyor. İptal `6`/`13`, iade `8` (`10` yalnız geçmişte `8` varsa).
+  Alınmamış siparişin iptali/iadesi stok değiştirmiyor. Kişisel veri
+  beyaz listeyle süzülüyor.
+- **Onay (3→12):** `acknowledgeOrder` → `PUT /order/updateOrderStatusList`.
+  Yazıldı ama hiçbir akışa bağlı değil (gerekçe sınıf notunda: `12`'de
+  kargolanmayan sipariş otomatik iadeye düşüyor ve satıcı puanı düşüyor).
+- **Yazılmayanlar:** ürün açma, kargo/takip bildirme, `lake-projections`
+  ile batch sonucu okuma, `getRefund` ile iade ayrıntısı.
+
+**Gerçek mağazada ilk bakılacaklar:**
+
+1. Token cevabının biçimi (`access_token` mı `data.accessToken` mı) ve
+   `expires_in` gelip gelmediği.
+2. `getOrdersForApiV2` bölme kullanmayan satıcıda da çalışıyor mu, yanıtı
+   V1 ile aynı biçimde mi. `pageSize: 500` kabul ediliyor mu.
+3. Bölgesiz `orderDate` Türkiye saati mi. İstekteki gün sınırları doğru
+   siparişleri getiriyor mu.
+4. Otomatik onaylanan iade sipariş tarafında `8` mi `10` mu görünüyor.
+   Yalnız `10` görülürse günlükte `pazarama.refund_without_approved_return`
+   uyarısı çıkar ve stok eklenmez.
+5. Kalem `totalPrice` adet toplamı mı birim mi. `orderAmount` kargoyu
+   içeriyor mu.
+6. İlk stok/fiyat isteğinin `dataId`'si `lake-projections` ile elle
+   sorgulanıp sonuç "Başarılı" görülmeli (adapter bunu okumuyor).
+7. 10 sn kuralı aşılınca dönen hata biçimi. Bugün adapter kuralı kendisi
+   uyguladığı için görülmemesi beklenir.
+8. `Code` süzgecinin tam eşleşme yapıp yapmadığı (mutabakat).
+
 ---
 
 ## 7. Yetenek → işlem eşleme tablosu (özet)

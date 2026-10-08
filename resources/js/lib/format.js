@@ -29,6 +29,7 @@ const channelNames = {
     ikas: 'ikas',
     ticimax: 'Ticimax',
     n11: 'N11',
+    pazarama: 'Pazarama',
     shopify: 'Shopify',
     woocommerce: 'WooCommerce',
     etsy: 'Etsy',

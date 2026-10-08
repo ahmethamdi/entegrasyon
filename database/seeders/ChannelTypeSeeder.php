@@ -298,6 +298,44 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // Pazarama — pazaryeri (marketplace), REST + OAuth2 client_credentials
+        // (8 Eki 2026).
+        //
+        // ⚠️ `is_active = false`: resmi API Entegrasyon Portali'na göre
+        // yazıldı, gerçek mağazayla SINANMADI. Sandbox yok; test gerçek
+        // mağazada yapılır (bkz. `PazaramaAdapter` sınıf notu).
+        $this->upsert(
+            ['code' => 'pazarama'],
+            [
+                'name' => 'Pazarama',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Pazarama\\PazaramaAdapter',
+                'capabilities' => [
+                    // Ürün açma (`product/create`) ve kargo adımı bu turda YAZILMADI.
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    // Resmi sınır: satıcı başına iki stok-fiyat isteği arası
+                    // 10 sn. Kova saniyede 1'in altını ifade edemez; en sıkı
+                    // hâl burada, 10 sn kapısı adapter'da.
+                    // ⚠️ ANAHTAR ADI `requests_per_second`.
+                    'requests_per_second' => 1,
+                    'burst_capacity' => 1,
+                    'max_concurrent' => 1,
+                ],
+                // Webhook yok; sipariş, iptal ve iade yalnız yoklamayla.
+                'supports_webhooks' => false,
+                'is_active' => false,
+            ],
+        );
+
         // DÖRDÜNCÜ KANAL — mağaza (storefront). V3.0 · Faz 1 · §06.
         //
         // ⚠️ v2.2'DEN BİLİNÇLİ SAPMA: doküman §2/§11 Shopify'ı ayrı bir

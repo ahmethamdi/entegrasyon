@@ -9,6 +9,7 @@ use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
 use App\Domain\Channels\Adapters\N11\N11Adapter;
+use App\Domain\Channels\Adapters\Pazarama\PazaramaAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Ticimax\TicimaxAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
@@ -350,6 +351,50 @@ final class ChannelConnectForm
             'oauth' => false,
             'help' => 'n11 Satıcı Ofisi → Hesabım → API Hesapları\'ndan bir API hesabı oluştur. '
                 .'Anahtarı ekrandan, şifreyi e-postandan alıp buraya gir. n11depom ürün ve siparişleri bu bağlantıya gelmez.',
+        ],
+
+        'pazarama' => [
+            // Mağaza bazlı clientId + clientSecret (8 Eki 2026), partner onayı
+            // yok. Çift kasaya gider; 1 saatlik erişim anahtarı bağlanırken
+            // `client_credentials` ile alınır (`token_exchange`). Adlar ikas'la
+            // aynı ve `ChannelHttpClient`'ın Basic auth çiftleri arasında YOK.
+            'secrets' => [
+                [
+                    'name' => PazaramaAdapter::CLIENT_ID_SECRET,
+                    'label' => 'Client ID',
+                    'placeholder' => '',
+                ],
+                [
+                    'name' => PazaramaAdapter::CLIENT_SECRET_SECRET,
+                    'label' => 'Client Secret',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'Pazarama bu değeri yalnız bir kez gösterir. Yeni anahtar üretirsen eskisi hemen geçersiz olur.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => PazaramaAdapter::SELLER_NAME_KEY,
+                    'label' => 'Pazarama mağaza adı',
+                    'placeholder' => 'magazam',
+                    // Yalnız hesap kimliği; istek adresine ya da başlığa GİRMEZ.
+                    'rules' => ['regex:/^[\pL\pN][\pL\pN ._\-]{1,63}$/u'],
+                    'hint' => 'Pazarama\'daki mağaza adın. Bağlantıyı ayırt etmek için kullanılır; tek API adresini bütün satıcılar paylaşır.',
+                ],
+                [
+                    'name' => PazaramaAdapter::SECRET_CREATED_AT_KEY,
+                    'label' => 'API anahtarının üretildiği gün (isteğe bağlı)',
+                    'placeholder' => 'YYYY-AA-GG',
+                    'optional' => true,
+                    'rules' => ['date_format:Y-m-d', 'before_or_equal:today'],
+                    'hint' => 'Pazarama API şifresi üretildiği günden 365 gün sonra geçersiz olur. Günü yazarsan bitişe 14 gün kala uyarırız.',
+                ],
+            ],
+            'account' => PazaramaAdapter::SELLER_NAME_KEY,
+            'oauth' => false,
+            'token_exchange' => true,
+            'help' => 'Pazarama satıcı panelinde (isortagim.pazarama.com) Hesabım → Hesap Bilgileri → '
+                .'Entegrasyon Bilgileri → "Yeni API Key Üret" ile Client ID ve Client Secret üret ve buraya gir.',
         ],
 
         'shopify' => [
