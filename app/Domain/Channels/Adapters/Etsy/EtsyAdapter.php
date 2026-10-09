@@ -12,12 +12,14 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
+use App\Domain\Channels\Contracts\DeclaresMissingAuthorization;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -30,6 +32,7 @@ use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
@@ -71,12 +74,12 @@ use Throwable;
  *   · `SupportsApprovalWorkflow` — Etsy'de onay süreci YOKTUR ve ilan
  *     yayınlanır yayınlanmaz canlıdır (§11.5). Uygulansaydı panelde hiç
  *     dolmayacak bir sekme açılırdı.
- *   · `SupportsFulfillment` — §11.4 bunu öngörüyor ama slice tablosunda
- *     kendi satırı YOKTUR; ilan edilip yazılmasaydı panelde çalışmayan
- *     bir sekme açardı (§05).
  *
  * `SupportsCatalogImport` 7 Eki 2026'da eklendi: mağazası dolu satıcı
  * bağlandığında ilanları 34Pazar'a gelmiyordu.
+ *
+ * `SupportsFulfillment` 9 Eki 2026'da eklendi: panelden girilen takip
+ * numarası Etsy'ye gitmiyordu ("Bu kanal kargo bildirimini desteklemiyor").
  *
  * ─────────────────────────────────────────────────────────────────────
  * ⚠️ İKİ AYRI KİMLİK BAŞLIĞI VARDIR (§11.2)
@@ -104,7 +107,7 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, DeclaresImageLimit, DeclaresMissingAuthorization, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -151,6 +154,9 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresChannelCurrency, Decl
      * Sipariş sayfası boyutu — Etsy'nin uç nokta üst sınırı 100 (§11.4).
      */
     private const ORDER_PAGE_SIZE = 100;
+
+    /** Etsy'nin desteklemediği kargo firması için önerdiği ad (OAS). */
+    private const OTHER_CARRIER = 'other';
 
     /**
      * Etsy beyanları ve profiller — bağlantı ayarı (`settings`). Beyanlar
@@ -2194,6 +2200,194 @@ final class EtsyAdapter implements ChannelAdapter, DeclaresChannelCurrency, Decl
     public function acknowledgeOrder(Order $order): AdapterResult
     {
         return AdapterResult::success(['acknowledged' => true]);
+    }
+
+    // -------------------------------------------------------------- kargo
+
+    /**
+     * Panelden girilen takip numarasını Etsy siparişine yazar
+     * (`createReceiptShipment`).
+     *
+     * ⚠️ TEKRAR ZARARSIZ DEĞİLDİR — ÖNCE OKUNUR. Etsy her başarılı çağrıda
+     * YENİ bir kargo kaydı açar ve alıcıya e-posta gönderir. Yanıtı kaybolan
+     * istek yeniden denenince alıcı aynı numarayla ikinci e-postayı alırdı;
+     * bu yüzden siparişin `shipments[]`'i okunur ve numara oradaysa istek
+     * atılmaz (Shopify'ın "açık parça kalmadıysa istek atmaz" kuralının eşi).
+     *
+     * ⚠️ 403 KİMLİK HATASI SAYILMAZ. Etsy bu uçta, Preferred Partner
+     * programının uygulandığı bölgelerde onaylı olmayan uygulamaya GEÇERLİ
+     * anahtar ve `transactions_w` ile bile 403 döner (OAS açıklaması).
+     * `classifyError()` 403'ü `AUTHENTICATION` sayar ve devre kesici o
+     * sınıfta SÜRESİZ açılır — tek bir kargo bildirimi bağlantının stok ve
+     * sipariş akışını durdururdu. Burada `VALIDATION` olur: yalnız bu kargo
+     * satırı "gönderilemedi" görünür.
+     *
+     * ⚠️ BİLİNMEYEN KARGO FİRMASI `other` İLE YENİDEN DENENİR. Etsy firma adı
+     * listesini yayımlamıyor ("Yurtiçi Kargo" gibi yerel firmalar büyük
+     * olasılıkla yok); desteklenmeyen firma için `other` öneriyor. Firma adı
+     * kaybolmasın diye alıcı notuna yazılır.
+     */
+    public function pushFulfillment(Fulfillment $fulfillment): AdapterResult
+    {
+        $receiptId = $fulfillment->order?->external_id;
+
+        if ($receiptId === null || $receiptId === '') {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Kargo bildirimi için siparişin kanal kimliği yok.',
+            );
+        }
+
+        // İzin yoksa istek ATILMAZ: Etsy 403 döner ve sebep satıcıya
+        // "kanal reddetti" diye görünürdü; oysa çözüm bizim ekranımızda.
+        if ($this->missingAuthorizationScopes() !== []) {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Etsy bağlantısının kargo bildirme izni yok. Kanallar ekranında Etsy kartındaki "İzin ver" ile bağlantıyı yeniden yetkilendirin.',
+            );
+        }
+
+        $tracking = trim((string) $fulfillment->tracking_number);
+        $carrier = trim((string) $fulfillment->carrier);
+
+        $existing = $this->shipmentIdIn($this->readReceipt($receiptId), $tracking);
+
+        if ($existing !== null) {
+            return AdapterResult::success(['external_id' => $existing, 'already_shipped' => true]);
+        }
+
+        $carrierName = $carrier === '' ? self::OTHER_CARRIER : $carrier;
+
+        try {
+            $receipt = $this->postTracking($receiptId, $tracking, $carrierName);
+        } catch (RequestException $e) {
+            $status = $e->response->status();
+
+            if ($status === 403) {
+                return AdapterResult::failure(
+                    ErrorClass::VALIDATION,
+                    'Etsy bu uygulamanın kargo bildirmesine izin vermiyor (Preferred Partner kısıtı). Takip numarasını Etsy panelinden girin.',
+                );
+            }
+
+            if ($status !== 400 || strcasecmp($carrierName, self::OTHER_CARRIER) === 0
+                || ! str_contains(mb_strtolower((string) $e->response->body()), 'carrier')) {
+                throw $e;
+            }
+
+            $receipt = $this->postTracking($receiptId, $tracking, self::OTHER_CARRIER, note: "Kargo firması: {$carrier}");
+        }
+
+        return AdapterResult::success(array_filter([
+            'external_id' => $this->shipmentIdIn($receipt, $tracking),
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Etsy'nin kargo firması listesi API'de YOKTUR; panel serbest metin alır.
+     *
+     * @return array<string, string>
+     */
+    public function fetchCarriers(): array
+    {
+        return [];
+    }
+
+    /**
+     * İzin verilmemiş scope'lar.
+     *
+     * Yetkilendirildiği listeyi taşımayan bağlantı `transactions_w`
+     * eklenmeden önce bağlanmıştır — o tek izin eksik sayılır. Hepsi eksik
+     * sayılsaydı da sonuç aynı olurdu ("İzin ver"), ama liste yanıltırdı.
+     *
+     * @return list<string>
+     */
+    public function missingAuthorizationScopes(): array
+    {
+        $settings = is_array($this->connection->settings) ? $this->connection->settings : [];
+        $granted = $settings[EtsyAuth::GRANTED_SCOPES_KEY] ?? null;
+
+        if (! is_array($granted)) {
+            $granted = array_diff(EtsyAuth::SCOPES, ['transactions_w']);
+        }
+
+        return array_values(array_diff(EtsyAuth::SCOPES, $granted));
+    }
+
+    /** @return array<string, mixed> */
+    private function readReceipt(string $receiptId): array
+    {
+        $response = $this->client->get(
+            EtsyEndpoints::url(EtsyEndpoints::SHOP_RECEIPT, ['shop_id' => $this->requireShopId(), 'receipt_id' => $receiptId]),
+            headers: $this->apiKeyHeader(),
+        );
+
+        // Okunamayan sipariş "kargo yok" SAYILMAZ — sayılsaydı geçici bir
+        // hata alıcıya ikinci e-posta demek olurdu.
+        $response->throw();
+
+        $body = $response->json();
+
+        return is_array($body) ? $body : [];
+    }
+
+    /** @return array<string, mixed> */
+    private function postTracking(string $receiptId, string $tracking, string $carrierName, ?string $note = null): array
+    {
+        $response = $this->client->post(
+            EtsyEndpoints::url(EtsyEndpoints::SHOP_RECEIPT_TRACKING, ['shop_id' => $this->requireShopId(), 'receipt_id' => $receiptId]),
+            array_filter([
+                'tracking_code' => $tracking === '' ? null : $tracking,
+                // Numara yoksa firma da gönderilmez: Etsy ikisi de yoksa
+                // siparişi yalnız "kargolandı" yapar.
+                'carrier_name' => $tracking === '' ? null : $carrierName,
+                'note_to_buyer' => $note,
+            ], static fn (mixed $v): bool => $v !== null),
+            headers: $this->apiKeyHeader(),
+        );
+
+        $response->throw();
+
+        $body = $response->json();
+
+        return is_array($body) ? $body : [];
+    }
+
+    /**
+     * Siparişte bu takip numarasıyla açılmış kargo kaydının kimliği.
+     *
+     * Numara boşluk ve büyük/küçük harf farkıyla karşılaştırılır: satıcı
+     * panelde "yk 123" yazmış, Etsy "YK123" saklamış olabilir. Numarasız
+     * bildirimde siparişin zaten kargolanmış olması yeterlidir.
+     *
+     * @param  array<string, mixed>  $receipt
+     */
+    private function shipmentIdIn(array $receipt, string $tracking): ?string
+    {
+        $shipments = array_values(array_filter((array) ($receipt['shipments'] ?? []), 'is_array'));
+
+        if ($tracking === '') {
+            return ($receipt['is_shipped'] ?? false) === true
+                ? (string) ($shipments[0]['receipt_shipping_id'] ?? $receipt['receipt_id'] ?? '')
+                : null;
+        }
+
+        $wanted = self::trackingKey($tracking);
+
+        foreach (array_reverse($shipments) as $shipment) {
+            if (self::trackingKey((string) ($shipment['tracking_code'] ?? '')) === $wanted) {
+                $id = $shipment['receipt_shipping_id'] ?? null;
+
+                return $id === null ? (string) ($receipt['receipt_id'] ?? '') : (string) $id;
+            }
+        }
+
+        return null;
+    }
+
+    private static function trackingKey(string $tracking): string
+    {
+        return strtoupper((string) preg_replace('/\s+/', '', $tracking));
     }
 
     // ---------------------------------------------------------- taksonomi

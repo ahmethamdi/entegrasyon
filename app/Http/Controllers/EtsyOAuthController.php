@@ -220,6 +220,13 @@ final class EtsyOAuthController extends Controller
                 refreshExpiresAt: now()->addDays(EtsyAuth::REFRESH_TOKEN_LIFETIME_DAYS)->toDateTimeImmutable(),
             );
 
+            // Etsy yanıtta scope DÖNMEZ; onaylanan liste istediğimizdir
+            // (kısmi onay yok). Yazılmasaydı sonradan eklenen izin için
+            // kart "İzin ver" düğmesini hiç kaldırmazdı.
+            $connection->forceFill([
+                'settings' => [...$connection->settings ?? [], EtsyAuth::GRANTED_SCOPES_KEY => EtsyAuth::SCOPES],
+            ])->save();
+
             // DENETİM KAYDI — YÜKE SIR KONMAZ, yalnızca anahtar ADLARI.
             $this->audit->run(
                 action: AuditAction::CHANNEL_CREDENTIAL_UPDATED,

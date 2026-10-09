@@ -12,6 +12,7 @@ use App\Domain\Channels\Actions\ConnectChannel;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
+use App\Domain\Channels\Contracts\DeclaresMissingAuthorization;
 use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
@@ -530,9 +531,25 @@ final class ChannelConnectionController extends Controller
             ChannelConnectForm::PENDING_ACCOUNT_PREFIX,
         );
 
-        return $neverAuthorized || $tokenStatus === TokenStatus::EXPIRED
+        return $neverAuthorized || $tokenStatus === TokenStatus::EXPIRED || $this->lacksScopes($connection)
             ? route($route, ['connection' => $connection->id], absolute: false)
             : null;
+    }
+
+    /**
+     * Token geçerli ama sonradan eklenen bir yetenek için izin eksik.
+     *
+     * Bozuk adapter kartı 500'e düşürmemeli — gerekçe `capabilitiesOrEmpty`.
+     */
+    private function lacksScopes(ChannelConnection $connection): bool
+    {
+        try {
+            $adapter = $this->registry->for($connection);
+        } catch (Throwable) {
+            return false;
+        }
+
+        return $adapter instanceof DeclaresMissingAuthorization && $adapter->missingAuthorizationScopes() !== [];
     }
 
     /**

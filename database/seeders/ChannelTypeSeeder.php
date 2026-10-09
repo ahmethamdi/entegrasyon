@@ -490,19 +490,15 @@ class ChannelTypeSeeder extends Seeder
                     // yayınlanır yayınlanmaz canlıdır. Açılsaydı panelde
                     // HİÇ DOLMAYACAK bir sekme belirirdi.
                     'approval' => false,
-                    // ⚠️ `SupportsFulfillment` UYGULANMADI. §11.4 ondan
-                    // söz ediyor ama §27'nin slice tablosunda kendi
-                    // satırı YOK; ilan edilip yazılmasaydı panelde
-                    // ÇALIŞMAYAN bir sekme açardı (§05). Bilinçli bir
-                    // açık madde ve `EtsyAdapterTest` bunu
-                    // `assertNotInstanceOf` ile korur.
+                    // Kargo bildirimi 9 Eki 2026 (`createReceiptShipment`,
+                    // `transactions_w`). Eski bağlantılar "İzin ver" ister.
                     //
                     // AYRI KONU — İADE: Etsy iade için uç nokta VERMİYOR
                     // (§11.4 · dürüst sınır). Satıcı iadeyi panelden
                     // işler, yoklama bunu `updated` görür ve stok
                     // hareketi ÜRETMEZ; `returned` sayılsaydı satılmış
                     // stok geri eklenir ve bakiye bozulurdu.
-                    'fulfillment' => false,
+                    'fulfillment' => true,
                 ],
                 'rate_limit_profile' => [
                     // 10 istek/sn (§21). ASIL SINIR GÜNLÜK KOTADIR:

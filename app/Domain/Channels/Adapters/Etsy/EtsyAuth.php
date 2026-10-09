@@ -65,8 +65,8 @@ final class EtsyAuth
      * anında 403 verir ve sebebi yetkilendirme ekranında DEĞİL aylar
      * sonra bir senkron hatasında görünür.
      *
-     * `transactions_r` sipariş yoklaması, `listings_w` katalog ve stok
-     * yazma, `shops_r` mağaza kimliği içindir.
+     * `transactions_r` sipariş yoklaması, `transactions_w` kargo bildirimi,
+     * `listings_w` katalog ve stok yazma, `shops_r` mağaza kimliği içindir.
      */
     /**
      * Etsy yenileme token'ının ömrü — 90 gün (Etsy OAuth belgesi). Yanıtta
@@ -76,7 +76,17 @@ final class EtsyAuth
      */
     public const REFRESH_TOKEN_LIFETIME_DAYS = 90;
 
-    public const SCOPES = ['listings_r', 'listings_w', 'transactions_r', 'shops_r', 'email_r'];
+    public const SCOPES = ['listings_r', 'listings_w', 'transactions_r', 'transactions_w', 'shops_r', 'email_r'];
+
+    /**
+     * Bağlantının izin verdiği scope'lar — `settings` anahtarı.
+     *
+     * ⚠️ ETSY TOKEN YANITINDA SCOPE DÖNMEZ. Hangi izinlerle yetkilendirildiği
+     * ancak callback anında İSTEDİĞİMİZ listeden bilinir (Etsy kısmi onay
+     * vermez: ya hepsi ya hiçbiri). Bu anahtar YOKSA bağlantı listeye
+     * `transactions_w` eklenmeden önce yetkilendirilmiştir.
+     */
+    public const GRANTED_SCOPES_KEY = 'etsy_granted_scopes';
 
     /**
      * Yetkilendirme isteği için tek kullanımlık sırlar.

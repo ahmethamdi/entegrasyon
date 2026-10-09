@@ -113,6 +113,17 @@ final class EtsyEndpoints
      */
     public const SHOP_RECEIPTS = '/v3/application/shops/{shop_id}/receipts';
 
+    /** Tek sipariş — kargo bildiriminden önce var olan `shipments[]` okunur. */
+    public const SHOP_RECEIPT = '/v3/application/shops/{shop_id}/receipts/{receipt_id}';
+
+    /**
+     * Kargo bildirimi (`createReceiptShipment`) — `transactions_w` ister.
+     *
+     * ⚠️ HER BAŞARILI ÇAĞRI YENİ BİR KARGO KAYDI AÇAR ve alıcıya e-posta
+     * gider. Tekrarı zararsız DEĞİLDİR; adapter önce `SHOP_RECEIPT`'i okur.
+     */
+    public const SHOP_RECEIPT_TRACKING = '/v3/application/shops/{shop_id}/receipts/{receipt_id}/tracking';
+
     // ──────────────────────────────────────────────────────────── taksonomi
 
     /** Satıcı taksonomisi — ağaç kanalın GERÇEĞİDİR, kiracısızdır. */

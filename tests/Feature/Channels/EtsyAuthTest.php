@@ -193,12 +193,16 @@ final class EtsyAuthTest extends TestCase
         $this->assertStringContainsString('code_challenge_method=S256', $url);
     }
 
-    /** Scope listesi §11.2'de yazılı olanla birebir — dar tutulur. */
+    /**
+     * Scope listesi §11.2'de yazılı olanla birebir — dar tutulur.
+     *
+     * `transactions_w` kargo bildirimi içindir (`createReceiptShipment`).
+     */
     #[Test]
     public function the_requested_scopes_match_the_document(): void
     {
         $this->assertSame(
-            ['listings_r', 'listings_w', 'transactions_r', 'shops_r', 'email_r'],
+            ['listings_r', 'listings_w', 'transactions_r', 'transactions_w', 'shops_r', 'email_r'],
             EtsyAuth::SCOPES,
         );
     }

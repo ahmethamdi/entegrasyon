@@ -334,15 +334,12 @@ final class EtsyAdapterTest extends TestCase
         $this->assertInstanceOf(SupportsInventory::class, $adapter);
         $this->assertInstanceOf(SupportsPricing::class, $adapter);
         $this->assertInstanceOf(SupportsOrders::class, $adapter);
+        $this->assertInstanceOf(SupportsFulfillment::class, $adapter);
 
         // ⚠️ HİÇ UYGULANMAYACAK — §11.5: Etsy'de onay süreci YOKTUR ve
         // ilan yayınlanır yayınlanmaz canlıdır. Uygulansaydı panelde hiç
         // dolmayacak bir sekme açılırdı.
         $this->assertNotInstanceOf(SupportsApprovalWorkflow::class, $adapter);
-
-        // Slice tablosunda kendi satırı YOK — ilan edilip yazılmasaydı
-        // panelde çalışmayan bir sekme açardı (§05).
-        $this->assertNotInstanceOf(SupportsFulfillment::class, $adapter);
     }
 
     /** Registry gerçek istemciyle taze örnek kurar — asla paylaşılmaz. */

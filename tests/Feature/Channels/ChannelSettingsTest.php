@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Channels;
 
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
+use App\Domain\Channels\Adapters\Etsy\EtsyAuth;
 use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
@@ -245,6 +246,22 @@ final class ChannelSettingsTest extends TestCase
         $this->assertNull($this->card($user)['authorizeUrl']);
     }
 
+    /**
+     * ⚠️ İZİN LİSTESİ TAŞIMAYAN ESKİ BAĞLANTI "İzin ver" GÖSTERİR.
+     *
+     * Token geçerli, stok akıyor; ama bağlantı `transactions_w` (kargo)
+     * eklenmeden yetkilendirildi. Kart yalnız token süresine baksaydı
+     * satıcının eksik izni vermenin yolu olmazdı ve kargo bildirimi hep
+     * "izin yok" diye düşerdi.
+     */
+    #[Test]
+    public function a_connection_authorized_before_a_new_scope_offers_authorization(): void
+    {
+        [$user, $connection] = $this->etsyConnection(grantedScopes: null);
+
+        $this->assertSame("/channels/{$connection->id}/etsy/authorize", $this->card($user)['authorizeUrl']);
+    }
+
     // ──────────────────────────────────────────────────────── yardımcılar
 
     /** Canlıda 7 Eki görülen iki profil biçimi + tek hazırlık profili. */
@@ -310,19 +327,22 @@ final class ChannelSettingsTest extends TestCase
     }
 
     /** @return array{0: User, 1: ChannelConnection} */
-    private function etsyConnection(?string $account = null): array
+    private function etsyConnection(?string $account = null, ?array $grantedScopes = EtsyAuth::SCOPES): array
     {
         $this->channelType('etsy', EtsyAdapter::class);
 
         $user = User::factory()->create();
         $tenant = (new CreateTenant)->run(name: 'Etsy Ayar '.uniqid(), owner: $user);
 
-        $connection = $this->asTenant($tenant, function () use ($account): ChannelConnection {
+        $connection = $this->asTenant($tenant, function () use ($account, $grantedScopes): ChannelConnection {
             $connection = ChannelConnection::factory()->create([
                 'channel_type_code' => 'etsy',
                 'external_account_id' => $account ?? '26418816-'.uniqid(),
                 'status' => 'active',
-                'settings' => [EtsyAdapter::SHOP_ID_KEY => '26418816'],
+                'settings' => array_filter([
+                    EtsyAdapter::SHOP_ID_KEY => '26418816',
+                    EtsyAuth::GRANTED_SCOPES_KEY => $grantedScopes,
+                ], static fn (mixed $v): bool => $v !== null),
             ]);
 
             app(CredentialVault::class)->store($connection, [

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Channels;
 
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
+use App\Domain\Channels\Adapters\Etsy\EtsyAuth;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelConnectForm;
@@ -359,6 +360,9 @@ final class EtsyOAuthFlowTest extends TestCase
 
         $this->assertSame('555', $fresh->external_account_id);
         $this->assertSame('555', $fresh->settings[EtsyAdapter::SHOP_ID_KEY]);
+        // Etsy yanıtta scope DÖNMEZ — onaylanan liste callback'te yazılır;
+        // yazılmasaydı kart "İzin ver"i hiç kaldırmazdı.
+        $this->assertSame(EtsyAuth::SCOPES, $fresh->settings[EtsyAuth::GRANTED_SCOPES_KEY] ?? null);
         $this->assertSame('12345.yeni-access', $this->storedSecrets($connection)['access_token'] ?? null);
         Http::assertSent(static fn ($r): bool => str_contains($r->url(), '/users/me')
             && $r->hasHeader('x-api-key', 'key-abc:sir-xyz')
