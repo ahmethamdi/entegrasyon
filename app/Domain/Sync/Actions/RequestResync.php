@@ -53,6 +53,10 @@ final class RequestResync
 
     public const REASON_CHANNEL_PRICE_CHANGED = 'channel_price_changed';
 
+    public const REASON_PRICE_RULE_CHANGED = 'price_rule_changed';
+
+    public const REASON_COST_CHANGED = 'cost_changed';
+
     /**
      * @param  string  $reason  Neden resync istendi — yükte taşınır
      */

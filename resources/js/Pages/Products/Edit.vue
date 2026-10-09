@@ -1,5 +1,6 @@
 <script setup>
-import { Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { Link, router, useForm } from '@inertiajs/vue3';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { useI18n } from '../../lib/i18n';
@@ -21,6 +22,19 @@ const { t } = useI18n();
 
 function submit() {
     form.put(`/products/${props.product.id}`);
+}
+
+// ALIŞ MALİYETİ — varyant başına, ayrı kaydedilir (ürün formundan bağımsız).
+const costs = ref(Object.fromEntries((props.product.variants ?? []).map((v) => [v.id, v.costPrice ?? ''])));
+const savingCost = ref(null);
+
+function saveCost(variant) {
+    savingCost.value = variant.id;
+    router.put(
+        `/products/${props.product.id}/variants/${variant.id}/cost`,
+        { cost_price: costs.value[variant.id] === '' ? null : costs.value[variant.id] },
+        { preserveScroll: true, onFinish: () => { savingCost.value = null; } },
+    );
 }
 </script>
 
@@ -176,5 +190,42 @@ function submit() {
                 </Link>
             </div>
         </form>
+
+        <section v-if="product.variants?.length" class="mt-10 max-w-xl border-t border-stone-200 pt-6">
+            <h2 class="text-sm font-medium text-stone-900">{{ t('Alış maliyeti') }}</h2>
+            <p class="mt-0.5 text-xs text-stone-500">
+                {{ t('Kanala gitmez. Kanalın fiyat kuralında zarar koruması açıksa bu maliyetin altına düşen fiyat gönderilmez.') }}
+            </p>
+
+            <ul class="mt-3 space-y-2">
+                <li v-for="variant in product.variants" :key="variant.id" class="flex flex-wrap items-center gap-3">
+                    <span class="min-w-0 flex-1 truncate font-mono text-xs text-stone-600">{{ variant.sku }}</span>
+                    <label class="block">
+                        <span class="sr-only">{{ t(':sku için alış maliyeti', { sku: variant.sku }) }}</span>
+                        <span class="flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                            <input
+                                v-model="costs[variant.id]"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputmode="decimal"
+                                :placeholder="t('Maliyet')"
+                                class="w-32 rounded-l-md border-0 px-3 py-1.5 text-sm focus:outline-none"
+                            >
+                            <span class="px-2 font-mono text-xs text-stone-500">{{ variant.currency }}</span>
+                        </span>
+                    </label>
+                    <button
+                        type="button"
+                        :disabled="savingCost !== null"
+                        class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        @click="saveCost(variant)"
+                    >
+                        {{ savingCost === variant.id ? t('Kaydediliyor…') : t('Kaydet') }}
+                    </button>
+                </li>
+            </ul>
+            <p v-if="$page.props.errors?.cost_price" class="mt-2 text-sm text-red-700">{{ $page.props.errors.cost_price }}</p>
+        </section>
     </PanelLayout>
 </template>

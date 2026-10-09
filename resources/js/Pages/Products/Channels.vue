@@ -441,6 +441,12 @@ function send(connectionId) {
                                     <p class="text-xs text-stone-700">
                                         {{ t('Ürün fiyatı') }}: {{ money(row.variantPrice, row.variantCurrency) }}
                                     </p>
+                                    <p
+                                        v-if="row.channelPrice === null && row.outgoingPrice !== null && row.outgoingPrice !== row.variantPrice"
+                                        class="text-xs text-stone-900"
+                                    >
+                                        {{ t('Fiyat kuralıyla kanala giden') }}: {{ money(row.outgoingPrice, row.outgoingCurrency) }}
+                                    </p>
                                 </div>
 
                                 <label class="block">
@@ -480,6 +486,9 @@ function send(connectionId) {
                                 </button>
                             </div>
 
+                            <p v-if="row.floorViolation" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
+                                {{ t(row.floorViolation) }}
+                            </p>
                             <p v-if="row.needsChannelPrice" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
                                 {{ t('Bu kanal :currency ile satıyor, ürünün fiyatı :product. Kanal fiyatı girilmeden fiyat gönderilmez.', { currency: channel.currency, product: row.variantCurrency }) }}
                             </p>

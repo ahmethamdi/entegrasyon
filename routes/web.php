@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
+use App\Http\Controllers\ChannelPricingController;
 use App\Http\Controllers\ChannelSettingsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EbayOAuthController;
@@ -149,6 +150,10 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
         ->name('channels.settings.edit');
     Route::put('/channels/{connection}/settings', [ChannelSettingsController::class, 'update'])
         ->name('channels.settings.update');
+    Route::get('/channels/{connection}/pricing', [ChannelPricingController::class, 'edit'])
+        ->name('channels.pricing.edit');
+    Route::put('/channels/{connection}/pricing', [ChannelPricingController::class, 'update'])
+        ->name('channels.pricing.update');
 
     // ETSY OAUTH 2 + PKCE (V3.0 · §11.2 · §19 · P0-10) — projede İLK
     // OAuth akışı ve BİLİNÇLİ olarak `web` grubundadır: webhook
@@ -224,6 +229,8 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
         ->name('products.import.channel');
     Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+    Route::put('/products/{product}/variants/{variant}/cost', [ProductController::class, 'updateCost'])
+        ->name('products.variants.cost');
 
     // Kanala gönderme akışı (§13 · faz 1.5). Gönderme POST'tur: yan etkisi
     // var (listing satırı ve senkron operasyonu yaratır) ve GET olsaydı

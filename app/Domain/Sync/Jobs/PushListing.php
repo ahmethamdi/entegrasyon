@@ -140,6 +140,18 @@ final class PushListing implements ShouldQueue
             return;
         }
 
+        // ZARAR KORUMASI — ilan açma ve içerik güncellemesi de fiyat taşır
+        // (Shopify, Trendyol, Etsy eşleyicileri `effectivePrice()` yazar).
+        // Yalnız fiyat işinde durdurulsaydı maliyet altı fiyat ilk açılışta
+        // ya da bir başlık düzeltmesinde kanala yine giderdi.
+        $violation = $listing->priceFloorViolation();
+
+        if ($violation !== null) {
+            $recorder->markBlocked($operation, $violation);
+
+            return;
+        }
+
         // HIZ SINIRI — kota tükendiyse kanalı hiç dövme. 429 almak da kotayı
         // harcar; sınıra biz uyarsak kanal hiç reddetmek zorunda kalmaz.
         if (! $limiter->attempt($connectionId, $adapter->rateLimitProfile())) {

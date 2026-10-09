@@ -245,6 +245,31 @@ final class SyncResultRecorder
         });
     }
 
+    /**
+     * Zarar koruması fiyatı GÖNDERMEDİ — operasyon ölür, neden listing'de.
+     *
+     * Deneme AÇILMAZ: kanala hiçbir şey gitmedi. Senkron durumu sürüm
+     * kapısına bakmadan yazılır: kural ya da maliyet değişince açılan
+     * yeniden gönderim aynı sürümü taşır ve `markSyncStateFailed`'in "bu
+     * sürüm zaten gönderildi" kapısı nedeni yutardı — satıcı fiyatın neden
+     * gitmediğini hiç görmezdi.
+     */
+    public function markBlocked(SyncOperation $operation, string $reason): void
+    {
+        DB::transaction(function () use ($operation, $reason): void {
+            $operation->forceFill([
+                'status' => SyncOperationStatus::DEAD->value,
+                'completed_at' => now(),
+                'last_error_class' => ErrorClass::VALIDATION->value,
+            ])->save();
+
+            $this->lockState($operation)?->forceFill([
+                'status' => ErrorClass::VALIDATION->syncStateStatus(),
+                'last_error' => mb_substr($reason, 0, 2000),
+            ])->save();
+        });
+    }
+
     public function markDead(array $operations, ErrorClass $class): void
     {
         DB::transaction(function () use ($operations, $class): void {

@@ -240,9 +240,19 @@ function formatDate(iso) {
                         <p class="mt-1 truncate font-mono text-xs text-stone-500">
                             {{ connection.channel }} · {{ connection.account }}
                         </p>
+                        <p v-if="connection.priceRule" class="mt-1 text-xs text-stone-600">
+                            {{ t('Fiyat') }}: {{ connection.priceRule }}
+                        </p>
                     </div>
 
                     <div class="flex shrink-0 items-center gap-2">
+                        <Link
+                            v-if="connection.capabilities?.pricing"
+                            :href="`/channels/${connection.id}/pricing`"
+                            class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                        >
+                            {{ t('Fiyat kuralı') }}
+                        </Link>
                         <Link
                             v-if="connection.hasSettings"
                             :href="`/channels/${connection.id}/settings`"

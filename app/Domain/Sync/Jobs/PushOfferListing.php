@@ -138,6 +138,15 @@ final class PushOfferListing implements ShouldQueue
             return;
         }
 
+        // ZARAR KORUMASI — eBay teklifi fiyat taşır (`PushListing` ile aynı kural).
+        $violation = $listing->priceFloorViolation();
+
+        if ($violation !== null) {
+            $recorder->markBlocked($operation, $violation);
+
+            return;
+        }
+
         if (! $limiter->attempt($connectionId, $adapter->rateLimitProfile())) {
             $this->release(max(
                 $limiter->secondsUntilAvailable($connectionId, $adapter->rateLimitProfile()),

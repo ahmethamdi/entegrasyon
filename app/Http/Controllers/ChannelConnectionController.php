@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Domain\Billing\Actions\EnforceQuota;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Exceptions\QuotaExceededException;
+use App\Domain\Catalog\Support\ChannelPriceRules;
 use App\Domain\Channels\Actions\CheckChannelHealth;
 use App\Domain\Channels\Actions\ConnectChannel;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
@@ -449,6 +450,11 @@ final class ChannelConnectionController extends Controller
             'lastError' => $connection->last_error,
             'connectedAt' => $connection->connected_at?->toIso8601String(),
             'capabilities' => $this->capabilitiesOrEmpty($connection),
+
+            // Fiyat kuralının kısa özeti ("+%15 · ,90 ile bitir"); kural yoksa null.
+            'priceRule' => ChannelPricingController::summary(
+                app(ChannelPriceRules::class)->forConnection($connection->id),
+            ),
 
             // Bağlantı sonrası ayar ekranı var mı ve zorunlu ayar eksik mi.
             // Ağ çağrısı YOKTUR (`missingConnectionSettings`): liste her

@@ -6,6 +6,7 @@ namespace Tests\Feature\Reconciliation;
 
 use App\Domain\Catalog\Actions\ResolveChannelPrice;
 use App\Domain\Catalog\Actions\ResolvePriceConflict;
+use App\Domain\Catalog\Models\ChannelPriceRule;
 use App\Domain\Catalog\Models\PriceOverride;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -117,6 +118,44 @@ final class PriceConflictTest extends TestCase
         // Sürüklenme SAYILMAZ da: `isDrift()` false döner ve tur sayacı
         // fiyat çakışmasını sürüklenme olarak raporlamaz.
         $this->assertSame(0, $run->drift_count);
+    }
+
+    /**
+     * ⚠️ ZARAR KORUMASININ DURDURDUĞU FİYAT ÇAKIŞMA SAYILMAZ.
+     *
+     * Kanalda eski fiyat bilinçli olarak kalır. Çakışma sayılsaydı her tur
+     * aynı satırı "fiyat çakışması" diye düşürür, "bizimkini gönder" de yine
+     * korumaya takılırdı.
+     */
+    #[Test]
+    public function a_price_blocked_by_the_floor_is_not_a_conflict(): void
+    {
+        [$tenant, $variant, $connection] = $this->makeContext(price: '99.90');
+
+        $this->asTenant($tenant, function () use ($tenant, $variant, $connection): void {
+            $variant->forceFill(['cost_price' => '95.00'])->save();
+            ChannelPriceRule::query()->create([
+                'tenant_id' => $tenant->id,
+                'channel_connection_id' => $connection->id,
+                'markup_percent' => '0',
+                'markup_amount' => '0',
+                'rounding' => 'none',
+                // Taban 104,50 — 99,90 gönderilmez.
+                'min_margin_percent' => '10',
+            ]);
+        });
+
+        $listing = $this->listing($tenant, $variant, $connection, externalId: '10');
+        $this->markPriceStale($tenant, $listing);
+
+        ProgrammableInventoryAdapter::remotePrice('woocommerce', '10', '120.00');
+
+        $this->reconcilePrices($tenant, $connection);
+
+        $item = $this->itemFor($tenant, $listing);
+
+        $this->assertSame(ItemStatus::MATCHED->value, $item->status);
+        $this->assertTrue($item->local_value['blocked_by_price_floor'] ?? false);
     }
 
     /**

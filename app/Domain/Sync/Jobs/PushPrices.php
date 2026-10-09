@@ -145,10 +145,23 @@ final class PushPrices implements ShouldQueue
         // topla. Fan-out YAPMAZ — yalnızca var olanları birleştirir.
         $batch = $builder->build($operation);
 
+        $blockedIds = [];
+
+        foreach ($batch->blocked() as [$blockedOperation, $reason]) {
+            $recorder->markBlocked($blockedOperation, $reason);
+            $blockedIds[] = $blockedOperation->id;
+        }
+
         if ($batch->isEmpty()) {
             // Listing delist edilmiş veya dış kimliği yok. Deneme AÇILMAZ:
             // `attempt_count = 0` kalması seviye 2 taramasının anlamını korur.
-            $recorder->recordSkipped($operation, 'nothing_to_push');
+            //
+            // ⚠️ DURDURULAN TETİKLEYİCİ "tamamlandı" YAPILMAZ: az önce ölü
+            // işaretlendi; `recordSkipped` onu completed'a çevirip nedeni
+            // görünmez kılardı.
+            if (! in_array($operation->id, $blockedIds, true)) {
+                $recorder->recordSkipped($operation, 'nothing_to_push');
+            }
 
             return;
         }

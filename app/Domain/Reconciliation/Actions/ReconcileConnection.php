@@ -384,6 +384,20 @@ final class ReconcileConnection
             ? null
             : $snapshot->priceFor($listing->external_id);
 
+        // ZARAR KORUMASI DURDURDUYSA FARK BEKLENENDİR. Kanalda eski fiyat
+        // kalır ve bu bilinçli; çakışma sayılsaydı her tur aynı satır
+        // "fiyat çakışması" olarak düşer, "bizimkini gönder" de yine
+        // korumaya takılırdı. Neden listing'in senkron hatasında görünür.
+        if ($listing->priceFloorViolation() !== null) {
+            return [
+                ItemStatus::MATCHED,
+                null,
+                ['price' => $ourPrice, 'blocked_by_price_floor' => true],
+                ['price' => $observedPrice],
+                $observedPrice === null ? null : hash('sha256', (string) $this->toMinorUnits($observedPrice)),
+            ];
+        }
+
         [$status, $magnitude] = $this->classify(
             $listing->id,
             $this->toMinorUnits($ourPrice),

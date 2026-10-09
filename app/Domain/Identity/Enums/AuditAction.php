@@ -79,6 +79,9 @@ enum AuditAction: string
      */
     case CHANNEL_PRICE_SET = 'price.channel_set';
 
+    /** Bağlantının fiyat kuralı (kanal farkı, yuvarlama, zarar koruması) değişti. */
+    case CHANNEL_PRICE_RULE_SET = 'price.rule_set';
+
     /**
      * Platform yöneticisi kiracıya planı elle atadı (müşteriye özel plan ya
      * da ödeme dışı bir anlaşma). Yükte eski ve yeni plan + bitiş tarihi:
@@ -97,6 +100,7 @@ enum AuditAction: string
             self::TENANT_CREATED => 'Hesap oluşturuldu',
             self::PRICE_CONFLICT_RESOLVED => 'Fiyat çakışması çözüldü',
             self::CHANNEL_PRICE_SET => 'Kanal fiyatı değişti',
+            self::CHANNEL_PRICE_RULE_SET => 'Kanal fiyat kuralı değişti',
             self::PLAN_ASSIGNED_BY_ADMIN => 'Plan yönetici tarafından atandı',
         });
     }

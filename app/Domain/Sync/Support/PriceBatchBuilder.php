@@ -100,6 +100,7 @@ final class PriceBatchBuilder
 
         $included = [];
         $items = [];
+        $blocked = [];
 
         foreach ($operations as $operation) {
             $listing = $operation->listing;
@@ -122,6 +123,17 @@ final class PriceBatchBuilder
                 continue;
             }
 
+            // ZARAR KORUMASI: maliyet tabanının altındaki fiyat GİTMEZ.
+            // Yanlış fiyattan satış geri alınamaz; durdurmanın bedeli yalnız
+            // kanalda eski fiyatın kalmasıdır.
+            $violation = $listing->priceFloorViolation();
+
+            if ($violation !== null) {
+                $blocked[] = [$operation, $violation];
+
+                continue;
+            }
+
             $included[] = $operation;
 
             // FİYAT STRING TAŞINIR: para float taşınmaz, yuvarlama kuruş
@@ -141,6 +153,7 @@ final class PriceBatchBuilder
             channelConnectionId: $trigger->channel_connection_id,
             items: $items,
             operations: $included,
+            blocked: $blocked,
         );
     }
 

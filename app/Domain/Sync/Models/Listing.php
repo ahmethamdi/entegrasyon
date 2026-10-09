@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Models;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Catalog\Support\ChannelPriceRules;
+use App\Domain\Catalog\Support\PriceRuleCalculator;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
@@ -76,11 +78,15 @@ class Listing extends Model
     /**
      * Bu kanala GİDECEK fiyat — TEK KAYNAK.
      *
-     * Satıcı kanal fiyatı girdiyse o, yoksa varyantın fiyatı. Gönderim
-     * (`PriceBatchBuilder`), ilan açma (adapter eşleyicileri) ve mutabakat
-     * (`ReconcileConnection`) HEPSİ buradan okur: biri varyant fiyatını
-     * okusaydı kanal fiyatı girilmiş ilan her mutabakatta sahte "fiyat
-     * çakışması" verir ya da ilk açılışta yanlış fiyatla çıkardı.
+     * Sıra: satıcının bu listing'e elle girdiği kanal fiyatı → yoksa
+     * varyantın fiyatı, bağlantının fiyat kuralı (+%15, ,90'a yuvarla)
+     * uygulanmış hâliyle. Elle girilen fiyata kural UYGULANMAZ: o satıcının
+     * bilinçli rakamıdır, üstüne %15 eklemek iki kez zam yapmak olurdu.
+     *
+     * Gönderim (`PriceBatchBuilder`), ilan açma (adapter eşleyicileri) ve
+     * mutabakat (`ReconcileConnection`) HEPSİ buradan okur: biri varyant
+     * fiyatını okusaydı kanal fiyatı girilmiş ilan her mutabakatta sahte
+     * "fiyat çakışması" verir ya da ilk açılışta yanlış fiyatla çıkardı.
      */
     public function effectivePrice(): ?string
     {
@@ -88,13 +94,19 @@ class Listing extends Model
             return (string) $this->channel_price;
         }
 
-        return $this->variant?->price !== null ? (string) $this->variant->price : null;
+        $price = $this->variant?->price;
+
+        return $price === null ? null : $this->withRule((string) $price);
     }
 
     /**
      * Üstü çizili fiyat — kanal fiyatı varken GÖNDERİLMEZ: varyantın
      * karşılaştırma fiyatı varyantın para birimindedir ve kanal fiyatının
      * yanında anlamsız (hatta küçük) kalırdı.
+     *
+     * Kural ona da uygulanır: Trendyol'da satış +%15 olup üstü çizili fiyat
+     * olduğu gibi kalsaydı indirim küçülür, hatta satış fiyatının ALTINA
+     * düşerdi. Satış fiyatından büyük değilse hiç gönderilmez.
      */
     public function effectiveCompareAtPrice(): ?string
     {
@@ -102,7 +114,18 @@ class Listing extends Model
             return null;
         }
 
-        return $this->variant?->compare_at_price !== null ? (string) $this->variant->compare_at_price : null;
+        $compareAt = $this->variant?->compare_at_price;
+
+        if ($compareAt === null) {
+            return null;
+        }
+
+        $compareAt = $this->withRule((string) $compareAt);
+        $price = $this->effectivePrice();
+
+        return $price !== null && PriceRuleCalculator::toMinor($compareAt) <= PriceRuleCalculator::toMinor($price)
+            ? null
+            : $compareAt;
     }
 
     /** Giden fiyatın para birimi. */
@@ -111,6 +134,67 @@ class Listing extends Model
         return $this->channel_price !== null
             ? $this->channel_price_currency
             : $this->variant?->currency;
+    }
+
+    /**
+     * Zarar koruması — giden fiyat alış maliyeti tabanının altındaysa neden.
+     *
+     * NULL: gönderilebilir (koruma kapalı, maliyet bilinmiyor ya da fiyat
+     * tabanın üstünde). Metin: GÖNDERİLMEZ ve satıcı nedeni görür.
+     *
+     * Elle girilen kanal fiyatı da denetlenir: korumanın asıl yakaladığı şey
+     * 1999 yerine 199 yazılan rakamdır.
+     *
+     * ⚠️ PARA BİRİMİ FARKLIYSA DENETLENMEZ. Maliyet varyantın birimindedir;
+     * USD Etsy fiyatını TL maliyetle kıyaslamak ya her ilanı durdurur ya da
+     * hiçbirini durdurmazdı. Kur dönüşümü bilinçli olarak yok.
+     */
+    public function priceFloorViolation(): ?string
+    {
+        $rule = app(ChannelPriceRules::class)->forConnection($this->channel_connection_id);
+
+        if ($rule === null || $rule->min_margin_percent === null) {
+            return null;
+        }
+
+        $price = $this->effectivePrice();
+
+        if ($price === null) {
+            return null;
+        }
+
+        if (PriceRuleCalculator::toMinor($price) <= 0) {
+            return __('Fiyat sıfır; zarar koruması kanala göndermedi.');
+        }
+
+        $cost = $this->variant?->cost_price;
+
+        if ($cost === null || $this->effectiveCurrency() !== $this->variant?->currency) {
+            return null;
+        }
+
+        $floor = PriceRuleCalculator::floor((string) $cost, (string) $rule->min_margin_percent);
+
+        if (PriceRuleCalculator::toMinor($price) >= PriceRuleCalculator::toMinor($floor)) {
+            return null;
+        }
+
+        return __('Fiyat :price, alış maliyeti :cost ve en az %:margin kâr ile hesaplanan :floor tabanının altında; zarar koruması kanala göndermedi.', [
+            'price' => $price,
+            'cost' => (string) $cost,
+            'margin' => (string) $rule->min_margin_percent,
+            'floor' => $floor,
+        ]);
+    }
+
+    /** Bağlantının fiyat kuralı varsa uygulanmış fiyat. */
+    private function withRule(string $price): string
+    {
+        $rule = app(ChannelPriceRules::class)->forConnection($this->channel_connection_id);
+
+        return $rule !== null && $rule->changesPrice()
+            ? PriceRuleCalculator::apply($price, $rule)
+            : $price;
     }
 
     public function connection(): BelongsTo

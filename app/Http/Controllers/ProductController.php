@@ -8,10 +8,12 @@ use App\Domain\Billing\Actions\EnforceQuota;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Catalog\Actions\CreateProduct;
+use App\Domain\Catalog\Actions\SetVariantCost;
 use App\Domain\Catalog\Actions\UpdateProduct;
 use App\Domain\Catalog\Exceptions\DuplicateSkuException;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductImage;
+use App\Domain\Catalog\Models\Variant;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -172,8 +174,32 @@ final class ProductController extends Controller
                 'status' => $model->status,
                 'internalCategoryId' => $model->internal_category_id,
                 'price' => $model->variants->first()?->price,
+                // Alış maliyeti varyant başınadır; zarar korumasının tabanı.
+                'variants' => $model->variants->sortBy('sku')->values()->map(fn (Variant $variant): array => [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku,
+                    'currency' => $variant->currency,
+                    'costPrice' => $variant->cost_price === null ? null : (string) $variant->cost_price,
+                ])->all(),
             ],
         ]);
+    }
+
+    /**
+     * Varyantın alış maliyeti — kanala gitmez, zarar korumasının tabanıdır.
+     */
+    public function updateCost(Request $request, string $product, string $variant, SetVariantCost $setCost): RedirectResponse
+    {
+        // Kiracı scope'u: başka kiracının ürünü/varyantı 404.
+        $model = Variant::query()->where('product_id', $product)->findOrFail($variant);
+
+        $validated = $request->validate([
+            'cost_price' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
+        ]);
+
+        $setCost->run($model, $validated['cost_price'] === null ? null : (string) $validated['cost_price']);
+
+        return back()->with('success', __(':sku alış maliyeti kaydedildi.', ['sku' => $model->sku]));
     }
 
     public function update(

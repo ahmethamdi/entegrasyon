@@ -37,6 +37,7 @@ class Variant extends Model
         'barcode',
         'price',
         'compare_at_price',
+        'cost_price',
         'currency',
         'weight_grams',
         'status',
@@ -48,6 +49,7 @@ class Variant extends Model
         return [
             'price' => 'decimal:2',
             'compare_at_price' => 'decimal:2',
+            'cost_price' => 'decimal:2',
             'weight_grams' => 'integer',
             'content_version' => 'integer',
         ];

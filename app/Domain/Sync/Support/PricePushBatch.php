@@ -19,12 +19,27 @@ final readonly class PricePushBatch
     /**
      * @param  list<array{listing_id: string, external_id: string, price: string, compare_at_price?: string|null, version: int}>  $items
      * @param  list<SyncOperation>  $operations  Yükte temsil edilen operasyonlar
+     * @param  list<array{0: SyncOperation, 1: string}>  $blocked  Zarar korumasının durdurduğu operasyonlar + neden
      */
     public function __construct(
         public string $channelConnectionId,
         public array $items,
         private array $operations = [],
+        private array $blocked = [],
     ) {}
+
+    /**
+     * Zarar korumasının GÖNDERMEDİĞİ operasyonlar ve nedenleri.
+     *
+     * Yükte yoklar ama sessizce düşürülmezler: iş onları ölü işaretler ve
+     * neden listing'de görünür.
+     *
+     * @return list<array{0: SyncOperation, 1: string}>
+     */
+    public function blocked(): array
+    {
+        return $this->blocked;
+    }
 
     /**
      * Bu yükün sonucunun yazılacağı operasyonlar.

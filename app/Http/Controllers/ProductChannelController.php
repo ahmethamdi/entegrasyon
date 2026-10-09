@@ -396,8 +396,18 @@ final class ProductChannelController extends Controller
             $variant = $variants->get($listing->variant_id);
             $variantCurrency = $variant?->currency;
 
+            // Kanala giden fiyat kural uygulanmış hâliyle gösterilir; ilişki
+            // elle bağlanır (koleksiyonda tembel yükleme kapalı).
+            $listing->setRelation('variant', $variant);
+            $outgoing = $listing->effectivePrice();
+
             return [
                 'listingId' => $listing->id,
+                // Kuraldan geçmiş, kanala GİDEN fiyat — ürün fiyatından
+                // farklıysa ekranda yazılır ("Kanala giden: 229,90").
+                'outgoingPrice' => $outgoing,
+                'outgoingCurrency' => $listing->effectiveCurrency(),
+                'floorViolation' => $listing->priceFloorViolation(),
                 'sku' => $variant?->sku,
                 'variantPrice' => $variant?->price !== null ? (string) $variant->price : null,
                 'variantCurrency' => $variantCurrency,

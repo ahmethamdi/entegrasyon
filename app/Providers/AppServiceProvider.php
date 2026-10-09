@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Support\StripePaymentGateway;
+use App\Domain\Catalog\Support\ChannelPriceRules;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Models\User;
 use App\Domain\Identity\Support\SuperAdmin;
@@ -28,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
         // onlar AdapterRegistry tarafından her çağrıda yeniden yaratılır.
         $this->app->singleton(PayloadRedactor::class);
         $this->app->singleton(CredentialVault::class);
+        // scoped: her iş/istekte sıfırlanır — kural değişince eski fiyat gitmesin.
+        $this->app->scoped(ChannelPriceRules::class);
 
         $this->app->bind(PaymentGateway::class, StripePaymentGateway::class);
     }
