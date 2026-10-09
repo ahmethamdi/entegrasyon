@@ -8,6 +8,7 @@ use App\Domain\Channels\Adapters\Ticimax\TicimaxAdapter;
 use App\Domain\Channels\Adapters\Ticimax\TicimaxSoapFault;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -55,6 +56,7 @@ final class TicimaxAdapterTest extends TestCase
         $this->assertInstanceOf(SupportsInventory::class, $adapter);
         $this->assertInstanceOf(SupportsPricing::class, $adapter);
         $this->assertInstanceOf(SupportsOrders::class, $adapter);
+        $this->assertInstanceOf(SupportsFulfillment::class, $adapter);
         $this->assertNotInstanceOf(SupportsCatalog::class, $adapter);
         $this->assertNotInstanceOf(SupportsTokenRefresh::class, $adapter);
     }

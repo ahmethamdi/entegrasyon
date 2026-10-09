@@ -59,11 +59,11 @@ final class IkasAdapterTest extends TestCase
         $this->assertInstanceOf(SupportsInventory::class, $adapter);
         $this->assertInstanceOf(SupportsPricing::class, $adapter);
         $this->assertInstanceOf(SupportsOrders::class, $adapter);
+        $this->assertInstanceOf(SupportsFulfillment::class, $adapter);
         $this->assertInstanceOf(SupportsTokenRefresh::class, $adapter);
         $this->assertInstanceOf(DeclaresConnectionSettings::class, $adapter);
 
         $this->assertNotInstanceOf(SupportsCatalog::class, $adapter);
-        $this->assertNotInstanceOf(SupportsFulfillment::class, $adapter);
     }
 
     // ─────────────────────────────────────────────────── kimlik
@@ -555,7 +555,7 @@ final class IkasAdapterTest extends TestCase
                 'adapter_class' => IkasAdapter::class,
                 'capabilities' => [
                     'catalog' => false, 'catalog_import' => true, 'inventory' => true, 'pricing' => true,
-                    'orders' => true, 'taxonomy' => false, 'approval' => false, 'fulfillment' => false,
+                    'orders' => true, 'taxonomy' => false, 'approval' => false, 'fulfillment' => true,
                 ],
                 'rate_limit_profile' => [],
                 'supports_webhooks' => false,

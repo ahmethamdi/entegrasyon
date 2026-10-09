@@ -989,5 +989,14 @@
     ":name zaten bitmiş.": ":name has already ended.",
     ":name iptal edildi; fiyatlar normale dönüyor.": ":name cancelled; prices are going back to normal.",
     "Kampanya açıldı": "Campaign created",
-    "Kampanya iptal edildi": "Campaign cancelled"
+    "Kampanya iptal edildi": "Campaign cancelled",
+    "Kanal bildirimi reddetti. Kargo bildirimi için siparişin kanal kimliği yok.": "The channel rejected the update. This order has no channel ID, so the shipment can't be sent.",
+    "Kanal bildirimi reddetti. eBay takip numarasında harf veya rakam bulunmalı.": "The channel rejected the update. An eBay tracking number must contain letters or digits.",
+    "Kanal bildirimi reddetti. eBay bu bağlantının kargo bildirmesine izin vermedi. Takip numarasını eBay panelinden girin.": "The channel rejected the update. eBay didn't allow this connection to send shipping updates. Enter the tracking number in your eBay admin.",
+    "Kanal bildirimi reddetti. ikas özel uygulamasının sipariş yazma izni yok. ikas panelinde uygulama izinlerini güncelleyin veya takip numarasını ikas panelinden girin.": "The channel rejected the update. The ikas private app has no permission to write orders. Update the app permissions in your ikas admin or enter the tracking number there.",
+    "Sipariş kanalda bulunamadı. Sipariş ikas'ta bulunamadı.": "The order wasn't found on the channel. The order wasn't found in ikas.",
+    "Sipariş kanalda bulunamadı. Sipariş Ticimax'ta bulunamadı.": "The order wasn't found on the channel. The order wasn't found in Ticimax.",
+    "Kanal bildirimi reddetti. Ticimax için takip numarası boş olamaz.":"The channel rejected the update. The tracking number can't be empty for Ticimax.",
+    "Kanal bildirimi reddetti. Sipariş Ticimax'ta iptal, iade ya da silinmiş durumda; kargo bildirilmedi.": "The channel rejected the update. The order is cancelled, returned or deleted in Ticimax; the shipment wasn't sent.",
+    "Kanal bildirimi reddetti. Ticimax yetki kodu kargo bildirmeye izin vermiyor. Ticimax panelinde WS yetki kodunun sipariş servisi iznini kontrol edin veya takip numarasını Ticimax panelinden girin.": "The channel rejected the update. The Ticimax authorization code doesn't allow shipping updates. Check the order service permission of the WS authorization code in your Ticimax admin, or enter the tracking number there."
 }

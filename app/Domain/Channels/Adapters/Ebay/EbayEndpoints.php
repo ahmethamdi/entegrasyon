@@ -154,6 +154,17 @@ final class EbayEndpoints
      */
     public const ORDER = '/sell/fulfillment/v1/order';
 
+    /** Tek sipariş — kargo bildiriminde açık kalemlerin `lineItemId`'si buradan okunur. */
+    public const ORDER_ITEM = '/sell/fulfillment/v1/order/{orderId}';
+
+    /**
+     * Siparişin kargo kayıtları — okuma (GET) ve yeni kayıt (POST).
+     *
+     * ⚠️ POST TEKRAR ZARARSIZ DEĞİLDİR: her çağrı yeni paket açar. Önce GET
+     * ile numaranın zaten yazılıp yazılmadığına bakılır (`pushFulfillment`).
+     */
+    public const SHIPPING_FULFILLMENT = '/sell/fulfillment/v1/order/{orderId}/shipping_fulfillment';
+
     /**
      * İade — AYRI API ve AYRI sürüm ailesi (`post-order/v2`).
      *

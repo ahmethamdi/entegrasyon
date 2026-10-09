@@ -588,7 +588,6 @@ final class EbayAdapterTest extends TestCase
             SupportsCatalog::class,
             SupportsCatalogImport::class,
             SupportsOrders::class,
-            SupportsFulfillment::class,
             SupportsApprovalWorkflow::class,
         ] as $capability) {
             $this->assertNotInstanceOf(
@@ -598,6 +597,13 @@ final class EbayAdapterTest extends TestCase
                 .'panelde çalışmayan bir sekme açardı (§05).',
             );
         }
+    }
+
+    /** Slice 4.8 — kargo bildirimi artık UYGULANMIŞTIR (`EbayFulfillmentTest`). */
+    #[Test]
+    public function fulfillment_is_declared(): void
+    {
+        $this->assertInstanceOf(SupportsFulfillment::class, $this->adapter());
     }
 
     /** Slice 4.1'de yazılan TEK yetenek token yenilemedir. */

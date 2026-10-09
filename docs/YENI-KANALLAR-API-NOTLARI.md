@@ -412,8 +412,13 @@ kullanıyor. B sonra eklenebilir.
   `created` + iptal kalemi başına `cancelled` + `REFUND_DELIVERED` kalemi
   başına `returned`. Kısmi iptalde ikas kalemi böler; iptal SKU ile asıl
   kaleme düşer.
-- Yazılmadı: ürün açma (`SupportsCatalog`), kargo bildirimi
-  (`fulfillOrder`), webhook.
+- Kargo (9 Eki 2026): `listOrder(id)` ile kalemler + paketler okunur, numara
+  silinmemiş/iptal edilmemiş bir pakette varsa istek atılmaz; yalnız
+  `UNFULFILLED` kalemler `fulfillOrder` ile gider. `trackingInfoDetail`:
+  `trackingNumber`, `cargoCompany`, firma `listCargoCompany`'de adıyla
+  bulunursa `cargoCompanyId`. `FORBIDDEN`/403 → VALIDATION (devre kesici
+  açılmaz).
+- Yazılmadı: ürün açma (`SupportsCatalog`), webhook.
 
 **Gerçek mağazada ilk bakılacaklar:** `sort: "createdAt"`/`"updatedAt"`
 değerleri kabul ediliyor mu · `Timestamp` gerçekten ms mi · kısmi iptal
@@ -601,7 +606,13 @@ Gerçek mağazayla sınanmadı.
   TR saati, 3 sa pay. Durum 8/9 → bütün kalemler `SelectSiparisUrun`'dan
   iptal/iade, yalnız sipariş daha önce alındıysa. `EntegrasyonAktarildi`
   işaretlenmez.
-- Yazılmadı: ürün açma, kargo bildirimi, kısmi kalem iptali (kalem durum
+- Kargo (9 Eki 2026, canlı WSDL ile teyitli): `SelectSiparis` (dönen ID
+  karşılaştırılır) → `SiparisKargoTakipNoKontrol` → firma
+  `SelectKargoFirmalari`'nda adıyla bulunursa `SetSiparisKargoFirmaId` →
+  `SaveKargoTakipNo` (kargoKodu boş) → durum 6/7 değilse
+  `SetSiparisKargoyaVerildi`. Yalnız eksik adım atılır. Yetki reddi →
+  VALIDATION.
+- Yazılmadı: ürün açma, kısmi kalem iptali (kalem durum
   kodları belgesiz → `SelectSiparisUrunDurumlari` canlıda okunmalı).
 
 **Gerçek mağazada ilk bakılacaklar:** `StokAdediGuncelle` dönüş sayısının

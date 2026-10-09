@@ -194,7 +194,7 @@ class ChannelTypeSeeder extends Seeder
                 'kind' => 'storefront',
                 'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Ikas\\IkasAdapter',
                 'capabilities' => [
-                    // Ürün açma ve kargo bildirimi bu turda YAZILMADI.
+                    // Ürün açma bu turda YAZILMADI.
                     'catalog' => false,
                     'catalog_import' => true,
                     'inventory' => true,
@@ -202,7 +202,8 @@ class ChannelTypeSeeder extends Seeder
                     'orders' => true,
                     'taxonomy' => false,
                     'approval' => false,
-                    'fulfillment' => false,
+                    // Kargo bildirimi 9 Eki 2026 (`fulfillOrder`).
+                    'fulfillment' => true,
                 ],
                 'rate_limit_profile' => [
                     'strategy' => 'fixed_window',
@@ -240,7 +241,8 @@ class ChannelTypeSeeder extends Seeder
                     'orders' => true,
                     'taxonomy' => false,
                     'approval' => false,
-                    'fulfillment' => false,
+                    // Kargo bildirimi 9 Eki 2026 (`SaveKargoTakipNo`).
+                    'fulfillment' => true,
                 ],
                 'rate_limit_profile' => [
                     'strategy' => 'fixed_window',
@@ -586,7 +588,10 @@ class ChannelTypeSeeder extends Seeder
                     // yayınlanmaz canlıdır (Etsy ile aynı). Açılsaydı
                     // panelde HİÇ DOLMAYACAK bir sekme belirirdi.
                     'approval' => false,
-                    'fulfillment' => false,      // slice 4.8
+                    // Kargo bildirimi 9 Eki 2026 (slice 4.8 ✓) —
+                    // `createShippingFulfillment`. Sipariş yoklaması
+                    // (4.7) henüz yok; kalem kimlikleri kanaldan okunur.
+                    'fulfillment' => true,
                 ],
                 'rate_limit_profile' => [
                     // ⚠️ eBay'İN ASIL SINIRI GÜNLÜKTÜR (~5.000/gün/uç

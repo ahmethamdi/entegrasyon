@@ -11,6 +11,7 @@ use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -18,6 +19,7 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
@@ -78,8 +80,12 @@ use Throwable;
  * Sipariş durumu 8 (iptal) ve 9 (iade edildi) bütün kalemleri döndürür.
  * `EntegrasyonAktarildi` bayrağına DOKUNULMAZ: satıcının ERP'si de onu
  * kullanıyor olabilir ve biz işaretlersek ERP siparişi hiç görmezdi.
+ *
+ * `SupportsFulfillment` 9 Eki 2026'da eklendi (`SaveKargoTakipNo` +
+ * `SetSiparisKargoyaVerildi`): panelden girilen takip numarası Ticimax'a
+ * gitmiyordu.
  */
-final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
 {
     use DeclaresRequestQuota;
 
@@ -104,6 +110,10 @@ final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, S
     private const CHANNEL_TIMEZONE = 'Europe/Istanbul';
 
     /** Sipariş durumları (SiparisServis.pdf s.2–4). */
+    private const STATUS_SHIPPED = 6;
+
+    private const STATUS_DELIVERED = 7;
+
     private const STATUS_CANCELLED = 8;
 
     private const STATUS_RETURNED = 9;
@@ -630,6 +640,237 @@ final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, S
     public function acknowledgeOrder(Order $order): AdapterResult
     {
         return AdapterResult::success(['acknowledged' => true]);
+    }
+
+    // -------------------------------------------------------------- kargo
+
+    /**
+     * Panelden girilen takip numarasını Ticimax siparişine yazar
+     * (`SaveKargoTakipNo`) ve sipariş hâlâ kargoda değilse "Kargoya verildi"
+     * yapar (`SetSiparisKargoyaVerildi`).
+     *
+     * ⚠️ ÖNCE OKUNUR, YALNIZ EKSİK ADIM ATILIR. Takip numarası
+     * `SiparisKargoTakipNoKontrol` ile, durum `SelectSiparis` ile okunur.
+     * Numara aynıysa yazılmaz, sipariş zaten kargodaysa (6/7) durum
+     * değiştirilmez: iki çağrının alıcıya e-posta/SMS gönderip göndermediği
+     * belgesiz (⚠️ DOĞRULANMADI) ve yanıtı kaybolan iş yeniden denendiğinde
+     * alıcı ikinci bildirimi almamalı. Durum yazmadan ÖNCE yeniden okunur:
+     * PDF başlığı `SaveKargoTakipNo`'nun "kargo işlemlerini" de yaptığını
+     * söylüyor; durumu kendisi değiştirdiyse ikinci geçiş yapılmaz.
+     *
+     * ⚠️ PARAMETRE SIRASI WSDL SIRASIDIR, ALFABETİK DEĞİL. Bunlar DataContract
+     * değil mesaj parçasıdır (`TicimaxSoap::envelope`); WCF sırası bozuk
+     * parçayı HATA VERMEDEN yok sayar — numara sessizce boş kalırdı.
+     *
+     * ⚠️ FİRMA KODU BOŞ GİDER. PDF `KargoKodu` için "Boş gönderilebilir"
+     * diyor ama değerin neye karşılık geldiğini söylemiyor (⚠️ DOĞRULANMADI);
+     * tahmini bir kod yanlış firmayı yazardı. Firma, mağazanın listesinde
+     * (`SelectKargoFirmalari`) adıyla bulunursa `SetSiparisKargoFirmaId` ile
+     * kimliğinden yazılır; bulunmazsa firma alanına dokunulmaz.
+     *
+     * ⚠️ YETKİ REDDİ KİMLİK HATASI SAYILMAZ. Yetki kodu sipariş servisine
+     * kapalıysa Fault metni "yetki" içerir ve `classifyError()` onu
+     * `AUTHENTICATION` sayar; devre kesici o sınıfta SÜRESİZ açılır ve tek
+     * kargo bildirimi bağlantının stok akışını durdururdu. Burada `VALIDATION`.
+     */
+    public function pushFulfillment(Fulfillment $fulfillment): AdapterResult
+    {
+        $orderId = (int) $fulfillment->order?->external_id;
+
+        if ($orderId <= 0) {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Kargo bildirimi için siparişin kanal kimliği yok.',
+            );
+        }
+
+        $tracking = trim((string) $fulfillment->tracking_number);
+
+        if ($tracking === '') {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Ticimax için takip numarası boş olamaz.');
+        }
+
+        try {
+            $status = $this->orderStatus($orderId);
+
+            // Sipariş okunamadıysa YAZILMAZ: yazma çağrısı başka bir siparişe
+            // ya da boşa gitseydi satır yine "gönderildi" görünürdü.
+            if ($status === -1) {
+                return AdapterResult::failure(ErrorClass::NOT_FOUND, 'Sipariş Ticimax\'ta bulunamadı.');
+            }
+
+            if (in_array($status, [self::STATUS_CANCELLED, self::STATUS_RETURNED, self::STATUS_DELETED], true)) {
+                return AdapterResult::failure(ErrorClass::VALIDATION, 'Sipariş Ticimax\'ta iptal, iade ya da silinmiş durumda; kargo bildirilmedi.');
+            }
+
+            $alreadyWritten = self::trackingKey($this->currentTrackingNumber($orderId)) === self::trackingKey($tracking);
+            $alreadyShipped = in_array($status, [self::STATUS_SHIPPED, self::STATUS_DELIVERED], true);
+
+            if ($alreadyWritten && $alreadyShipped) {
+                return AdapterResult::success(['already_shipped' => true]);
+            }
+
+            $saveResult = null;
+
+            if (! $alreadyWritten) {
+                $this->assignCarrier($orderId, (string) $fulfillment->carrier);
+
+                $saveResult = $this->call('SiparisServis', 'SaveKargoTakipNo', [
+                    'siparisId' => $orderId,
+                    'kargoKodu' => '',
+                    'kargoTakipNo' => $tracking,
+                    'kargoTakipLink' => '',
+                    // Boşsa Ticimax kendisi üretir (PDF).
+                    'BarkodBilgisi' => '',
+                    'KargoTakipLinkGoster' => false,
+                ]);
+
+                $alreadyShipped = in_array($this->orderStatus($orderId), [self::STATUS_SHIPPED, self::STATUS_DELIVERED], true);
+            }
+
+            if (! $alreadyShipped) {
+                $this->call('SiparisServis', 'SetSiparisKargoyaVerildi', ['siparisId' => $orderId]);
+            }
+        } catch (TicimaxSoapFault $e) {
+            if (! $e->isAuthentication()) {
+                throw $e;
+            }
+
+            return $this->forbiddenFulfillment();
+        } catch (RequestException $e) {
+            if ($e->response->status() !== 403) {
+                throw $e;
+            }
+
+            return $this->forbiddenFulfillment();
+        }
+
+        // `SaveKargoTakipNo` `string` döndürür ama anlamı belgesiz
+        // (⚠️ DOĞRULANMADI) — gerçek mağazada bakılsın diye sonuçta durur.
+        return AdapterResult::success(array_filter([
+            'tracking_written' => ! $alreadyWritten,
+            'save_result' => is_string($saveResult) && $saveResult !== '' ? mb_substr($saveResult, 0, 200) : null,
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Siparişte kayıtlı takip numarası (`SiparisKargoTakipNoKontrol`).
+     *
+     * ⚠️ YANIT `WebServisResponse`'tur: numarası olmayan siparişte
+     * `IsError` dönüp dönmediği belgesiz (⚠️ DOĞRULANMADI). Dönerse bu
+     * "numara yok" okunur — kargo bildirimi o yüzden durmamalı; numarayı
+     * yeniden yazmak üzerine yazmadır, ikinci paket açmaz. Yetki reddi
+     * yükselir.
+     */
+    private function currentTrackingNumber(int $orderId): string
+    {
+        try {
+            $current = $this->call('SiparisServis', 'SiparisKargoTakipNoKontrol', ['siparisId' => $orderId]);
+        } catch (TicimaxSoapFault $e) {
+            if ($e->faultCode !== 'IsError' || $e->isAuthentication()) {
+                throw $e;
+            }
+
+            return '';
+        }
+
+        return is_array($current) ? (string) ($current['KargoTakipNo'] ?? '') : '';
+    }
+
+    /**
+     * Mağazanın kargo firmaları — `ID => Tanim`.
+     *
+     * @return array<string, string>
+     */
+    public function fetchCarriers(): array
+    {
+        $carriers = [];
+
+        foreach (TicimaxSoap::items($this->call('CustomServis', 'SelectKargoFirmalari', []), 'KargoFirma') as $firm) {
+            if ((int) ($firm['ID'] ?? 0) > 0 && isset($firm['Tanim'])) {
+                $carriers[(string) (int) $firm['ID']] = (string) $firm['Tanim'];
+            }
+        }
+
+        return $carriers;
+    }
+
+    private function forbiddenFulfillment(): AdapterResult
+    {
+        return AdapterResult::failure(
+            ErrorClass::VALIDATION,
+            'Ticimax yetki kodu kargo bildirmeye izin vermiyor. Ticimax panelinde WS yetki kodunun sipariş servisi iznini kontrol edin veya takip numarasını Ticimax panelinden girin.',
+        );
+    }
+
+    /**
+     * Siparişin durum kodu (`Durum`); sipariş yoksa -1.
+     *
+     * ⚠️ DÖNEN SİPARİŞİN KİMLİĞİ KARŞILAŞTIRILIR. Süzgeç sessizce yok
+     * sayılsaydı (WCF sırası bozuk alanı hata vermeden atlar) ilk sipariş
+     * döner ve BAŞKA siparişin durumu okunurdu.
+     */
+    private function orderStatus(int $orderId): int
+    {
+        $orders = TicimaxSoap::items($this->call('SiparisServis', 'SelectSiparis', [
+            'f' => [...self::orderFilter(), 'SiparisID' => $orderId, 'UrunGetir' => false],
+            's' => ['BaslangicIndex' => 0, 'KayitSayisi' => 1, 'SiralamaDegeri' => 'ID', 'SiralamaYonu' => 'ASC'],
+        ]), 'WebSiparis');
+
+        if (! isset($orders[0]['Durum']) || (int) ($orders[0]['ID'] ?? 0) !== $orderId) {
+            return -1;
+        }
+
+        return (int) $orders[0]['Durum'];
+    }
+
+    /**
+     * Firma mağazanın listesinde adıyla varsa siparişe kimliğiyle yazılır.
+     *
+     * Liste okunamazsa (yetki dışı Fault) firma atlanır: firma yardımcı
+     * bilgidir, takip numarasının gitmesini durdurmamalı. Yetki reddi
+     * yükselir — aynı kod sipariş yazmayı da reddederdi.
+     */
+    private function assignCarrier(int $orderId, string $carrier): void
+    {
+        $wanted = self::carrierKey($carrier);
+
+        if ($wanted === '') {
+            return;
+        }
+
+        try {
+            $carriers = $this->fetchCarriers();
+        } catch (TicimaxSoapFault $e) {
+            if ($e->isAuthentication()) {
+                throw $e;
+            }
+
+            return;
+        }
+
+        foreach ($carriers as $id => $name) {
+            if (self::carrierKey($name) === $wanted) {
+                $this->call('SiparisServis', 'SetSiparisKargoFirmaId', ['siparisId' => $orderId, 'kargoFirmaId' => (int) $id]);
+
+                return;
+            }
+        }
+    }
+
+    private static function trackingKey(string $tracking): string
+    {
+        return mb_strtoupper((string) preg_replace('/\s+/u', '', $tracking));
+    }
+
+    /** "Yurtiçi Kargo", "yurtici", "YURTİÇİ KARGO A.Ş." aynı anahtara düşer. */
+    private static function carrierKey(string $carrier): string
+    {
+        $key = mb_strtolower(strtr($carrier, ['İ' => 'i', 'I' => 'ı']));
+        $key = strtr($key, ['ı' => 'i', 'ş' => 's', 'ğ' => 'g', 'ü' => 'u', 'ö' => 'o', 'ç' => 'c']);
+        $key = (string) preg_replace('/[^a-z0-9]/', '', $key);
+
+        return (string) preg_replace('/(kargo|cargo)(as|ltdsti)?$/', '', $key);
     }
 
     // ------------------------------------------------------------------- iç

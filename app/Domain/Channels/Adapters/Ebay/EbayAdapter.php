@@ -14,6 +14,7 @@ use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -22,6 +23,7 @@ use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
@@ -35,6 +37,7 @@ use App\Support\Tenancy\TenantContext;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use RuntimeException;
 use Throwable;
 
@@ -61,8 +64,10 @@ use Throwable;
  * `SupportsPricing`) — AYNI toplu uç nokta, KISMİ BAŞARI operasyona
  * eşlenir (§13.4).
  *
- * HENÜZ YAZILMAYANLAR ve slice'ları: `SupportsOrders` (4.7),
- * `SupportsFulfillment` (4.8).
+ * 4.8'de yazılan: **kargo bildirimi** (`SupportsFulfillment`) — 9 Eki
+ * 2026; `createShippingFulfillment`, önce mevcut kargolar okunur.
+ *
+ * HENÜZ YAZILMAYAN ve slice'ı: `SupportsOrders` (4.7).
  *
  * ⚠️ `SupportsCatalog` HİÇ UYGULANMAYACAK ve bu bir eksiklik DEĞİLDİR.
  * O arayüz yayını TEK ÇAĞRI varsayar; eBay'de yayın ÜÇ ADIMDIR ve ara
@@ -102,7 +107,7 @@ use Throwable;
  * okur; `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
  * GELMEZDİ.
  */
-final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsFulfillment, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -122,6 +127,12 @@ final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, Decl
      * KATIDIR ve aşan istek tamamen reddedilir.
      */
     private const MAX_BULK_BATCH = 25;
+
+    /** eBay listesinde olmayan firma için resmî kod (`ShippingCarrierCodeType`). */
+    private const OTHER_CARRIER = 'Other';
+
+    /** `createShippingFulfillment` · "Invalid shipment tracking number or carrier" (OAS). */
+    private const INVALID_TRACKING_OR_CARRIER = 32300;
 
     /**
      * `settings` anahtarları (§17 · DB Delta 5).
@@ -1076,6 +1087,243 @@ final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, Decl
         return is_array($settings)
             ? (string) ($settings[self::MARKETPLACE_ID_KEY] ?? '')
             : '';
+    }
+
+    // ------------------------------------------------------ kargo (4.8)
+
+    /**
+     * Panelden girilen takip numarasını eBay siparişine yazar
+     * (`createShippingFulfillment`).
+     *
+     * ⚠️ TEKRAR ZARARSIZ DEĞİLDİR — ÖNCE OKUNUR. Her başarılı çağrı YENİ bir
+     * kargo kaydı açar ve alıcı bildirim alır; yanıtı kaybolan istek yeniden
+     * denenince sipariş aynı numarayla iki paket taşırdı (eBay sipariş başına
+     * takip numarası sayısını da sınırlar, `34100`). Siparişin mevcut kargo
+     * kayıtları okunur ve numara oradaysa istek atılmaz (Etsy kuralının eşi).
+     *
+     * ⚠️ KALEM KİMLİKLERİ KANALDAN OKUNUR. Gövde `lineItemId` ister ve eBay
+     * siparişi bizde henüz kalem kimliğiyle saklanmıyor (yoklama 4.7);
+     * okunan sipariş aynı zamanda hangi kalemin AÇIK olduğunu söyler.
+     * Kargolanmış kalem yeniden gönderilseydi çağrı reddedilirdi.
+     *
+     * ⚠️ 403 KİMLİK HATASI SAYILMAZ. `classifyError()` 403'ü `AUTHENTICATION`
+     * sayar ve devre kesici o sınıfta SÜRESİZ açılır — tek bir kargo
+     * bildirimi bağlantının stok ve fiyat akışını durdururdu. Burada
+     * `VALIDATION` olur: yalnız bu kargo satırı "gönderilemedi" görünür.
+     * 401 (süresi dolmuş token) dokunulmadan yükselir; onu yenileme düzeltir.
+     *
+     * ⚠️ FİRMA KODU SERBEST METİN DEĞİLDİR. eBay `ShippingCarrierCodeType`
+     * listesindeki kodu bekler ("Yurtiçi Kargo" orada yok). Tanınan adlar
+     * koda çevrilir, gerisi resmî belgedeki `Other` ("Use this code for any
+     * carrier not listed here") ile gider. Eşlenen kod reddedilirse
+     * (`32300`) bir kez `Other` ile yeniden denenir.
+     */
+    public function pushFulfillment(Fulfillment $fulfillment): AdapterResult
+    {
+        $orderId = $fulfillment->order?->external_id;
+
+        if ($orderId === null || $orderId === '') {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Kargo bildirimi için siparişin kanal kimliği yok.',
+            );
+        }
+
+        // ⚠️ eBay takip numarasında YALNIZ harf ve rakam kabul eder (boşluk,
+        // tire yok — OAS). Etikette "YK 123-4" yazıyorsa olduğu gibi
+        // gönderilen numara reddedilir; karşılaştırma da bu biçimle yapılır.
+        $tracking = self::trackingKey((string) $fulfillment->tracking_number);
+
+        if ($tracking === '') {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'eBay takip numarasında harf veya rakam bulunmalı.',
+            );
+        }
+
+        try {
+            $existing = $this->fulfillmentIdFor($orderId, $tracking);
+
+            if ($existing !== null) {
+                return AdapterResult::success(['external_id' => $existing, 'already_shipped' => true]);
+            }
+
+            $lineItems = $this->openLineItems($orderId);
+
+            // Açık kalem yoksa sipariş eBay'de zaten kargolanmıştır
+            // (Shopify'ın "açık parça kalmadıysa istek atmaz" kuralı).
+            if ($lineItems === []) {
+                return AdapterResult::success(['already_fulfilled' => true]);
+            }
+
+            $carrier = self::carrierCode((string) $fulfillment->carrier);
+            $shippedAt = $fulfillment->shipped_at?->copy()->utc()->format('Y-m-d\TH:i:s.v\Z');
+
+            try {
+                $response = $this->postShippingFulfillment($orderId, $lineItems, $carrier, $tracking, $shippedAt);
+            } catch (RequestException $e) {
+                if ($carrier === self::OTHER_CARRIER || ! self::hasErrorId($e, self::INVALID_TRACKING_OR_CARRIER)) {
+                    throw $e;
+                }
+
+                $response = $this->postShippingFulfillment($orderId, $lineItems, self::OTHER_CARRIER, $tracking, $shippedAt);
+            }
+        } catch (RequestException $e) {
+            if ($e->response->status() !== 403) {
+                throw $e;
+            }
+
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'eBay bu bağlantının kargo bildirmesine izin vermedi. Takip numarasını eBay panelinden girin.',
+            );
+        }
+
+        // Kimlik `Location` başlığının son parçasıdır; eBay takip numaralı
+        // kargoda kimliği numaranın kendisi yapar (OAS), başlık yoksa o.
+        $location = $response->header('Location');
+        $id = $location === '' ? '' : rawurldecode((string) basename((string) parse_url($location, PHP_URL_PATH)));
+
+        return AdapterResult::success(['external_id' => $id === '' ? $tracking : $id]);
+    }
+
+    /**
+     * eBay kod listesinden satıcının sık girdiği firmalar.
+     *
+     * ⚠️ TAM LİSTE DEĞİLDİR ve uydurulmadı: her kod `ShippingCarrierCodeType`
+     * sayfasından alındı. Listede olmayan firma `Other` ile gider.
+     *
+     * @return array<string, string>
+     */
+    public function fetchCarriers(): array
+    {
+        return [
+            'UPS' => 'UPS',
+            // `DHL`; DHL Express ayrı koddur (`DHLEXPRESS`).
+            'DHL' => 'DHL',
+            'FedEx' => 'FedEx',
+            'USPS' => 'USPS',
+            'DPD' => 'DPD',
+            'GLS' => 'GLS',
+            'Hermes' => 'Hermes',
+            'DeutschePost' => 'Deutsche Post',
+            'MNGTurkey' => 'MNG Kargo',
+            self::OTHER_CARRIER => 'Diğer',
+        ];
+    }
+
+    /**
+     * Siparişte bu numarayla açılmış kargo kaydının kimliği.
+     *
+     * Okunamayan liste "kargo yok" SAYILMAZ — sayılsaydı geçici bir hata
+     * aynı numarayla ikinci paket demek olurdu. İstisna yükselir.
+     */
+    private function fulfillmentIdFor(string $orderId, string $tracking): ?string
+    {
+        $response = $this->client->get(
+            EbayEndpoints::url(EbayEndpoints::SHIPPING_FULFILLMENT, ['orderId' => $orderId], sandbox: $this->useSandbox()),
+        );
+
+        $response->throw();
+
+        foreach ((array) $response->json('fulfillments') as $existing) {
+            if (is_array($existing) && self::trackingKey((string) ($existing['shipmentTrackingNumber'] ?? '')) === $tracking) {
+                return (string) ($existing['fulfillmentId'] ?? $tracking);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Henüz kargolanmamış kalemler — `lineItemFulfillmentStatus` `FULFILLED`
+     * olmayanlar, tam miktarıyla.
+     *
+     * @return list<array{lineItemId: string, quantity: int}>
+     */
+    private function openLineItems(string $orderId): array
+    {
+        $response = $this->client->get(
+            EbayEndpoints::url(EbayEndpoints::ORDER_ITEM, ['orderId' => $orderId], sandbox: $this->useSandbox()),
+        );
+
+        $response->throw();
+
+        $lines = [];
+
+        foreach ((array) $response->json('lineItems') as $line) {
+            if (! is_array($line) || ! isset($line['lineItemId']) || ($line['lineItemFulfillmentStatus'] ?? null) === 'FULFILLED') {
+                continue;
+            }
+
+            $lines[] = ['lineItemId' => (string) $line['lineItemId'], 'quantity' => max(1, (int) ($line['quantity'] ?? 1))];
+        }
+
+        return $lines;
+    }
+
+    /** @param  list<array{lineItemId: string, quantity: int}>  $lineItems */
+    private function postShippingFulfillment(string $orderId, array $lineItems, string $carrier, string $tracking, ?string $shippedAt): Response
+    {
+        $response = $this->client->post(
+            EbayEndpoints::url(EbayEndpoints::SHIPPING_FULFILLMENT, ['orderId' => $orderId], sandbox: $this->useSandbox()),
+            array_filter([
+                'lineItems' => $lineItems,
+                // İkisi birbirine bağlıdır: biri varsa öteki de gönderilir (OAS).
+                'shippingCarrierCode' => $carrier,
+                'trackingNumber' => $tracking,
+                'shippedDate' => $shippedAt,
+            ], static fn (mixed $v): bool => $v !== null),
+        );
+
+        $response->throw();
+
+        return $response;
+    }
+
+    /**
+     * Satıcının yazdığı firma adı → eBay kodu.
+     *
+     * Ad sadeleştirilir ("MNG Kargo", "mng-kargo", "MNGTurkey" aynı koda
+     * düşer). Satıcı kodun kendisini yazmışsa o da tanınır.
+     */
+    private static function carrierCode(string $carrier): string
+    {
+        $key = strtolower((string) preg_replace('/[^A-Za-z0-9]/', '', strtr($carrier, [
+            'ı' => 'i', 'İ' => 'i', 'ş' => 's', 'Ş' => 's', 'ğ' => 'g', 'Ğ' => 'g',
+            'ü' => 'u', 'Ü' => 'u', 'ö' => 'o', 'Ö' => 'o', 'ç' => 'c', 'Ç' => 'c',
+        ])));
+        $key = (string) preg_replace('/(kargo|cargo|turkey|express)$/', '', $key);
+
+        return match ($key) {
+            'ups' => 'UPS',
+            'dhl' => 'DHL',
+            'fedex' => 'FedEx',
+            'usps' => 'USPS',
+            'dpd' => 'DPD',
+            'gls' => 'GLS',
+            'hermes' => 'Hermes',
+            'deutschepost' => 'DeutschePost',
+            'mng' => 'MNGTurkey',
+            default => self::OTHER_CARRIER,
+        };
+    }
+
+    /** Hata gövdesinde verilen `errorId` var mı? */
+    private static function hasErrorId(RequestException $e, int $errorId): bool
+    {
+        foreach ((array) $e->response->json('errors') as $error) {
+            if (is_array($error) && (int) ($error['errorId'] ?? 0) === $errorId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function trackingKey(string $tracking): string
+    {
+        return strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $tracking));
     }
 
     // ---------------------------------------------- §13.5 · taksonomi (4.5)

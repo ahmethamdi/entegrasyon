@@ -100,4 +100,41 @@ final class IkasQueries
           }
         }
         GQL;
+
+    /**
+     * Kargo bildirimi öncesi tek sipariş — kalemler ve mevcut paketler.
+     *
+     * Paketlerin takip numarası "bu numara zaten yazıldı mı" sorusunun
+     * cevabıdır; kalem durumu hangi kalemin hâlâ kargolanabilir olduğunu
+     * söyler. Kişisel veri istenmez.
+     */
+    public const ORDER_FOR_FULFILLMENT = <<<'GQL'
+        query ($id: StringFilterInput) {
+          listOrder(id: $id) {
+            data {
+              id
+              orderLineItems { id quantity status deleted }
+              orderPackages { id orderLineItemIds orderPackageFulfillStatus deleted trackingInfo { trackingNumber cargoCompany cargoCompanyId } }
+            }
+          }
+        }
+        GQL;
+
+    /** Mağazanın tanıdığı kargo firmaları — `cargoCompanyId` buradan. */
+    public const CARGO_COMPANIES = <<<'GQL'
+        query { listCargoCompany { id name } }
+        GQL;
+
+    /**
+     * Kargo bildirimi — `PublicFulFillOrderInput` (`orderId`, `lines`,
+     * `trackingInfoDetail`). Dönen siparişten yalnız paketler istenir.
+     */
+    public const FULFILL_ORDER = <<<'GQL'
+        mutation ($input: PublicFulFillOrderInput!) {
+          fulfillOrder(input: $input) {
+            id
+            orderPackages { id orderLineItemIds deleted trackingInfo { trackingNumber } }
+          }
+        }
+        GQL;
 }

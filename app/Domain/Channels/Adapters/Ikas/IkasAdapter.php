@@ -13,6 +13,7 @@ use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -22,6 +23,7 @@ use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
@@ -87,8 +89,11 @@ use Throwable;
  * `updatedAt` yoklaması olmalıydı. İmza doğrulaması yine de yazıldı
  * (gövdedeki `data` alanının HMAC-SHA256'sı, anahtar `client_secret` —
  * `@ikas/admin-api-client` `validateIkasWebhookSignature`).
+ *
+ * `SupportsFulfillment` 9 Eki 2026'da eklendi (`fulfillOrder`): panelden
+ * girilen takip numarası ikas'a gitmiyordu.
  */
-final class IkasAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
+final class IkasAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -921,6 +926,211 @@ final class IkasAdapter implements ChannelAdapter, DeclaresChannelCurrency, Decl
     public function acknowledgeOrder(Order $order): AdapterResult
     {
         return AdapterResult::success(['acknowledged' => true]);
+    }
+
+    // -------------------------------------------------------------- kargo
+
+    /**
+     * Panelden girilen takip numarasını ikas siparişine yazar (`fulfillOrder`).
+     *
+     * ⚠️ TEKRAR ZARARSIZ DEĞİLDİR — ÖNCE OKUNUR. Her başarılı çağrı yeni paket
+     * açar; yanıtı kaybolan istek yeniden denenince aynı numara iki pakette
+     * görünürdü. Siparişin paketleri okunur, numara birindeyse istek atılmaz
+     * (Etsy kuralının eşi).
+     *
+     * ⚠️ KALEMLER KANALDAN OKUNUR. `order_lines.external_line_id` ikas kalem
+     * kimliğini taşır ama kalemin O ANKİ durumunu bilmez: satıcı bir kalemi
+     * ikas panelinden kargolamış ya da iptal etmiş olabilir. Yalnız
+     * `UNFULFILLED` kalemler gönderilir; kargolanmış kalem yeniden
+     * gönderilseydi mutation reddedilir ve hata ikas'ın HATA ORANINA yazılırdı
+     * (sınıf notu — kalıcı engel kuralı).
+     *
+     * ⚠️ İZİN HATASI KİMLİK HATASI SAYILMAZ. HTTP 403 ve GraphQL `FORBIDDEN`
+     * `classifyError()`'da `AUTHENTICATION`'dır ve devre kesici o sınıfta
+     * SÜRESİZ açılır — özel uygulamada sipariş yazma izni verilmemiş tek bir
+     * kargo bildirimi bağlantının stok akışını durdururdu. Burada `VALIDATION`
+     * olur. Süresi dolmuş token (`UNAUTHENTICATED`, 401) dokunulmadan yükselir.
+     *
+     * ⚠️ BİLİNMEYEN FİRMA İSTEK REDDİYLE ÖĞRENİLMEZ. Önce mağazanın firma
+     * listesi (`listCargoCompany`) okunur; ad eşleşirse `cargoCompanyId` de
+     * gider, eşleşmezse yalnız ad (`cargoCompany`) gider. "Reddedilirse
+     * yeniden dene" yolu her bilinmeyen firmada bir hata daha yazardı.
+     */
+    public function pushFulfillment(Fulfillment $fulfillment): AdapterResult
+    {
+        $orderId = $fulfillment->order?->external_id;
+
+        if ($orderId === null || $orderId === '') {
+            return AdapterResult::failure(
+                ErrorClass::VALIDATION,
+                'Kargo bildirimi için siparişin kanal kimliği yok.',
+            );
+        }
+
+        $tracking = trim((string) $fulfillment->tracking_number);
+
+        try {
+            $order = $this->graphql(IkasQueries::ORDER_FOR_FULFILLMENT, ['id' => ['eq' => $orderId]])['listOrder']['data'][0] ?? null;
+
+            if (! is_array($order)) {
+                return AdapterResult::failure(ErrorClass::NOT_FOUND, 'Sipariş ikas\'ta bulunamadı.');
+            }
+
+            $existing = self::packageIdFor((array) ($order['orderPackages'] ?? []), $tracking);
+
+            if ($existing !== null) {
+                return AdapterResult::success(['external_id' => $existing, 'already_shipped' => true]);
+            }
+
+            $lines = [];
+
+            foreach ((array) ($order['orderLineItems'] ?? []) as $line) {
+                if (is_array($line) && isset($line['id']) && ($line['deleted'] ?? false) !== true && ($line['status'] ?? null) === 'UNFULFILLED') {
+                    $lines[] = ['orderLineItemId' => (string) $line['id'], 'quantity' => max(1, (int) ($line['quantity'] ?? 1))];
+                }
+            }
+
+            // Açık kalem yoksa sipariş ikas'ta zaten kargolanmıştır.
+            if ($lines === []) {
+                return AdapterResult::success(['already_fulfilled' => true]);
+            }
+
+            $fulfilled = $this->graphql(IkasQueries::FULFILL_ORDER, ['input' => [
+                'orderId' => $orderId,
+                'lines' => $lines,
+                // Müşteriye bildirim ve "kargoya hazır" adımı satıcının ikas
+                // ayarıdır; burada zorlanmaz (Shopify kararının aynısı).
+                'trackingInfoDetail' => $this->trackingInfoDetail((string) $fulfillment->carrier, $tracking),
+            ]])['fulfillOrder'] ?? [];
+        } catch (IkasGraphQLException $e) {
+            if ($e->errorCode !== 'FORBIDDEN') {
+                throw $e;
+            }
+
+            return $this->forbiddenFulfillment();
+        } catch (RequestException $e) {
+            if ($e->response->status() !== 403) {
+                throw $e;
+            }
+
+            return $this->forbiddenFulfillment();
+        }
+
+        return AdapterResult::success(array_filter([
+            'external_id' => self::packageIdFor((array) ($fulfilled['orderPackages'] ?? []), $tracking),
+        ], static fn (mixed $v): bool => $v !== null));
+    }
+
+    /**
+     * Mağazanın kargo firmaları — `id => ad`.
+     *
+     * @return array<string, string>
+     */
+    public function fetchCarriers(): array
+    {
+        $carriers = [];
+
+        foreach ((array) ($this->graphql(IkasQueries::CARGO_COMPANIES)['listCargoCompany'] ?? []) as $company) {
+            if (is_array($company) && isset($company['id'], $company['name'])) {
+                $carriers[(string) $company['id']] = (string) $company['name'];
+            }
+        }
+
+        return $carriers;
+    }
+
+    private function forbiddenFulfillment(): AdapterResult
+    {
+        return AdapterResult::failure(
+            ErrorClass::VALIDATION,
+            'ikas özel uygulamasının sipariş yazma izni yok. ikas panelinde uygulama izinlerini güncelleyin veya takip numarasını ikas panelinden girin.',
+        );
+    }
+
+    /**
+     * Takip bilgisi — firma mağazanın listesinde varsa kimliğiyle.
+     *
+     * Liste okunamazsa (GraphQL hatası) firma yalnız adıyla gider: liste
+     * yardımcı bilgidir, takip numarasının gitmesini durdurmamalı. İzin
+     * hatası ise yükselir — aynı izin mutation'ı da durdururdu.
+     *
+     * @return array<string, string>
+     */
+    private function trackingInfoDetail(string $carrier, string $tracking): array
+    {
+        $carrier = trim($carrier);
+        $companyId = null;
+
+        if ($carrier !== '') {
+            try {
+                $wanted = self::carrierKey($carrier);
+
+                foreach ($this->fetchCarriers() as $id => $name) {
+                    if (self::carrierKey($name) === $wanted || self::carrierKey($id) === $wanted) {
+                        $companyId = $id;
+                        $carrier = $name;
+
+                        break;
+                    }
+                }
+            } catch (IkasGraphQLException $e) {
+                if ($e->errorCode === 'FORBIDDEN') {
+                    throw $e;
+                }
+            }
+        }
+
+        return array_filter([
+            'trackingNumber' => $tracking,
+            'cargoCompany' => $carrier,
+            'cargoCompanyId' => $companyId,
+        ], static fn (mixed $v): bool => $v !== null && $v !== '');
+    }
+
+    /**
+     * Siparişte bu takip numarasını taşıyan paketin kimliği.
+     *
+     * Silinmiş ve iptal edilmiş paket sayılmaz: iptal edilen paketin
+     * numarasıyla yeniden kargolamak MEŞRUDUR. Karşılaştırma boşluk ve
+     * harf farkını yok sayar.
+     *
+     * @param  array<int, mixed>  $packages
+     */
+    private static function packageIdFor(array $packages, string $tracking): ?string
+    {
+        $wanted = self::trackingKey($tracking);
+
+        if ($wanted === '') {
+            return null;
+        }
+
+        foreach ($packages as $package) {
+            if (! is_array($package) || ($package['deleted'] ?? false) === true
+                || in_array($package['orderPackageFulfillStatus'] ?? null, ['CANCELLED', 'REFUNDED', 'REFUND_DELIVERED'], true)) {
+                continue;
+            }
+
+            if (self::trackingKey((string) ($package['trackingInfo']['trackingNumber'] ?? '')) === $wanted && isset($package['id'])) {
+                return (string) $package['id'];
+            }
+        }
+
+        return null;
+    }
+
+    private static function trackingKey(string $tracking): string
+    {
+        return mb_strtoupper((string) preg_replace('/\s+/u', '', $tracking));
+    }
+
+    /** "MNG Kargo", "mng-kargo", "MNG_KARGO" aynı anahtara düşer. */
+    private static function carrierKey(string $carrier): string
+    {
+        $key = mb_strtolower(strtr($carrier, ['İ' => 'i', 'I' => 'ı']));
+        $key = strtr($key, ['ı' => 'i', 'ş' => 's', 'ğ' => 'g', 'ü' => 'u', 'ö' => 'o', 'ç' => 'c']);
+        $key = (string) preg_replace('/[^a-z0-9]/', '', $key);
+
+        return (string) preg_replace('/(kargo|cargo)$/', '', $key);
     }
 
     // ------------------------------------------------------------------- iç
