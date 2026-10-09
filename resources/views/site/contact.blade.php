@@ -27,51 +27,58 @@
 @endpush
 
 @section('content')
-    <section class="wrap pt-14 pb-16 sm:pt-20 lg:pt-28 lg:pb-24" aria-labelledby="iletisim-h1">
-        <p class="eyebrow">İletişim</p>
-        <h1 id="iletisim-h1" class="display t-hero mt-6">Bize <span class="accent">yaz.</span></h1>
-        <p class="lead mt-10 max-w-[44ch] lg:mt-14">
-            Bir kanalı bağlarken takıldıysan, bir şey beklediğin gibi çalışmıyorsa ya da listede olmayan bir kanalda satıyorsan yaz.
-        </p>
+    <section class="border-b border-line bg-soft" aria-labelledby="iletisim-h1">
+        <div class="wrap pt-12 pb-12 lg:pt-16 lg:pb-16">
+            <p class="eyebrow">İletişim</p>
+            <h1 id="iletisim-h1" class="h-page mt-3">Bize ulaş</h1>
+            <p class="lead mt-5 max-w-[56ch]">
+                Bir kanalı bağlarken takıldıysan, bir şey beklediğin gibi çalışmıyorsa ya da listede olmayan bir kanalda satıyorsan yaz.
+            </p>
+        </div>
     </section>
 
-    <section class="on-dark" aria-label="İletişim bilgileri">
-        <div class="wrap py-20 lg:py-28">
-            {{-- E-posta adresi dev yazıyla: sayfanın asıl içeriği bu. Uzun adres dar ekranda kırılabilir. --}}
-            <p class="eyebrow"><b>01</b> E-posta</p>
-            <a href="mailto:{{ $email }}" class="display mt-6 block text-[clamp(1.75rem,0.6rem+5.4vw,6.5rem)] leading-none [overflow-wrap:anywhere] hover:text-[#ff6a47]">{{ $email }}</a>
-
-            <div class="mt-20 grid gap-12 border-t border-line-dark pt-12 md:grid-cols-2 lg:mt-28">
-                <div>
-                    <p class="eyebrow"><b>02</b> Telefon</p>
-                    <a href="{{ $phoneHref }}" class="display t-3 mt-5 block hover:text-[#ff6a47]">{{ $phone }}</a>
-                </div>
-                <div>
-                    <p class="eyebrow"><b>03</b> Adres</p>
-                    <address class="mt-5 text-lg leading-relaxed not-italic">
+    <section class="section" aria-label="İletişim bilgileri">
+        <div class="wrap">
+            <ul class="grid gap-5 md:grid-cols-3">
+                <li class="card">
+                    <span class="icon-box">@include('site.partials.icon', ['name' => 'mail'])</span>
+                    <h2 class="heading-3 mt-4">E-posta</h2>
+                    <p class="mt-1 text-sm muted">Sorular, destek ve öneriler için.</p>
+                    <a href="mailto:{{ $email }}" class="link mt-3 inline-block [overflow-wrap:anywhere]">{{ $email }}</a>
+                </li>
+                <li class="card">
+                    <span class="icon-box">@include('site.partials.icon', ['name' => 'call'])</span>
+                    <h2 class="heading-3 mt-4">Telefon</h2>
+                    <p class="mt-1 text-sm muted">Almanya numarası.</p>
+                    <a href="{{ $phoneHref }}" class="link mt-3 inline-block">{{ $phone }}</a>
+                </li>
+                <li class="card">
+                    <span class="icon-box">@include('site.partials.icon', ['name' => 'pin'])</span>
+                    <h2 class="heading-3 mt-4">Adres</h2>
+                    <address class="mt-3 not-italic">
                         {{ config('site.operator') }}<br>
                         {{ config('site.street') }}<br>
                         {{ config('site.postal_code') }} {{ config('site.city') }}, {{ config('site.country') }}
                     </address>
-                </div>
-            </div>
+                </li>
+            </ul>
         </div>
     </section>
 
-    <section class="wrap py-24 lg:py-32" aria-labelledby="iletisim-alt">
-        <div class="grid gap-10 lg:grid-cols-12 lg:items-end">
-            <div class="lg:col-span-7">
-                <h2 id="iletisim-alt" class="display t-2">Önce kendin bakmak istersen.</h2>
-                <p class="mt-6 max-w-[48ch] muted">
+    <section class="border-t border-line bg-soft" aria-labelledby="iletisim-alt">
+        <div class="wrap flex flex-col gap-6 py-12 lg:flex-row lg:items-center lg:justify-between">
+            <div class="max-w-2xl">
+                <h2 id="iletisim-alt" class="heading-2">Önce kendin bakmak istersen</h2>
+                <p class="mt-3 muted">
                     Sık sorulan soruların cevapları ana sayfada. Hesabın varsa panelin "Yardım" ekranına da bakabilirsin.
                 </p>
             </div>
-            <div class="flex flex-wrap gap-4 lg:col-span-5 lg:justify-end">
-                <a href="{{ route('home') }}#sss" class="btn btn-outline">Sık sorulanlar</a>
+            <div class="flex flex-wrap gap-3">
+                <a href="{{ route('home') }}#sss" class="btn btn-secondary">Sık sorulanlar</a>
                 @if ($isLoggedIn)
-                    <a href="{{ url('/panel') }}" class="btn btn-primary">Panele git <span class="arrow" aria-hidden="true">→</span></a>
+                    <a href="{{ url('/panel') }}" class="btn btn-primary">Panele git</a>
                 @else
-                    <a href="{{ route('register') }}" class="btn btn-primary">Ücretsiz başla <span class="arrow" aria-hidden="true">→</span></a>
+                    <a href="{{ route('register') }}" class="btn btn-primary">Ücretsiz dene</a>
                 @endif
             </div>
         </div>

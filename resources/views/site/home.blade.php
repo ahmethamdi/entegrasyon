@@ -1,5 +1,9 @@
 {{--
-    34pazar.com ana sayfası.
+    34pazar.com ana sayfası — kurumsal düzen (9 Ekim 2026).
+
+    Akış: ne yaptığımız tek cümlede → bağlanan kanallar → 3 adımda nasıl
+    çalışır → sorun/çözüm blokları (gerçek panel ekranlarıyla) → diğer
+    özellikler → fiyat özeti → SSS → son çağrı.
 
     DEĞİŞMEZ KURAL — SAYFA VERİ UYDURMAZ (SiteController ile aynı kural):
       Fiyat ve kanal listesi denetleyiciden gelir. Müşteri sayısı, yorum,
@@ -9,6 +13,9 @@
       olursa ya da kanal satışı geç bildirirse fazla satış yine olabilir
       (panel görüntüsünde de kırmızı bir satır var). Vaat şu: stok her
       kanalda birlikte düşer; ters giden bir şey olursa hemen görürsün.
+
+    KARGO BİLDİRİMİ kanal kanal: `cargoPush` adaptörün yeteneğinden gelir
+      (SiteController::presentChannel); burada elle liste tutulmaz.
 --}}
 @extends('site.layout')
 
@@ -27,105 +34,88 @@
     $availableNames = $join(array_column($available, 'name'));
     $upcomingNames = $join(array_column($upcoming, 'name'));
 
-    /*
-     * Bulunma eki ('da/'de/'te) elle tutulur: yabancı marka adının okunuşu
-     * yazılışından tahmin edilemez ("Shopify" i ile biter, a ile okunur).
-     * Sözlükte olmayan kanal başlığa girmez; o zaman genel başlık kullanılır.
-     */
-    $locative = [
-        'trendyol' => "Trendyol'da", 'shopify' => "Shopify'da", 'woocommerce' => "WooCommerce'te",
-        'etsy' => "Etsy'de", 'ebay' => "eBay'de", 'hepsiburada' => "Hepsiburada'da",
-    ];
-    $byCode = array_column($available, null, 'code');
-    $heroPair = isset($byCode['trendyol'], $byCode['shopify']) ? ['trendyol', 'shopify'] : null;
-
-    /*
-     * Kargo numarasını kanala geri gönderebildiğimiz kanallar. Diğerlerinde
-     * satıcı numarayı kanalın kendi panelinde girer. Bu liste features ve
-     * channel görünümlerinde de AYNI — biri değişirse ikisi de değişmeli.
-     */
-    $cargoPush = ['shopify', 'woocommerce'];
-    $cargoYes = $join(array_column(array_filter($available, fn ($c) => in_array($c['code'], $cargoPush, true)), 'name'));
-    $cargoNo = $join(array_column(array_filter($available, fn ($c) => ! in_array($c['code'], $cargoPush, true)), 'name'));
+    $cargoYes = $join(array_column(array_filter($available, fn ($c) => $c['cargoPush']), 'name'));
+    $cargoNo = $join(array_column(array_filter($available, fn ($c) => ! $c['cargoPush']), 'name'));
 
     $freePlan = collect($plans)->first(fn ($p) => (float) $p['priceMonthly'] === 0.0);
     $limit = fn (?int $v, string $unit): string => $v === null ? "sınırsız {$unit}" : number_format($v, 0, ',', '.')." {$unit}";
 
-    $primaryHref = $isLoggedIn ? url('/panel') : route('register');
-    $primaryLabel = $isLoggedIn ? 'Panele git' : 'Ücretsiz başla';
-
     /*
-     * Her satır TEK bir gerçek iş anlatır ve yanında o işin yapıldığı
-     * panel ekranı durur. İkon ızgarası yerine bu düzen: satıcı "bu ne
-     * işe yarar"ı soyut sıfatlardan değil kendi gününden tanır.
+     * Sorun → çözüm blokları. Her blok TEK bir gerçek işi anlatır ve
+     * yanında o işin yapıldığı panel ekranı durur.
      */
-    $scenes = [
+    $blocks = [
         [
-            'id' => 'siparisler', 'kicker' => 'Siparişler',
+            'id' => 'stok', 'icon' => 'stock', 'kicker' => 'Stok',
+            'problem' => 'Ürün bir kanalda satıldı, öbür kanalda hâlâ stokta görünüyor.',
+            'title' => 'Tek stok, bütün kanallar.',
+            'body' => 'Ürünün adedi tek bir yerde tutulur. Satış hangi kanaldan gelirse gelsin adet oradan düşer ve yeni sayı bağlı bütün kanallara gönderilir.',
+            'points' => ['Bir kanalda satılan ürünün stoğu diğerlerinde de düşer', 'Depodaki, ayrılmış ve satılabilir adet ayrı ayrı görünür', 'Ters giden bir şey olursa ürün kırmızıyla listenin en üstüne çıkar'],
+            'shot' => ['src' => 'images/site/panel-stok.png', 'alt' => 'Panelde ürünlerin stok adetleri; fazla satılan ürün kırmızıyla işaretli'],
+        ],
+        [
+            'id' => 'siparisler', 'icon' => 'orders', 'kicker' => 'Siparişler',
+            'problem' => 'Her sabah sipariş kontrolü için ayrı ayrı panellere giriyorsun.',
             'title' => 'Bütün siparişler tek listede.',
-            'body' => 'Sabah paneli açarsın; hangi kanaldan gelirse gelsin bütün siparişler alt alta. Sekmeler arasında dolaşıp hangisini kaçırdığını aramazsın.',
-            'points' => ['Her siparişin hangi kanaldan geldiği yanında yazar', 'Kargo bekleyenler tek tıkla süzülür', 'Stoğu yetmeyen sipariş ayrıca işaretlenir'],
-            'shot' => ['src' => 'images/site/panel-siparisler.png', 'alt' => 'Panelde Trendyol, Shopify ve WooCommerce siparişlerinin tek listede görünümü', 'dy' => 0],
+            'body' => 'Hangi kanaldan gelirse gelsin bütün siparişler alt alta düşer. Her satırda siparişin hangi kanaldan geldiği ve durumu yazar.',
+            'points' => ['Kargo bekleyen siparişler tek tıkla süzülür', 'Sipariş numarası ya da stok kodu (SKU) ile arama', 'Stoğu yetmeyen ya da tanınmayan ürün içeren sipariş ayrıca işaretlenir'],
+            'shot' => ['src' => 'images/site/panel-siparisler.png', 'alt' => 'Panelde Trendyol, Shopify ve WooCommerce siparişlerinin tek listede görünümü'],
         ],
         [
-            'id' => 'stok', 'kicker' => 'Stok',
-            'title' => 'Stok tek yerde. Ters giden hemen görünür.',
-            'body' => 'Ürünün adedi tek bir yerde tutulur. Satış nereden gelirse gelsin adet oradan düşer ve yeni sayı bağlı bütün kanallara gider.',
-            'points' => ['Bir kanalda satılan ürünün stoğu diğerlerinde de düşer', 'Fazla satılan ürün kırmızıyla en üstte durur'],
-            'shot' => ['src' => 'images/site/panel-stok.png', 'alt' => 'Panelde ürünlerin stok adetleri; fazla satılan ürün kırmızıyla işaretli', 'dy' => 0],
+            'id' => 'fiyat', 'icon' => 'price', 'kicker' => 'Fiyat',
+            'problem' => 'Komisyonu karşılamak için her kanalın fiyatını elle hesaplıyorsun.',
+            'title' => 'Kanal başına fiyat kuralı ve zarar koruması.',
+            'body' => 'Her kanal için bir fark tanımlarsın; örneğin pazaryerine +%15 ve ,90 ile biten fiyat. Ürünün fiyatını değiştirdiğinde kanallara giden fiyat kendiliğinden hesaplanır.',
+            'points' => ['Yüzde ve sabit tutar farkı; tam sayıya, ,90 ya da ,99 ile biten fiyata yuvarlama', 'Zarar koruması: alış maliyetinin altına düşen fiyat kanala gönderilmez', 'İstersen bir ürüne kanal için elle fiyat da girebilirsin'],
+            'shot' => ['src' => 'images/site/panel-fiyat-kurali.png', 'alt' => 'Kanal fiyat kuralı ekranı: yüzde fark, ,90 yuvarlama, zarar koruması ve örnek hesap'],
         ],
         [
-            'id' => 'kargo', 'kicker' => 'Kargo',
+            'id' => 'kargo', 'icon' => 'truck', 'kicker' => 'Kargo',
+            'problem' => 'Takip numarasını her kanalın paneline ayrı ayrı yazıyorsun.',
             'title' => 'Takip numarasını bir kez gir.',
             'body' => $cargoYes
-                ? "Paketi kargoya verdin, takip numarasını siparişin içine yazdın. {$cargoYes} siparişlerinde numara kanala iletilir; müşterin takibi orada görür."
-                : 'Paketi kargoya verdin, takip numarasını siparişin içine yazdın; sipariş panelde kargoda görünür.',
+                ? "Kargo firmasını ve takip numarasını siparişin içine yazarsın. {$cargoYes} siparişlerinde numara kanala iletilir; müşterin takibi orada görür."
+                : 'Kargo firmasını ve takip numarasını siparişin içine yazarsın; sipariş panelde kargoda görünür.',
             'points' => array_values(array_filter([
                 $cargoYes ? "{$cargoYes} için kanalın panelini açman gerekmez" : null,
                 $cargoNo ? "{$cargoNo} siparişlerinde numarayı şimdilik kanalın kendi panelinde girersin" : null,
             ])),
             'shot' => ['src' => 'images/site/panel-kargo.png', 'alt' => 'Sipariş ayrıntısında kargo firması ve takip numarası formu', 'dy' => 30],
         ],
-        [
-            'id' => 'gunluk', 'kicker' => 'Ana sayfa',
-            'title' => 'Paneli açınca ne yapacağını bilirsin.',
-            'body' => 'Ana sayfada rapor değil iş listesi durur: kargolanmayı bekleyen siparişler, fazla satılan ürün, kanalın reddettiği ürün. Her satırın yanında oraya giden bağlantı.',
-            'points' => ['Bugünkü sipariş sayısı ve satış tutarı en üstte', 'Bağlı kanallarının durumu tek bakışta'],
-            'shot' => ['src' => 'images/site/panel-ana-sayfa.png', 'alt' => 'Panelin ana sayfasındaki Yapman gerekenler listesi', 'dy' => 0,
-                'crop' => ['ratio' => '16 / 7', 'zoom' => '142%', 'x' => '-32.7%', 'y' => '-23%']],
-        ],
     ];
 
-    /*
-     * Ekran görüntüsü olmayan özellikler düz liste: her biri için uydurma
-     * bir görsel üretmek yerine ne yaptığını tek cümleyle söylemek dürüst.
-     */
+    // Ekranı ana sayfada gösterilmeyen özellikler: kısa kartlar.
     $extras = [
-        ['Ürünü bir kez hazırla', 'Ürün bilgisini bir kere gir, hangi kanalda satılacağını seç ve buradan gönder.'],
-        ['Fiyatı bir yerde değiştir', 'Yeni fiyat bağlı kanallara gider; mağaza mağaza dolaşıp düzeltmezsin.'],
-        ['Sormadan üzerine yazmayız', 'Bir kanalın içinde fiyatı kendin değiştirdiysen fark ederiz; hangisinin geçerli olacağına sen karar verirsin.'],
-        ['Telefonda da açılır', 'Uygulama indirmen gerekmez; panel telefonunun tarayıcısında çalışır.'],
+        ['calendar', 'Süreli kampanyalar', 'Seçtiğin ürünlere, seçtiğin kanallarda tarih aralıklı indirim. Kampanya bitince fiyat kendiliğinden eski hâline döner.'],
+        ['upload', 'Toplu ürün aktarımı', 'Ürünlerini bağlı kanalından ya da CSV dosyasıyla içe aktar; yüzlerce ürünü tek tek girmezsin.'],
+        ['image', 'Görsel yönetimi', 'Kanaldan gelen görseller ürünle birlikte durur. Hangi görselin hangi kanala gideceğini sen seçersin.'],
+        ['scale', 'Sormadan üzerine yazmayız', 'Fiyatı bir kanalın kendi panelinde değiştirdiysen farkı gösteririz; hangisinin geçerli olacağına sen karar verirsin.'],
+        ['dashboard', 'Rapor değil, iş listesi', 'Paneli açınca önce yapman gerekenleri görürsün: kargolanmayı bekleyen sipariş, fazla satılan ürün, kanalın reddettiği ürün.'],
+        ['phone', 'Telefonda da çalışır', 'Uygulama indirmen gerekmez; panel telefonunun tarayıcısında açılır.'],
     ];
 
     /*
      * SSS cevapları YALNIZ doğrulanmış şeyleri söyler. "Kart bilgisi
      * gerekmez" kayıt formuna bakılarak yazıldı (ödeme sormuyor) ve yalnız
-     * ücretsiz paket varsa gösterilir.
+     * ücretsiz paket varsa gösterilir. Aylık abonelik ve "istediğin zaman
+     * iptal" kullanım koşullarındaki maddelerle aynı.
      */
     $faqs = [
-        ['q' => '34Pazar ne işe yarar?', 'a' => 'Birden fazla kanalda satış yapıyorsan stoğunu, ürünlerini ve siparişlerini tek panelden yönetmeni sağlar. En önemlisi: bir kanalda satılan ürünün stoğu diğer kanallarda da düşer.'],
+        ['q' => '34Pazar ne işe yarar?', 'a' => 'Birden fazla kanalda satış yapıyorsan stoğunu, ürünlerini, fiyatlarını ve siparişlerini tek panelden yönetmeni sağlar. En önemlisi: bir kanalda satılan ürünün stoğu diğer kanallarda da düşer.'],
     ];
     if ($availableNames) {
         $faqs[] = ['q' => 'Hangi kanallarla çalışıyor?', 'a' => "Şu an {$availableNames} bağlanabiliyor.".($upcomingNames ? " {$upcomingNames} için çalışıyoruz; hazır olduğunda bağlanabilir hâle gelecek." : '')];
     }
     if ($freePlan) {
-        $faqs[] = ['q' => 'Ücretsiz deneyebilir miyim?', 'a' => "Evet. {$freePlan['name']} paketle kart bilgisi girmeden başlarsın. Bu pakette {$limit($freePlan['productLimit'], 'ürün')} ve {$limit($freePlan['channelLimit'], 'kanal')} hakkın var."];
+        $faqs[] = ['q' => 'Kart bilgisi vermeden başlayabilir miyim?', 'a' => "Evet. {$freePlan['name']} paketle kart bilgisi girmeden başlarsın. Bu pakette {$limit($freePlan['productLimit'], 'ürün')} ve {$limit($freePlan['channelLimit'], 'kanal')} hakkın var."];
     }
+    $faqs[] = ['q' => 'Yıllık ödeme zorunlu mu?', 'a' => 'Hayır. Ücretli paketler aylık abonelikle çalışır. Aboneliğini istediğin zaman iptal edebilirsin; iptal, ödemesi yapılmış dönemin sonunda geçerli olur.'];
     $faqs[] = ['q' => 'Bir kanalda satış olunca diğerlerinde ne olur?', 'a' => 'Stok tek bir yerde tutulur. Ürün hangi kanalda satılırsa satılsın adet oradan düşer ve yeni adet bağlı bütün kanallara gönderilir.'];
     $faqs[] = ['q' => 'Yine de fazla satış olabilir mi?', 'a' => 'Nadiren olabilir: iki kanalda neredeyse aynı anda satış olursa ya da bir kanal satışı geç bildirirse. Böyle bir durumda ürün panelinde kırmızıyla en üstte görünür; stoğu düzeltir ya da müşteriye haber verirsin.'];
+    $faqs[] = ['q' => 'Her kanalda farklı fiyat kullanabilir miyim?', 'a' => 'Evet. Kanal başına yüzde ya da tutar farkı ve yuvarlama tanımlayabilir, istersen bir ürüne kanal için elle fiyat girebilirsin. Alış maliyetini girdiysen maliyetin altına düşen fiyat kanala gönderilmez.'];
     $faqs[] = ['q' => 'Kanalın kendi panelinde fiyat değiştirirsem ne olur?', 'a' => 'Değişikliğini sessizce ezmeyiz. Farkı gördüğümüzde sana gösteririz; hangi fiyatın geçerli olacağına sen karar verirsin.'];
     $faqs[] = ['q' => 'Teknik bilgi gerekiyor mu?', 'a' => 'Kod yazman gerekmez. Bir kanalı bağlamak için o kanalın satıcı panelinden API anahtarı gibi birkaç bilgiyi alıp bağlantı formuna yapıştırırsın; form hangi bilgiyi istediğini tek tek gösterir.'];
-    $faqs[] = ['q' => 'Muhasebe ya da e-fatura var mı?', 'a' => 'Henüz yok. Muhasebe modülü yakında geliyor. Şu an 34Pazar stok, ürün, sipariş ve kargo takibine odaklanıyor.'];
+    $faqs[] = ['q' => 'Muhasebe ya da e-fatura var mı?', 'a' => 'Henüz yok. Muhasebe modülü yakında geliyor. Şu an 34Pazar stok, ürün, fiyat, sipariş ve kargo takibine odaklanıyor.'];
 
     $description = $availableNames
         ? "{$availableNames} mağazalarını tek panelden yönet. Bir kanalda satılan ürünün stoğu diğerlerinde de düşer; siparişler tek listede."
@@ -141,37 +131,36 @@
 @endpush
 
 @section('content')
-    {{-- ═══════════════════════════════════════ HERO --}}
-    <section aria-labelledby="hero-baslik" class="relative">
-        <div class="wrap pt-10 sm:pt-16 lg:pt-20">
-            <p class="eyebrow"><b>34Pazar</b> Pazaryeri entegrasyonu</p>
-
-            <h1 id="hero-baslik" class="display t-hero mt-6 max-w-[15ch] lg:mt-8">
-                @if ($heroPair)
-                    {{ $locative[$heroPair[0]] }} sattın. <span class="muted">{{ $locative[$heroPair[1]] }}ki stok</span> <span class="accent">kendiliğinden</span> <span class="muted">düştü.</span>
-                @else
-                    Bir kanalda sattın. <span class="muted">Ötekilerde stok</span> <span class="accent">kendiliğinden</span> <span class="muted">düştü.</span>
-                @endif
-            </h1>
-
-            <div class="mt-10 grid gap-8 lg:mt-14 lg:grid-cols-12 lg:items-end">
-                <p class="lead max-w-[36ch] lg:col-span-6">
-                    34Pazar bütün mağazalarını tek panele bağlar. Stoğun tek yerde tutulur, siparişlerin tek listeye düşer.
+    {{-- ═══════════════════════════════════════ GİRİŞ --}}
+    <section aria-labelledby="hero-baslik" class="bg-gradient-to-b from-soft to-white">
+        <div class="wrap grid items-center gap-12 pt-12 pb-16 lg:grid-cols-12 lg:gap-10 lg:pt-20 lg:pb-24">
+            <div class="lg:col-span-5">
+                <p class="eyebrow">Pazaryeri ve e-ticaret entegrasyonu</p>
+                <h1 id="hero-baslik" class="h-hero mt-3">Tüm mağazalarını tek panelden yönet: stok, sipariş, fiyat.</h1>
+                <p class="lead mt-5 max-w-[46ch]">
+                    @if ($availableNames)
+                        {{ $availableNames }} mağazalarını 34Pazar'a bağla. Bir kanalda satılan ürünün stoğu diğerlerinden de düşer, siparişler tek listede toplanır.
+                    @else
+                        Satış kanallarını 34Pazar'a bağla. Bir kanalda satılan ürünün stoğu diğerlerinden de düşer, siparişler tek listede toplanır.
+                    @endif
                 </p>
-                <div class="flex flex-wrap items-center gap-x-6 gap-y-4 lg:col-span-6 lg:justify-end">
-                    <a href="{{ $primaryHref }}" class="btn btn-primary">{{ $primaryLabel }} <span class="arrow" aria-hidden="true">→</span></a>
-                    <a href="{{ route('site.features') }}" class="link-u font-semibold">Nasıl çalıştığını gör</a>
+                <div class="mt-8 flex flex-wrap gap-3">
+                    @if ($isLoggedIn)
+                        <a href="{{ url('/panel') }}" class="btn btn-primary btn-lg">Panele git</a>
+                    @else
+                        <a href="{{ route('register') }}" class="btn btn-primary btn-lg">Ücretsiz dene</a>
+                    @endif
+                    <a href="#nasil-calisir" class="btn btn-secondary btn-lg">Nasıl çalışır</a>
                 </div>
+                <ul class="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm muted">
+                    @if ($freePlan)
+                        <li class="flex items-center gap-1.5"><span class="text-ok" aria-hidden="true">✓</span> Kart bilgisi gerekmez</li>
+                    @endif
+                    <li class="flex items-center gap-1.5"><span class="text-ok" aria-hidden="true">✓</span> Aylık ödeme, yıllık taahhüt yok</li>
+                    <li class="flex items-center gap-1.5"><span class="text-ok" aria-hidden="true">✓</span> Kod yazmadan kurulum</li>
+                </ul>
             </div>
-            @if ($freePlan && ! $isLoggedIn)
-                <p class="mt-4 text-sm muted lg:text-right">Ücretsiz paketle, kart bilgisi girmeden.</p>
-            @endif
-
-            {{--
-                Ekran görüntüsü alttaki siyah banda TAŞAR: sayfa "yazı + görsel +
-                yazı" diye üç kutuya bölünmesin, tek akış gibi okunsun.
-            --}}
-            <div class="relative z-10 mt-12 -mb-[22vw] lg:mt-16 lg:-mb-[18rem]">
+            <div class="lg:col-span-7">
                 @include('site.partials.shot', [
                     'src' => 'images/site/panel-ana-sayfa.png',
                     'alt' => '34Pazar paneli: günün siparişleri, Yapman gerekenler listesi ve bağlı kanallar',
@@ -181,186 +170,144 @@
         </div>
     </section>
 
-    {{-- ═══════════════════════════════════════ SORUN (siyah bant) --}}
-    <section aria-labelledby="sorun-baslik" class="on-dark">
-        <div class="wrap pt-[calc(22vw+5rem)] pb-24 lg:pt-[calc(18rem+8rem)] lg:pb-36">
-            <div class="grid gap-14 lg:grid-cols-12">
-                <div class="lg:col-span-6" data-reveal>
-                    <p class="eyebrow">Tanıdık geldi mi?</p>
-                    <h2 id="sorun-baslik" class="display t-2 mt-6">Rafta bir tane vardı. İki kanalda birden satıldı.</h2>
-                    <p class="lead mt-8 max-w-[44ch] muted">
-                        Birden fazla yerde satan herkes bunu yaşamıştır. Stoğu her mağazada elle düzeltmeye yetişemezsin;
-                        sonunda müşteriye "ürün kalmamış" diye yazar, iptal edersin. Hem müşteri gider hem mağaza puanın düşer.
-                    </p>
+    {{-- ═══════════════════════════════════════ KANALLAR --}}
+    @if (count($channels))
+        <section id="kanallar" aria-labelledby="kanal-baslik" class="border-y border-line">
+            <div class="wrap py-12 lg:py-14">
+                <div class="flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                        <h2 id="kanal-baslik" class="heading-3">Bağlanabilen kanallar</h2>
+                        <p class="mt-1 text-[0.9875rem] muted">"Aktif" olanları bugün bağlayabilirsin; "Yakında" olanlar üzerinde çalışıyoruz.</p>
+                    </div>
+                    <a href="{{ route('site.channels') }}" class="link text-[0.9875rem]">Tüm entegrasyonlar</a>
                 </div>
-
-                <ol class="self-end lg:col-span-5 lg:col-start-8" data-reveal>
-                    <li class="grid grid-cols-[6rem_1fr] gap-4 border-t border-line-dark py-5">
-                        <span class="font-semibold tabular-nums muted">14:02</span>
-                        <span>Son ürün bir pazaryerinde satılıyor.</span>
-                    </li>
-                    <li class="grid grid-cols-[6rem_1fr] gap-4 border-t border-line-dark py-5">
-                        <span class="font-semibold tabular-nums muted">14:05</span>
-                        <span>Kendi siten hâlâ "stokta 1" gösteriyor. Orada da satılıyor.</span>
-                    </li>
-                    <li class="grid grid-cols-[6rem_1fr] gap-4 border-t border-line-dark py-5">
-                        <span class="font-semibold muted">Ertesi gün</span>
-                        <span>İki sipariş, bir ürün. Biri iptal, biri özür mesajı.</span>
-                    </li>
-                    <li class="grid grid-cols-[6rem_1fr] gap-4 border-y border-line-dark py-5">
-                        <span class="font-semibold text-[#ff6a47]">34Pazar ile</span>
-                        <span class="font-semibold">14:02'deki satış stoğu bütün kanallarda düşürür. Bir şey yine de ters giderse panelin en üstünde görürsün.</span>
-                    </li>
-                </ol>
-            </div>
-        </div>
-    </section>
-
-    {{-- ═══════════════════════════════════════ KANAL BANDI (kırmızı) --}}
-    @if (count($available))
-        <section aria-labelledby="bant-baslik" class="on-brand py-8 lg:py-10">
-            <h2 id="bant-baslik" class="wrap eyebrow mb-2 text-white">Bugün bağlayabildiğin kanallar</h2>
-            <div class="marquee">
-                <div class="marquee__track">
-                    {{-- İki kopya: iz -%50 kayınca ikincisi birincinin yerine oturur. --}}
-                    @foreach ([false, true] as $copy)
-                        <ul class="marquee__group" @if ($copy) aria-hidden="true" @endif>
-                            @foreach (array_merge($available, $available) as $ch)
-                                <li class="marquee__item">{{ $ch['name'] }}</li>
-                            @endforeach
-                        </ul>
-                    @endforeach
+                <div class="mt-6">
+                    @include('site.partials.channel-list', ['channels' => $channels, 'columns' => 'grid-cols-2 md:grid-cols-3 lg:grid-cols-5'])
                 </div>
             </div>
         </section>
     @endif
 
     {{-- ═══════════════════════════════════════ NASIL ÇALIŞIR --}}
-    <section id="nasil-calisir" aria-labelledby="nasil-baslik">
-        <div class="wrap py-24 lg:py-36">
-            <div class="grid gap-8 lg:grid-cols-12 lg:items-end">
-                <h2 id="nasil-baslik" class="display t-1 lg:col-span-8">Üç adımda kurulur.</h2>
-                <p class="lead muted lg:col-span-4">Kod yazmazsın. Kanalın satıcı panelinden birkaç API bilgisini alıp buraya yapıştırman yeterli.</p>
+    <section id="nasil-calisir" aria-labelledby="nasil-baslik" class="section">
+        <div class="wrap">
+            <div class="section-head section-head--center">
+                <p class="eyebrow">Nasıl çalışır</p>
+                <h2 id="nasil-baslik" class="heading-2">Üç adımda kurulur.</h2>
+                <p class="lead">Kod yazmazsın. Kanalın satıcı panelinden birkaç bilgiyi alıp bağlantı formuna yapıştırman yeterli.</p>
             </div>
-            <ol class="mt-16 grid gap-12 md:grid-cols-3 md:gap-8 lg:mt-24 lg:gap-12">
+            <ol class="mt-12 grid gap-5 md:grid-cols-3">
                 @foreach ([
-                    ['Kanalını bağla', 'Satış yaptığın mağazaları ekle. Form, kanalın hangi bilgisini istediğini tek tek gösterir.'],
-                    ['Ürünlerini aktar', 'Ürünlerini ve stok adetlerini tek yerde topla. Hangi ürün hangi kanalda satılacak, sen seçersin.'],
-                    ['Tek panelden yönet', 'Siparişler tek listeye düşer, stok her satışta bütün kanallarda birlikte azalır. Sen paketlersin.'],
+                    ['Kanallarını bağla', 'Satış yaptığın mağazaları ekle. Bağlantı formu, kanalın satıcı panelinden hangi bilgiyi alacağını tek tek gösterir.'],
+                    ['Ürünlerini eşle', 'Ürünlerini kanaldan ya da CSV dosyasıyla içe aktar. Ürünler stok koduyla (SKU) eşleşir; aynı ürün iki kez açılmaz.'],
+                    ['Tek yerden yönet', 'Siparişler tek listeye düşer, stok her satışta bütün kanallarda birlikte güncellenir, fiyatı tek yerden değiştirirsin.'],
                 ] as [$title, $body])
-                    <li class="border-t-2 border-ink pt-8" data-reveal>
-                        <span class="step-num" aria-hidden="true">{{ sprintf('%02d', $loop->iteration) }}</span>
-                        <h3 class="display t-3 mt-8"><span class="sr-only">{{ $loop->iteration }}. adım: </span>{{ $title }}</h3>
-                        <p class="mt-4 max-w-[34ch] muted">{{ $body }}</p>
+                    <li class="card">
+                        <span class="step-num" aria-hidden="true">{{ $loop->iteration }}</span>
+                        <h3 class="heading-3 mt-5"><span class="sr-only">{{ $loop->iteration }}. adım: </span>{{ $title }}</h3>
+                        <p class="mt-2 muted">{{ $body }}</p>
                     </li>
                 @endforeach
             </ol>
         </div>
     </section>
 
-    {{-- ═══════════════════════════════════════ ÖZELLİKLER (zikzak) --}}
-    <section aria-labelledby="ozellik-baslik" class="border-t border-line">
-        <div class="wrap pt-24 lg:pt-36">
-            <p class="eyebrow">Panelde bir gün</p>
-            <h2 id="ozellik-baslik" class="display t-1 mt-6 max-w-[14ch]">Gördüğün ekran, kullanacağın ekran.</h2>
-            <p class="lead mt-6 max-w-[48ch] muted">Aşağıdakiler çizim değil, panelin kendisi. Kayıt olduğunda karşına bunlar çıkar.</p>
-        </div>
+    {{-- ═══════════════════════════════════════ SORUN → ÇÖZÜM --}}
+    <section aria-labelledby="ozellik-baslik" class="section bg-soft">
+        <div class="wrap">
+            <div class="section-head section-head--center">
+                <p class="eyebrow">Özellikler</p>
+                <h2 id="ozellik-baslik" class="heading-2">Her gün uğraştığın işler, tek panelde.</h2>
+                <p class="lead">Aşağıdaki görseller çizim değil, panelin kendisi. Kayıt olduğunda karşına bunlar çıkar.</p>
+            </div>
 
-        <div class="wrap space-y-28 py-24 lg:space-y-44 lg:py-36">
-            @foreach ($scenes as $i => $scene)
-                @php $flip = $i % 2 === 1; @endphp
-                <article id="{{ $scene['id'] }}" class="grid items-center gap-10 lg:grid-cols-12 lg:gap-16" aria-labelledby="{{ $scene['id'] }}-baslik">
-                    <div class="lg:col-span-5 {{ $flip ? 'lg:order-2 lg:col-start-8' : '' }}" data-reveal>
-                        <p class="eyebrow"><b>{{ sprintf('%02d', $i + 1) }}</b> {{ $scene['kicker'] }}</p>
-                        <h3 id="{{ $scene['id'] }}-baslik" class="display t-scene mt-6">{{ $scene['title'] }}</h3>
-                        <p class="mt-6 text-lg leading-relaxed muted">{{ $scene['body'] }}</p>
-                        <ul class="mt-8 border-t border-line">
-                            @foreach ($scene['points'] as $point)
-                                <li class="flex gap-4 border-b border-line py-3.5 font-medium">
-                                    <span class="mt-[0.6rem] size-2 shrink-0 bg-brand" aria-hidden="true"></span>{{ $point }}
-                                </li>
-                            @endforeach
-                        </ul>
-                    </div>
-                    {{-- Görsel geniş sütunda ve xl'de sayfa kenarına taşar: ekran okunur büyüklükte kalsın. --}}
-                    <div class="lg:col-span-7 {{ $flip ? 'lg:order-1 lg:col-start-1 xl:-ml-12' : 'xl:-mr-12' }}" data-reveal>
-                        @include('site.partials.shot', $scene['shot'])
-                    </div>
-                </article>
-            @endforeach
-        </div>
-    </section>
-
-    {{-- ═══════════════════════════════════════ BİR DE ŞUNLAR + TELEFON --}}
-    <section aria-labelledby="diger-baslik" class="bg-sand">
-        <div class="wrap grid gap-16 py-24 lg:grid-cols-12 lg:py-36">
-            <div class="lg:col-span-7">
-                <h2 id="diger-baslik" class="display t-1">Bir de şunlar.</h2>
-                <dl class="mt-12 border-t-2 border-ink">
-                    @foreach ($extras as [$title, $body])
-                        <div class="grid gap-2 border-b border-line py-7 sm:grid-cols-[15rem_1fr] sm:gap-8" data-reveal>
-                            <dt class="display t-3 text-[1.375rem]!">{{ $title }}</dt>
-                            <dd class="muted">{{ $body }}</dd>
+            <div class="mt-14 space-y-16 lg:mt-20 lg:space-y-24">
+                @foreach ($blocks as $i => $b)
+                    @php $flip = $i % 2 === 1; @endphp
+                    <article id="{{ $b['id'] }}" class="grid items-center gap-8 lg:grid-cols-12 lg:gap-14" aria-labelledby="{{ $b['id'] }}-baslik">
+                        <div class="lg:col-span-5 {{ $flip ? 'lg:order-2' : '' }}">
+                            <span class="icon-box">@include('site.partials.icon', ['name' => $b['icon']])</span>
+                            <p class="eyebrow mt-4 block">{{ $b['kicker'] }}</p>
+                            <p class="problem mt-3"><b>Sorun:</b> <span>{{ $b['problem'] }}</span></p>
+                            <h3 id="{{ $b['id'] }}-baslik" class="heading-2 mt-5 text-[clamp(1.5rem,1.2rem+1vw,2rem)]">{{ $b['title'] }}</h3>
+                            <p class="mt-3 muted">{{ $b['body'] }}</p>
+                            @if ($b['points'])
+                                <ul class="check-list mt-5">
+                                    @foreach ($b['points'] as $point)
+                                        <li>{{ $point }}</li>
+                                    @endforeach
+                                </ul>
+                            @endif
                         </div>
-                    @endforeach
-                    <div class="grid gap-2 border-b border-line py-7 sm:grid-cols-[15rem_1fr] sm:gap-8">
-                        <dt class="display t-3 text-[1.375rem]! muted">Muhasebe modülü</dt>
-                        <dd><span class="tag tag--soon">Yakında</span></dd>
-                    </div>
-                </dl>
-            </div>
-            <div class="flex items-start justify-center lg:col-span-4 lg:col-start-9 lg:justify-end" data-reveal>
-                <figure class="phone lg:-mt-48">
-                    <img src="{{ asset('images/site/panel-mobil.png') }}" alt="34Pazar paneli telefon tarayıcısında" width="390" height="844" loading="lazy" decoding="async">
-                </figure>
+                        <div class="lg:col-span-7 {{ $flip ? 'lg:order-1' : '' }}">
+                            @include('site.partials.shot', $b['shot'])
+                        </div>
+                    </article>
+                @endforeach
             </div>
         </div>
     </section>
 
-    {{-- ═══════════════════════════════════════ KANALLAR --}}
-    <section id="kanallar" aria-labelledby="kanal-baslik">
-        <div class="wrap py-24 lg:py-36">
-            <div class="grid gap-8 lg:grid-cols-12 lg:items-end">
-                <div class="lg:col-span-8">
-                    <p class="eyebrow"><b>{{ count($available) }}/{{ count($channels) }}</b> Kanallar</p>
-                    <h2 id="kanal-baslik" class="display t-1 mt-6">Bağlayabildiğin kanallar.</h2>
+    {{-- ═══════════════════════════════════════ DİĞER ÖZELLİKLER --}}
+    <section aria-labelledby="diger-baslik" class="section">
+        <div class="wrap">
+            <div class="flex flex-wrap items-end justify-between gap-6">
+                <div class="section-head">
+                    <h2 id="diger-baslik" class="heading-2">Bunlar da hazır.</h2>
+                    <p class="lead">Bütün paketlerde aynı özellikler var; paketler yalnız ürün ve kanal sayısıyla ayrılır.</p>
                 </div>
-                <p class="max-w-[34ch] muted lg:col-span-4">Bugün açık olanlar ve üzerinde çalıştıklarımız. Her kanalda neyin çalıştığını kanal sayfasında yazıyoruz.</p>
+                <a href="{{ route('site.features') }}" class="btn btn-secondary">Bütün özellikler</a>
             </div>
-            <div class="mt-14 lg:mt-20">
-                @include('site.partials.channel-list', ['channels' => $channels])
-            </div>
+            <ul class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                @foreach ($extras as [$icon, $title, $body])
+                    <li class="card">
+                        <span class="icon-box">@include('site.partials.icon', ['name' => $icon])</span>
+                        <h3 class="heading-3 mt-4">{{ $title }}</h3>
+                        <p class="mt-2 muted">{{ $body }}</p>
+                    </li>
+                @endforeach
+                <li class="card border-dashed bg-soft">
+                    <h3 class="heading-3 muted">Muhasebe modülü</h3>
+                    <p class="mt-2"><span class="badge badge--soon">Yakında</span></p>
+                </li>
+            </ul>
         </div>
     </section>
 
-    {{-- ═══════════════════════════════════════ FİYATLAR --}}
-    <section id="fiyatlar" aria-labelledby="fiyat-baslik" class="border-t border-line">
-        <div class="wrap py-24 lg:py-36">
-            <div class="flex flex-wrap items-end justify-between gap-8">
-                <h2 id="fiyat-baslik" class="display t-1 max-w-[13ch]">Ürün ve kanal sayına göre.</h2>
-                <div class="max-w-[30ch]">
-                    <p class="muted">Büyüdükçe paketi yükseltirsin. Fiyatlar aylıktır.</p>
-                    <a href="{{ route('site.pricing') }}" class="link-u mt-3 inline-block font-semibold">Bütün ayrıntılar →</a>
+    {{-- ═══════════════════════════════════════ FİYAT ÖZETİ --}}
+    @if (count($plans))
+        <section id="fiyatlar" aria-labelledby="fiyat-baslik" class="section bg-soft">
+            <div class="wrap">
+                <div class="section-head section-head--center">
+                    <p class="eyebrow">Fiyatlar</p>
+                    <h2 id="fiyat-baslik" class="heading-2">Ürün ve kanal sayına göre aylık paketler.</h2>
+                    <p class="lead">Yıllık peşin ödeme yok. Büyüdükçe paketini yükseltirsin, istediğin zaman iptal edersin.</p>
                 </div>
-            </div>
-            <div class="mt-14 lg:mt-20">
-                @include('site.partials.plans', ['plans' => $plans, 'isLoggedIn' => $isLoggedIn])
-            </div>
-        </div>
-    </section>
-
-    {{-- ═══════════════════════════════════════ SSS --}}
-    <section id="sss" aria-labelledby="sss-baslik" class="bg-sand">
-        <div class="wrap py-24 lg:py-36">
-            <div class="grid gap-8 lg:grid-cols-12 lg:items-end">
-                <h2 id="sss-baslik" class="display t-1 lg:col-span-8">Sık sorulanlar.</h2>
-                <p class="muted lg:col-span-4">
-                    Cevabını bulamadın mı? <a href="{{ route('site.contact') }}" class="link-u font-semibold text-ink">Bize yaz.</a>
+                <div class="mt-12">
+                    @include('site.partials.plans', ['plans' => $plans, 'isLoggedIn' => $isLoggedIn])
+                </div>
+                <p class="mt-8 text-center">
+                    <a href="{{ route('site.pricing') }}" class="link">Paketleri karşılaştır</a>
                 </p>
             </div>
-            <div class="mt-14 lg:mt-20 lg:ml-[33.333%]">
+        </section>
+    @endif
+
+    {{-- ═══════════════════════════════════════ SSS --}}
+    <section id="sss" aria-labelledby="sss-baslik" class="section">
+        <div class="wrap grid gap-10 lg:grid-cols-12">
+            <div class="lg:col-span-4">
+                <p class="eyebrow">SSS</p>
+                <h2 id="sss-baslik" class="heading-2 mt-2">Sık sorulanlar</h2>
+                <p class="mt-4 muted">
+                    Cevabını bulamadın mı? <a href="{{ route('site.contact') }}" class="link">Bize yaz.</a>
+                </p>
+            </div>
+            <div class="lg:col-span-8">
                 @include('site.partials.faq', ['faqs' => $faqs, 'openFirst' => true])
             </div>
         </div>
     </section>
+
+    @include('site.partials.cta')
 @endsection

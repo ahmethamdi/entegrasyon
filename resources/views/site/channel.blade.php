@@ -2,8 +2,8 @@
     /entegrasyonlar/{kod} — tek şablon, `$channel` ile sürülür.
 
     AÇIK KANAL: neyin çalıştığı satır satır. Kargo numarasını kanala geri
-    gönderme YALNIZ `$cargoPush` listesindeki kanallarda var (home ve
-    features ile AYNI liste); diğerlerinde "kanalın panelinde girilir" denir.
+    gönderme `$channel['cargoPush']`'tan gelir (adaptörün SupportsFulfillment
+    yeteneği, SiteController); diğerlerinde "kanalın panelinde girilir" denir.
 
     KAPALI KANAL: hiçbir yetenek iddiası yok. "Hazırlanıyor" der, yine de
     kayıt olmaya çağırır (satıcı diğer kanallarıyla başlayabilir).
@@ -18,50 +18,33 @@
     $name = $channel['name'];
     $isOn = $channel['available'];
 
-    // Bulunma eki elle tutulur (home ile aynı gerekçe); sözlükte yoksa nötr kalıp.
+    // Bulunma eki elle tutulur: yabancı marka adının okunuşu yazılışından
+    // tahmin edilemez ("Shopify" i ile biter, a ile okunur). Sözlükte yoksa nötr kalıp.
     $locative = [
         'trendyol' => "Trendyol'da", 'shopify' => "Shopify'da", 'woocommerce' => "WooCommerce'te",
         'etsy' => "Etsy'de", 'ebay' => "eBay'de", 'hepsiburada' => "Hepsiburada'da",
     ];
     $loc = $locative[$code] ?? "{$name} mağazanda";
 
-    $copy = [
-        'trendyol' => [
-            'kind' => 'Pazaryeri',
-            'connect' => 'Trendyol satıcı panelindeki entegrasyon bilgileri: API key, API secret ve Satıcı ID (Cari ID).',
-        ],
-        'shopify' => [
-            'kind' => 'E-ticaret sitesi',
-            'connect' => 'Mağaza adresin, Admin API erişim anahtarı ve webhook imza anahtarı. Stoğun hangi konumdan (location) yönetileceğini de seçersin.',
-        ],
-        'woocommerce' => [
-            'kind' => 'E-ticaret sitesi',
-            'connect' => "Site adresin ve WooCommerce'in REST API anahtarları (consumer key ve consumer secret).",
-        ],
-        'etsy' => [
-            'kind' => 'Pazaryeri',
-            'connect' => "Etsy uygulama anahtarı (keystring) ve mağaza kimliğin (shop ID). Ardından Etsy hesabınla giriş yapıp 34Pazar'a erişim izni verirsin.",
-        ],
-        'ebay' => [
-            'kind' => 'Pazaryeri',
-            'connect' => 'eBay geliştirici hesabındaki uygulama bilgileri; ardından eBay hesabınla giriş yapıp erişim izni verirsin.',
-        ],
-        'hepsiburada' => [
-            'kind' => 'Pazaryeri',
-            'connect' => 'Hepsiburada entegrasyon kullanıcı adın ve parolan.',
-        ],
+    $connect = [
+        'trendyol' => 'Trendyol satıcı panelindeki entegrasyon bilgileri: API key, API secret ve Satıcı ID (Cari ID).',
+        'shopify' => 'Mağaza adresin, Admin API erişim anahtarı ve webhook imza anahtarı. Stoğun hangi konumdan (location) yönetileceğini de seçersin.',
+        'woocommerce' => "Site adresin ve WooCommerce'in REST API anahtarları (consumer key ve consumer secret).",
+        'etsy' => "Etsy uygulama anahtarı (keystring) ve mağaza kimliğin (shop ID). Ardından Etsy hesabınla giriş yapıp 34Pazar'a erişim izni verirsin.",
+        'ebay' => 'eBay geliştirici hesabındaki uygulama bilgileri; ardından eBay hesabınla giriş yapıp erişim izni verirsin.',
+        'hepsiburada' => 'Hepsiburada entegrasyon kullanıcı adın ve parolan.',
     ];
-    $info = $copy[$code] ?? ['kind' => 'Satış kanalı', 'connect' => null];
+    $connectText = $connect[$code] ?? null;
+    $kind = $channel['marketplace'] ? 'Pazaryeri' : 'E-ticaret sitesi';
 
-    $cargoPush = ['shopify', 'woocommerce'];
-    $cargoOk = in_array($code, $cargoPush, true);
+    $cargoOk = $channel['cargoPush'];
 
     // [başlık, açıklama, kanalda çalışıyor mu]
     $caps = [
         ['Stok', "Başka bir kanalda satış olunca {$loc}ki stok da düşer. Adedi panelde düzeltirsen yeni sayı buraya da gider.", true],
         ['Siparişler', "{$name} siparişleri diğer kanallarının siparişleriyle aynı listeye düşer.", true],
         ['Ürün yayınlama', 'Ürünü panelden bu kanala gönderirsin. Kanal reddederse sebebi panelde yazar; düzeltip tekrar gönderirsin.', true],
-        ['Fiyat', "Panelde değiştirdiğin fiyat bu kanala da gider. Fiyatı {$loc} kendin değiştirirsen sessizce üzerine yazmayız; hangisinin geçerli olacağına sen karar verirsin.", true],
+        ['Fiyat', "Panelde değiştirdiğin fiyat bu kanala da gider; kanal için fiyat kuralı tanımlayabilirsin. Fiyatı {$loc} kendin değiştirirsen sessizce üzerine yazmayız; hangisinin geçerli olacağına sen karar verirsin.", true],
         ['Kargo takip numarası', $cargoOk
             ? 'Numarayı panelde siparişin içine yazarsın; numara bu kanala iletilir ve sipariş orada da kargolandı olarak işaretlenir.'
             : "Şimdilik numarayı {$loc}, kanalın kendi panelinde girersin. Panel bu siparişi yine de listede gösterir.", $cargoOk],
@@ -74,7 +57,7 @@
         : implode('', $availableOthers);
 
     $primaryHref = $isLoggedIn ? url('/panel') : route('register');
-    $primaryLabel = $isLoggedIn ? 'Panele git' : ($isOn ? 'Ücretsiz başla' : 'Ücretsiz hesap aç');
+    $primaryLabel = $isLoggedIn ? 'Panele git' : 'Ücretsiz dene';
 
     $description = $isOn
         ? "{$name} entegrasyonu: {$loc}ki stok, fiyat, sipariş ve ürünlerini diğer kanallarınla birlikte tek panelden yönet. Neyin çalıştığı tek tek."
@@ -93,69 +76,65 @@
 @endpush
 
 @section('content')
-    <section class="wrap pt-10 pb-16 sm:pt-14 lg:pt-20 lg:pb-24" aria-labelledby="kanal-h1">
-        <nav aria-label="Konum" class="text-sm muted">
-            <ol class="flex flex-wrap items-center gap-2">
-                <li><a href="{{ route('home') }}" class="hover:text-ink">Ana sayfa</a></li>
-                <li aria-hidden="true">/</li>
-                <li><a href="{{ route('site.channels') }}" class="hover:text-ink">Entegrasyonlar</a></li>
-                <li aria-hidden="true">/</li>
-                <li aria-current="page" class="font-semibold text-ink">{{ $name }}</li>
-            </ol>
-        </nav>
+    <section class="border-b border-line bg-soft" aria-labelledby="kanal-h1">
+        <div class="wrap pt-8 pb-12 lg:pt-10 lg:pb-16">
+            <nav aria-label="Konum" class="text-sm muted">
+                <ol class="flex flex-wrap items-center gap-2">
+                    <li><a href="{{ route('home') }}" class="link-u hover:text-ink">Ana sayfa</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li><a href="{{ route('site.channels') }}" class="link-u hover:text-ink">Entegrasyonlar</a></li>
+                    <li aria-hidden="true">/</li>
+                    <li aria-current="page" class="font-semibold text-ink">{{ $name }}</li>
+                </ol>
+            </nav>
 
-        <div class="mt-10 flex flex-wrap items-center gap-x-5 gap-y-2 lg:mt-14">
-            <p class="eyebrow">{{ $info['kind'] }}</p>
+            <div class="mt-8 flex flex-wrap items-center gap-3">
+                <span class="text-sm font-semibold muted">{{ $kind }}</span>
+                @if ($isOn)
+                    <span class="badge badge--active">Aktif</span>
+                @else
+                    <span class="badge badge--soon">Yakında</span>
+                @endif
+            </div>
+
+            <h1 id="kanal-h1" class="h-page mt-3 [overflow-wrap:anywhere]">{{ $name }} entegrasyonu</h1>
+
             @if ($isOn)
-                <span class="tag">Bağlanabilir</span>
-            @else
-                <span class="tag tag--soon">Yakında</span>
-            @endif
-        </div>
-
-        <h1 id="kanal-h1" class="display t-hero mt-6 [overflow-wrap:anywhere]">
-            {{ $name }}<br><span class="{{ $isOn ? 'accent' : 'muted' }}">entegrasyonu.</span>
-        </h1>
-
-        <div class="mt-10 grid gap-8 lg:mt-14 lg:grid-cols-12 lg:items-end">
-            @if ($isOn)
-                <p class="lead max-w-[40ch] lg:col-span-6">
+                <p class="lead mt-4 max-w-[56ch]">
                     {{ $name }} mağazanı 34Pazar'a bağla. {{ $loc }} satılan ürünün stoğu diğer kanallarında da düşer; siparişlerin tek listede durur.
                 </p>
             @else
-                <p class="lead max-w-[44ch] lg:col-span-6">
-                    <strong class="font-semibold">Bu entegrasyon hazırlanıyor.</strong>
+                <p class="lead mt-4 max-w-[56ch]">
+                    <strong class="font-semibold text-ink">Bu entegrasyon hazırlanıyor.</strong>
                     Şu an {{ $name }} mağazanı 34Pazar'a bağlayamazsın. Hazır olduğunda bu sayfada yazacak.
                     @if ($othersText) Bu arada {{ $othersText }} ile başlayabilirsin. @endif
                 </p>
             @endif
-            <div class="flex flex-wrap gap-4 lg:col-span-6 lg:justify-end">
-                <a href="{{ $primaryHref }}" class="btn btn-primary">{{ $primaryLabel }} <span class="arrow" aria-hidden="true">→</span></a>
-                <a href="{{ route('site.channels') }}" class="btn btn-outline">Bütün kanallar</a>
+            <div class="mt-7 flex flex-wrap gap-3">
+                <a href="{{ $primaryHref }}" class="btn btn-primary">{{ $primaryLabel }}</a>
+                <a href="{{ route('site.channels') }}" class="btn btn-secondary">Bütün kanallar</a>
             </div>
         </div>
     </section>
 
     @if ($isOn)
-        {{-- ═══════════════════════════════════ NE ÇALIŞIR (siyah) --}}
-        <section class="on-dark" aria-labelledby="calisan-h2">
-            <div class="wrap py-24 lg:py-32">
-                <div class="grid gap-8 lg:grid-cols-12 lg:items-end">
-                    <h2 id="calisan-h2" class="display t-1 lg:col-span-8">{{ $loc }} neler çalışır.</h2>
-                    <p class="muted lg:col-span-4">Satır satır. Çalışmayanı da yazıyoruz.</p>
+        {{-- ═══════════════════════════════════ NE ÇALIŞIR --}}
+        <section class="section" aria-labelledby="calisan-h2">
+            <div class="wrap">
+                <div class="section-head">
+                    <h2 id="calisan-h2" class="heading-2">{{ $loc }} neler çalışır.</h2>
+                    <p class="lead">Satır satır. Çalışmayanı da yazıyoruz.</p>
                 </div>
-                <dl class="mt-14 border-t border-line-dark lg:mt-20">
-                    @foreach ($caps as $n => [$title, $body, $ok])
-                        <div class="grid gap-3 border-b border-line-dark py-8 lg:grid-cols-12 lg:gap-8" data-reveal>
-                            <dt class="display t-3 lg:col-span-4">
-                                <span class="mr-3 align-middle text-sm text-[#ff6a47] tabular-nums">{{ sprintf('%02d', $n + 1) }}</span>{{ $title }}
-                            </dt>
-                            <dd class="muted lg:col-span-6">{{ $body }}</dd>
+                <dl class="mt-8 overflow-hidden rounded-xl border border-line">
+                    @foreach ($caps as [$title, $body, $ok])
+                        <div class="grid gap-2 px-5 py-5 lg:grid-cols-12 lg:items-center lg:gap-6 {{ ! $loop->first ? 'border-t border-line' : '' }}">
+                            <dt class="heading-3 lg:col-span-3">{{ $title }}</dt>
+                            <dd class="muted lg:col-span-7">{{ $body }}</dd>
                             <dd class="lg:col-span-2 lg:text-right">
                                 @if ($ok)
-                                    <span class="tag text-white">Çalışır</span>
+                                    <span class="badge badge--active">Çalışır</span>
                                 @else
-                                    <span class="tag tag--soon">Kanalda girilir</span>
+                                    <span class="badge badge--soon">Kanalda girilir</span>
                                 @endif
                             </dd>
                         </div>
@@ -165,38 +144,40 @@
         </section>
 
         {{-- ═══════════════════════════════════ BAĞLANTI --}}
-        @if ($info['connect'])
-            <section class="wrap py-24 lg:py-32" aria-labelledby="baglanti-h2">
-                <div class="grid gap-12 lg:grid-cols-12">
-                    <div class="lg:col-span-5">
+        <section class="section bg-soft" aria-labelledby="baglanti-h2">
+            <div class="wrap grid items-center gap-10 lg:grid-cols-12">
+                <div class="lg:col-span-5">
+                    @if ($connectText)
                         <p class="eyebrow">Bağlantı</p>
-                        <h2 id="baglanti-h2" class="display t-2 mt-6">Bağlamak için ne lazım?</h2>
-                    </div>
-                    <div class="lg:col-span-6 lg:col-start-7">
-                        <p class="lead">{{ $info['connect'] }}</p>
-                        <p class="mt-6 muted">Kod yazmazsın. Bilgileri panelde "Kanal ekle" formuna yapıştırırsın; bağlantının çalışıp çalışmadığını "Kanallarım" ekranından kontrol edersin.</p>
-                    </div>
+                        <h2 id="baglanti-h2" class="heading-2 mt-2">Bağlamak için ne lazım?</h2>
+                        <p class="mt-4">{{ $connectText }}</p>
+                        <p class="mt-4 muted">Kod yazmazsın. Bilgileri panelde "Kanal ekle" formuna yapıştırırsın; bağlantının çalışıp çalışmadığını "Kanallarım" ekranından kontrol edersin.</p>
+                    @else
+                        <h2 id="baglanti-h2" class="heading-2">Siparişlerin tek listede.</h2>
+                        <p class="mt-4 muted">{{ $name }} siparişleri diğer kanallarının siparişleriyle aynı listeye düşer.</p>
+                    @endif
                 </div>
-            </section>
-        @endif
-
-        <section class="wrap pb-24 lg:pb-32" aria-label="Panelden bir ekran">
-            @include('site.partials.shot', [
-                'src' => 'images/site/panel-siparisler.png',
-                'alt' => 'Sipariş listesi: farklı kanallardan gelen siparişler tek listede',
-            ])
+                <div class="lg:col-span-7">
+                    @include('site.partials.shot', [
+                        'src' => 'images/site/panel-siparisler.png',
+                        'alt' => 'Sipariş listesi: farklı kanallardan gelen siparişler tek listede',
+                    ])
+                </div>
+            </div>
         </section>
     @endif
 
     {{-- ═══════════════════════════════════ DİĞER KANALLAR --}}
     @if (count($others))
-        <section class="border-t border-line" aria-labelledby="diger-kanal-h2">
-            <div class="wrap py-24 lg:py-32">
-                <h2 id="diger-kanal-h2" class="display t-2">Diğer kanallar.</h2>
-                <div class="mt-12">
+        <section class="section" aria-labelledby="diger-kanal-h2">
+            <div class="wrap">
+                <h2 id="diger-kanal-h2" class="heading-2">Diğer kanallar</h2>
+                <div class="mt-8">
                     @include('site.partials.channel-list', ['channels' => $others])
                 </div>
             </div>
         </section>
     @endif
+
+    @include('site.partials.cta')
 @endsection

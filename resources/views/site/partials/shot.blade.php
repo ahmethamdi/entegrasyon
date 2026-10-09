@@ -1,5 +1,5 @@
 {{--
-    Panelden GERÇEK ekran görüntüsü, koyu tarayıcı çerçevesinde.
+    Panelden GERÇEK ekran görüntüsü, açık tarayıcı çerçevesinde.
 
     Sitede uydurma HTML arayüz çizilmez (kullanıcı kararı, 4 Ekim 2026):
     satıcı panelde ne görecekse sitede de onu görür.
@@ -8,8 +8,8 @@
       $src    /images/site/... (2880×1800, 1440×900'ün @2x'i)
       $alt    ne gösterdiğini anlatan metin
       $eager  ilk ekrandaki görsel (hero) için true — LCP gecikmesin
-      $dy     dar ekranda kadrajın ne kadar aşağı kayacağı (%); anlatılan
-              öğe ekranın altındaysa (ör. kargo formu) görünür kalsın
+      $dy     kadrajın ne kadar aşağı kayacağı (%); anlatılan öğe
+              ekranın altındaysa (ör. kargo formu) görünür kalsın
       $crop   ['ratio' => '16 / 9', 'zoom' => '150%', 'x' => '-30%', 'y' => '-25%']
               geniş ekranda belirli bir bölgeyi büyütür
       $url    çerçevedeki adres; süs, ekran okuyucu atlar

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Domain\Billing\Models\Plan;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
 use App\Support\Site\Blog;
 use Illuminate\Contracts\View\View;
@@ -68,12 +69,12 @@ final class SiteController extends Controller
      */
     public function channel(Request $request, string $channel): View
     {
-        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'is_active']);
+        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active']);
 
         abort_if($type === null, 404);
 
         return $this->page('site.channel', $request, [
-            'channel' => ['code' => $type->code, 'name' => $type->name, 'available' => (bool) $type->is_active],
+            'channel' => $this->presentChannel($type),
         ]);
     }
 
@@ -195,18 +196,36 @@ final class SiteController extends Controller
             ->all();
     }
 
-    /** @return list<array{code: string, name: string, available: bool}> */
+    /** @return list<array{code: string, name: string, available: bool, marketplace: bool, cargoPush: bool}> */
     private function channelList(): array
     {
         return ChannelType::query()
             ->orderByDesc('is_active')
             ->orderBy('name')
-            ->get(['code', 'name', 'is_active'])
-            ->map(fn (ChannelType $type): array => [
-                'code' => $type->code,
-                'name' => $type->name,
-                'available' => (bool) $type->is_active,
-            ])
+            ->get(['code', 'name', 'kind', 'adapter_class', 'is_active'])
+            ->map(fn (ChannelType $type): array => $this->presentChannel($type))
             ->all();
+    }
+
+    /**
+     * Kanalın sitede gösterilen hâli.
+     *
+     * `cargoPush` ADAPTÖRÜN YETENEĞİNDEN okunur (SupportsFulfillment):
+     * takip numarasını kanala geri gönderebilen kanallar listesi daha önce
+     * üç görünümde elle tutuluyordu ve Etsy desteği eklendiğinde üçü de eskide kaldı.
+     * Adaptör örneklenmez (bağlantı bilgisi gerekmez); yalnız sınıfın
+     * arayüzü uygulayıp uygulamadığına bakılır.
+     *
+     * @return array{code: string, name: string, available: bool, marketplace: bool, cargoPush: bool}
+     */
+    private function presentChannel(ChannelType $type): array
+    {
+        return [
+            'code' => $type->code,
+            'name' => $type->name,
+            'available' => (bool) $type->is_active,
+            'marketplace' => $type->kind === 'marketplace',
+            'cargoPush' => is_string($type->adapter_class) && is_a($type->adapter_class, SupportsFulfillment::class, true),
+        ];
     }
 }

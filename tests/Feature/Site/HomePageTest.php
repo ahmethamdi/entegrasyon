@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Site;
 
 use App\Domain\Billing\Models\Plan;
+use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Actions\CreateTenant;
@@ -35,7 +36,7 @@ final class HomePageTest extends TestCase
             'ana sayfa' => ['/', 'Sık sorulanlar'],
             'özellikler' => ['/ozellikler', 'Tek stok, bütün kanallar.'],
             'fiyatlar' => ['/fiyatlar', 'Fiyatlar aylıktır.'],
-            'entegrasyonlar' => ['/entegrasyonlar', 'Bir panel.'],
+            'entegrasyonlar' => ['/entegrasyonlar', 'Bir panel, bütün satış kanalların.'],
             'hakkımızda' => ['/hakkimizda', "34Pazar'ı 34Devs yapıyor."],
             'iletişim' => ['/iletisim', 'Bize'],
         ];
@@ -53,7 +54,7 @@ final class HomePageTest extends TestCase
             // Kaçışsız karşılaştırma: şablondaki düz kesme işareti (34Pazar'ı) birebir aranır.
             ->assertSee($text, false)
             // Misafire kayıt çağrısı gider, "Panele git" değil.
-            ->assertSee('Ücretsiz başla')
+            ->assertSee('Ücretsiz dene')
             ->assertDontSee('Panele git');
     }
 
@@ -121,7 +122,8 @@ final class HomePageTest extends TestCase
             ->assertSee('WooCommerce')
             ->assertSee('Kapalı Kanal')
             ->assertSee('Yakında')
-            ->assertSee('Bağlanabilir');
+            // Rozet birebir: "Aktif kanallar" başlığı tek başına testi geçirmesin.
+            ->assertSee('<span class="badge badge--active">Aktif</span>', false);
     }
 
     /** Açık kanalın sayfası neyin çalıştığını yazar; kargo notu kanala göre. */
@@ -137,6 +139,33 @@ final class HomePageTest extends TestCase
             // WooCommerce takip numarasını kanala geri gönderebilen kanallardan.
             ->assertSee('numara bu kanala iletilir')
             ->assertSee('consumer key');
+    }
+
+    /**
+     * Kargo bildirimi adaptörün YETENEĞİNDEN okunur (SupportsFulfillment),
+     * elle tutulan listeden değil: uygulamayan adaptörün kanal sayfası
+     * "kanala iletilir" DEMEZ.
+     */
+    #[Test]
+    public function cargo_note_follows_adapter_capability(): void
+    {
+        $this->asSystem(function (): void {
+            ChannelType::query()->firstOrCreate(
+                ['code' => 'site-test-kargosuz'],
+                [
+                    'name' => 'Kargosuz Kanal',
+                    'kind' => 'marketplace',
+                    'adapter_class' => TrendyolAdapter::class,
+                    'is_active' => true,
+                ],
+            );
+        });
+
+        $this->get('/entegrasyonlar/site-test-kargosuz')
+            ->assertOk()
+            ->assertSee('neler çalışır.')
+            ->assertSee('Şimdilik numarayı')
+            ->assertDontSee('numara bu kanala iletilir');
     }
 
     /** Kapalı kanalın sayfası açılır ama hiçbir yetenek iddia etmez. */
@@ -176,7 +205,7 @@ final class HomePageTest extends TestCase
             ->get('/')
             ->assertOk()
             ->assertSee('Panele git')
-            ->assertDontSee('Ücretsiz başla');
+            ->assertDontSee('Ücretsiz dene');
     }
 
     /** Bir açık, bir kapalı kanal tanımlar. */

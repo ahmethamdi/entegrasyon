@@ -22,34 +22,36 @@
 
 @section('content')
     @php($english = trim($__env->yieldContent('lang')) === 'en')
-    <div class="wrap pt-10 pb-20 lg:pt-16 lg:pb-28">
+    {{-- Yalnız yerleşim/tipografi; metinlerin İÇERİĞİ avukat kontrolünden geçti, dokunulmaz. --}}
+    <header class="border-b border-line bg-soft">
+        <div class="wrap pt-10 pb-10 lg:pt-14 lg:pb-12">
+            <p class="eyebrow">{{ $english ? 'Legal' : 'Yasal' }}</p>
+            <h1 class="h-page mt-3">{{ $legalTitle }}</h1>
+            @if ($english)
+                <p class="mt-4 text-sm muted">Last updated: <time datetime="2026-10-05">5 October 2026</time></p>
+            @else
+                <p class="mt-4 text-sm muted">Son güncelleme: <time datetime="2026-10-05">5 Ekim 2026</time></p>
+            @endif
+        </div>
+    </header>
+    <div class="wrap py-12 lg:py-16">
         <div class="grid gap-12 lg:grid-cols-12">
             <article class="lg:col-span-8">
-                <header>
-                    <p class="eyebrow accent">{{ $english ? 'Legal' : 'Yasal' }}</p>
-                    <h1 class="display t-2 mt-4">{{ $legalTitle }}</h1>
-                    @if ($english)
-                        <p class="mt-6 text-sm muted">Last updated: <time datetime="2026-10-05">5 October 2026</time></p>
-                    @else
-                        <p class="mt-6 text-sm muted">Son güncelleme: <time datetime="2026-10-05">5 Ekim 2026</time></p>
-                    @endif
-                </header>
-
-                <div class="prose-site mt-10 lg:mt-14">
+                <div class="prose-site">
                     @yield('legal_body')
                 </div>
             </article>
 
             <nav class="lg:col-span-3 lg:col-start-10" aria-labelledby="yasal-nav">
-                <div class="lg:sticky lg:top-28 border-t border-line pt-6">
-                    <h2 id="yasal-nav" class="text-sm font-semibold uppercase tracking-[0.12em]">{{ $english ? 'Legal' : 'Yasal metinler' }}</h2>
-                    <ul class="mt-4 space-y-3" role="list">
+                <div class="card lg:sticky lg:top-24">
+                    <h2 id="yasal-nav" class="text-sm font-semibold muted">{{ $english ? 'Legal' : 'Yasal metinler' }}</h2>
+                    <ul class="mt-3 space-y-1" role="list">
                         @foreach ($legalPages as $slug => $name)
                             <li>
                                 @if (url()->current() === route('site.legal', $slug))
-                                    <span aria-current="page" class="font-semibold">{{ $name }}</span>
+                                    <span aria-current="page" class="flex min-h-10 items-center font-semibold text-brand-700">{{ $name }}</span>
                                 @else
-                                    <a class="link-u muted" href="{{ route('site.legal', $slug) }}">{{ $name }}</a>
+                                    <a class="flex min-h-10 items-center hover:text-brand-700 hover:underline" href="{{ route('site.legal', $slug) }}">{{ $name }}</a>
                                 @endif
                             </li>
                         @endforeach
