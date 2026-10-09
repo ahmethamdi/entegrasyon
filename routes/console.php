@@ -186,6 +186,16 @@ Schedule::command('orders:resolve-unmatched')
     ->onOneServer()
     ->withoutOverlapping();
 
+// FİYAT KAMPANYALARI — başlangıç/bitiş anında kanala yeniden gönderim.
+//
+// DAKİKALIK: satıcı "Cuma 00:00'da başlasın" der; beş dakikalık gecikme
+// kampanyanın ilk siparişlerini normal fiyattan aldırırdı. Tur ucuzdur —
+// yalnız işareti boş kampanyalara bakar.
+Schedule::command('campaigns:tick')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // §13 · Faz 3 · api_calls SAKLAMA — GÜNLÜK, gece 04:00.
 //
 // api_calls en çok yazılan tablodur ve `expires_at` ilk günden beri

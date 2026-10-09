@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Models;
 
+use App\Domain\Catalog\Models\ChannelPriceRule;
+use App\Domain\Catalog\Models\PriceCampaign;
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Catalog\Support\ActiveCampaigns;
 use App\Domain\Catalog\Support\ChannelPriceRules;
 use App\Domain\Catalog\Support\PriceRuleCalculator;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -90,13 +93,13 @@ class Listing extends Model
      */
     public function effectivePrice(): ?string
     {
-        if ($this->channel_price !== null) {
-            return (string) $this->channel_price;
+        $normal = $this->normalPrice();
+
+        if ($normal === null) {
+            return null;
         }
 
-        $price = $this->variant?->price;
-
-        return $price === null ? null : $this->withRule((string) $price);
+        return $this->campaignPrice($normal) ?? $normal;
     }
 
     /**
@@ -107,25 +110,116 @@ class Listing extends Model
      * Kural ona da uygulanır: Trendyol'da satış +%15 olup üstü çizili fiyat
      * olduğu gibi kalsaydı indirim küçülür, hatta satış fiyatının ALTINA
      * düşerdi. Satış fiyatından büyük değilse hiç gönderilmez.
+     *
+     * KAMPANYADA normal fiyat üstü çizili gider (kampanya istediyse);
+     * varyantın kendi karşılaştırma fiyatı daha yüksekse o kalır.
      */
     public function effectiveCompareAtPrice(): ?string
     {
-        if ($this->channel_price !== null) {
-            return null;
+        $compareAt = null;
+
+        if ($this->channel_price === null && $this->variant?->compare_at_price !== null) {
+            $compareAt = $this->withRule((string) $this->variant->compare_at_price);
         }
 
-        $compareAt = $this->variant?->compare_at_price;
+        $price = $this->effectivePrice();
+        $normal = $this->normalPrice();
+
+        if ($normal !== null && $price !== $normal && ($this->activeCampaign()?->show_compare_at ?? false)
+            && ($compareAt === null || PriceRuleCalculator::toMinor($normal) > PriceRuleCalculator::toMinor($compareAt))) {
+            $compareAt = $normal;
+        }
 
         if ($compareAt === null) {
             return null;
         }
 
-        $compareAt = $this->withRule((string) $compareAt);
-        $price = $this->effectivePrice();
-
         return $price !== null && PriceRuleCalculator::toMinor($compareAt) <= PriceRuleCalculator::toMinor($price)
             ? null
             : $compareAt;
+    }
+
+    /**
+     * Kampanyasız fiyat: elle girilen kanal fiyatı, yoksa kurallı varyant fiyatı.
+     *
+     * Elle girilen fiyata kural UYGULANMAZ: o satıcının bilinçli rakamıdır,
+     * üstüne %15 eklemek iki kez zam yapmak olurdu.
+     */
+    public function normalPrice(): ?string
+    {
+        if ($this->channel_price !== null) {
+            return (string) $this->channel_price;
+        }
+
+        $price = $this->variant?->price;
+
+        return $price === null ? null : $this->withRule((string) $price);
+    }
+
+    /**
+     * Bu listing'e şu an uygulanan kampanya — birden çoksa EN DÜŞÜK fiyatı
+     * veren. Sıra kuralı olmadan iki kampanya arasında hangisinin gittiği
+     * sorgu sırasına kalırdı ve gönderim ile mutabakat farklı rakam görebilirdi.
+     */
+    public function activeCampaign(): ?PriceCampaign
+    {
+        $normal = $this->normalPrice();
+
+        if ($normal === null) {
+            return null;
+        }
+
+        $best = null;
+        $bestMinor = PriceRuleCalculator::toMinor($normal);
+
+        foreach (app(ActiveCampaigns::class)->for($this->tenant_id, $this->channel_connection_id, $this->variant_id) as $campaign) {
+            $price = $this->discounted($normal, $campaign);
+
+            if ($price !== null && PriceRuleCalculator::toMinor($price) < $bestMinor) {
+                $best = $campaign;
+                $bestMinor = PriceRuleCalculator::toMinor($price);
+            }
+        }
+
+        return $best;
+    }
+
+    private function campaignPrice(string $normal): ?string
+    {
+        $campaign = $this->activeCampaign();
+
+        return $campaign === null ? null : $this->discounted($normal, $campaign);
+    }
+
+    /**
+     * Kampanya indirimi uygulanmış fiyat; uygulanamıyorsa null.
+     *
+     * ⚠️ TUTAR İNDİRİMİ YALNIZ AYNI PARA BİRİMİNDE. "50 TL indirim" USD Etsy
+     * fiyatından 50 düşseydi $12.90'lık ilan sıfıra inerdi. Yüzde birimden
+     * bağımsızdır, her fiyata uygulanır.
+     *
+     * Yuvarlama yalnız kurallı fiyatta (elle fiyat girilmemişse) uygulanır.
+     */
+    private function discounted(string $normal, PriceCampaign $campaign): ?string
+    {
+        if ($campaign->discount_type === PriceCampaign::TYPE_AMOUNT
+            && $this->effectiveCurrencyWithoutCampaign() !== $this->variant?->currency) {
+            return null;
+        }
+
+        $rounding = $this->channel_price === null
+            ? (app(ChannelPriceRules::class)->forConnection($this->channel_connection_id)?->rounding ?? ChannelPriceRule::ROUNDING_NONE)
+            : ChannelPriceRule::ROUNDING_NONE;
+
+        $price = PriceRuleCalculator::discount($normal, $campaign->discount_type, (string) $campaign->discount_value, $rounding);
+
+        // Yuvarlama küçük bir indirimi sıfırlayabilir; indirim yoksa kampanya da yok.
+        return PriceRuleCalculator::toMinor($price) < PriceRuleCalculator::toMinor($normal) ? $price : null;
+    }
+
+    private function effectiveCurrencyWithoutCampaign(): ?string
+    {
+        return $this->channel_price !== null ? $this->channel_price_currency : $this->variant?->currency;
     }
 
     /** Giden fiyatın para birimi. */

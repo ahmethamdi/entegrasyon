@@ -60,10 +60,10 @@ const navGroups = [
         heading: k('Modüller'),
         items: [
             /*
-             * Kampanyalar — fiyat kuralları modülü (kullanıcı kararı,
-             * 5 Ekim: panel yenilemesinden SONRA yazılacak).
+             * Kampanyalar — süreli indirim (9 Ekim). Kalıcı kanal farkı
+             * Kanallar → "Fiyat kuralı"ndadır.
              */
-            { href: null, label: k('Kampanyalar'), soon: true },
+            { href: '/campaigns', label: k('Kampanyalar') },
             { href: null, label: k('Muhasebe'), soon: true },
         ],
     },

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Catalog\Support;
 
 use App\Domain\Catalog\Models\ChannelPriceRule;
+use App\Domain\Catalog\Models\PriceCampaign;
 
 /**
  * Kanal fiyat kuralının hesabı — saf, yan etkisiz.
@@ -34,14 +35,34 @@ final class PriceRuleCalculator
         // Negatif sonuç kanala gitmez; sıfır fiyat zarar korumasında durur.
         $minor = max($minor, 0);
 
-        $minor = match ($rule->rounding) {
+        return self::fromMinor(self::roundMinor($minor, $rule->rounding));
+    }
+
+    /**
+     * Kampanya indirimi: yüzde ya da tutar, sonra (varsa) kuralın yuvarlaması.
+     *
+     * Yuvarlama YUKARIDIR ve indirimi biraz küçültebilir (229,89 → 229,90);
+     * kampanya fiyatı da kanalın fiyat diliyle (,90) bitsin diye bilinçli.
+     */
+    public static function discount(string $price, string $type, string $value, string $rounding = ChannelPriceRule::ROUNDING_NONE): string
+    {
+        $minor = self::toMinor($price);
+
+        $minor = $type === PriceCampaign::TYPE_PERCENT
+            ? intdiv($minor * (10000 - self::toMinor($value)) + 5000, 10000)
+            : $minor - self::toMinor($value);
+
+        return self::fromMinor(self::roundMinor(max($minor, 0), $rounding));
+    }
+
+    private static function roundMinor(int $minor, string $rounding): int
+    {
+        return match ($rounding) {
             ChannelPriceRule::ROUNDING_WHOLE => self::ceilTo($minor, 0),
             ChannelPriceRule::ROUNDING_X90 => self::ceilTo($minor, 90),
             ChannelPriceRule::ROUNDING_X99 => self::ceilTo($minor, 99),
             default => $minor,
         };
-
-        return self::fromMinor($minor);
     }
 
     /**

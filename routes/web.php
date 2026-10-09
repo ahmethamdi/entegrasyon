@@ -21,6 +21,7 @@ use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\PriceCampaignController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
@@ -150,6 +151,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
         ->name('channels.settings.edit');
     Route::put('/channels/{connection}/settings', [ChannelSettingsController::class, 'update'])
         ->name('channels.settings.update');
+    Route::get('/campaigns', [PriceCampaignController::class, 'index'])->name('campaigns.index');
+    Route::get('/campaigns/create', [PriceCampaignController::class, 'create'])->name('campaigns.create');
+    Route::get('/campaigns/products', [PriceCampaignController::class, 'products'])->name('campaigns.products');
+    Route::post('/campaigns', [PriceCampaignController::class, 'store'])->name('campaigns.store');
+    Route::post('/campaigns/{campaign}/cancel', [PriceCampaignController::class, 'cancel'])->name('campaigns.cancel');
     Route::get('/channels/{connection}/pricing', [ChannelPricingController::class, 'edit'])
         ->name('channels.pricing.edit');
     Route::put('/channels/{connection}/pricing', [ChannelPricingController::class, 'update'])

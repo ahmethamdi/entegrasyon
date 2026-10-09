@@ -57,6 +57,8 @@ final class RequestResync
 
     public const REASON_COST_CHANGED = 'cost_changed';
 
+    public const REASON_CAMPAIGN_CHANGED = 'campaign_changed';
+
     /**
      * @param  string  $reason  Neden resync istendi — yükte taşınır
      */

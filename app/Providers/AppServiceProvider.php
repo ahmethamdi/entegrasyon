@@ -6,6 +6,7 @@ namespace App\Providers;
 
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Support\StripePaymentGateway;
+use App\Domain\Catalog\Support\ActiveCampaigns;
 use App\Domain\Catalog\Support\ChannelPriceRules;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Models\User;
@@ -31,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CredentialVault::class);
         // scoped: her iş/istekte sıfırlanır — kural değişince eski fiyat gitmesin.
         $this->app->scoped(ChannelPriceRules::class);
+        $this->app->scoped(ActiveCampaigns::class);
 
         $this->app->bind(PaymentGateway::class, StripePaymentGateway::class);
     }

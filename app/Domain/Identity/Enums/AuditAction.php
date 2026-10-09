@@ -82,6 +82,11 @@ enum AuditAction: string
     /** Bağlantının fiyat kuralı (kanal farkı, yuvarlama, zarar koruması) değişti. */
     case CHANNEL_PRICE_RULE_SET = 'price.rule_set';
 
+    /** Süreli fiyat kampanyası açıldı / iptal edildi. */
+    case PRICE_CAMPAIGN_CREATED = 'price.campaign_created';
+
+    case PRICE_CAMPAIGN_CANCELLED = 'price.campaign_cancelled';
+
     /**
      * Platform yöneticisi kiracıya planı elle atadı (müşteriye özel plan ya
      * da ödeme dışı bir anlaşma). Yükte eski ve yeni plan + bitiş tarihi:
@@ -101,6 +106,8 @@ enum AuditAction: string
             self::PRICE_CONFLICT_RESOLVED => 'Fiyat çakışması çözüldü',
             self::CHANNEL_PRICE_SET => 'Kanal fiyatı değişti',
             self::CHANNEL_PRICE_RULE_SET => 'Kanal fiyat kuralı değişti',
+            self::PRICE_CAMPAIGN_CREATED => 'Kampanya açıldı',
+            self::PRICE_CAMPAIGN_CANCELLED => 'Kampanya iptal edildi',
             self::PLAN_ASSIGNED_BY_ADMIN => 'Plan yönetici tarafından atandı',
         });
     }
