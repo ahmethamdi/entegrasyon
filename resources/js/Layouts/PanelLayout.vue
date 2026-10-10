@@ -64,6 +64,8 @@ const navGroups = [
              * Kanallar → "Fiyat kuralı"ndadır.
              */
             { href: '/campaigns', label: k('Kampanyalar') },
+            /* e-fatura — Paraşüt (10 Ekim). Fatura sipariş ekranından kesilir. */
+            { href: '/settings/invoicing', label: k('e-Fatura') },
             { href: null, label: k('Muhasebe'), soon: true },
         ],
     },

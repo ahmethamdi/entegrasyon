@@ -5,6 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Domain\Channels\Contracts\SupportsFulfillment;
+use App\Domain\Channels\Contracts\SupportsInvoiceData;
+use App\Domain\Invoicing\Actions\RequestInvoice;
+use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
+use App\Domain\Invoicing\Models\Invoice;
+use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Invoicing\Support\InvoiceProviders;
 use App\Domain\Orders\Actions\RecordPanelShipment;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
@@ -97,6 +103,7 @@ final class OrderController extends Controller
             'lines.variant:id,sku',
             'events' => fn ($query) => $query->orderByDesc('occurred_at'),
             'fulfillments' => fn ($query) => $query->orderBy('created_at'),
+            'invoice',
             'connection:id,channel_type_code,label',
             'connection.channelType:code,adapter_class',
         ])->findOrFail($order);
@@ -159,8 +166,91 @@ final class OrderController extends Controller
                 ])->all(),
 
                 'canShip' => $this->channelSupportsFulfillment($order),
+
+                // Fatura: alıcı verisi YOK — yalnız durum, tür ve numara.
+                'invoice' => $order->invoice === null ? null : [
+                    'status' => $order->invoice->status,
+                    'documentType' => $order->invoice->document_type,
+                    'number' => $order->invoice->invoice_number,
+                    'error' => $order->invoice->error,
+                    'issuedAt' => $order->invoice->issued_at?->toIso8601String(),
+                ],
+                'invoiceChannelSupported' => $this->channelSupportsInvoicing($order),
+                'invoiceAccountReady' => (bool) InvoiceAccount::query()->first()?->isUsable(),
             ],
         ]);
+    }
+
+    /**
+     * Siparişe fatura kes — alıcı kanaldan anlık okunur, entegratöre gider.
+     *
+     * Ön koşullar istek ANINDA söylenir (kargo kuralı): kanal desteklemiyor
+     * ya da Paraşüt bağlı değilse satır açılmaz; açılıp sonra "kesilemedi"
+     * denseydi satıcı nedenini bilmeden bir deneme görürdü.
+     */
+    public function invoice(Request $request, string $order, RequestInvoice $requestInvoice): RedirectResponse
+    {
+        $order = Order::query()->with('connection.channelType:code,adapter_class')->findOrFail($order);
+
+        if (! $this->channelSupportsInvoicing($order)) {
+            return back()->withErrors(['invoice' => __('Bu kanalın siparişine henüz fatura kesilemiyor.')]);
+        }
+
+        $account = InvoiceAccount::query()->first();
+
+        if ($account === null || ! $account->isUsable()) {
+            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından Paraşüt hesabınızı bağlayın.')]);
+        }
+
+        if ($order->invoice()->exists()) {
+            return back()->withErrors(['invoice' => __('Bu siparişin faturası zaten var.')]);
+        }
+
+        $requestInvoice->run($order, $account, $request->user()?->id);
+
+        return back()->with('success', __('Fatura kesiliyor.'));
+    }
+
+    /** Kesilemeyen faturayı yeniden dener; yalnız BAŞARISIZ olan. */
+    public function retryInvoice(string $order, RequestInvoice $requestInvoice): RedirectResponse
+    {
+        $invoice = Invoice::query()
+            ->where('order_id', $order)
+            ->where('status', Invoice::STATUS_FAILED)
+            ->firstOrFail();
+
+        $requestInvoice->retry($invoice);
+
+        return back()->with('success', __('Fatura yeniden kesiliyor.'));
+    }
+
+    /**
+     * Fatura PDF'i — entegratörün SÜRELİ bağlantısına yönlendirir.
+     *
+     * Bağlantı saklanmaz ve sayfaya gömülmez: süresi dolar (Paraşüt ~1 sa)
+     * ve ekrandaki eski bağlantı "erişim reddedildi" verirdi. Her tıklamada
+     * taze bağlantı istenir.
+     */
+    public function invoicePdf(string $order, InvoiceProviders $providers): RedirectResponse
+    {
+        $invoice = Invoice::query()
+            ->where('order_id', $order)
+            ->where('status', Invoice::STATUS_ISSUED)
+            ->firstOrFail();
+
+        $account = InvoiceAccount::query()->first();
+
+        try {
+            $url = $account === null ? null : $providers->for($account)->pdfUrl($invoice);
+        } catch (InvoiceProviderException $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
+        if ($url === null) {
+            return back()->withErrors(['invoice' => __('Fatura PDF\'i henüz hazır değil; birazdan tekrar deneyin.')]);
+        }
+
+        return redirect()->away($url);
     }
 
     /**
@@ -246,6 +336,14 @@ final class OrderController extends Controller
         $class = $order->connection?->channelType?->adapter_class;
 
         return is_string($class) && $class !== '' && is_subclass_of($class, SupportsFulfillment::class);
+    }
+
+    /** Kargodaki gibi sınıftan okunur — adapter kurulmaz. */
+    private function channelSupportsInvoicing(Order $order): bool
+    {
+        $class = $order->connection?->channelType?->adapter_class;
+
+        return is_string($class) && $class !== '' && is_subclass_of($class, SupportsInvoiceData::class);
     }
 
     private function blankToNull(?string $value): ?string

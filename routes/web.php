@@ -18,6 +18,7 @@ use App\Http\Controllers\EbayOAuthController;
 use App\Http\Controllers\EtsyOAuthController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InvoiceSettingsController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\OrderController;
@@ -280,6 +281,22 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::post('/orders/{order}/shipments', [OrderController::class, 'ship'])->name('orders.ship');
     Route::post('/orders/{order}/shipments/{fulfillment}/retry', [OrderController::class, 'retryShipment'])
         ->name('orders.ship.retry');
+
+    // e-fatura — alıcı kanaldan ANLIK okunur, Paraşüt'e gider; bizde
+    // saklanmaz. PDF bağlantısı her tıklamada taze istenir (süreli).
+    Route::post('/orders/{order}/invoice', [OrderController::class, 'invoice'])->name('orders.invoice');
+    Route::post('/orders/{order}/invoice/retry', [OrderController::class, 'retryInvoice'])->name('orders.invoice.retry');
+    Route::get('/orders/{order}/invoice/pdf', [OrderController::class, 'invoicePdf'])->name('orders.invoice.pdf');
+
+    // e-fatura ayarları + Paraşüt OAuth (Etsy iskeleti: yönlendirme POST,
+    // callback GET, `state` doğrulaması CSRF'in yerini tutar).
+    Route::get('/settings/invoicing', [InvoiceSettingsController::class, 'index'])->name('settings.invoicing');
+    Route::put('/settings/invoicing', [InvoiceSettingsController::class, 'update'])->name('settings.invoicing.update');
+    Route::delete('/settings/invoicing', [InvoiceSettingsController::class, 'destroy'])->name('settings.invoicing.destroy');
+    Route::post('/settings/invoicing/parasut/authorize', [InvoiceSettingsController::class, 'redirect'])
+        ->name('settings.invoicing.parasut.authorize');
+    Route::get('/settings/invoicing/parasut/callback', [InvoiceSettingsController::class, 'callback'])
+        ->name('settings.invoicing.parasut.callback');
 
     // Onay durumu ekranı (§13 · Faz 4, §14 · onay süreci). SALT OKUNUR:
     // onay kararını KANAL verir ve biz yalnızca okuruz (`approval:track`,

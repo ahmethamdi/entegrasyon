@@ -1,5 +1,5 @@
 <script setup>
-import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
@@ -95,6 +95,31 @@ const sourceLabels = {
     panel: k('panelden'),
     system: k('sistem'),
 };
+
+// ── e-fatura ──────────────────────────────────────────────────────────
+const invoiceBadges = {
+    pending: { text: k('Fatura kesiliyor'), class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    issuing: { text: k('Fatura kesiliyor'), class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    issued: { text: k('Fatura kesildi'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    failed: { text: k('Fatura kesilemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
+};
+
+const documentLabels = { e_archive: k('e-Arşiv'), e_invoice: k('e-Fatura') };
+
+const invoiceError = computed(() => page.props.errors?.invoice);
+const invoicing = ref(false);
+
+function requestInvoice() {
+    router.post(`/orders/${props.order.id}/invoice`, {}, {
+        preserveScroll: true,
+        onStart: () => { invoicing.value = true; },
+        onFinish: () => { invoicing.value = false; },
+    });
+}
+
+function retryInvoice() {
+    router.post(`/orders/${props.order.id}/invoice/retry`, {}, { preserveScroll: true });
+}
 
 function stamp(value) {
     if (!value) return '—';
@@ -373,6 +398,75 @@ function stamp(value) {
         <datalist id="carrier-suggestions">
             <option v-for="name in carrierSuggestions" :key="name" :value="name" />
         </datalist>
+
+        <!--
+            E-FATURA. Fatura Paraşüt'ten kesilir; alıcı bilgisi kanaldan
+            anlık okunur, burada gösterilmez ve saklanmaz.
+        -->
+        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Fatura') }}</h2>
+
+        <div class="mt-3 rounded-lg border border-stone-200 bg-white px-4 py-3">
+            <div v-if="order.invoice" class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <p class="text-xs text-stone-900">
+                        {{ order.invoice.documentType ? t(documentLabels[order.invoice.documentType]) : t('Fatura') }}
+                        <span v-if="order.invoice.number" class="font-mono text-stone-600">· {{ order.invoice.number }}</span>
+                    </p>
+                    <p v-if="order.invoice.issuedAt" class="mt-0.5 font-mono text-[11px] text-stone-500">{{ stamp(order.invoice.issuedAt) }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span
+                        class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                        :class="invoiceBadges[order.invoice.status]?.class"
+                    >
+                        {{ t(invoiceBadges[order.invoice.status]?.text ?? order.invoice.status) }}
+                    </span>
+                    <a
+                        v-if="order.invoice.status === 'issued'"
+                        :href="`/orders/${order.id}/invoice/pdf`"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                    >
+                        {{ t('PDF') }}
+                    </a>
+                    <button
+                        v-if="order.invoice.status === 'failed'"
+                        type="button"
+                        class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                        @click="retryInvoice"
+                    >
+                        {{ t('Tekrar dene') }}
+                    </button>
+                </div>
+            </div>
+            <!-- Hata metni gizlenmez: satıcı neyi düzelteceğini buradan anlar. -->
+            <p v-if="order.invoice?.error" class="mt-1.5 text-[11px] text-red-700">{{ order.invoice.error }}</p>
+
+            <template v-if="!order.invoice">
+                <p v-if="!order.invoiceChannelSupported" class="text-xs text-stone-500">
+                    {{ t('Bu kanalın siparişine henüz fatura kesilemiyor.') }}
+                </p>
+                <p v-else-if="!order.invoiceAccountReady" class="text-xs text-stone-500">
+                    {{ t('Fatura kesmek için önce') }}
+                    <Link href="/settings/invoicing" class="underline">{{ t('e-fatura ayarlarından Paraşüt hesabınızı bağlayın') }}</Link>.
+                </p>
+                <div v-else class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-xs text-stone-500">
+                        {{ t('Alıcı bilgisi :channel\'dan okunur, fatura Paraşüt\'ten kesilir.', { channel: channelName(order.channel.type) }) }}
+                    </p>
+                    <button
+                        type="button"
+                        :disabled="invoicing"
+                        class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        @click="requestInvoice"
+                    >
+                        {{ t('Fatura kes') }}
+                    </button>
+                </div>
+            </template>
+            <p v-if="invoiceError" class="mt-2 text-sm text-red-700">{{ invoiceError }}</p>
+        </div>
 
         <!-- olay geçmişi -->
         <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Geçmiş') }}</h2>

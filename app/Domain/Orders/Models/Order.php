@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Orders\Models;
 
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Invoicing\Models\Invoice;
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
 use Illuminate\Database\Eloquent\Builder;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Kanaldan alınan sipariş.
@@ -108,5 +110,10 @@ class Order extends Model
     public function fulfillments(): HasMany
     {
         return $this->hasMany(Fulfillment::class);
+    }
+
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
     }
 }

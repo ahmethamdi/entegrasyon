@@ -35,6 +35,8 @@ Hazırlanma: 9 Ekim 2026. Rakip bilgileri o gün sitelerinden okundu (Entegra: e
 
 - [ ] **TR pazar yerlerini canlıya al: Hepsiburada, N11, Pazarama, Çiçeksepeti.** Kod yazılı ve testli, kanallar kapalı. Gereken: her birinde gerçek satıcı hesabıyla uçtan uca test. HB için SIT bilgisi, N11 appKey, Pazarama clientId, ÇS API anahtarı + IP bildirimi. *Engel: test hesabı.*
 - [ ] **e-fatura.** Sipariş → fatura otomatik kesilsin, PDF müşteriye ve pazar yerine gitsin (Trendyol/HB fatura yükleme uçları). İlk entegratörler: **Paraşüt** (KOBİ'de yaygın, açık API), **BirFatura** veya **EDM**. *Rakiplerde 11–13 entegratör var, biz 2–3 ile başlarız. Tahmin: L.*
+  - **10 Eki — 1. dilim yazıldı (Paraşüt + Trendyol, panelden elle "Fatura kes").** Kullanıcı kararları: ilk entegratör **Paraşüt** (BirFatura ücretsiz pazaryeri entegrasyonu da sattığı için rakip); alıcı verisi **anlık çekilir, saklanmaz** (`SupportsInvoiceData`, `InvoiceBuyer` log'a düşmez). Satıcı Paraşüt'e OAuth ile bağlanır (tek 34Pazar uygulaması, şifre bize gelmez). Akış: cari → satış faturası → mükellef sorgusu → e-fatura / e-arşiv (internet satışı) → `trackable_jobs` sonucu; her adımın kimliği anında yazılır (ikinci resmî belge açılmaz). Sipariş başına tek fatura (DB kısıtı).
+  - **Kalan:** ① Paraşüt'ten uygulama + test ortamı iste, gerçek hesapta doğrula (ilişki adları `invoice`/`sales_invoice`, iş durumu değerleri, `invoice_number` alanı, kalemde ürünsüz fatura) ② Trendyol'a PDF yükleme (`seller-invoice-file`, PDF bağlantısı süreli → dosya indirilip yüklenir) ③ otomatik kesim kuralı (ör. kargoya verilince) ④ HB/diğer kanallarda `SupportsInvoiceData` ⑤ iade/iptal faturası ⑥ plan sınırı (aylık fatura kotası).
 - [ ] **Kargo entegrasyonu + toplu etiket.** Yurtiçi, Aras, HepsiJet (sonra MNG, Sürat, PTT). Gönderi oluştur → barkod/etiket PDF → takip no kanala kendiliğinden bildirilsin (bildirim kısmı zaten var). TR pazar yerlerinde anlaşmalı kargo varsa etiketi pazar yerinden indir. *Tahmin: L.*
 - [ ] **Ürün sınırını gözden geçir.** Rakiplerde ürün sınırsız; bizde 499 ₺ planda 500 ürün var, kataloğu büyük satıcı daha ilk bakışta eler. Öneri: sınırı kanal sayısına bağla, ürünü serbest bırak ya da çok yükselt. *Karar: kullanıcı.*
 
@@ -71,6 +73,6 @@ Hazırlanma: 9 Ekim 2026. Rakip bilgileri o gün sitelerinden okundu (Entegra: e
 ## 4. Kullanıcıdan beklenenler
 
 - HB SIT bilgileri · N11 appKey/appSecret · Pazarama clientId/secret · Çiçeksepeti API anahtarı (+ sunucu IP 212.227.142.108 bildirimi)
-- e-fatura için ilk entegratör seçimi (Paraşüt / BirFatura / EDM) ve test hesabı
+- e-fatura: ~~entegratör seçimi~~ Paraşüt seçildi (10 Eki) → **Paraşüt destekten 34Pazar uygulaması (client_id/secret, redirect `https://34pazar.com/settings/invoicing/parasut/callback`) + test ortamı**
 - Kargo için ilk firmalar ve anlaşmalı kargo hesapları (Yurtiçi / Aras / HepsiJet)
 - Ürün sınırı kararı (P0)

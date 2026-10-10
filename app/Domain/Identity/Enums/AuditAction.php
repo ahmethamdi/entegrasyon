@@ -94,6 +94,14 @@ enum AuditAction: string
      */
     case PLAN_ASSIGNED_BY_ADMIN = 'billing.plan_assigned';
 
+    /**
+     * Fatura entegratörü (Paraşüt) bağlandı / bağlantı kesildi. Yükte
+     * entegratör ve firma kimliği — token ASLA.
+     */
+    case INVOICE_ACCOUNT_CONNECTED = 'invoicing.account_connected';
+
+    case INVOICE_ACCOUNT_DISCONNECTED = 'invoicing.account_disconnected';
+
     /** Panelde gösterilecek Türkçe ad. */
     public function label(): string
     {
@@ -109,6 +117,8 @@ enum AuditAction: string
             self::PRICE_CAMPAIGN_CREATED => 'Kampanya açıldı',
             self::PRICE_CAMPAIGN_CANCELLED => 'Kampanya iptal edildi',
             self::PLAN_ASSIGNED_BY_ADMIN => 'Plan yönetici tarafından atandı',
+            self::INVOICE_ACCOUNT_CONNECTED => 'e-fatura hesabı bağlandı',
+            self::INVOICE_ACCOUNT_DISCONNECTED => 'e-fatura hesabı kaldırıldı',
         });
     }
 }

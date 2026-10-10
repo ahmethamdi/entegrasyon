@@ -20,12 +20,17 @@ use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
+use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
+use App\Domain\Invoicing\Support\InvoiceBuyer;
+use App\Domain\Invoicing\Support\InvoiceDraft;
+use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -45,6 +50,7 @@ use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -98,7 +104,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -1483,6 +1489,125 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
         }
 
         return new DateTimeImmutable('@'.intdiv((int) $raw, 1000));
+    }
+
+    /**
+     * Fatura taslağı — paket Trendyol'dan ANLIK okunur, hiçbir yere yazılmaz.
+     *
+     * Alıcı (ad, fatura adresi, TCKN/VKN) sipariş alımında maskelenir
+     * (`PersonalDataMask`); fatura anında yalnız bu paket istenir ve
+     * `InvoiceDraft` bellekte entegratöre gider.
+     *
+     * KALEMLER DE BURADAN: `vatRate` ve `lineUnitPrice` (indirim düşülmüş,
+     * KDV dahil) yalnız kanal yanıtında vardır; `order_lines`'ta KDV oranı
+     * tutulmaz. İptal/tedarik edilemeyen kalem faturaya girmez.
+     *
+     * ⚠️ KURUMSAL ALICI: `commercial` + 10 haneli VKN → firma adına fatura
+     * (`invoiceAddress.company`). Bireyselde TCKN paylaşılmamışsa
+     * 11111111111 (GİB'in kabul ettiği anonim kimlik).
+     *
+     * ⚠️ TARİH PENCERESİ: Trendyol filtre verilse bile tarih aralığı
+     * olmadan yalnız son günlere bakar; paket sipariş anının çevresinde
+     * aranır (gerçek hesapta doğrulanacak).
+     */
+    public function fetchInvoiceDraft(Order $order): InvoiceDraft
+    {
+        $placed = $order->placed_at === null ? null : CarbonImmutable::instance($order->placed_at);
+
+        $response = $this->get($this->sellerUrl('order', 'v2/orders'), array_filter([
+            'shipmentPackageIds' => $order->external_id,
+            'orderNumber' => $order->external_number,
+            'startDate' => $placed?->subDay()->getTimestampMs(),
+            'endDate' => $placed === null ? null : min($placed->addDays(13)->getTimestampMs(), now()->getTimestampMs()),
+            'page' => 0,
+            'size' => 50,
+        ], static fn (mixed $v): bool => $v !== null && $v !== ''));
+
+        $response->throw();
+
+        $package = null;
+
+        foreach ((array) ($response->json('content') ?? []) as $row) {
+            if (is_array($row) && self::packageId($row) === $order->external_id) {
+                $package = $row;
+            }
+        }
+
+        if ($package === null) {
+            throw new InvoiceDataUnavailable('Paket Trendyol\'da bulunamadı.');
+        }
+
+        if (in_array(self::packageStatus($package), ['Cancelled', 'UnSupplied'], true)) {
+            throw new InvoiceDataUnavailable('Paket iptal edilmiş; fatura kesilmez.');
+        }
+
+        $lines = [];
+
+        foreach ((array) ($package['lines'] ?? []) as $item) {
+            if (! is_array($item) || in_array($item['orderLineItemStatusName'] ?? null, ['Cancelled', 'UnSupplied'], true)) {
+                continue;
+            }
+
+            if (! is_numeric($item['vatRate'] ?? null)) {
+                // Yanlış KDV'li fatura yasal hatadır — varsayılanla kesilmez.
+                throw new InvoiceDataUnavailable('Trendyol kalemde KDV oranı göndermedi.');
+            }
+
+            $lines[] = new InvoiceLine(
+                description: (string) ($item['productName'] ?? $item['barcode'] ?? 'Ürün'),
+                quantity: max(1, (int) ($item['quantity'] ?? 1)),
+                grossUnitPrice: (string) ($item['lineUnitPrice'] ?? $item['price'] ?? '0'),
+                vatRate: (int) round((float) $item['vatRate']),
+                sku: self::lineSku($item) ?: null,
+            );
+        }
+
+        if ($lines === []) {
+            throw new InvoiceDataUnavailable('Pakette faturalanacak kalem yok.');
+        }
+
+        return new InvoiceDraft(
+            buyer: self::invoiceBuyer($package),
+            lines: $lines,
+            orderNumber: (string) ($package['orderNumber'] ?? $order->external_number ?? $order->external_id),
+            orderedAt: $this->placedAt($package) ?? new DateTimeImmutable,
+            platformName: 'Trendyol',
+            platformUrl: 'https://www.trendyol.com',
+            currency: (string) ($package['currencyCode'] ?? 'TRY'),
+        );
+    }
+
+    /** @param array<string, mixed> $package */
+    private static function invoiceBuyer(array $package): InvoiceBuyer
+    {
+        $address = is_array($package['invoiceAddress'] ?? null) ? $package['invoiceAddress'] : [];
+
+        $text = static fn (mixed $v): ?string => is_scalar($v) && trim((string) $v) !== '' ? trim((string) $v) : null;
+
+        $vkn = preg_replace('/\D/', '', (string) ($text($package['taxNumber'] ?? null) ?? $text($address['taxNumber'] ?? null) ?? ''));
+        $company = $text($address['company'] ?? null);
+        $isCompany = (bool) ($package['commercial'] ?? false) && strlen((string) $vkn) === 10;
+
+        $tckn = preg_replace('/\D/', '', (string) ($text($package['identityNumber'] ?? null) ?? ''));
+
+        $person = $text($address['fullName'] ?? null)
+            ?? $text(trim(($address['firstName'] ?? '').' '.($address['lastName'] ?? '')))
+            ?? $text(trim(($package['customerFirstName'] ?? '').' '.($package['customerLastName'] ?? '')))
+            ?? 'Nihai Tüketici';
+
+        return new InvoiceBuyer(
+            name: $isCompany ? ($company ?? $person) : $person,
+            isCompany: $isCompany,
+            taxNumber: $isCompany ? (string) $vkn : (strlen((string) $tckn) === 11 ? (string) $tckn : InvoiceBuyer::ANONYMOUS_TCKN),
+            taxOffice: $isCompany ? $text($address['taxOffice'] ?? null) : null,
+            address: $text($address['fullAddress'] ?? null)
+                ?? $text(trim(($address['address1'] ?? '').' '.($address['address2'] ?? '')))
+                ?? '-',
+            city: $text($address['city'] ?? null),
+            district: $text($address['district'] ?? null),
+            email: $text($package['customerEmail'] ?? null),
+            countryCode: strtoupper($text($address['countryCode'] ?? null) ?? 'TR'),
+        );
     }
 
     public function acknowledgeOrder(Order $order): AdapterResult

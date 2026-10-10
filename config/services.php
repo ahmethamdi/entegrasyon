@@ -59,4 +59,15 @@ return [
         'shared_secret' => env('ETSY_SHARED_SECRET'),
     ],
 
+    // 34Pazar Paraşüt uygulaması (e-fatura) — Paraşüt destekten istenir;
+    // satıcılar OAuth ile bununla bağlanır, şifreleri bize gelmez.
+    // Redirect: https://34pazar.com/settings/invoicing/parasut/callback
+    // Test ortamı için PARASUT_BASE_URL. Boşsa e-fatura ekranı "henüz
+    // açık değil" der (ParasutApp::configured()).
+    'parasut' => [
+        'client_id' => env('PARASUT_CLIENT_ID'),
+        'client_secret' => env('PARASUT_CLIENT_SECRET'),
+        'base_url' => env('PARASUT_BASE_URL'),
+    ],
+
 ];
