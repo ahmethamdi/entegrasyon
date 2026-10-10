@@ -33,6 +33,8 @@ final class ParasutClient
 {
     private const TIMEOUT_SECONDS = 30;
 
+    private const MAX_ACCOUNT_PAGES = 10;
+
     public function __construct(private InvoiceAccount $account) {}
 
     /** @param array<string, mixed> $query */
@@ -45,6 +47,50 @@ final class ParasutClient
     public function post(string $endpoint, array $body): array
     {
         return $this->send('post', $endpoint, $body);
+    }
+
+    /**
+     * Kasa ve banka hesapları — tahsilat eşlemesinin seçenekleri.
+     *
+     * YALNIZ AYAR EKRANI AÇILINCA çağrılır (ve kaydederken, seçilen hesabın
+     * gerçekten satıcının olduğunu doğrulamak için). Saklanmaz: satıcı
+     * Paraşüt'te hesap ekleyip sildikçe eski bir kopya yanlış hesabı
+     * önerirdi.
+     *
+     * Sayfalı okunur; sınır `MAX_ACCOUNT_PAGES` — sonsuz döngüye düşen bir
+     * `meta` yanıtı ekranı kilitlemesin.
+     *
+     * @return list<array{id: string, name: string, type: string|null}>
+     */
+    public function accounts(): array
+    {
+        $accounts = [];
+
+        for ($page = 1; $page <= self::MAX_ACCOUNT_PAGES; $page++) {
+            $response = $this->get('accounts', ['page[number]' => $page, 'page[size]' => 25]);
+
+            foreach ((array) ($response['data'] ?? []) as $item) {
+                if (! is_array($item) || ! isset($item['id'])) {
+                    continue;
+                }
+
+                $type = $item['attributes']['account_type'] ?? null;
+
+                $accounts[] = [
+                    'id' => (string) $item['id'],
+                    'name' => (string) ($item['attributes']['name'] ?? $item['id']),
+                    'type' => is_string($type) && $type !== '' ? $type : null,
+                ];
+            }
+
+            $totalPages = (int) ($response['meta']['total_pages'] ?? 1);
+
+            if ($page >= $totalPages) {
+                break;
+            }
+        }
+
+        return $accounts;
     }
 
     /**

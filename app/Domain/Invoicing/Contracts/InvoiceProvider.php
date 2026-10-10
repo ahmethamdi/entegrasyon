@@ -7,6 +7,7 @@ namespace App\Domain\Invoicing\Contracts;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\IssueOutcome;
+use App\Domain\Invoicing\Support\SubmitOptions;
 
 /**
  * Fatura entegratörü — Paraşüt ilk, sonra BirFatura / EDM.
@@ -22,10 +23,16 @@ use App\Domain\Invoicing\Support\IssueOutcome;
  * KALDIĞI YERDEN devam eder; hepsi sonda yazılsaydı ikinci deneme ikinci
  * bir satış faturası, daha kötüsü ikinci bir RESMÎ e-belge açardı (GİB'de
  * iptali ayrı süreçtir).
+ *
+ * `SubmitOptions` satıcının tercihini taşır (e-belge kesilsin mi, tahsilat
+ * hangi hesaba). `issueEDocument = false` iken `submit()` e-belge İSTEMEZ
+ * ve satırı `issuing`'e geçirmez; kesimi iş (`IssueInvoice`) "muhasebeye
+ * işlendi" olarak kapatır — `poll()` çağrılmaz.
  */
 interface InvoiceProvider
 {
-    public function submit(Invoice $invoice, InvoiceDraft $draft): void;
+    /** `$options` null = varsayılan: e-belge kes, tahsilat işleme. */
+    public function submit(Invoice $invoice, InvoiceDraft $draft, ?SubmitOptions $options = null): void;
 
     public function poll(Invoice $invoice): IssueOutcome;
 

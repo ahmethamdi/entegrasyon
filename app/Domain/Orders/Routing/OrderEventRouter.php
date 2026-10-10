@@ -6,6 +6,7 @@ namespace App\Domain\Orders\Routing;
 
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Invoicing\Actions\MaybeAutoInvoice;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Actions\ApplyOrderCancellation;
 use App\Domain\Orders\Actions\ApplyOrderReturn;
@@ -56,6 +57,9 @@ final class OrderEventRouter
         // yalnızca log'lanıyordu ve sessizce düşüyordu.
         private readonly UpdateOrderSnapshot $updateSnapshot = new UpdateOrderSnapshot,
         private readonly UpdateFulfillment $updateFulfillment = new UpdateFulfillment,
+        // Otomatik fatura — durum ilerleyince ayara göre istek açar. Sipariş
+        // yolunun bir parçası DEĞİLDİR: hatası log'a düşer, olay yine işlenir.
+        private readonly MaybeAutoInvoice $autoInvoice = new MaybeAutoInvoice,
     ) {}
 
     public function route(InboxMessage $message): void
@@ -315,7 +319,7 @@ final class OrderEventRouter
 
         $payload = $normalized->payload;
 
-        $this->updateSnapshot->run(new OrderSnapshotEvent(
+        $updated = $this->updateSnapshot->run(new OrderSnapshotEvent(
             orderId: $order->id,
             externalRef: $normalized->externalRef,
             status: isset($payload['status']) ? (string) $payload['status'] : null,
@@ -326,12 +330,21 @@ final class OrderEventRouter
             occurredAt: $normalized->occurredAt,
             inboxMessageId: $message->id,
         ));
+
+        // Trendyol `Shipped`/`Delivered` bu yoldan gelir. Olay daha önce
+        // işlenmiş olsa da (`UpdateOrderSnapshot` erken döner) kanca yine
+        // sorulur: önceki tur fatura isteği açamadan düşmüşse yoklamanın
+        // bir sonraki görüşü onu tamamlar. Tekrar zararsızdır.
+        if ($updated !== null) {
+            $this->autoInvoice->run($updated, MaybeAutoInvoice::stageOf($updated->status));
+        }
     }
 
     /**
      * Kargo bildirimini kaydeder — STOK HAREKETİ ÜRETMEZ (§4).
      *
-     * Kargo yalnızca teslim durumunu izler.
+     * Kargo yalnızca teslim durumunu izler. Paketin durumu otomatik fatura
+     * kancasına da gider; paket durumu yoksa siparişin başlık durumu.
      */
     private function handleFulfilled(NormalizedOrderEvent $normalized, InboxMessage $message): void
     {
@@ -346,7 +359,7 @@ final class OrderEventRouter
         /** @var array<string, mixed> $shipment */
         $shipment = is_array($payload['fulfillment'] ?? null) ? $payload['fulfillment'] : [];
 
-        $this->updateFulfillment->run(new FulfillmentEvent(
+        $fulfillment = $this->updateFulfillment->run(new FulfillmentEvent(
             orderId: $order->id,
             externalId: isset($shipment['external_id']) ? (string) $shipment['external_id'] : null,
             carrier: isset($shipment['carrier']) ? (string) $shipment['carrier'] : null,
@@ -360,6 +373,13 @@ final class OrderEventRouter
             occurredAt: $normalized->occurredAt,
             inboxMessageId: $message->id,
         ));
+
+        if ($fulfillment !== null) {
+            $this->autoInvoice->run(
+                $order,
+                MaybeAutoInvoice::stageOf($fulfillment->status) ?? MaybeAutoInvoice::stageOf($order->status),
+            );
+        }
     }
 
     private function defaultWarehouseId(string $tenantId): string

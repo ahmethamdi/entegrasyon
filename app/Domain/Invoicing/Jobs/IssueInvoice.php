@@ -14,6 +14,7 @@ use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Invoicing\Support\InvoiceProviders;
+use App\Domain\Invoicing\Support\SubmitOptions;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Domain\Sync\Support\ChannelErrorText;
@@ -35,6 +36,9 @@ use Throwable;
  *              gönderilir (`submit`), iş kısa süre sonra kendini yeniden
  *              kuyruğa koyar
  *   issuing  → entegratöre sonucu sorar (`poll`); sürüyorsa yine bekler
+ *
+ * "Yalnız muhasebeye işle" kipinde ikinci evre YOKTUR: `submit` e-belge
+ * istemez ve satır aynı turda `issued` olur (`markBooked`).
  *
  * ⚠️ İŞ YÜKÜNDE ALICI YOKTUR — yalnız fatura ve kiracı kimliği. Taslak
  * her `pending` turunda kanaldan yeniden okunur; kuyruğa (Redis) kişisel
@@ -177,16 +181,49 @@ final class IssueInvoice implements ShouldQueue
             return;
         }
 
+        // Satıcının tercihi HER `pending` turunda hesaptan okunur (taslak
+        // gibi): ayar arada değişirse yeniden deneme güncel olanla gider.
+        $options = new SubmitOptions(
+            issueEDocument: $account->issuesEDocument(),
+            paymentAccountId: $account->paymentAccountFor($connection->channel_type_code),
+        );
+
         try {
-            $provider->submit($invoice, $draft);
+            $provider->submit($invoice, $draft, $options);
         } catch (InvoiceProviderException $e) {
             $this->retryOrFail($invoice, $e->class, $e->getMessage(), $e->retryAfterSeconds());
 
             return;
         }
 
+        if (! $options->issueEDocument) {
+            $this->markBooked($invoice);
+
+            return;
+        }
+
         $invoice->forceFill(['error' => null])->save();
         $this->release(self::POLL_SECONDS);
+    }
+
+    /**
+     * "Yalnız muhasebeye işle" — fatura satıcının defterine girdi, iş biter.
+     *
+     * Sorulacak asenkron e-belge işi YOKTUR (`poll` çağrılmaz). Kanala da
+     * dosya YÜKLENMEZ (`upload_status` NULL): bu kipteki satıcı e-belgesini
+     * başka yerden keser ve kanala o belge gider; bizim yükleyecek resmî bir
+     * belgemiz yoktur — Paraşüt'ün taslak PDF'i yüklenseydi pazar yerinde
+     * aynı pakete iki farklı fatura görünürdü.
+     */
+    private function markBooked(Invoice $invoice): void
+    {
+        $invoice->forceFill([
+            'status' => Invoice::STATUS_ISSUED,
+            'document_type' => null,
+            'issued_at' => now(),
+            'error' => null,
+            'upload_status' => null,
+        ])->save();
     }
 
     private function poll(Invoice $invoice, InvoiceProvider $provider): void

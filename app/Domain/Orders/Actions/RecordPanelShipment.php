@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Orders\Actions;
 
+use App\Domain\Invoicing\Actions\MaybeAutoInvoice;
 use App\Domain\Orders\Enums\OrderEventType;
 use App\Domain\Orders\Jobs\PushFulfillment;
 use App\Domain\Orders\Models\Fulfillment;
@@ -63,6 +64,12 @@ final class RecordPanelShipment
         });
 
         PushFulfillment::dispatch($fulfillment->id, $tenantId)->onQueue('orders:high');
+
+        // Panelden girilen kargo da "kargoya verildi"dir: satıcı takip
+        // numarasını buradan girdiyse kanalın durum yoklaması `Shipped`'ı
+        // ancak sonra görür ve fatura o ana kadar beklerdi. Kanca ayarı,
+        // tarihi ve iptali kendisi denetler; tekrar zararsızdır.
+        app(MaybeAutoInvoice::class)->run($order, MaybeAutoInvoice::STAGE_SHIPPED);
 
         return $fulfillment;
     }

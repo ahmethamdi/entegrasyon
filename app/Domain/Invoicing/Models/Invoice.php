@@ -21,6 +21,10 @@ use Illuminate\Support\Carbon;
  * DURUM: pending → issuing → issued | failed. `issuing` = e-belge isteği
  * entegratöre gitti, sonucu bekleniyor (Paraşüt asenkron işler).
  *
+ * "YALNIZ MUHASEBEYE İŞLE" kipinde (`InvoiceAccount::MODE_BOOKS_ONLY`)
+ * pending → issued doğrudan geçilir: e-belge istenmez, `document_type`
+ * NULL kalır ve kanala dosya yüklenmez.
+ *
  * @property string $id
  * @property string $tenant_id
  * @property string $order_id
@@ -31,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $provider_invoice_id
  * @property string|null $provider_job_id
  * @property string|null $provider_document_id
+ * @property string|null $provider_payment_id
  * @property string|null $invoice_number
  * @property int $attempts
  * @property string|null $error
@@ -77,6 +82,7 @@ class Invoice extends Model
         'provider_invoice_id',
         'provider_job_id',
         'provider_document_id',
+        'provider_payment_id',
         'invoice_number',
         'attempts',
         'error',

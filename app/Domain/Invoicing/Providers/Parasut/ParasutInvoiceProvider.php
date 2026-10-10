@@ -10,6 +10,7 @@ use App\Domain\Invoicing\Support\InvoiceBuyer;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Invoicing\Support\IssueOutcome;
+use App\Domain\Invoicing\Support\SubmitOptions;
 use DateTimeImmutable;
 use DateTimeZone;
 use RuntimeException;
@@ -20,11 +21,24 @@ use RuntimeException;
  * AKIŞ (Paraşüt API v4):
  *   1. `contacts`          alıcı carisi (VKN/TCKN biliniyorsa var olan bulunur)
  *   2. `sales_invoices`    taslak fatura, kalemler KDV HARİÇ birim fiyatla
+ *   2b. `sales_invoices/{id}/payments`  tahsilat — yalnız kanal → kasa/banka
+ *      eşlemesi varsa (`SubmitOptions::paymentAccountId`); yoksa fatura
+ *      açık hesap kalır
  *   3. `e_invoice_inboxes` alıcı e-fatura mükellefi mi? (yalnız gerçek VKN/TCKN)
  *        evet  → `e_invoices` (senaryo TEMEL, alıcının posta kutusuna)
  *        hayır → `e_archives` (internet satışı bilgisiyle)
  *      İkisi de `trackable_jobs` kimliği döner — sonuç asenkron.
+ *      "Yalnız muhasebeye işle" kipinde (`issueEDocument = false`) bu adım
+ *      ve 4. adım HİÇ çalışmaz.
  *   4. `trackable_jobs/{id}` → bitince `sales_invoices/{id}?include=active_e_document`
+ *
+ * ⚠️ KOMİSYON VE KARGO GİDERİ SİPARİŞ BAŞINA YAZILMAZ — bilinçli. Trendyol
+ * komisyonu ve kargo bedelini satıcıya AYLIK e-fatura olarak keser; o fatura
+ * satıcının Paraşüt'ündeki gelen e-faturalar kutusuna KENDİLİĞİNDEN düşer ve
+ * gider olarak oradan işlenir. Burada sipariş başına bir de gider faturası
+ * açılsaydı aynı gider İKİ KEZ sayılır, satıcının kârı olduğundan düşük ve
+ * KDV indirimi şişkin görünürdü. Hakediş (Trendyol hesabından bankaya
+ * aktarım, finance API) ayrı bir dilimdir — `docs/RAKIP-YOL-HARITASI.md`.
  *
  * ⚠️ GERÇEK HESAPTA DOĞRULANACAK (belge sitesi otomatik erişime kapalı,
  * alanlar açık kaynak v4 istemcilerinden derlendi):
@@ -32,6 +46,11 @@ use RuntimeException;
  *   · iş durumu değerleri (`done`/`error` varsayıldı, `succeeded`/`failed` da kabul)
  *   · e-belgenin numara alanı (`invoice_number` varsayıldı)
  *   · kalemde ürün ilişkisi olmadan fatura kabul ediliyor mu
+ *   · tahsilat ucu `sales_invoices/{id}/payments`: gövde türü `payments`,
+ *     `account_id` niteliği (ilişki DEĞİL) ve yanıtta kimliğin `data.id`'de
+ *     dönmesi; TRL dışı para biriminde `exchange_rate` zorunlu mu
+ *   · `accounts` listesinin alan adları (`name`, `account_type`) ve arşivli
+ *     hesapların listeye gelip gelmediği
  */
 final class ParasutInvoiceProvider implements InvoiceProvider
 {
@@ -42,14 +61,27 @@ final class ParasutInvoiceProvider implements InvoiceProvider
         private readonly ?string $invoiceSeries = null,
     ) {}
 
-    public function submit(Invoice $invoice, InvoiceDraft $draft): void
+    public function submit(Invoice $invoice, InvoiceDraft $draft, ?SubmitOptions $options = null): void
     {
+        $options ??= new SubmitOptions;
+
         if ($invoice->provider_contact_id === null) {
             $invoice->forceFill(['provider_contact_id' => $this->contactFor($draft->buyer)])->save();
         }
 
         if ($invoice->provider_invoice_id === null) {
             $invoice->forceFill(['provider_invoice_id' => $this->createSalesInvoice($invoice->provider_contact_id, $draft)])->save();
+        }
+
+        // Tahsilat e-belgeden ÖNCE: e-belge reddedilip yeniden denense de
+        // satış faturası aynıdır ve tahsilatı bir kez taşır. Kimlik anında
+        // yazılır — iş burada ölürse ikinci tahsilat AÇILMAZ.
+        if ($options->paymentAccountId !== null && $invoice->provider_payment_id === null) {
+            $invoice->forceFill(['provider_payment_id' => $this->createPayment($invoice->provider_invoice_id, $options->paymentAccountId, $draft)])->save();
+        }
+
+        if (! $options->issueEDocument) {
+            return;
         }
 
         if ($invoice->provider_job_id === null) {
@@ -199,6 +231,37 @@ final class ParasutInvoiceProvider implements InvoiceProvider
         ]);
 
         return (string) ($created['data']['id'] ?? throw new RuntimeException('Paraşüt fatura kimliği dönmedi.'));
+    }
+
+    /**
+     * Tahsilat — pazar yeri parayı müşteriden ALMIŞTIR; fatura açık hesap
+     * kalsaydı satıcının cari bakiyesi her siparişte şişer ve "tahsil
+     * edilmemiş alacak" listesi gerçek dışı olurdu.
+     *
+     * Tutar kalemlerin KDV DAHİL toplamıdır (`InvoiceDraft::grossTotal`),
+     * tarih siparişin Türkiye saatiyle günü — müşterinin ödediği gün.
+     */
+    private function createPayment(string $salesInvoiceId, string $accountId, InvoiceDraft $draft): string
+    {
+        $created = $this->client->post("sales_invoices/{$salesInvoiceId}/payments", [
+            'data' => [
+                'type' => 'payments',
+                'attributes' => [
+                    'description' => "{$draft->platformName} siparişi {$draft->orderNumber} tahsilatı",
+                    'account_id' => $accountId,
+                    'date' => $draft->orderedAt->setTimezone(new DateTimeZone(self::TIMEZONE))->format('Y-m-d'),
+                    'amount' => $draft->grossTotal(),
+                ],
+            ],
+        ]);
+
+        $id = $created['data']['id'] ?? null;
+
+        if (! is_scalar($id) || (string) $id === '') {
+            throw new RuntimeException('Paraşüt tahsilat kimliği dönmedi.');
+        }
+
+        return (string) $id;
     }
 
     /**

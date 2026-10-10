@@ -432,10 +432,13 @@ function stamp(value) {
                         class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
                         :class="invoiceBadges[order.invoice.status]?.class"
                     >
-                        {{ t(invoiceBadges[order.invoice.status]?.text ?? order.invoice.status) }}
+                        <!-- Belge türü yoksa "yalnız muhasebeye işle" kipidir: e-belge kesilmedi. -->
+                        {{ order.invoice.status === 'issued' && !order.invoice.documentType
+                            ? t('Muhasebeye işlendi')
+                            : t(invoiceBadges[order.invoice.status]?.text ?? order.invoice.status) }}
                     </span>
                     <a
-                        v-if="order.invoice.status === 'issued'"
+                        v-if="order.invoice.status === 'issued' && order.invoice.documentType"
                         :href="`/orders/${order.id}/invoice/pdf`"
                         target="_blank"
                         rel="noopener"

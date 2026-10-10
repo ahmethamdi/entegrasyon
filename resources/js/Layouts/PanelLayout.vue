@@ -52,10 +52,10 @@ const navGroups = [
     },
     {
         /*
-         * MODÜLLER — 34Pazar'ın büyüyeceği yer. Muhasebe henüz yok;
-         * "Yakında" olarak görünür ama tıklanmaz. Hiç gösterilmeseydi
-         * satıcı ürünün nereye gittiğini bilemez; tıklanabilir olsaydı
-         * boş bir sayfaya düşerdi.
+         * MODÜLLER — 34Pazar'ın büyüyeceği yer. Henüz olmayan modül
+         * `soon: true` ile "Yakında" görünür ama tıklanmaz. Hiç
+         * gösterilmeseydi satıcı ürünün nereye gittiğini bilemez;
+         * tıklanabilir olsaydı boş bir sayfaya düşerdi.
          */
         heading: k('Modüller'),
         items: [
@@ -64,9 +64,12 @@ const navGroups = [
              * Kanallar → "Fiyat kuralı"ndadır.
              */
             { href: '/campaigns', label: k('Kampanyalar') },
-            /* e-fatura — Paraşüt (10 Ekim). Fatura sipariş ekranından kesilir. */
-            { href: '/settings/invoicing', label: k('e-Fatura') },
-            { href: null, label: k('Muhasebe'), soon: true },
+            /*
+             * Fatura ve muhasebe — Paraşüt (10 Ekim). e-Fatura ile muhasebe
+             * aktarımı AYNI bağlantı ve AYNI ekrandır; iki kalem olsaydı
+             * satıcı Paraşüt'ü iki kez bağlaması gerektiğini sanırdı.
+             */
+            { href: '/settings/invoicing', label: k('Fatura ve muhasebe') },
         ],
     },
     {

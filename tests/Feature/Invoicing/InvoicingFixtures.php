@@ -170,7 +170,7 @@ trait InvoicingFixtures
     /**
      * İki tarafın sahte API'si — gönderilen her istek `$this->sent`'e düşer.
      *
-     * @param  array{package?: array<string, mixed>|null, mailbox?: string|null, contact?: string|null, job?: string, token?: array<int, mixed>, pdfUrl?: string|null, pdf?: array<int, mixed>, upload?: array<int, mixed>}  $opts
+     * @param  array{package?: array<string, mixed>|null, mailbox?: string|null, contact?: string|null, job?: string, token?: array<int, mixed>, pdfUrl?: string|null, pdf?: array<int, mixed>, upload?: array<int, mixed>, accounts?: array<int, mixed>}  $opts
      */
     protected function fakeApis(array $opts = []): void
     {
@@ -203,6 +203,17 @@ trait InvoicingFixtures
                 str_ends_with($url, '/oauth/token') => Http::response(...($opts['token'] ?? [['access_token' => 'erisim-yeni', 'refresh_token' => 'yenile-yeni', 'expires_in' => 7200]])),
                 str_starts_with($url, $base.'contacts') && $method === 'GET' => Http::response(['data' => ($opts['contact'] ?? null) === null ? [] : [['id' => $opts['contact'], 'type' => 'contacts']]]),
                 str_starts_with($url, $base.'contacts') => Http::response(['data' => ['id' => 'c-1', 'type' => 'contacts']], 201),
+                // Tahsilat — `sales_invoices/` dalından ÖNCE: o dal yöntem
+                // ayırmaz ve tahsilatı fatura okuması sanırdı.
+                str_starts_with($url, $base.'sales_invoices/') && str_ends_with($url, '/payments') => Http::response(['data' => ['id' => 'pay-1', 'type' => 'payments']], 201),
+                // Kasa/banka listesi — `accounts`: [gövde, durum].
+                str_starts_with($url, $base.'accounts') => Http::response(...($opts['accounts'] ?? [[
+                    'data' => [
+                        ['id' => 'acc-kasa', 'type' => 'accounts', 'attributes' => ['name' => 'Merkez Kasa', 'account_type' => 'cash']],
+                        ['id' => 'acc-banka', 'type' => 'accounts', 'attributes' => ['name' => 'Ziraat Bankası', 'account_type' => 'bank']],
+                    ],
+                    'meta' => ['total_pages' => 1],
+                ], 200])),
                 str_starts_with($url, $base.'sales_invoices/') => Http::response([
                     'data' => ['id' => 'si-1', 'type' => 'sales_invoices', 'relationships' => ['active_e_document' => ['data' => ['id' => 'ea-1', 'type' => 'e_archives']]]],
                     'included' => [['id' => 'ea-1', 'type' => 'e_archives', 'attributes' => ['invoice_number' => 'GIB2026000000123']]],
