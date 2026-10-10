@@ -32,6 +32,11 @@ trait InvoicingFixtures
 {
     protected const COMPANY = '555';
 
+    protected const PDF_URL = 'https://parasut-pdf.example.com/ea-1.pdf';
+
+    /** Gerçek PDF başlığıyla başlayan küçük gövde — indirici `%PDF-` arar. */
+    protected const PDF_BYTES = "%PDF-1.4\n% sahte fatura\n%%EOF";
+
     /** @var list<HttpRequest> */
     protected array $sent = [];
 
@@ -165,7 +170,7 @@ trait InvoicingFixtures
     /**
      * İki tarafın sahte API'si — gönderilen her istek `$this->sent`'e düşer.
      *
-     * @param  array{package?: array<string, mixed>|null, mailbox?: string|null, contact?: string|null, job?: string, token?: array<int, mixed>}  $opts
+     * @param  array{package?: array<string, mixed>|null, mailbox?: string|null, contact?: string|null, job?: string, token?: array<int, mixed>, pdfUrl?: string|null, pdf?: array<int, mixed>, upload?: array<int, mixed>}  $opts
      */
     protected function fakeApis(array $opts = []): void
     {
@@ -190,6 +195,10 @@ trait InvoicingFixtures
             $base = 'https://api.parasut.com/v4/'.self::COMPANY.'/';
 
             return match (true) {
+                // Fatura dosyası yükleme — `upload`: [gövde, durum].
+                str_contains($url, 'apigw.trendyol.com') && str_ends_with($url, '/seller-invoice-file') => Http::response(...($opts['upload'] ?? [[], 200])),
+                // Paraşüt'ün süreli PDF bağlantısının hedefi (depolama).
+                str_starts_with($url, self::PDF_URL) => Http::response(...($opts['pdf'] ?? [self::PDF_BYTES, 200, ['Content-Type' => 'application/pdf']])),
                 str_contains($url, 'apigw.trendyol.com') => Http::response(['content' => $package === null ? [] : [$package], 'totalPages' => 1]),
                 str_ends_with($url, '/oauth/token') => Http::response(...($opts['token'] ?? [['access_token' => 'erisim-yeni', 'refresh_token' => 'yenile-yeni', 'expires_in' => 7200]])),
                 str_starts_with($url, $base.'contacts') && $method === 'GET' => Http::response(['data' => ($opts['contact'] ?? null) === null ? [] : [['id' => $opts['contact'], 'type' => 'contacts']]]),
@@ -200,7 +209,8 @@ trait InvoicingFixtures
                 ]),
                 str_starts_with($url, $base.'sales_invoices') => Http::response(['data' => ['id' => 'si-1', 'type' => 'sales_invoices']], 201),
                 str_starts_with($url, $base.'e_invoice_inboxes') => Http::response(['data' => ($opts['mailbox'] ?? null) === null ? [] : [['id' => 'ib-1', 'attributes' => ['vkn' => '1234567890', 'e_invoice_address' => $opts['mailbox']]]]]),
-                str_contains($url, '/pdf') => Http::response(['data' => ['attributes' => ['url' => 'https://parasut-pdf.example.com/ea-1.pdf']]]),
+                // `pdfUrl` => null: belge henüz imzalanıyor, bağlantı yok.
+                str_contains($url, '/pdf') => Http::response(['data' => ['attributes' => ['url' => array_key_exists('pdfUrl', $opts) ? $opts['pdfUrl'] : self::PDF_URL]]]),
                 str_starts_with($url, $base.'e_archives'), str_starts_with($url, $base.'e_invoices') => Http::response(['data' => ['id' => 'job-1', 'type' => 'trackable_jobs']], 202),
                 str_starts_with($url, $base.'trackable_jobs') => Http::response(['data' => ['id' => 'job-1', 'attributes' => [
                     'status' => $opts['job'] ?? 'done',

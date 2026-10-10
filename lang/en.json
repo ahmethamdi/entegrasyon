@@ -1037,5 +1037,10 @@
     "Fatura yeniden kesiliyor.": "Retrying the invoice.",
     "Fatura PDF'i henüz hazır değil; birazdan tekrar deneyin.": "The invoice PDF isn't ready yet. Try again shortly.",
     "e-fatura hesabı bağlandı": "e-Invoice account connected",
-    "e-fatura hesabı kaldırıldı": "e-Invoice account disconnected"
+    "e-fatura hesabı kaldırıldı": "e-Invoice account disconnected",
+    "Kanala yükleniyor": "Uploading to channel",
+    "Kanala yüklendi": "Uploaded to channel",
+    "Kanala yüklenemedi": "Channel upload failed",
+    ":channel'a tekrar yükle": "Upload to :channel again",
+    "Fatura kanala yeniden yükleniyor.": "Re-uploading the invoice to the channel."
 }

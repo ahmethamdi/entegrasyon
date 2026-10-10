@@ -287,6 +287,10 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::post('/orders/{order}/invoice', [OrderController::class, 'invoice'])->name('orders.invoice');
     Route::post('/orders/{order}/invoice/retry', [OrderController::class, 'retryInvoice'])->name('orders.invoice.retry');
     Route::get('/orders/{order}/invoice/pdf', [OrderController::class, 'invoicePdf'])->name('orders.invoice.pdf');
+    // Kesilen faturanın PDF'i kanala (Trendyol) otomatik yüklenir; bu
+    // yalnız BAŞARISIZ yüklemeyi yeniden dener, kesimi değil.
+    Route::post('/orders/{order}/invoice/upload/retry', [OrderController::class, 'retryInvoiceUpload'])
+        ->name('orders.invoice.upload.retry');
 
     // e-fatura ayarları + Paraşüt OAuth (Etsy iskeleti: yönlendirme POST,
     // callback GET, `state` doğrulaması CSRF'in yerini tutar).

@@ -174,6 +174,10 @@ final class OrderController extends Controller
                     'number' => $order->invoice->invoice_number,
                     'error' => $order->invoice->error,
                     'issuedAt' => $order->invoice->issued_at?->toIso8601String(),
+                    // Kanala yükleme: null = kanal dosya almıyor.
+                    'uploadStatus' => $order->invoice->upload_status,
+                    'uploadError' => $order->invoice->upload_error,
+                    'uploadedAt' => $order->invoice->uploaded_at?->toIso8601String(),
                 ],
                 'invoiceChannelSupported' => $this->channelSupportsInvoicing($order),
                 'invoiceAccountReady' => (bool) InvoiceAccount::query()->first()?->isUsable(),
@@ -222,6 +226,23 @@ final class OrderController extends Controller
         $requestInvoice->retry($invoice);
 
         return back()->with('success', __('Fatura yeniden kesiliyor.'));
+    }
+
+    /**
+     * Kanala yüklenemeyen fatura dosyasını yeniden gönderir — yalnız
+     * KESİLMİŞ faturanın BAŞARISIZ yüklemesi. Kesim yeniden denenmez.
+     */
+    public function retryInvoiceUpload(string $order, RequestInvoice $requestInvoice): RedirectResponse
+    {
+        $invoice = Invoice::query()
+            ->where('order_id', $order)
+            ->where('status', Invoice::STATUS_ISSUED)
+            ->where('upload_status', Invoice::UPLOAD_FAILED)
+            ->firstOrFail();
+
+        $requestInvoice->retryUpload($invoice);
+
+        return back()->with('success', __('Fatura kanala yeniden yükleniyor.'));
     }
 
     /**

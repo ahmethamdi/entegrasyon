@@ -206,13 +206,30 @@ final class IssueInvoice implements ShouldQueue
         }
 
         if ($outcome->isIssued()) {
+            // Kanal fatura dosyası alıyorsa yükleme AYNI kayıtta "bekliyor"
+            // olur: ayrı yazılsaydı arada ölen iş kesilmiş ama hiç
+            // yüklenmeyecek, ekranda da "yükleniyor" görünmeyen bir fatura
+            // bırakırdı. Almıyorsa NULL kalır — yüklenecek bir şey yok.
+            $upload = UploadInvoiceToChannel::channelAccepts($invoice->order);
+
             $invoice->forceFill([
                 'status' => Invoice::STATUS_ISSUED,
                 'provider_document_id' => $outcome->documentId,
                 'invoice_number' => $outcome->invoiceNumber,
                 'issued_at' => now(),
                 'error' => null,
+                'upload_status' => $upload ? Invoice::UPLOAD_PENDING : null,
+                'upload_attempts' => 0,
+                'upload_error' => null,
             ])->save();
+
+            if ($upload) {
+                // Commit SONRASI: iş satırı "kesildi" görmeden koşarsa hiçbir
+                // şey yapmadan döner ve yükleme sessizce kaybolurdu.
+                UploadInvoiceToChannel::dispatch($invoice->id, $this->tenantId)
+                    ->onQueue('orders:high')
+                    ->afterCommit();
+            }
 
             return;
         }

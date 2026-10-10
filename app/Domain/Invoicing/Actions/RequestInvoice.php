@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Invoicing\Actions;
 
 use App\Domain\Invoicing\Jobs\IssueInvoice;
+use App\Domain\Invoicing\Jobs\UploadInvoiceToChannel;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Orders\Models\Order;
@@ -64,5 +65,23 @@ final class RequestInvoice
         ])->save();
 
         IssueInvoice::dispatch($invoice->id, TenantContext::idOrFail())->onQueue('orders:high');
+    }
+
+    /**
+     * Kanala yüklenemeyen faturanın dosyasını yeniden gönderir.
+     *
+     * ⚠️ YALNIZ YÜKLEME YENİDEN DENENİR, KESİM DEĞİL: `status`'a ve
+     * entegratör kimliklerine dokunulmaz. Fatura kesilmiş ve resmîdir;
+     * `retry()` çağrılsaydı aynı siparişe ikinci bir e-belge istenebilirdi.
+     */
+    public function retryUpload(Invoice $invoice): void
+    {
+        $invoice->forceFill([
+            'upload_status' => Invoice::UPLOAD_PENDING,
+            'upload_attempts' => 0,
+            'upload_error' => null,
+        ])->save();
+
+        UploadInvoiceToChannel::dispatch($invoice->id, TenantContext::idOrFail())->onQueue('orders:high');
     }
 }

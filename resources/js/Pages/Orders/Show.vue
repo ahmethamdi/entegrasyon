@@ -121,6 +121,19 @@ function retryInvoice() {
     router.post(`/orders/${props.order.id}/invoice/retry`, {}, { preserveScroll: true });
 }
 
+// Kesilen faturanın PDF'i kanala yüklenir; `uploadStatus` null = kanal
+// dosya almıyor, rozet hiç çıkmaz. Yükleme hatası faturayı "kesilemedi"
+// yapmaz — iki rozet ayrıdır.
+const uploadBadges = {
+    pending: { text: k('Kanala yükleniyor'), class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    sent: { text: k('Kanala yüklendi'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    failed: { text: k('Kanala yüklenemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
+};
+
+function retryInvoiceUpload() {
+    router.post(`/orders/${props.order.id}/invoice/upload/retry`, {}, { preserveScroll: true });
+}
+
 function stamp(value) {
     if (!value) return '—';
     return new Date(value).toLocaleString(intlLocale(), {
@@ -442,6 +455,30 @@ function stamp(value) {
             </div>
             <!-- Hata metni gizlenmez: satıcı neyi düzelteceğini buradan anlar. -->
             <p v-if="order.invoice?.error" class="mt-1.5 text-[11px] text-red-700">{{ order.invoice.error }}</p>
+
+            <div
+                v-if="order.invoice?.status === 'issued' && order.invoice.uploadStatus"
+                class="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 pt-2"
+            >
+                <div class="flex items-center gap-2">
+                    <span
+                        class="rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                        :class="uploadBadges[order.invoice.uploadStatus]?.class"
+                    >
+                        {{ t(uploadBadges[order.invoice.uploadStatus]?.text ?? order.invoice.uploadStatus) }}
+                    </span>
+                    <span v-if="order.invoice.uploadedAt" class="font-mono text-[11px] text-stone-500">{{ stamp(order.invoice.uploadedAt) }}</span>
+                </div>
+                <button
+                    v-if="order.invoice.uploadStatus === 'failed'"
+                    type="button"
+                    class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                    @click="retryInvoiceUpload"
+                >
+                    {{ t(':channel\'a tekrar yükle', { channel: channelName(order.channel.type) }) }}
+                </button>
+            </div>
+            <p v-if="order.invoice?.uploadError" class="mt-1.5 text-[11px] text-red-700">{{ order.invoice.uploadError }}</p>
 
             <template v-if="!order.invoice">
                 <p v-if="!order.invoiceChannelSupported" class="text-xs text-stone-500">

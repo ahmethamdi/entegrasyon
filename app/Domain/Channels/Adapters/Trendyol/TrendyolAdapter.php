@@ -21,6 +21,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
+use App\Domain\Channels\Contracts\SupportsInvoiceUpload;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
@@ -28,6 +29,7 @@ use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
+use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceBuyer;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\InvoiceLine;
@@ -104,7 +106,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -181,6 +183,12 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
 
     /** Yoklama sayfa boyutu — kanalın üst sınırı 200. */
     private const ORDER_PAGE_SIZE = 200;
+
+    /** `seller-invoice-file` dosya sınırı (belge: 10 MB). */
+    private const INVOICE_FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+    /** Fatura numarası: 3 alfanümerik + 13 rakam (yıl + 9 hane sıra). */
+    private const INVOICE_NUMBER_PATTERN = '/^[A-Za-z0-9]{3}\d{13}$/';
 
     /**
      * Trendyol paket durumu → kanonik olay tipi.
@@ -1608,6 +1616,85 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
             email: $text($package['customerEmail'] ?? null),
             countryCode: strtoupper($text($address['countryCode'] ?? null) ?? 'TR'),
         );
+    }
+
+    /** Trendyol belgesi: dosya en fazla 10 MB. */
+    public function maxInvoiceFileBytes(): int
+    {
+        return self::INVOICE_FILE_MAX_BYTES;
+    }
+
+    /**
+     * Kesilen faturanın PDF'ini pakete ekler — `seller-invoice-file`.
+     *
+     * Belgeden ölçüldü (developers.trendyol.com v2.0 · uploadInvoiceFile,
+     * 10 Eki 2026): `POST {taban}/sellers/{id}/seller-invoice-file`, servis
+     * öneki YOK (`order/` değil), multipart alanları `shipmentPackageId`
+     * (zorunlu), `file` (PDF/JPEG/PNG, ≤10 MB), `invoiceDateTime` (unix sn
+     * ya da ms) ve `invoiceNumber` (`^[A-Za-z0-9]{3}\d{13}$`). Son ikisi
+     * belgede yalnız MİKRO İHRACAT siparişinde zorunlu.
+     *
+     * ⚠️ DOSYA ALANININ ADI `file` — OpenAPI referansı böyle der; rehber
+     * sayfası "form-data (file)" yazar ama bir yerde "invoiceFile" geçer.
+     * GERÇEK HESAPTA DOĞRULANACAK: yanlış adda kanal 400 döner ve yükleme
+     * kalıcı "reddetti" görünür.
+     *
+     * ⚠️ NUMARA VE TARİH YURT İÇİ PAKETTE DE GÖNDERİLİR — biçime uyuyorsa.
+     * Mikro ihracat paketini bizim tarafta ayırt edecek alan yok; atlansaydı
+     * o paket "Invoice information is required for Micro export types" ile
+     * kalıcı reddedilirdi. Yurt içinde fazladan alanın kabul edildiği
+     * GERÇEK HESAPTA DOĞRULANACAK. Biçime uymayan numara (seri ayarı
+     * farklı entegratör) hiç gönderilmez: yanlış biçim 400'dür ve kalıcıdır.
+     *
+     * ⚠️ İLERİ TARİHLİ FATURA REDDEDİLİR ("A future-dated invoice cannot be
+     * added"): tarih kesim anıdır, saat farkına karşı şimdiden ileri olamaz.
+     *
+     * ⚠️ 409 = PAKETİN FATURASI ZATEN VAR → BAŞARI. Yanıtı kaybolan başarılı
+     * yükleme yeniden denenince 409 alır; hata sayılsaydı satıcı yüklenmiş
+     * faturayı "yüklenemedi" görür ve elle yüklemeye kalkardı. Satıcı
+     * Trendyol panelinden kendisi yüklediyse de paketin faturası vardır.
+     * Silme ucu yalnız LİNK için var (`seller-invoice-links/delete`);
+     * dosyanın değiştirilmesi bizden yapılamaz.
+     *
+     * v3.0 belgesindeki aynı uç `storeFrontCode` başlığı ister — o sürüm
+     * Körfez (uluslararası) mağazaları içindir; TR satıcısı v2.0'ı kullanır.
+     */
+    public function uploadInvoice(Order $order, Invoice $invoice, string $pdf, string $filename): AdapterResult
+    {
+        // İş indirmeyi zaten sınırlar; burada yine bakılır çünkü kanal
+        // büyük dosyayı 400 ile reddeder ve istek kotası boşa gider.
+        if (strlen($pdf) > self::INVOICE_FILE_MAX_BYTES) {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Fatura dosyası Trendyol sınırını (10 MB) aşıyor.');
+        }
+
+        $fields = ['shipmentPackageId' => (string) $order->external_id];
+
+        $number = trim((string) $invoice->invoice_number);
+
+        if (preg_match(self::INVOICE_NUMBER_PATTERN, $number) === 1) {
+            $issuedAt = $invoice->issued_at === null ? now() : CarbonImmutable::instance($invoice->issued_at);
+
+            $fields['invoiceNumber'] = $number;
+            // Saniye; ileri tarih reddedilir.
+            $fields['invoiceDateTime'] = (string) min($issuedAt->getTimestamp(), now()->getTimestamp());
+        }
+
+        $response = $this->client->upload(
+            $this->sellerUrl('', 'seller-invoice-file'),
+            $fields,
+            'file',
+            $pdf,
+            $filename,
+            headers: $this->defaultHeaders(),
+        );
+
+        if ($response->status() === 409) {
+            return AdapterResult::success(['already_uploaded' => true]);
+        }
+
+        $response->throw();
+
+        return AdapterResult::success(['already_uploaded' => false]);
     }
 
     public function acknowledgeOrder(Order $order): AdapterResult

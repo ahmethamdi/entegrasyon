@@ -35,6 +35,14 @@ use Illuminate\Support\Carbon;
  * @property int $attempts
  * @property string|null $error
  * @property Carbon|null $issued_at
+ * @property string|null $upload_status
+ * @property int $upload_attempts
+ * @property string|null $upload_error
+ * @property Carbon|null $uploaded_at
+ *
+ * KANALA YÜKLEME ayrı bir durumdur (`upload_*`): NULL = kanal dosya almıyor
+ * ya da fatura henüz kesilmedi; pending → sent | failed. Yükleme
+ * başarısızlığı kesilmiş faturayı "kesilemedi" yapmaz.
  */
 class Invoice extends Model
 {
@@ -48,6 +56,12 @@ class Invoice extends Model
     public const STATUS_ISSUED = 'issued';
 
     public const STATUS_FAILED = 'failed';
+
+    public const UPLOAD_PENDING = 'pending';
+
+    public const UPLOAD_SENT = 'sent';
+
+    public const UPLOAD_FAILED = 'failed';
 
     public const TYPE_E_ARCHIVE = 'e_archive';
 
@@ -68,6 +82,10 @@ class Invoice extends Model
         'error',
         'issued_at',
         'requested_by',
+        'upload_status',
+        'upload_attempts',
+        'upload_error',
+        'uploaded_at',
     ];
 
     protected function casts(): array
@@ -75,6 +93,8 @@ class Invoice extends Model
         return [
             'attempts' => 'integer',
             'issued_at' => 'datetime',
+            'upload_attempts' => 'integer',
+            'uploaded_at' => 'datetime',
         ];
     }
 
