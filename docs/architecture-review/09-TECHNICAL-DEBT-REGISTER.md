@@ -40,3 +40,8 @@ Etki: Y (veri/güvenlik/para) · O (yanlış görünüm, operasyon yükü) · D 
 | TD-34 | Aralıklı kırılan test (ikinci PDO bağlantıları kapanmıyor) | `ConcurrentTokenRefreshTest` vb. | D | P1 | S12 |
 | TD-35 | Ticimax sipariş `Tutar` anlamı doğrulanmadı | `TicimaxAdapter.php:598` | Y | P1 | S10 (açmadan önce) |
 | TD-36 | `MetricsController::history` sistem metriklerini kiracılara gösteriyor | `MetricsController` | O | P2 | — |
+| TD-37 | Sınıflama/eşleme sebepleri DB'de Türkçe sunum metni (alan değeri değil) — İngilizce panelde Türkçe görünür; sebep KODU + çeviri olmalı | `TrendyolFinancialTypes::classify`, `MatchFinancialTransactions`, `channel_financial_transactions.classification_reason/match_reason` | D/O | P2 | S3 |
+| TD-38 | Katkı raporu dönem başına 200 siparişle kesiliyor (`truncated`); sayfalama yok | `ContributionReportController::index` | O | P2 | S4 |
+| TD-39 | `Ödeme`, `Komisyon Faturası`, `Gelen Havale` VERIFIED'ı yalnız etikete bağlı; yapısal değişmez yok (S1 §11 politikası). Katkıya girmedikleri için bugün sayıyı değiştirmez | `TrendyolFinancialTypes::OBSERVED` | O | P1 | S0 ödemesi (22 Eki) gözlenince |
+| TD-40 | Dönem toplamında tamam sipariş 0 iken katkı kalın "0,00" görünüyor (etiketli ama kesin rakam gibi okunabilir) → "—" | `resources/js/Pages/Reports/Contribution.vue:93` | O | P2 | S2 içinde küçük düzeltme |
+| TD-41 | Finans ilk turu yalnız bağlantı − 30 gün; geriye dönük doldurma/önizleme seçeneği yok (yeni kiracıda eski hakediş gelmez) | `IngestFinancialTransactions::INITIAL_LOOKBACK_DAYS`, `finance:sync` | O | P2 | ilk gerçek kiracıdan önce |

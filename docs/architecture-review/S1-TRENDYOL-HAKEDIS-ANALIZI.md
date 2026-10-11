@@ -245,7 +245,7 @@ Paraşüt'e finansal yazma yok (karar 11). Mevcut fatura/tahsilat akışı deği
 | Ödeme, Komisyon Faturası, Gelen Havale | **LIVE VERIFIED** (tanıma; katkı dışı) |
 | İade, indirim, kupon, TY indirim/kupon, provizyon, manuel iade, komisyon ±, hakediş ±, teslimat ücreti, PayByLink, stopaj, kargo/kesinti faturası, diğer | **IMPLEMENTED — NOT LIVE VERIFIED** (saklanır, katkıya girmez) |
 | Uçtan uca canlı eşleşme | **NOT LIVE VERIFIED** — canlı tek satışın siparişi bizde yok |
-| Üretimde `finance:sync` | **ÇALIŞTIRILMADI** — S1 kodu canlıya alınmadı |
+| Üretimde `finance:sync` | **ÇALIŞTI** (11 Eki 14:34 UTC; idempotens kanıtlandı — §10) |
 
 ### 9.9 Bilinen sınırlar
 - Adet alanı yok; katkı paket (sipariş) düzeyinde, satır düzeyinde değil.
@@ -253,3 +253,95 @@ Paraşüt'e finansal yazma yok (karar 11). Mevcut fatura/tahsilat akışı deği
 - `match_reason` / `classification_reason` DB'de Türkçe tanı metni (İngilizce panelde de Türkçe görünür).
 - Rapor dönem başına en çok 200 sipariş.
 - Canlıda `currency` alanı var ama belgede yok; yoksa satış unverified olur.
+
+## 10. Canlıya alma (11 Eki 2026) — durum: **PARTIAL — LIVE FINANCIAL SEMANTICS PENDING**
+
+| | |
+|---|---|
+| Canlı commit | `bf7e7f9` (`2ccaa23` kod + belge), `/opt/34pazar` |
+| Yedek | `/var/backups/oncesi-s1-34pazar-20261011-1427.dump` · sha256 `302ffed4…1536a6ba2` · `pg_restore --list` 61 tablo verisi, `channel_financial_*` YOK (migration öncesi) · ad `34pazar-*` deseninde değil → 14 günlük silme dokunmaz |
+| Migration | `2026_10_12_000100_create_channel_financial_transactions_table` batch 13, 36 ms. Dağıtımdan sonra yerelde `entegrasyon_test` üzerinde rollback (9,5 ms) + yeniden uygulama (15 ms) tekrar denendi, temiz |
+| Test | 2281/2281 (dağıtım öncesi ve sonrası aynı kod) |
+| Zamanlayıcı | `finance:sync` `20 */3 * * *` |
+
+### 10.1 İlk tur — sınırlı pencere
+Komutta dry-run yok; eklenmedi (talimat: dağıtım için büyük özellik ekleme).
+Kodun kendi sınırı kullanıldı: ilk tur **bağlantı tarihi − 30 gün → şimdi**
+(tek aktif Trendyol bağlantısı, `connected_at` 6 Eki → pencere 6 Eyl – 11 Eki,
+3 pencere × 2 kaynak).
+
+| Ölçü | 1. tur (14:34) | Aynı pencere tekrar (14:47, imleç silinerek) | Artımlı tur (14:47) |
+|---|---|---|---|
+| Çekilen | 4 | 4 | 0 (pencere 8–11 Eki) |
+| Eklenen | 4 | **0** | 0 |
+| Tekilleştirilen | 0 | **4** | 0 |
+| Çakışan (`raw_hash` farklı) | 0 | **0** | 0 |
+| VERIFIED / UNVERIFIED / UNKNOWN | 4 / 0 / 0 | aynı | aynı |
+| matched / unmatched / not_order_level | 0 / 1 / 3 | aynı | aynı |
+| Etkilenen sipariş | 0 | 0 | 0 |
+
+Önce/sonra parmak izi (`/root/s1-once.txt`, `/root/s1-sonra*.txt`): işlem
+sayısı 4, Σalacak 1.790,00, Σborç 340,91, `md5(external_id‖raw_hash‖sınıf‖eşleşme)`
+aynı; `orders` 5 satır + `md5(id‖state‖updated_at)` aynı; `order_lines` 5,
+`order_charges` 0, `order_refunds` 0, `failed_jobs` 0. Dağıtımdan sonra
+`inventory_movements` / sipariş güncellemesi 0 → **iş verisi değişmedi**.
+
+⚠️ Dağıtım anındaki "2. tur 0" artımlıydı (imleç ilerlemiş, Eylül yeniden
+sorulmadı) — idempotensin kanıtı DEĞİLDİ. Kanıt "aynı pencere tekrar" sütunu.
+
+### 10.2 Geriye dönük doldurma
+Salt okuma önizleme (yazmadan, `fetchFinancialPage` 15 günlük pencerelerle,
+iki kaynak): **1 Eki 2025 – 6 Eyl 2026 arası 0 işlem.** Hesabın tüm geçmişi
+zaten içeride → genişletilecek pencere yok. Yeni kiracı bağlandığında yalnız
+30 gün geriye bakılır (TD-41).
+
+### 10.3 Canlı rapor doğrulaması (kiracı kullanıcısıyla HTTP çekirdeği üzerinden, 6 Eyl–11 Eki)
+| Şart | Sonuç |
+|---|---|
+| Rapor yükleniyor | ✅ `/reports/contribution` 200 (`Reports/Contribution`), `/reports/contribution/{id}` 200 (`Reports/ContributionShow`) |
+| Beklenen ve gerçekleşen ayrı | ✅ her siparişte `basis: expected` / `basis: settled` ayrı satır ve ayrı dönem toplamı |
+| Eksik gerçekleşen katkı kesin rakam değil | ✅ tek Trendyol siparişi (iptal) gerçekleşen `not_available`, `contribution: null`; beklenen `incomplete`, "eksik · bilinenler: 0,00". Dönem toplamı "Katkı (yalnız tamam siparişler) 0,00 · Tamam 0 · Eksik 1" — etiketli, ama kalın 0,00 yanıltabilir → TD-40 |
+| Bilinmeyen bileşen "bilinmiyor" | ✅ `null` + sebep ("Beklenen komisyon bilinmiyor", "Beklenen kargo kesintisi bilinmiyor", "Satırın satış anı net tutarı yok") |
+| Eşleşmeyen işlemler görünür | ✅ `unmatched.count = 1`: `Satış` 14124406379, "paket 4148528783 bu bağlantıda sipariş değil" |
+| Kaynak izlenebilirliği | ✅ `trace`: "Satır 34PZRTEST0001 × 1 · satış anı görüntüsü (KDV dahil) · ref 6040917631 · iptal 1 · iade 0 · birim maliyet yok" |
+| Hariç tutulan ve nedeni | ⚪ canlıda ÖRNEK YOK (eşleşmiş işlem yok); testlerle kapsanıyor |
+| Komisyon faturası çift sayılmıyor | ✅ yapısal: `Komisyon Faturası` `DCA2026000453682` borç 339,91 = satış satırının `commissionInvoiceSerialNumber` ve `commissionAmount` değeri; `not_order_level`, hiçbir sipariş katkısında yok |
+| Hiçbir işlem elle VERIFIED yapılmadı | ✅ |
+
+### 10.4 Kuyruk / log (dağıtımdan ~20 dk sonra)
+`/up` 200 · Horizon running · 7 konteyner · `failed_jobs` 0 · `jobs` 0 ·
+inbox 28/28 processed · outbox 612/612 published, 0 hata · dağıtım sonrası 7
+mutabakat koşusu completed / 0 kalem · log: yalnız bilinen pending Etsy
+`credentials.refresh_failed` uyarısı (dağıtım öncesiyle aynı). Yeni anomali yok.
+
+### 10.5 Geri alma
+Sunucuda `/root/34pazar-s1-runbook.md`. Özet:
+**A (tercih, veri kaybı yok):** `git reset --hard 229b1c1` → build → up →
+`horizon:terminate`. Şema ekleme yönlü (yeni tablo eski kodda kullanılmıyor;
+imleç `settings` içinde zararsız bir anahtar). `deploy.sh` ÇALIŞTIRILMAZ.
+**B:** `migrate:rollback --step=1` (KODDAN ÖNCE) + A — kayıp yalnız
+`channel_financial_transactions` (Trendyol'dan yeniden çekilebilir).
+**C (felaket):** servisleri durdur, `pg_restore --clean --if-exists` ön S1
+yedeğinden, sonra A — yedekten sonraki bütün yazmalar kaybolur.
+
+## 11. VERIFIED kanıt kaydı (politika)
+
+Bir sınıf UNVERIFIED → VERIFIED ancak **yetkili canlı kanıtla** geçer; kayıt
+şu alanları içerir. Yükseltme yalnız çevrilmiş `transactionType` etiketine
+dayanamaz — **yapısal değişmezler** (aritmetik ilişki, kimlik bağı, işaret)
+sınıflandırıcıda koda yazılır, tutmazsa satır UNVERIFIED kalır.
+Hiçbir işlem raporu tamamlamak için elle VERIFIED yapılmaz.
+
+| Ham tür | Uç | İlgili ham alanlar | Aritmetik ilişki | Ekonomik anlam | Katkı etkisi | Doğrulandı |
+|---|---|---|---|---|---|---|
+| `Satış` | `settlements` | `credit` 1789,00 · `debt` 0 · `commissionAmount` 339,91 · `commissionRate` 19 · `sellerRevenue` 1449,09 · `shipmentPackageId` · `orderNumber` · `currency` TRY · `paymentDate` 22 Eki · `commissionInvoiceSerialNumber` | `sellerRevenue = credit − commissionAmount` (kuruş); 339,91 / 1789 = %19,0 = `commissionRate` | Müşteri ödemesi (KDV dahil, indirim sonrası olduğu doğrulanmadı) ve sipariş başına komisyon | Gerçekleşen satış (+credit) ve komisyon (−commissionAmount) | 11 Eki 2026 (1 satır). **Değişmezler kodda** (`classifySale`) |
+| `Komisyon Faturası` | `otherfinancials` | `id` = `commissionInvoiceSerialNumber` · `debt` 339,91 · açıklama "13 Temmuz – 14 Eylül arası" | `debt = Σ commissionAmount` aynı fatura serisini taşıyan satışlar (burada 1 satış) | Satışlarda zaten kesilen komisyonun FATURASI | **Yok** (çift sayım; sipariş düzeyi değil) | 11 Eki 2026. ⚠️ Değişmez kodda DEĞİL — etiketle (TD-39) |
+| `Ödeme` | `otherfinancials` | `debt` 1,00 · `paymentOrderId` 77214019 · açıklama "TRENDYOL Marketplace Ödeme" | `Gelen Havale` ile aynı `paymentOrderId`, tutar eşit, ters işaret | Trendyol'dan satıcıya ödeme (burada MASAK 1 TL doğrulama iadesi) | Yok (nakit hareketi, katkı değil) | 11 Eki 2026. ⚠️ Etiketle (TD-39). Gerçek hakediş ödemesi (1449,09 bekleniyor, `paymentDate` 22 Eki) henüz gözlenmedi |
+| `Gelen Havale` | `otherfinancials` | `credit` 1,00 · `paymentOrderId` 77214019 · açıklama "Masak doğrulaması" | yukarıdaki `Ödeme` ile eşleşir | Satıcıdan Trendyol'a havale (MASAK 1 TL) | Yok | 11 Eki 2026. ⚠️ Etiketle (TD-39) |
+
+Bekleyen sınıflar ve onları üretecek senaryolar: `S1-CANLI-FINANS-DOGRULAMA-PLANI.md`.
+
+## 12. Resmî durum
+**S1 = PARTIAL — LIVE FINANCIAL SEMANTICS PENDING.** Bu durum S2'yi
+engellemez; ürün eksik gerçekleşen katkıyı kesin rakam olarak göstermemeye
+devam eder. Paraşüt: BLOCKED (değişmedi).

@@ -46,6 +46,7 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 - [ ] **A.** Trendyol `UnSupplied` paket stoğu geri getirmiyor.
 - [ ] **B.** Shopify iade kurtarma yok (kaçan `refunds/create` geri alınmaz).
 - [ ] **B'.** Shopify iade stok değişmezi: aynı iade FARKLI olay kimliğiyle gelirse stok iki kez iade edilir (`ApplyOrderReturn` → `MovementKey::returnOf(orderEvent.id, line)`; para kaydı `order_refunds` iade kimliğiyle tekil kalır). Bugün tetiklenmez (Shopify tekrar teslimatta aynı `X-Shopify-Event-Id`); 11 Eki canlı smoke'unda yerelde ölçüldü. **B açılmadan önce** stok iadesinin idempotens anahtarı iade/iş kimliğine (Shopify `refund.id` + kalem) bağlanmalı.
+- [ ] **S1 kalan (engel değil):** canlı finans anlamı — `S1-CANLI-FINANS-DOGRULAMA-PLANI.md` (S0: 22 Eki ödemesi). Backlog: TD-37 sebep kodları, TD-38 rapor sayfalama, TD-39 etiket-dışı değişmez, TD-40 sıfır toplam gösterimi, TD-41 geriye dönük doldurma.
 - [ ] Yeni iş eylemlerine `AuditAction` (kâr raporu yok; hakediş içe aktarma `system` aktörü).
 
 ## S2
