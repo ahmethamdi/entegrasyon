@@ -96,3 +96,8 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 - [ ] S10: adapter sözleşme kontrol listesi, `WarehouseResolver`, Ticimax `Tutar` doğrulaması.
 - [ ] S11: eylem merkezi (`IssueSource` + `issue_acknowledgements`), sağlık panosu, kanıt ekranı.
 - [ ] S12: geri yükleme tatbikatı, mutabakat doğrulaması, aralıklı test (`DB::disconnect` + `finally`).
+
+## S2 · Depo akışı (12 Eki 2026) — IMPLEMENTATION COMPLETE, LIVE VERIFICATION PENDING
+- [x] Toplu seçim + kalem başına sonuç, ortak etiket (ZPL), toplama listesi (varyant), fatura belgesi durumu — `S2-DEPO-AKISI.md`
+- [ ] Canlı: Trendyol ortak etiket YETKİSİ (kategori sorumlusu) + TEX/Aras paketiyle POST/GET doğrulaması
+- [ ] Karar: ZPL → A4 PDF dönüşümü (harici servis = kişisel veri üçüncü tarafa)

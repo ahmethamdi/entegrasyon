@@ -51,6 +51,8 @@ Durum: **önerildi** (11 Ekim 2026 denetimi), aksi her ADR'nin altında yazılı
 - **Migration etkisi:** kolonlar + kısmi unique.
 - **Yol haritası etkisi:** S2 (Trendyol ortak etiket), S6 (Yurtiçi/Aras `SupportsCarrierShipment`).
 
+- **S2 uygulama notu (12 Eki 2026) — SAPMA:** Trendyol ortak etiketi `fulfillments` yerine ayrı `shipping_labels` tablosunda. Gerekçe (kodda ölçüldü): `Order::scopeAwaitingShipment` fulfillment'ı olan siparişi "kargo bekliyor"dan düşürür — etiketi basılmış ama kargolanmamış sipariş listeden kaybolurdu; ayrıca Trendyol ortak etiketi yeni gönderi AÇMAZ (takip no paket oluşurken atanır), mevcut paket için barkod üretir. Paraşüt adım deseni korundu (`requested_at` koşullu talep, belirsiz sonuçta önce sorgu). Etiket ASLI saklanır (`payload`): ZPL tek kaynaktır ve kanal yeniden üretimi belgelenmemiştir. S6 taşıyıcı gönderisi (`SupportsCarrierShipment`) için ADR-004'ün (b) önerisi açık kalır.
+
 ## ADR-005 · İade talebi yaşam döngüsü ayrı tabloda
 
 - **Karar:** `return_requests` (kanal talep kimliği tekil; `requested → approved/rejected → received → restocked/disposed`; kalem, adet, neden, tutar). Stok, **onay ya da depoya varış anında** mevcut `ApplyOrderReturn` ile (talep kimliği `external_ref`).
