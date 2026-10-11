@@ -134,6 +134,7 @@ final class ResolveUnmatchedOrderLines
 
                 if ($soldBeforeCatalog || $line->effectiveQuantity() <= 0) {
                     $line->forceFill([
+                        ...$this->costSnapshot($line, $variantId),
                         'variant_id' => $variantId,
                         'stock_status' => StockStatus::SKIPPED->value,
                     ])->save();
@@ -174,6 +175,34 @@ final class ResolveUnmatchedOrderLines
     }
 
     /** IngestChannelOrder::applyLine ile aynı sonuç — satış + işaret + fazla satış olayı. */
+    /**
+     * Sonradan eşleşen kalemin maliyet görüntüsü (ADR-002).
+     *
+     * Satış anındaki maliyet bilinemez; EŞLEŞME anındaki maliyet en iyi
+     * yaklaşımdır ve `cost_captured_at` bunu açıkça kaydeder. Görüntü bir
+     * kez yazılır (DB tetikleyicisi değişikliği reddeder).
+     *
+     * @return array<string, mixed>
+     */
+    private function costSnapshot(OrderLine $line, string $variantId): array
+    {
+        if ($line->unit_cost !== null) {
+            return [];
+        }
+
+        $variant = Variant::query()->find($variantId, ['id', 'cost_price', 'currency']);
+
+        if ($variant === null || $variant->cost_price === null) {
+            return [];
+        }
+
+        return [
+            'unit_cost' => (string) $variant->cost_price,
+            'cost_currency' => (string) $variant->currency,
+            'cost_captured_at' => now(),
+        ];
+    }
+
     private function deduct(Order $order, OrderLine $line, string $variantId, int $availableBefore, string $warehouseId): void
     {
         $quantity = $line->effectiveQuantity();
@@ -195,6 +224,7 @@ final class ResolveUnmatchedOrderLines
             'variant_id' => $variantId,
             'stock_status' => $status->value,
             'stock_applied_at' => now(),
+            ...$this->costSnapshot($line, $variantId),
         ])->save();
 
         if ($status->isOversold()) {

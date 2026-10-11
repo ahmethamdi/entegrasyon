@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\Shopify;
 
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Support\LineFinancials;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
+use App\Support\Money\Money;
 use DateTimeImmutable;
 use Throwable;
 
@@ -289,10 +291,61 @@ final class ShopifyOrderNormalizer
                 // Para float taşımaz ama burada çarpım kaçınılmaz —
                 // `number_format` ile iki hane sabitlenir ve string döner.
                 'line_total' => number_format((float) $unitPrice * $quantity, 2, '.', ''),
+                ...self::lineFinancials($payload, $item, $unitPrice, $quantity),
             ];
         }
 
         return $lines;
+    }
+
+    /**
+     * Kalem finans görüntüsü (ADR-002) — Shopify REST alanlarıyla.
+     *
+     * `price` indirim ÖNCESİ birim fiyattır; indirim `discount_allocations`
+     * (mağaza para birimi), vergi `tax_lines`, taban `taxes_included`.
+     * ANAHTAR YOKSA hesaplanmaz: sipariş mutabakatının GraphQL gövdesi
+     * indirim/vergi taşımaz ve "indirim 0" yazmak yanlış olurdu.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $item
+     * @return array<string, mixed>
+     */
+    private static function lineFinancials(array $payload, array $item, string $unitPrice, int $quantity): array
+    {
+        $discount = null;
+
+        if (is_array($item['discount_allocations'] ?? null)) {
+            $amounts = array_map(static fn (mixed $a): string => (string) (is_array($a) ? ($a['amount'] ?? '0') : '0'), $item['discount_allocations']);
+            $discount = $amounts === [] ? '0' : Money::add(...$amounts);
+        }
+
+        $vatAmount = null;
+        $vatRate = null;
+
+        if (is_array($item['tax_lines'] ?? null)) {
+            $taxes = array_values(array_filter($item['tax_lines'], 'is_array'));
+            $vatAmount = $taxes === [] ? '0' : Money::add(...array_map(static fn (array $t): string => (string) ($t['price'] ?? '0'), $taxes));
+            // Tek oran varsa yazılır (0.2 → 20); birden çok vergi satırında oran belirsiz.
+            $vatRate = count($taxes) === 1 && is_numeric($taxes[0]['rate'] ?? null)
+                ? Money::normalize(Money::decimal((string) $taxes[0]['rate'])->multipliedBy(100))
+                : null;
+        }
+
+        return LineFinancials::from(
+            gross: LineFinancials::times($unitPrice, $quantity),
+            discount: $discount,
+            vatRate: $vatRate,
+            vatAmount: $vatAmount,
+            includesVat: is_bool($payload['taxes_included'] ?? null) ? $payload['taxes_included'] : null,
+            source: [
+                'price' => $item['price'] ?? null,
+                'quantity' => $quantity,
+                'total_discount' => $item['total_discount'] ?? null,
+                'discount_allocations' => $discount,
+                'tax_lines' => $vatAmount,
+                'taxes_included' => $payload['taxes_included'] ?? null,
+            ],
+        );
     }
 
     /**

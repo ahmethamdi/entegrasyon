@@ -109,6 +109,14 @@ final class N11OrderSliceTest extends TestCase
         $order = $this->asTenant($tenant, fn () => Order::query()->where('external_id', self::ORDER)->firstOrFail());
         $this->assertSame(self::ORDER, $order->external_number);
 
+        // Satış anı finans görüntüsü (ADR-002) — resmi formül alanlarından.
+        $kupaLine = $this->asTenant($tenant, fn () => $order->lines()->where('sku', 'KUPA-01')->firstOrFail());
+        $this->assertSame('750.00', $kupaLine->gross_line_total);
+        $this->assertSame('0.00', $kupaLine->discount_total);
+        $this->assertSame('750.00', $kupaLine->net_line_total);
+        $this->assertSame('20.00', $kupaLine->vat_rate);
+        $this->assertNull($kupaLine->amounts_include_vat, 'N11 KDV tabanı doğrulanmadı — uydurulmaz.');
+
         // Kişisel veri inbox'a girmez: adres, gsm, TCKN, e-posta, ad, özel metin.
         $stored = $this->asTenant($tenant, fn (): string => json_encode(InboxMessage::query()->pluck('payload')->all(), JSON_UNESCAPED_UNICODE));
         foreach (['billingAddress', 'shippingAddress', 'customerEmail', 'customerfullName', 'tcIdentityNumber', '5321234567', '11111111111', 'Ayşe Yılmaz', 'customTextOptionValues'] as $personal) {
@@ -127,6 +135,7 @@ final class N11OrderSliceTest extends TestCase
         $this->assertSame(10, $this->availableFor($tenant, $kupa));
         $this->assertSame(10, $this->availableFor($tenant, $tabak));
         $this->assertSame('Cancelled', $this->asTenant($tenant, fn () => Order::query()->firstOrFail()->status));
+        $this->assertSame('cancelled', $this->asTenant($tenant, fn () => Order::query()->firstOrFail()->state));
 
         $this->assertLedgerMatchesProjection($tenant->id, $this->warehouse($tenant)->id, $kupa->id);
         $this->assertLedgerMatchesProjection($tenant->id, $this->warehouse($tenant)->id, $tabak->id);

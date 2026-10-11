@@ -22,6 +22,7 @@ use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
+use App\Domain\Orders\Support\LineFinancials;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
@@ -1211,6 +1212,22 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, MapsO
                 // sayıldı — DOĞRULANMADI.
                 'unit_price' => self::money($unit),
                 'line_total' => self::money($lineTotal),
+                // FİNANS GÖRÜNTÜSÜ (ADR-002) — resmi formül:
+                // sellerInvoiceAmount = price × adet − totalSellerDiscountPrice.
+                // KDV tabanı DOĞRULANMADI → `amounts_include_vat` boş.
+                ...LineFinancials::from(
+                    gross: LineFinancials::times($line['price'] ?? null, $quantity),
+                    discount: $line['totalSellerDiscountPrice'] ?? null,
+                    net: $line['sellerInvoiceAmount'] ?? null,
+                    vatRate: $line['vatRate'] ?? null,
+                    source: [
+                        'price' => $line['price'] ?? null,
+                        'sellerInvoiceAmount' => $line['sellerInvoiceAmount'] ?? null,
+                        'totalSellerDiscountPrice' => $line['totalSellerDiscountPrice'] ?? null,
+                        'vatRate' => $line['vatRate'] ?? null,
+                        'quantity' => $quantity,
+                    ],
+                ),
             ];
         }
 

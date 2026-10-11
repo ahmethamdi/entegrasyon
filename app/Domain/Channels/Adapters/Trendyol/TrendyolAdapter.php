@@ -37,6 +37,7 @@ use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
+use App\Domain\Orders\Support\LineFinancials;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
@@ -1445,6 +1446,22 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
                 'quantity' => $quantity,
                 'unit_price' => (string) ($item['lineUnitPrice'] ?? $item['price'] ?? $item['amount'] ?? '0'),
                 'line_total' => (string) ($item['lineGrossAmount'] ?? $item['amount'] ?? '0'),
+                // FİNANS GÖRÜNTÜSÜ (ADR-002): `lineUnitPrice` indirim düşülmüş,
+                // KDV dahil birim (fatura yolu da bunu brüt birim sayar);
+                // `lineGrossAmount` kanalın brüt kalem tutarı. İndirim ikisinin
+                // farkından türer. ⚠️ Anlam gerçek indirimli pakette DOĞRULANMALI.
+                ...LineFinancials::from(
+                    gross: $item['lineGrossAmount'] ?? null,
+                    net: LineFinancials::times($item['lineUnitPrice'] ?? null, $quantity),
+                    vatRate: $item['vatRate'] ?? null,
+                    includesVat: true,
+                    source: [
+                        'lineUnitPrice' => $item['lineUnitPrice'] ?? null,
+                        'lineGrossAmount' => $item['lineGrossAmount'] ?? null,
+                        'vatRate' => $item['vatRate'] ?? null,
+                        'quantity' => $quantity,
+                    ],
+                ),
             ];
         }
 

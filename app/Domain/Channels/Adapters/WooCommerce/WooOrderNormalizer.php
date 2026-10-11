@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Channels\Adapters\WooCommerce;
 
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Support\LineFinancials;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use DateTimeImmutable;
 use Throwable;
@@ -245,6 +246,21 @@ final class WooOrderNormalizer
                 'quantity' => (int) ($item['quantity'] ?? 0),
                 'unit_price' => (string) ($item['price'] ?? '0'),
                 'line_total' => (string) ($item['total'] ?? '0'),
+                // FİNANS GÖRÜNTÜSÜ (ADR-002) — Woo REST: `subtotal` indirim
+                // öncesi, `total` indirim sonrası, ikisi de VERGİ HARİÇ;
+                // vergi `total_tax`.
+                ...LineFinancials::from(
+                    gross: $item['subtotal'] ?? null,
+                    net: $item['total'] ?? null,
+                    vatAmount: $item['total_tax'] ?? null,
+                    includesVat: isset($item['subtotal'], $item['total']) ? false : null,
+                    source: [
+                        'subtotal' => $item['subtotal'] ?? null,
+                        'total' => $item['total'] ?? null,
+                        'total_tax' => $item['total_tax'] ?? null,
+                        'quantity' => $item['quantity'] ?? null,
+                    ],
+                ),
             ];
         }
 

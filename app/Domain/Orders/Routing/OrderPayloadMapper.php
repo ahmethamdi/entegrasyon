@@ -11,6 +11,7 @@ use App\Domain\Orders\Support\IncomingOrder;
 use App\Domain\Orders\Support\IncomingOrderLine;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
+use App\Support\Money\Money;
 
 /**
  * Kanonik olay yükünü domain girdisine çevirir.
@@ -84,6 +85,15 @@ final class OrderPayloadMapper
                 variantId: $variantId,
                 unitPrice: (string) ($line['unit_price'] ?? '0'),
                 lineTotal: (string) ($line['line_total'] ?? '0'),
+                // Görüntü alanları kanal adapter'ında, belgeli anlamıyla
+                // doldurulur; burada yalnız normalleştirilir (float yok).
+                grossLineTotal: Money::normalizeOrNull($line['gross_line_total'] ?? null),
+                discountTotal: Money::normalizeOrNull($line['discount_total'] ?? null),
+                netLineTotal: Money::normalizeOrNull($line['net_line_total'] ?? null),
+                amountsIncludeVat: isset($line['amounts_include_vat']) ? (bool) $line['amounts_include_vat'] : null,
+                vatRate: Money::normalizeOrNull($line['vat_rate'] ?? null),
+                vatAmount: Money::normalizeOrNull($line['vat_amount'] ?? null),
+                financialsSource: is_array($line['financials_source'] ?? null) ? $line['financials_source'] : [],
             );
         }
 

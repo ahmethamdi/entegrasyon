@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Orders\Actions;
 
+use App\Domain\Catalog\Models\Variant;
 use App\Domain\Inventory\Actions\ApplyMovement;
 use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
@@ -162,6 +163,10 @@ final class IngestChannelOrder
     {
         $now = now();
 
+        // SATIŞ ANI MALİYETİ — varyantın ŞU ANKİ maliyeti satış anında
+        // dondurulur; sonradan değişen maliyet geçmiş kârı değiştirmez (ADR-002).
+        $costs = $this->costsFor($incoming);
+
         $rows = array_map(fn (IncomingOrderLine $line): array => [
             'id' => OrderLine::generateUuidV7(),
             'tenant_id' => $tenantId,
@@ -177,6 +182,17 @@ final class IngestChannelOrder
             'unit_price' => $line->unitPrice,
             'line_total' => $line->lineTotal,
             'stock_status' => StockStatus::PENDING->value,
+            'gross_line_total' => $line->grossLineTotal,
+            'discount_total' => $line->discountTotal,
+            'net_line_total' => $line->netLineTotal,
+            'amounts_include_vat' => $line->amountsIncludeVat,
+            'vat_rate' => $line->vatRate,
+            'vat_amount' => $line->vatAmount,
+            'financials_source' => $line->financialsSource === [] ? null : json_encode($line->financialsSource, JSON_THROW_ON_ERROR),
+            'financials_captured_at' => $line->hasFinancials() ? $now : null,
+            'unit_cost' => $costs[$line->variantId ?? '']['cost'] ?? null,
+            'cost_currency' => $costs[$line->variantId ?? '']['currency'] ?? null,
+            'cost_captured_at' => isset($costs[$line->variantId ?? '']) ? $now : null,
             'created_at' => $now,
             'updated_at' => $now,
         ], $incoming->lines);
@@ -184,6 +200,30 @@ final class IngestChannelOrder
         DB::table('order_lines')->insertOrIgnore($rows);
 
         return OrderLine::query()->where('order_id', $order->id)->get();
+    }
+
+    /**
+     * Eşleşen varyantların maliyeti — maliyeti girilmemiş varyant yok sayılır
+     * (NULL = bilinmiyor; 0 maliyet uydurulmaz).
+     *
+     * @return array<string, array{cost: string, currency: string}>
+     */
+    private function costsFor(IncomingOrder $incoming): array
+    {
+        $ids = $incoming->variantIds();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        return Variant::query()
+            ->whereIn('id', $ids)
+            ->whereNotNull('cost_price')
+            ->get(['id', 'cost_price', 'currency'])
+            ->mapWithKeys(static fn (Variant $v): array => [
+                $v->id => ['cost' => (string) $v->cost_price, 'currency' => (string) $v->currency],
+            ])
+            ->all();
     }
 
     /**

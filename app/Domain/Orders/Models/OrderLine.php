@@ -51,6 +51,18 @@ class OrderLine extends Model
         'line_total',
         'stock_status',
         'stock_applied_at',
+        // Satış anı görüntüsü (ADR-002) — bir kez yazılır, DB değişikliği reddeder.
+        'gross_line_total',
+        'discount_total',
+        'net_line_total',
+        'amounts_include_vat',
+        'vat_rate',
+        'vat_amount',
+        'unit_cost',
+        'cost_currency',
+        'cost_captured_at',
+        'financials_source',
+        'financials_captured_at',
     ];
 
     protected function casts(): array
@@ -64,6 +76,16 @@ class OrderLine extends Model
             'line_total' => 'decimal:2',
             'stock_status' => StockStatus::class,
             'stock_applied_at' => 'datetime',
+            'gross_line_total' => 'decimal:2',
+            'discount_total' => 'decimal:2',
+            'net_line_total' => 'decimal:2',
+            'amounts_include_vat' => 'boolean',
+            'vat_rate' => 'decimal:2',
+            'vat_amount' => 'decimal:2',
+            'unit_cost' => 'decimal:4',
+            'cost_captured_at' => 'datetime',
+            'financials_source' => 'array',
+            'financials_captured_at' => 'datetime',
         ];
     }
 
