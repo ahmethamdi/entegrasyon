@@ -9,6 +9,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
@@ -18,6 +19,7 @@ use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -138,9 +140,25 @@ use Throwable;
  * kalmaz). Satıcı onayı N11'e otomatiğe de bağlatabilir
  * (`sellerintegration@n11.com`).
  */
-final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). N11 paket durumları (yazım tutarsız, anahtar normalleştirilir).
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'created' => 'awaiting_shipment',
+        'picking' => 'awaiting_shipment',
+        'shipped' => 'shipped',
+        'delivered' => 'delivered',
+        'cancelled' => 'cancelled',
+        'canceled' => 'cancelled',
+        'unsupplied' => 'cancelled',
+    ];
 
     /** Tek host — bütün satıcılar paylaşır. */
     public const BASE_URL = 'https://api.n11.com';

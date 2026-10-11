@@ -9,6 +9,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
@@ -18,6 +19,7 @@ use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -110,7 +112,7 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -119,6 +121,16 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
     }
 
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). Hepsiburada: alım `Open` yazar; güncelleme olayı yok (kargo/teslim başlığa yansımaz — bilinen boşluk).
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'open' => 'awaiting_shipment',
+    ];
 
     /** Satıcı kimliğinin (GUID) `settings` içindeki yeri. */
     public const MERCHANT_ID_KEY = 'merchant_id';

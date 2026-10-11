@@ -6,6 +6,7 @@ namespace App\Domain\Orders\Actions;
 
 use App\Domain\Invoicing\Actions\MaybeAutoInvoice;
 use App\Domain\Orders\Enums\OrderEventType;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Jobs\PushFulfillment;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
@@ -64,6 +65,9 @@ final class RecordPanelShipment
         });
 
         PushFulfillment::dispatch($fulfillment->id, $tenantId)->onQueue('orders:high');
+
+        // Satıcının kendi eylemi — kanal kelimesi değil (ADR-001).
+        app(TransitionOrderState::class)->run($order, OrderState::SHIPPED);
 
         // Panelden girilen kargo da "kargoya verildi"dir: satıcı takip
         // numarasını buradan girdiyse kanalın durum yoklaması `Shipped`'ı

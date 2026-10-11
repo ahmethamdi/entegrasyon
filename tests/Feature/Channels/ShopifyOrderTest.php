@@ -124,6 +124,21 @@ final class ShopifyOrderTest extends TestCase
      * Bu ayrım iade gövdesinin kökünün FARKLI olmasından doğar ve sipariş
      * konularında karşılığı yoktur; ayrı test ister.
      */
+    /**
+     * İADE GÖVDESİ SİPARİŞ DURUMU TAŞIMAZ (ADR-001).
+     *
+     * Önceden `status()` iade gövdesine 'pending' derdi ve her iade siparişin
+     * başlık durumunu 'pending'e ezerdi.
+     */
+    #[Test]
+    public function a_refund_does_not_carry_an_order_status(): void
+    {
+        $event = $this->normalizeRefund();
+
+        $this->assertNotNull($event);
+        $this->assertNull($event->payload['status']);
+    }
+
     #[Test]
     public function the_refund_order_id_is_the_order_not_the_refund(): void
     {

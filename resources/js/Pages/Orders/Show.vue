@@ -162,8 +162,8 @@ function stamp(value) {
                     · {{ stamp(order.placedAt) }}
                     <span
                         class="ml-2 rounded-full border px-2.5 py-0.5 text-xs font-medium"
-                        :class="toneClass[orderState(order.status, order.fulfillments.length > 0).tone]"
-                    >{{ $t(orderState(order.status, order.fulfillments.length > 0).text) }}</span>
+                        :class="toneClass[orderState(order.status, order.fulfillments.length > 0, order.state).tone]"
+                    >{{ $t(orderState(order.status, order.fulfillments.length > 0, order.state).text) }}</span>
                 </p>
             </template>
         </PageHeader>

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Orders\Support;
 
+use App\Domain\Orders\Enums\OrderState;
+
 /**
  * Kanaldan gelen kanonik sipariş — alım girdisi.
  *
@@ -34,6 +36,8 @@ final readonly class IncomingOrder
         public ?\DateTimeInterface $placedAt = null,
         public array $customerRef = [],
         public ?string $inboxMessageId = null,
+        // Kanonik başlangıç durumu (ADR-001) — adapter eşler; null = bilinmiyor.
+        public ?OrderState $state = null,
     ) {}
 
     /** Stok düşülecek satırlar — eşleşmemiş SKU'lar hariç. */

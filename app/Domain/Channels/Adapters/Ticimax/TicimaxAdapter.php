@@ -9,6 +9,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
@@ -19,6 +20,7 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -85,7 +87,7 @@ use Throwable;
  * `SetSiparisKargoyaVerildi`): panelden girilen takip numarası Ticimax'a
  * gitmiyordu.
  */
-final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
+final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing
 {
     use DeclaresRequestQuota;
 
@@ -563,6 +565,26 @@ final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, S
         return [['_kind' => 'created', ...self::withoutPersonalData($order)]];
     }
 
+    /**
+     * Ticimax kanonik durumu (ADR-001) — METİNDEN DEĞİL, DURUM KODUNDAN.
+     *
+     * `SiparisDurumu` mağazanın kendi yazdığı metindir; kod sabittir:
+     * 6 kargoda · 7 teslim · 8 iptal · 9 iade (kalem sayaçlarından türer).
+     * Diğer kodlarla alınan sipariş kargo bekler.
+     */
+    public function orderStateFor(NormalizedOrderEvent $event): ?OrderState
+    {
+        $code = $event->payload['status_code'] ?? null;
+
+        return match (is_numeric($code) ? (int) $code : null) {
+            6 => OrderState::SHIPPED,
+            7 => OrderState::DELIVERED,
+            8 => OrderState::CANCELLED,
+            9 => null,
+            default => $event->type === 'created' ? OrderState::AWAITING_SHIPMENT : null,
+        };
+    }
+
     /** @param array<string, mixed> $order */
     public function pollingEventIdFor(array $order): ?string
     {
@@ -609,7 +631,7 @@ final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, S
                 type: $kind,
                 externalOrderId: (string) $id,
                 externalRef: $ref,
-                payload: ['status' => (string) ($payload['SiparisDurumu'] ?? ''), 'lines' => $lines],
+                payload: ['status' => (string) ($payload['SiparisDurumu'] ?? ''), 'status_code' => $payload['Durum'] ?? null, 'lines' => $lines],
                 occurredAt: self::channelDate($payload['DurumGuncellemeTarihi'] ?? null) ?? self::channelDate($payload['DuzenlemeTarihi'] ?? null),
             );
         }
@@ -624,6 +646,8 @@ final class TicimaxAdapter implements ChannelAdapter, DeclaresChannelCurrency, S
                 'type' => 'created',
                 'external_number' => (string) ($payload['SiparisNo'] ?? $id),
                 'status' => (string) ($payload['SiparisDurumu'] ?? 'Durum '.($payload['Durum'] ?? '')),
+                // Kanonik durum bu koddan eşlenir; metin mağazaya göre değişir.
+                'status_code' => $payload['Durum'] ?? null,
                 'currency' => strtoupper((string) ($payload['ParaBirimi'] ?? '')) ?: $this->channelCurrency(),
                 'subtotal' => $total,
                 'shipping_total' => self::money($payload['KargoTutari'] ?? 0),

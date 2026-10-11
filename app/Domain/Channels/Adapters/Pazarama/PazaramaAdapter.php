@@ -9,6 +9,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
@@ -20,6 +21,7 @@ use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -174,9 +176,26 @@ use Throwable;
  *   - satıcı siparişi panelden ya da başka araçtan yönetiyorsa otomatik
  *     onay onun akışını BOZAR.
  */
-final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
+final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). Pazarama durum kelimeleri (`STATUS_WORDS`). İptal/iade TALEBİ durum değiştirmez.
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'created' => 'awaiting_shipment',
+        'picking' => 'awaiting_shipment',
+        'shipped' => 'shipped',
+        'atcollectionpoint' => 'shipped',
+        'undelivered' => 'shipped',
+        'delivered' => 'delivered',
+        'cancelled' => 'cancelled',
+        'unsupplied' => 'cancelled',
+    ];
 
     /** API — bütün satıcılar paylaşır. */
     public const BASE_URL = 'https://isortagimapi.pazarama.com';

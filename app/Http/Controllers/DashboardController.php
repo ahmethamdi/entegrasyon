@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Inventory\Models\InventoryLevel;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Reconciliation\Enums\ItemStatus;
@@ -177,7 +178,14 @@ final class DashboardController extends Controller
     {
         $base = Order::query()
             ->whereRaw('coalesce(placed_at, created_at) >= ?', [now()->startOfDay()])
-            ->whereRaw('lower(status) <> ?', ['cancelled']);
+            // SATIŞ SAYILMAYANLAR kanonik durumdan (ADR-001): iptal, bölünen
+            // paket, iade. Eşlenmemiş eski satırda ham `cancelled` kuralı.
+            ->where(static function ($q): void {
+                $q->whereNotIn('state', OrderState::nonRevenue())
+                    ->orWhere(static function ($legacy): void {
+                        $legacy->whereNull('state')->whereRaw('lower(status) <> ?', ['cancelled']);
+                    });
+            });
 
         $revenue = (clone $base)
             ->selectRaw('currency, sum(grand_total) AS total')

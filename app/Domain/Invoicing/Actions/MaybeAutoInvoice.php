@@ -7,6 +7,7 @@ namespace App\Domain\Invoicing\Actions;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Order;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -77,6 +78,16 @@ final class MaybeAutoInvoice
         return $status === null ? null : (self::STATUS_STAGES[strtolower(trim($status))] ?? null);
     }
 
+    /** Kanonik durumun aşaması (ADR-001); kargo/teslim dışı → null. */
+    public static function stageOfState(?string $state): ?string
+    {
+        return match ($state) {
+            OrderState::SHIPPED->value => self::STAGE_SHIPPED,
+            OrderState::DELIVERED->value => self::STAGE_DELIVERED,
+            default => null,
+        };
+    }
+
     /**
      * @param  string|null  $stage  `STAGE_*`; null = aşama yok, hiçbir şey yapılmaz
      * @return Invoice|null açılan (ya da var olan) fatura; koşul tutmadıysa null
@@ -119,7 +130,9 @@ final class MaybeAutoInvoice
             return null;
         }
 
-        if (in_array(strtolower((string) $order->status), self::CANCELLED_STATUSES, true)) {
+        // Kanonik durum önce (ADR-001); eşlenmemiş eski satırda ham liste.
+        if (in_array($order->state, [OrderState::CANCELLED->value, OrderState::SUPERSEDED->value], true)
+            || ($order->state === null && in_array(strtolower((string) $order->status), self::CANCELLED_STATUSES, true))) {
             return null;
         }
 

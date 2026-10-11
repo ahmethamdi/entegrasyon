@@ -1065,5 +1065,7 @@
     "Tahsilat işlenmesin": "Don't record payment",
     "Komisyon ve kargo gideri sipariş başına aktarılmaz: Trendyol bunları ayda bir e-fatura olarak keser ve o fatura Paraşüt'teki gelen faturalarınıza kendiliğinden düşer. Ayrıca aktarılsaydı gider iki kez sayılırdı.": "Commission and shipping costs aren't transferred per order: Trendyol bills them monthly as an e-invoice, which lands in your incoming invoices in Paraşüt automatically. Transferring them as well would count the cost twice.",
     "Muhasebeye işlendi": "Recorded in accounting",
-    "Satış olabilir, bekleniyor": "Possible sale, waiting"
+    "Satış olabilir, bekleniyor": "Possible sale, waiting",
+    "Kısmi iade": "Partially returned",
+    "Paket bölündü": "Package split"
 }

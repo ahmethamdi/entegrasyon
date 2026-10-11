@@ -8,9 +8,11 @@ use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -29,9 +31,21 @@ use Throwable;
  * gerçek bir imza hesaplamak zorunda kalmasın, yalnızca controller'ın RED
  * yolunu izlediği doğrulansın.
  */
-final class FakeOrderAdapter implements ChannelAdapter, SupportsOrders
+final class FakeOrderAdapter implements ChannelAdapter, MapsOrderState, SupportsOrders
 {
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /** Sahte kanalın durum tablosu — gerçek adapter'larla aynı sözleşme (ADR-001). */
+    private const ORDER_STATE_MAP = [
+        'awaiting' => 'awaiting_payment',
+        'created' => 'awaiting_shipment',
+        'picking' => 'awaiting_shipment',
+        'shipped' => 'shipped',
+        'delivered' => 'delivered',
+        'cancelled' => 'cancelled',
+        'unpacked' => 'superseded',
+    ];
 
     /** Testler imza sonucunu buradan kontrol eder. */
     public static bool $signatureValid = true;

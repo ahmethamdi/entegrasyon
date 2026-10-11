@@ -124,7 +124,10 @@ final class ShopifyOrderNormalizer
             'external_number' => isset($payload['order_number'])
                 ? (string) $payload['order_number']
                 : null,
-            'status' => self::status($payload, $type),
+            // İADE GÖVDESİ SİPARİŞ DURUMU TAŞIMAZ (kökü `refund` nesnesidir):
+            // `status()` ona 'pending' derdi ve her iade başlığı 'pending'e
+            // ezerdi. Durum yazılmaz; sonuç kalem sayaçlarından türer.
+            'status' => $type === 'returned' ? null : self::status($payload, $type),
             'financial_status' => isset($payload['financial_status'])
                 ? (string) $payload['financial_status']
                 : null,

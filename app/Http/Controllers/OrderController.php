@@ -114,6 +114,8 @@ final class OrderController extends Controller
                 'externalId' => $order->external_id,
                 'externalNumber' => $order->external_number,
                 'status' => $order->status,
+                'state' => $order->state,
+                'state' => $order->state,
                 'financialStatus' => $order->financial_status,
                 'currency' => $order->currency,
                 'subtotal' => $order->subtotal,

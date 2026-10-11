@@ -188,9 +188,9 @@ function placedAt(row) {
                         <td class="px-4 py-3">
                             <span
                                 class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
-                                :class="toneClass[orderState(row.status, row.hasShipment).tone]"
+                                :class="toneClass[orderState(row.status, row.hasShipment, row.state).tone]"
                             >
-                                {{ $t(orderState(row.status, row.hasShipment).text) }}
+                                {{ $t(orderState(row.status, row.hasShipment, row.state).text) }}
                             </span>
                         </td>
 

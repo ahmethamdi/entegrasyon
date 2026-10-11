@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Orders\Routing;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\IncomingOrder;
 use App\Domain\Orders\Support\IncomingOrderLine;
@@ -37,6 +38,7 @@ final class OrderPayloadMapper
         NormalizedOrderEvent $normalized,
         string $channelConnectionId,
         ?string $inboxMessageId = null,
+        ?OrderState $state = null,
     ): IncomingOrder {
         $payload = $normalized->payload;
         $rawLines = $payload['lines'] ?? [];
@@ -100,6 +102,7 @@ final class OrderPayloadMapper
             placedAt: $normalized->placedAt,
             customerRef: $payload['customer_ref'] ?? [],
             inboxMessageId: $inboxMessageId,
+            state: $state,
         );
     }
 

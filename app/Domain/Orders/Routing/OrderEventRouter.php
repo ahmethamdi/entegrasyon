@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Orders\Routing;
 
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Invoicing\Actions\MaybeAutoInvoice;
@@ -13,9 +14,11 @@ use App\Domain\Messaging\Support\DeferUntilOrderArrives;
 use App\Domain\Orders\Actions\ApplyOrderCancellation;
 use App\Domain\Orders\Actions\ApplyOrderReturn;
 use App\Domain\Orders\Actions\IngestChannelOrder;
+use App\Domain\Orders\Actions\TransitionOrderState;
 use App\Domain\Orders\Actions\UpdateFulfillment;
 use App\Domain\Orders\Actions\UpdateOrderSnapshot;
 use App\Domain\Orders\Enums\OrderEventType;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\CancellationEvent;
 use App\Domain\Orders\Support\CancelledLine;
@@ -63,6 +66,8 @@ final class OrderEventRouter
         // yolunun bir parçası DEĞİLDİR: hatası log'a düşer, olay yine işlenir.
         private readonly MaybeAutoInvoice $autoInvoice = new MaybeAutoInvoice,
         private readonly WakeDeferredOrderEvents $wakeDeferred = new WakeDeferredOrderEvents,
+        // ADR-001 · kanonik durumun tek yazma noktası.
+        private readonly TransitionOrderState $transition = new TransitionOrderState,
     ) {}
 
     public function route(InboxMessage $message): void
@@ -106,34 +111,45 @@ final class OrderEventRouter
             return;
         }
 
+        // KANONİK DURUM YALNIZ ADAPTER'DA EŞLENİR (ADR-001); çekirdek kanal
+        // kelimesi tanımaz. Yeteneği olmayan kanalda null = "değişmedi".
+        $state = $adapter instanceof MapsOrderState ? $adapter->orderStateFor($normalized) : null;
+
         match ($type) {
             // YENİ SİPARİŞ — tekillik kısıtı yalnızca burada anlamlı.
-            OrderEventType::CREATED => $this->handleCreated($normalized, $message),
+            OrderEventType::CREATED => $this->handleCreated($normalized, $message, $state),
 
             // MEVCUT SİPARİŞ — önce bulunur, sonra olay uygulanır.
-            OrderEventType::CANCELLED => $this->handleCancelled($normalized, $message),
-            OrderEventType::RETURNED => $this->handleReturned($normalized, $message),
+            OrderEventType::CANCELLED => $this->handleCancelled($normalized, $message, $state),
+            OrderEventType::RETURNED => $this->handleReturned($normalized, $message, $state),
 
             // Güncelleme ve kargo: sipariş anlık görüntüsünü tazeler, stok
             // hareketi ÜRETMEZ (§4). Mal satışta zaten düşülmüştür;
             // hareket üretselerdi aynı satış iki kez düşülürdü.
-            OrderEventType::UPDATED => $this->handleUpdated($normalized, $message),
-            OrderEventType::FULFILLED => $this->handleFulfilled($normalized, $message),
+            OrderEventType::UPDATED => $this->handleUpdated($normalized, $message, $state),
+            OrderEventType::FULFILLED => $this->handleFulfilled($normalized, $message, $state),
 
             // Bizim ürettiğimiz denetim olayı kanaldan gelmez.
             OrderEventType::OVERSELL_DETECTED => null,
         };
     }
 
-    private function handleCreated(NormalizedOrderEvent $normalized, InboxMessage $message): void
+    private function handleCreated(NormalizedOrderEvent $normalized, InboxMessage $message, ?OrderState $state = null): void
     {
         $incoming = OrderPayloadMapper::toIncomingOrder(
             $normalized,
             $message->channel_connection_id,
             $message->id,
+            $state,
         );
 
-        $this->ingestOrder->run($incoming, $this->defaultWarehouseId($message->tenant_id));
+        $order = $this->ingestOrder->run($incoming, $this->defaultWarehouseId($message->tenant_id));
+
+        // Sipariş zaten vardıysa (tekrar gelen `created`) durum yine ileri
+        // taşınabilir; geri gidemez (`TransitionOrderState`).
+        if ($state !== null && $order->state !== $state->value) {
+            $this->transition->run($order, $state);
+        }
 
         // Siparişten ÖNCE gelip ertelenmiş iptal/iade olayları beklemeden
         // işlensin (P0-1). Sipariş zaten varsa da çağrılır: zararsızdır ve
@@ -141,7 +157,7 @@ final class OrderEventRouter
         $this->wakeDeferred->run($message->channel_connection_id, $normalized->externalOrderId, $message->id);
     }
 
-    private function handleCancelled(NormalizedOrderEvent $normalized, InboxMessage $message): void
+    private function handleCancelled(NormalizedOrderEvent $normalized, InboxMessage $message, ?OrderState $state = null): void
     {
         $order = $this->resolveOrderOrDefer($normalized, $message);
 
@@ -149,7 +165,7 @@ final class OrderEventRouter
             return;
         }
 
-        $this->syncHeaderStatus($order, $normalized);
+        $this->syncHeaderStatus($order, $normalized, $state);
 
         $lines = OrderPayloadMapper::toAffectedLines($normalized, $order);
 
@@ -170,9 +186,12 @@ final class OrderEventRouter
             occurredAt: $normalized->occurredAt,
             inboxMessageId: $message->id,
         ));
+
+        // Sonuç kalem sayaçlarından: tamamı iptalse `cancelled`.
+        $this->transition->syncFromLines($order);
     }
 
-    private function handleReturned(NormalizedOrderEvent $normalized, InboxMessage $message): void
+    private function handleReturned(NormalizedOrderEvent $normalized, InboxMessage $message, ?OrderState $state = null): void
     {
         $order = $this->resolveOrderOrDefer($normalized, $message);
 
@@ -180,7 +199,7 @@ final class OrderEventRouter
             return;
         }
 
-        $this->syncHeaderStatus($order, $normalized);
+        $this->syncHeaderStatus($order, $normalized, $state);
 
         $lines = OrderPayloadMapper::toAffectedLines($normalized, $order);
 
@@ -204,6 +223,9 @@ final class OrderEventRouter
             // normalizer söyler — `if ($channel === 'woocommerce')` YAZILMAZ.
             cumulative: (bool) ($normalized->payload['returned_quantities_cumulative'] ?? false),
         ));
+
+        // Kısmi iade `partially_returned`, kalan yoksa `returned`.
+        $this->transition->syncFromLines($order);
     }
 
     /**
@@ -232,7 +254,7 @@ final class OrderEventRouter
      * Yaratma idempotenttir: asıl `created` olayı sonra gelirse
      * `IngestChannelOrder` siparişi bulur ve stoğu ikinci kez düşmez.
      */
-    private function adoptMissedOrder(NormalizedOrderEvent $normalized, InboxMessage $message): ?Order
+    private function adoptMissedOrder(NormalizedOrderEvent $normalized, InboxMessage $message, ?OrderState $state = null): ?Order
     {
         $existing = Order::query()
             ->where('channel_connection_id', $message->channel_connection_id)
@@ -260,7 +282,7 @@ final class OrderEventRouter
             'type' => $normalized->type,
         ]);
 
-        $this->handleCreated($normalized, $message);
+        $this->handleCreated($normalized, $message, $state);
 
         return Order::query()
             ->where('channel_connection_id', $message->channel_connection_id)
@@ -276,8 +298,11 @@ final class OrderEventRouter
      * "ReadyToShip" yazıyordu (6 Eki). Kalem eşleşmese bile başlık
      * güncellenir — satıcı siparişin iptal olduğunu görmeli.
      */
-    private function syncHeaderStatus(Order $order, NormalizedOrderEvent $normalized): void
+    private function syncHeaderStatus(Order $order, NormalizedOrderEvent $normalized, ?OrderState $state = null): void
     {
+        // Kanonik durum önce: geçiş kuralı geri yazımı reddeder.
+        $this->transition->run($order, $state);
+
         $changes = [];
 
         foreach (['status', 'financial_status'] as $field) {
@@ -358,9 +383,9 @@ final class OrderEventRouter
      * Mal satışta zaten düşülmüştür. Bu yol hareket üretseydi aynı satış
      * iki kez düşülür ve bakiye KALICI olarak bozulurdu.
      */
-    private function handleUpdated(NormalizedOrderEvent $normalized, InboxMessage $message): void
+    private function handleUpdated(NormalizedOrderEvent $normalized, InboxMessage $message, ?OrderState $state = null): void
     {
-        $order = $this->adoptMissedOrder($normalized, $message) ?? $this->resolveOrder($normalized, $message);
+        $order = $this->adoptMissedOrder($normalized, $message, $state) ?? $this->resolveOrder($normalized, $message);
 
         if ($order === null) {
             return;
@@ -385,7 +410,12 @@ final class OrderEventRouter
         // sorulur: önceki tur fatura isteği açamadan düşmüşse yoklamanın
         // bir sonraki görüşü onu tamamlar. Tekrar zararsızdır.
         if ($updated !== null) {
-            $this->autoInvoice->run($updated, MaybeAutoInvoice::stageOf($updated->status));
+            $this->transition->run($updated, $state);
+
+            $this->autoInvoice->run(
+                $updated,
+                MaybeAutoInvoice::stageOfState($updated->state) ?? MaybeAutoInvoice::stageOf($updated->status),
+            );
         }
     }
 
@@ -395,9 +425,9 @@ final class OrderEventRouter
      * Kargo yalnızca teslim durumunu izler. Paketin durumu otomatik fatura
      * kancasına da gider; paket durumu yoksa siparişin başlık durumu.
      */
-    private function handleFulfilled(NormalizedOrderEvent $normalized, InboxMessage $message): void
+    private function handleFulfilled(NormalizedOrderEvent $normalized, InboxMessage $message, ?OrderState $state = null): void
     {
-        $order = $this->adoptMissedOrder($normalized, $message) ?? $this->resolveOrder($normalized, $message);
+        $order = $this->adoptMissedOrder($normalized, $message, $state) ?? $this->resolveOrder($normalized, $message);
 
         if ($order === null) {
             return;
@@ -424,9 +454,19 @@ final class OrderEventRouter
         ));
 
         if ($fulfillment !== null) {
+            // Kargo kaydı = en az "kargoda". Kanal açık bir durum verdiyse o,
+            // paket teslim dediyse "teslim edildi".
+            $this->transition->run($order, $state ?? (
+                MaybeAutoInvoice::stageOf($fulfillment->status) === MaybeAutoInvoice::STAGE_DELIVERED
+                    ? OrderState::DELIVERED
+                    : OrderState::SHIPPED
+            ));
+
             $this->autoInvoice->run(
                 $order,
-                MaybeAutoInvoice::stageOf($fulfillment->status) ?? MaybeAutoInvoice::stageOf($order->status),
+                MaybeAutoInvoice::stageOf($fulfillment->status)
+                    ?? MaybeAutoInvoice::stageOfState($order->state)
+                    ?? MaybeAutoInvoice::stageOf($order->status),
             );
         }
     }

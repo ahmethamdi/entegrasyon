@@ -15,6 +15,7 @@ use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresMissingAuthorization;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
@@ -31,6 +32,7 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
@@ -107,9 +109,25 @@ use Throwable;
  * aynısı. `true` dönmek Etsy adına imzasız sipariş enjekte etmenin
  * kapısını açardı. Sipariş YOKLAMAYLA gelir (slice 3.7).
  */
-final class EtsyAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, DeclaresImageLimit, DeclaresMissingAuthorization, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EtsyAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, DeclaresImageLimit, DeclaresMissingAuthorization, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). Etsy alım durumları (`statusKey` biçimi). İade/para iadesi kelimeleri durum değiştirmez.
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'payment_processing' => 'awaiting_payment',
+        'paid' => 'awaiting_shipment',
+        'open' => 'awaiting_shipment',
+        'processing' => 'awaiting_shipment',
+        'completed' => 'shipped',
+        'canceled' => 'cancelled',
+        'cancelled' => 'cancelled',
+    ];
 
     /**
      * Etsy receipt durumu → kanonik olay tipi (§11.4).

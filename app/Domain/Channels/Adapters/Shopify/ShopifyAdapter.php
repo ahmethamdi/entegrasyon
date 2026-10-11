@@ -11,6 +11,7 @@ use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalog;
@@ -26,6 +27,7 @@ use App\Domain\Channels\Contracts\VerifiesWebhookSender;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
@@ -115,7 +117,7 @@ use Throwable;
  * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
  * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration, VerifiesWebhookSender
+final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration, VerifiesWebhookSender
 {
     /** Sipariş mutabakatı sayfa boyu — 100 kalemli siparişte maliyet ~ sayfa × kalem. */
     private const RECOVER_PAGE_SIZE = 25;
@@ -156,6 +158,22 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
         GQL;
 
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). Shopify: durum `ShopifyOrderNormalizer::status()`'tan gelir — kargo durumu önce, sonra ödeme. `refunded`/`partially_refunded`/`voided`/`restocked` bilinçli olarak YOK: iade/iptal sonucu kalem sayaçlarından türer.
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'pending' => 'awaiting_payment',
+        'authorized' => 'awaiting_payment',
+        'partially_paid' => 'awaiting_shipment',
+        'paid' => 'awaiting_shipment',
+        'partial' => 'awaiting_shipment',
+        'fulfilled' => 'shipped',
+        'cancelled' => 'cancelled',
+    ];
 
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
     private const AUTH_HEADER = 'X-Shopify-Access-Token';

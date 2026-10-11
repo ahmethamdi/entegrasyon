@@ -1,11 +1,12 @@
 # Mimari karar kayıtları (ADR)
 
-Durum: **önerildi** (11 Ekim 2026 denetimi). Uygulama başlamadan kullanıcı onayı beklenir. Her karar mevcut kodu koruyarak en küçük değişikliği seçer.
+Durum: **önerildi** (11 Ekim 2026 denetimi), aksi her ADR'nin altında yazılı değilse. Her karar mevcut kodu koruyarak en küçük değişikliği seçer. Bir ADR yalnız uygulama bizi o karara gerçekten bağladığında **Kabul edildi** olur.
 
 ---
 
 ## ADR-001 · Kanonik sipariş durumu
 
+- **Durum:** **Kabul edildi** — 11 Eki 2026, temel faz. Uygulanan: `orders.state` + `state_changed_at` (CHECK kısıtlı), `OrderState` enum + `canTransition`, `MapsOrderState` (10 sipariş kanalının hepsi; Ticimax metin değil durum kodundan), `TransitionOrderState` (koşullu UPDATE), kalem sayacından iptal/iade türetme, `orders:backfill-state`. Sapmalar: `NormalizedOrderEvent.payload['state']` yerine adapter yöntemi; `fulfillments` kaydı en az `shipped`; `OrderStateChanged` outbox olayı YAZILMADI (ADR-008, S1).
 - **Karar:** `orders.state` (string, PHP `OrderState` enum) eklenir; kanalın ham `status`/`financial_status` alanları görüntü ve hata ayıklama için kalır.
 - **Mevcut durum:** `orders.status` kanalın ham kelimesi (Trendyol `Created/Picking/ReadyToShip/Shipped/UnPacked`, Shopify üç alandan biri, Woo `processing/completed`). Olay tipleri (`created/updated/cancelled/returned/fulfilled`) yalnız yönlendirme içindir.
 - **Sorun:** ham kelimeler adapter dışında 4 listede ve birbirini tutmuyor; pano cirosu bölünmüş/iade edilmiş paketleri sayıyor, "kargo bekliyor" `ReadyToShip`'i kaçırıyor; durum sırasız mesajlarla geri gidebiliyor. S1/S2/S4/S6/S11 ve otomasyon aynı soruyu tekrar soracak.

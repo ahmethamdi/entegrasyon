@@ -6,6 +6,7 @@ namespace App\Domain\Orders\Models;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Invoicing\Models\Invoice;
+use App\Domain\Orders\Enums\OrderState;
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
 use Illuminate\Database\Eloquent\Builder;
@@ -30,7 +31,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string $id
  * @property string $tenant_id
  * @property string $external_id
- * @property string $status
+ * @property string $status ham kanal kelimesi — tanı için
+ * @property string|null $state `OrderState` (ADR-001); null = henüz eşlenmedi
  */
 class Order extends Model
 {
@@ -45,6 +47,8 @@ class Order extends Model
         'external_number',
         'status',
         'financial_status',
+        'state',
+        'state_changed_at',
         'currency',
         'subtotal',
         'shipping_total',
@@ -62,6 +66,7 @@ class Order extends Model
             'tax_total' => 'decimal:2',
             'grand_total' => 'decimal:2',
             'placed_at' => 'datetime',
+            'state_changed_at' => 'datetime',
             'customer_ref' => 'encrypted:array',
         ];
     }
@@ -85,9 +90,16 @@ class Order extends Model
      */
     public function scopeAwaitingShipment(Builder $query): void
     {
-        $query->whereRaw('lower(orders.status) IN (?, ?, ?, ?, ?, ?, ?)', [
-            'processing', 'paid', 'partially_paid', 'partial', 'created', 'picking', 'invoiced',
-        ])
+        // KANONİK DURUM (ADR-001). Eşlenmemiş (geri doldurma öncesi) satır
+        // eski ham izin listesine düşer — geçiş döneminde görünmez olmasın.
+        $query->where(static function (Builder $q): void {
+            $q->where('orders.state', OrderState::AWAITING_SHIPMENT->value)
+                ->orWhere(static function (Builder $legacy): void {
+                    $legacy->whereNull('orders.state')->whereRaw('lower(orders.status) IN (?, ?, ?, ?, ?, ?, ?)', [
+                        'processing', 'paid', 'partially_paid', 'partial', 'created', 'picking', 'invoiced',
+                    ]);
+                });
+        })
             ->whereRaw('coalesce(orders.placed_at, orders.created_at) >= ?', [now()->subDays(30)])
             ->whereDoesntHave('fulfillments');
     }

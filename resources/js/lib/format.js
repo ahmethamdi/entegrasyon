@@ -58,7 +58,30 @@ const cancelled = ['cancelled', 'canceled', 'unpacked', 'voided', 'failed'];
 const returned = ['refunded', 'returned', 'partially_refunded'];
 const unpaid = ['pending', 'on-hold', 'authorized'];
 
-export function orderState(status, hasShipment = false) {
+/*
+ * Kanonik durum (ADR-001) — sunucu adapter'dan eşler; rozet ÖNCE buna bakar.
+ * Eşlenmemiş eski siparişte (state = null) aşağıdaki ham kelime eşlemesi
+ * geçiş dönemi için kalır.
+ */
+const canonical = {
+    awaiting_payment: { text: k('Ödeme bekleniyor'), tone: 'muted' },
+    awaiting_shipment: { text: k('Kargo bekliyor'), tone: 'todo' },
+    shipped: { text: k('Kargoda'), tone: 'done' },
+    delivered: { text: k('Teslim edildi'), tone: 'done' },
+    partially_returned: { text: k('Kısmi iade'), tone: 'muted' },
+    cancelled: { text: k('İptal'), tone: 'muted' },
+    returned: { text: k('İade'), tone: 'muted' },
+    superseded: { text: k('Paket bölündü'), tone: 'muted' },
+};
+
+export function orderState(status, hasShipment = false, state = null) {
+    if (state && canonical[state]) {
+        // Kargo kaydı varsa "kargo bekliyor" gösterilmez — eski davranış.
+        if (state === 'awaiting_shipment' && hasShipment) return canonical.shipped;
+
+        return canonical[state];
+    }
+
     const s = String(status ?? '').toLowerCase();
 
     if (cancelled.includes(s)) return { text: k('İptal'), tone: 'muted' };

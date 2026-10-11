@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
@@ -21,6 +22,7 @@ use App\Domain\Channels\Contracts\SupportsWebhookRegistration;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
@@ -74,7 +76,7 @@ use Throwable;
  * Webhook bir yetenek değil taşıma biçimidir — SupportsWebhooks arayüzü
  * YOKTUR. İmza doğrulama ve olay kimliği çıkarma ChannelAdapter'ın parçası.
  */
-final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsWebhookRegistration
+final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsWebhookRegistration
 {
     /**
      * Sipariş akışının ihtiyaç duyduğu konular — `WooOrderNormalizer` üçünü
@@ -84,6 +86,21 @@ final class WooCommerceAdapter implements ChannelAdapter, SupportsCatalog, Suppo
     private const WEBHOOK_TOPICS = ['order.created', 'order.updated', 'order.deleted'];
 
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). Woo: `failed` ödeme hatasıdır (iptal DEĞİL). `refunded` YOK: iade sonucu kalem sayaçlarından türer.
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'pending' => 'awaiting_payment',
+        'on_hold' => 'awaiting_payment',
+        'failed' => 'awaiting_payment',
+        'processing' => 'awaiting_shipment',
+        'completed' => 'shipped',
+        'cancelled' => 'cancelled',
+    ];
 
     public function __construct(
         private readonly ChannelConnection $connection,

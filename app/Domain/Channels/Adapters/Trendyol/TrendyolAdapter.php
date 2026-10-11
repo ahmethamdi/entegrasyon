@@ -14,6 +14,7 @@ use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
@@ -28,6 +29,7 @@ use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceBuyer;
@@ -106,7 +108,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -115,6 +117,27 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
     }
 
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). Trendyol paket durumları. `UnPacked` = paket bölündü, kalemler yeni paketlerde gelir → `superseded`. `UnDelivered` kargonun alt durumu. `Returned` YOK: kalem sayaçlarından (kısmi/tam) türer.
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'awaiting' => 'awaiting_payment',
+        'created' => 'awaiting_shipment',
+        'picking' => 'awaiting_shipment',
+        'invoiced' => 'awaiting_shipment',
+        'readytoship' => 'awaiting_shipment',
+        'shipped' => 'shipped',
+        'atcollectionpoint' => 'shipped',
+        'undelivered' => 'shipped',
+        'delivered' => 'delivered',
+        'cancelled' => 'cancelled',
+        'unsupplied' => 'cancelled',
+        'unpacked' => 'superseded',
+    ];
 
     /**
      * Satıcı kimliğinin `settings` içindeki adı — bağlanma formu da

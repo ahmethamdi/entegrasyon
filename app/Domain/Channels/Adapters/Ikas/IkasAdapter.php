@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
@@ -22,6 +23,7 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
@@ -93,9 +95,20 @@ use Throwable;
  * `SupportsFulfillment` 9 Eki 2026'da eklendi (`fulfillOrder`): panelden
  * girilen takip numarası ikas'a gitmiyordu.
  */
-final class IkasAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
+final class IkasAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, MapsOrderState, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
+    use MapsOrderStateFromTable;
+
+    /**
+     * Ham durum → kanonik durum (ADR-001). ikas sipariş durumları. `PARTIALLY_CANCELLED` kalem sayaçlarından türer.
+     *
+     * @var array<string, string>
+     */
+    private const ORDER_STATE_MAP = [
+        'created' => 'awaiting_shipment',
+        'cancelled' => 'cancelled',
+    ];
 
     /** Mağaza adı (`{magaza}.myikas.com`) — hesap kimliği. SIR DEĞİL. */
     public const STORE_NAME_KEY = 'ikas_store_name';

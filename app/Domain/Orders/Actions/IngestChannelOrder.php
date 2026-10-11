@@ -113,6 +113,8 @@ final class IngestChannelOrder
             'external_number' => $incoming->externalNumber,
             'status' => $incoming->status,
             'financial_status' => $incoming->financialStatus,
+            'state' => $incoming->state?->value,
+            'state_changed_at' => $incoming->state === null ? null : $now,
             'currency' => $incoming->currency,
             'subtotal' => $incoming->subtotal,
             'shipping_total' => $incoming->shippingTotal,

@@ -5,7 +5,7 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 ## S1 öncesi / S1 ilk günler — P0
 
 - [x] **P0-1** `OrderEventRouter::handleCancelled/handleReturned`: sipariş yoksa mesaj `processed` olmaz; sınırlı sayıda ertelenir (ör. 5 × 2 dk) ya da `adoptMissedOrder` ile sipariş sahiplenilir. Test: #1, #2; `InboundPipelineTest::event_for_unknown_order_is_marked_processed` yeni davranışa göre güncellenir.
-- [ ] **P0-1b** Durum geri yazılmaz: ADR-001'deki `canTransition` (S1'de `orders.state` ile birlikte) — geçici olarak `UpdateOrderSnapshot`'ta `occurred_at` karşılaştırması. Test: #8.
+- [x] **P0-1b** Durum geri yazılmaz: ADR-001'deki `canTransition` (S1'de `orders.state` ile birlikte) — geçici olarak `UpdateOrderSnapshot`'ta `occurred_at` karşılaştırması. Test: #8.
 - [x] **P0-2** `ReconcileConnection::classify`: `observed < expected` → bağlantıda `pending/processing` inbox mesajı varsa ya da `orders_polled_through` gözlemden eskiyse `DRIFT_DETECTED`, onarım yok; `DriftHistory` iki ardışık tur görürse onarım. `observed > expected` değişmez. Test: #3.
 - [x] **P0-3** `ShopifyAdapter::fetchOrders` (GraphQL `orders(query: "updated_at:>…")`), `reconcile:orders` komutu (30 dk, bağlantı başına `runFor` + `try/catch`), aynı `IngestInboxMessage` yolu, `source='reconcile'`, yeni satırlar `reconciliation_items(domain='ORDERS')`. Test: #4.
 - [x] **P0-4** `TokenRefresher` ve `PollChannelOrders`: adapter kurulumu + kasa yazımı bağlantı başına `try/catch` içinde; başarısız satır için `next_attempt_at` ya da sıralamada geri itme. Test: #5.
@@ -24,7 +24,8 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 
 ## S1 — finans temeli (rapordan önce)
 
-- [ ] ADR-001 `orders.state` + `OrderState` enum + adapter eşlemeleri (`STATUS_TO_STATE`) + geri doldurma komutu; 4 ham listeyi `state`'e çevir (`awaitingShipment`, `format.js`, `MaybeAutoInvoice::stageOf`, pano).
+- [x] ADR-001 `orders.state` + `OrderState` enum + adapter eşlemeleri (`STATUS_TO_STATE`) + geri doldurma komutu; 4 ham listeyi `state`'e çevir (`awaitingShipment`, `format.js`, `MaybeAutoInvoice::stageOf`, pano).
+  - Uygulama (11 Eki): durumlar `awaiting_payment · awaiting_shipment · shipped · delivered · partially_returned` + terminal `cancelled · returned · superseded`; 4 ham liste taşındı (`awaitingShipment`, `format.js`, `MaybeAutoInvoice` iptal/aşama, pano cirosu) — `state` boşken eski ham listeye düşer. Kanal eşleme testleri `ChannelOrderStateMappingTest` (69 satır, her sipariş kanalı zorunlu), uçtan uca `CanonicalOrderStateTest` (7). **Canlıda `orders:backfill-state` koşturulmalı.** Bilinen boşluk: Hepsiburada/ikas/Ticimax güncelleme olayı üretmez → kargo/teslim başlığa yansımaz (kanal tarafı, S2/S10).
 - [ ] `app/Support/Money` + 5 `toMinor` kopyasının taşınması; `brick/math` `composer.json`'a doğrudan.
 - [ ] Migration: `order_lines` (+`discount_total, net_line_total, vat_rate, unit_cost, cost_currency, commission_rate, commission_amount`), `orders` (+`state, discount_total, refunded_total`), `order_refunds`, `settlements`, `settlement_lines`, `invoices` (+`net_total, vat_total, gross_total, currency`).
 - [ ] Trendyol/Shopify net tutar tanımı + `TrendyolOrderPollingTest` güncellemesi; Trendyol alan anlamı gerçek paketle doğrulama.
