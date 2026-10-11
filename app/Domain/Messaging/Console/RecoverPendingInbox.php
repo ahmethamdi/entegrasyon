@@ -45,9 +45,14 @@ final class RecoverPendingInbox extends Command
         $this->reclaimAbandoned();
 
         // Tarama TÜM kiracıları görmek zorundadır; sistem erişimi açıktır.
+        //
+        // ZAMANI GELMEMİŞ SATIR SEÇİLMEZ (P0-6): bekleme ya da sipariş
+        // bekleyen erteleme. Seçilseydi tur sınırı (`--limit`) onlarla dolar ve
+        // vakti gelmiş mesajlar sıra bekler — dolu sayfa kayıp atlatırdı.
         $stuck = TenantContext::runAsSystem(fn () => InboxMessage::query()
             ->where('status', 'pending')
             ->where('received_at', '<', now()->subMinutes($minutes))
+            ->where(static fn ($q) => $q->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now()))
             ->orderBy('received_at')
             ->limit($limit)
             ->get(['id', 'tenant_id']));

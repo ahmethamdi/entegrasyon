@@ -64,6 +64,17 @@ enum ItemStatus: string
     case PRICE_CONFLICT = 'PRICE_CONFLICT';
 
     /**
+     * Kanal stoğu beklenenden DÜŞÜK ve fark henüz alınmamış bir satış
+     * olabilir (mimari denetim P0-2) — onarım AÇILMAZ, beklenir.
+     *
+     * Sürüklenme zincirine girmez ve onu kırmaz (`DriftHistory`):
+     * kanıtlanmış bir fark değildir, "düzeldi" de değildir. Sipariş alımı
+     * yetişince ya fark kapanır (sipariş geldi → `MATCHED`) ya da aynı
+     * değer bir tur daha görülür ve onarım açılır (`UnrecordedSaleGuard`).
+     */
+    case SUSPECTED_SALE = 'SUSPECTED_SALE';
+
+    /**
      * Bu sınıflandırma sürüklenme sayılır mı — tur sayacını besler.
      *
      * Sayaç aynı zamanda ONARIM KAPISIDIR (`ReconcileConnection::run()`):

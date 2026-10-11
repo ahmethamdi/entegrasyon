@@ -11,6 +11,7 @@ use App\Domain\Channels\Console\SyncTaxonomyCommand;
 use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
+use App\Domain\Messaging\Console\ReplayFailedInbox;
 use App\Domain\Orders\Console\PollChannelOrdersCommand;
 use App\Domain\Orders\Console\ReconcileChannelOrdersCommand;
 use App\Domain\Orders\Console\ResolveUnmatchedOrderLinesCommand;
@@ -51,6 +52,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withCommands([
         OutboxRelayCommand::class,
         RecoverPendingInbox::class,
+        // P0-6 · elle/sistemle güvenli yeniden oynatma (zamanlanmaz).
+        ReplayFailedInbox::class,
         // §6 · iki bütünlük taraması. Zamanlaması routes/console.php içinde;
         // kayıt burada olmadan zamanlayıcı komutu bulamaz ve tarama sessizce
         // hiç çalışmaz (ScheduledScansTest bu ikisini ayrı ayrı doğrular).

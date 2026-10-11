@@ -7,7 +7,9 @@ namespace App\Domain\Orders\Routing;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Invoicing\Actions\MaybeAutoInvoice;
+use App\Domain\Messaging\Actions\WakeDeferredOrderEvents;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Messaging\Support\DeferUntilOrderArrives;
 use App\Domain\Orders\Actions\ApplyOrderCancellation;
 use App\Domain\Orders\Actions\ApplyOrderReturn;
 use App\Domain\Orders\Actions\IngestChannelOrder;
@@ -60,6 +62,7 @@ final class OrderEventRouter
         // Otomatik fatura — durum ilerleyince ayara göre istek açar. Sipariş
         // yolunun bir parçası DEĞİLDİR: hatası log'a düşer, olay yine işlenir.
         private readonly MaybeAutoInvoice $autoInvoice = new MaybeAutoInvoice,
+        private readonly WakeDeferredOrderEvents $wakeDeferred = new WakeDeferredOrderEvents,
     ) {}
 
     public function route(InboxMessage $message): void
@@ -131,11 +134,16 @@ final class OrderEventRouter
         );
 
         $this->ingestOrder->run($incoming, $this->defaultWarehouseId($message->tenant_id));
+
+        // Siparişten ÖNCE gelip ertelenmiş iptal/iade olayları beklemeden
+        // işlensin (P0-1). Sipariş zaten varsa da çağrılır: zararsızdır ve
+        // yarışta kaçmış bir uyandırmayı telafi eder.
+        $this->wakeDeferred->run($message->channel_connection_id, $normalized->externalOrderId, $message->id);
     }
 
     private function handleCancelled(NormalizedOrderEvent $normalized, InboxMessage $message): void
     {
-        $order = $this->resolveOrder($normalized, $message);
+        $order = $this->resolveOrderOrDefer($normalized, $message);
 
         if ($order === null) {
             return;
@@ -166,7 +174,7 @@ final class OrderEventRouter
 
     private function handleReturned(NormalizedOrderEvent $normalized, InboxMessage $message): void
     {
-        $order = $this->resolveOrder($normalized, $message);
+        $order = $this->resolveOrderOrDefer($normalized, $message);
 
         if ($order === null) {
             return;
@@ -283,6 +291,47 @@ final class OrderEventRouter
         if ($changes !== []) {
             $order->forceFill($changes)->save();
         }
+    }
+
+    /**
+     * İptal/iade için sipariş — YOKSA OLAY ERTELENİR, KAYBOLMAZ (P0-1).
+     *
+     * Önceden sipariş bulunamayınca olay uyarıyla "işlendi" sayılırdı: sipariş
+     * sonra gelir, stok düşer ve iptal/iade HİÇ uygulanmazdı.
+     *
+     * Sipariş SAHİPLENİLMEZ (A14'ün tersi): iptal/iade gövdesindeki kalem
+     * miktarı siparişin tamamını değil yalnız iptal/iade edilen kısmı taşıyabilir;
+     * ondan sipariş yaratmak asıl `created` olayını "zaten var" diye eler ve
+     * kalan adetler hiç düşülmezdi. Beklemek güvenli taraftır.
+     *
+     * Tek istisna: sipariş BAĞLANTIDAN ÖNCE verilmişse (A14 kuralı) hiç
+     * gelmeyecektir — o satış açılış stoğundadır, olay işlenmiş sayılır.
+     */
+    private function resolveOrderOrDefer(NormalizedOrderEvent $normalized, InboxMessage $message): ?Order
+    {
+        $order = Order::query()
+            ->where('channel_connection_id', $message->channel_connection_id)
+            ->where('external_id', $normalized->externalOrderId)
+            ->first();
+
+        if ($order !== null) {
+            return $order;
+        }
+
+        $connectedAt = $message->connection?->connected_at;
+        $placedAt = $normalized->placedAt;
+
+        if ($connectedAt !== null && $placedAt !== null && $placedAt < $connectedAt->toDateTimeImmutable()) {
+            Log::info('inbox.event_for_pre_connection_order', [
+                'message' => $message->id,
+                'external_order_id' => $normalized->externalOrderId,
+                'type' => $normalized->type,
+            ]);
+
+            return null;
+        }
+
+        throw new DeferUntilOrderArrives($normalized->externalOrderId);
     }
 
     private function resolveOrder(NormalizedOrderEvent $normalized, InboxMessage $message): ?Order

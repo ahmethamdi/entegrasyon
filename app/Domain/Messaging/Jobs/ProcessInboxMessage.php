@@ -7,6 +7,8 @@ namespace App\Domain\Messaging\Jobs;
 use App\Domain\Billing\Routing\ShopifyBillingRouter;
 use App\Domain\Channels\Routing\ChannelLifecycleRouter;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Messaging\Support\DeferUntilOrderArrives;
+use App\Domain\Messaging\Support\InboxRetrySchedule;
 use App\Domain\Orders\Routing\OrderEventRouter;
 use App\Support\Tenancy\TenantAwareJob;
 use Illuminate\Support\Facades\DB;
@@ -69,6 +71,10 @@ final class ProcessInboxMessage extends TenantAwareJob
             // `inbox:recover` de onu toplamaz — o sipariş HİÇ işlenmez.
             ->where('tenant_id', $this->tenantId)
             ->where('status', 'pending')
+            // ZAMANI GELMEMİŞ MESAJ ALINMAZ (P0-6): hata sonrası bekleme ya
+            // da sipariş bekleyen erteleme. Kuyruğun hemen yeniden denemesi
+            // burada boş çıkar; mesajı vakti gelince `inbox:recover` atar.
+            ->where(static fn ($q) => $q->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now()))
             ->update([
                 'status' => 'processing',
                 'attempt_count' => DB::raw('attempt_count + 1'),
@@ -114,6 +120,8 @@ final class ProcessInboxMessage extends TenantAwareJob
             }
 
             $message->markProcessed();
+        } catch (DeferUntilOrderArrives $deferred) {
+            $this->defer($message, $deferred);
         } catch (Throwable $e) {
             // ⚠️ HATA MESAJI ÖLDÜRMEZ — BÜTÇE TÜKENENE KADAR GERİ DÖNER.
             //
@@ -135,6 +143,9 @@ final class ProcessInboxMessage extends TenantAwareJob
             $message->forceFill([
                 'status' => $exhausted ? 'failed' : 'pending',
                 'last_error' => mb_substr($e->getMessage(), 0, 2000),
+                // BEKLEMELİ YENİDEN DENEME (P0-6): 10 sn → 1 dk → 5 dk →
+                // 15 dk. Önceden beş deneme saniyeler içinde biterdi.
+                'next_attempt_at' => $exhausted ? null : InboxRetrySchedule::afterError($message->attempt_count),
             ])->save();
 
             Log::error($exhausted ? 'inbox.process_failed' : 'inbox.process_retrying', [
@@ -145,5 +156,42 @@ final class ProcessInboxMessage extends TenantAwareJob
 
             throw $e;
         }
+    }
+
+    /**
+     * Sipariş henüz yok — mesaj ERTELENİR, işlenmiş SAYILMAZ (P0-1).
+     *
+     * Hata bütçesi GERİ VERİLİR: sahiplenme `attempt_count`'u artırdı ama
+     * bekleme bir arıza değildir; beş ertelemede `failed` olsaydı yoklama
+     * turunu bekleyen meşru bir iptal kaybolurdu.
+     *
+     * Pencere dolunca terminal `expired` olur — `failed` DEĞİL: hiç gelmeyen
+     * siparişin stoğu hiç düşülmemiştir, iptali/iadesi geri alacak bir şey
+     * bulmaz (Trendyol paketi yoklamada ilk kez "Cancelled" görülürse tam
+     * olarak budur). `failed` alarmı bu meşru durumla dolmasın.
+     * `awaiting_order_ref` KALIR: sipariş günler sonra (ör. elle yeniden
+     * oynatmayla) gelirse olay yine uyandırılır.
+     * İstisna yeniden FIRLATILMAZ — kuyruk hatası değildir, Horizon'u
+     * gereksiz yeniden denemeyle doldurmaz.
+     */
+    private function defer(InboxMessage $message, DeferUntilOrderArrives $deferred): void
+    {
+        $receivedAt = $message->received_at ?? now();
+        $expired = InboxRetrySchedule::deferralExpired($receivedAt);
+
+        $message->forceFill([
+            'status' => $expired ? 'expired' : 'pending',
+            'attempt_count' => max(0, $message->attempt_count - 1),
+            'awaiting_order_ref' => mb_substr($deferred->externalOrderId, 0, 255),
+            'next_attempt_at' => $expired ? null : InboxRetrySchedule::afterDeferral($receivedAt),
+            'last_error' => $expired
+                ? 'Sipariş '.InboxRetrySchedule::DEFER_WINDOW_HOURS.' saat içinde gelmedi; olay uygulanmadı.'
+                : $deferred->getMessage(),
+        ])->save();
+
+        Log::info($expired ? 'inbox.deferral_expired' : 'inbox.deferred_until_order', [
+            'message' => $message->id,
+            'external_order_id' => $deferred->externalOrderId,
+        ]);
     }
 }

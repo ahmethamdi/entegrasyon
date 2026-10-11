@@ -78,6 +78,7 @@ final class ReconciliationController extends Controller
     private const ACTIONABLE = [
         ItemStatus::PRICE_CONFLICT->value,
         ItemStatus::MANUAL_REVIEW->value,
+        ItemStatus::SUSPECTED_SALE->value,
         ItemStatus::DRIFT_DETECTED->value,
         ItemStatus::REPAIR_QUEUED->value,
         ItemStatus::REMOTE_MISSING->value,
@@ -97,6 +98,9 @@ final class ReconciliationController extends Controller
         // hiçbir şey olmaz (§9 · PRICE).
         ItemStatus::PRICE_CONFLICT->value => 0,
         ItemStatus::MANUAL_REVIEW->value => 1,
+        // Sistem bilerek bekliyor (alınmamış satış olabilir, P0-2); kendiliğinden
+        // çözülür ama uzun sürerse satıcı kanaldaki son siparişlere bakmalı.
+        ItemStatus::SUSPECTED_SALE->value => 2,
         ItemStatus::DRIFT_DETECTED->value => 2,
         ItemStatus::REPAIR_QUEUED->value => 3,
         ItemStatus::REMOTE_MISSING->value => 4,
@@ -250,6 +254,7 @@ final class ReconciliationController extends Controller
                 ItemStatus::DRIFT_DETECTED->value,
                 ItemStatus::REPAIR_QUEUED->value,
             ])
+            ->selectRaw('count(*) FILTER (WHERE status = ?) AS suspected_sale', [ItemStatus::SUSPECTED_SALE->value])
             ->selectRaw('count(*) FILTER (WHERE status = ?) AS unreachable', [ItemStatus::REMOTE_UNREACHABLE->value])
             ->selectRaw('count(*) FILTER (WHERE status = ?) AS missing', [ItemStatus::REMOTE_MISSING->value])
             ->selectRaw('count(*) FILTER (WHERE status = ?) AS repaired', [ItemStatus::REPAIRED->value])

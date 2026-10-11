@@ -18,6 +18,7 @@ use App\Domain\Messaging\Actions\IngestInboxMessage;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
 use App\Domain\Messaging\Jobs\ProcessInboxMessage;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Messaging\Support\InboxRetrySchedule;
 use App\Domain\Orders\Enums\StockStatus;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Models\OrderLine;
@@ -462,13 +463,16 @@ final class InboundPipelineTest extends TestCase
     }
 
     /**
-     * Sipariş bulunamayan olay YUTULMAZ ama patlamaz da.
+     * Sipariş bulunamayan İPTAL "işlendi" SAYILMAZ — ERTELENİR (P0-1).
      *
-     * Mesaj işlenmiş sayılır; aksi halde kurtarma taraması onu sonsuza kadar
-     * yeniden dener. Eksik, uyarı günlüğüyle görünür kalır.
+     * Bu test önceden olayın `processed` işaretlendiğini kilitliyordu; mimari
+     * denetim bunun yanlış olduğunu gösterdi: sipariş sonra gelince stok
+     * düşer ve iptal hiç uygulanmazdı. Mesaj artık `pending` kalır, hata
+     * bütçesini yemez, siparişi bekler ve zamanı gelince yeniden denenir.
+     * Akışın tamamı `OutOfOrderOrderEventsTest`'te.
      */
     #[Test]
-    public function event_for_unknown_order_is_marked_processed(): void
+    public function event_for_unknown_order_is_deferred_not_processed(): void
     {
         [$tenant, $connection] = $this->makeContext();
 
@@ -481,7 +485,12 @@ final class InboundPipelineTest extends TestCase
 
         (new ProcessInboxMessage($tenant->id, $message->id))->handle();
 
-        $this->assertSame('processed', $message->fresh()->status);
+        $fresh = $message->fresh();
+
+        $this->assertSame('pending', $fresh->status);
+        $this->assertSame('ORD-YOK', $fresh->awaiting_order_ref);
+        $this->assertSame(0, $fresh->attempt_count, 'Erteleme hata bütçesini yememeli.');
+        $this->assertTrue($fresh->next_attempt_at->isFuture());
     }
 
     /** Sipariş olayı olmayan mesaj işlenmiş sayılır. */
@@ -585,7 +594,14 @@ final class InboundPipelineTest extends TestCase
         $this->assertSame('pending', $message->fresh()->status, 'Geçici arızada mesaj yeniden işlenebilir kalmalı.');
         $this->assertSame(10, $this->onHand($tenant, $warehouseId, $variant->id));
 
-        // Kuyruğun yeniden denemesi.
+        // BEKLEMELİ YENİDEN DENEME (P0-6): kuyruğun HEMEN yeniden denemesi
+        // mesajı almaz — bekleme süresi dolmadı.
+        (new ProcessInboxMessage($tenant->id, $message->id))->handle();
+        $this->assertSame('pending', $message->fresh()->status, 'Bekleme dolmadan yeniden işlenmemeli.');
+        $this->assertSame(10, $this->onHand($tenant, $warehouseId, $variant->id));
+
+        $this->travel(InboxRetrySchedule::ERROR_BACKOFF_SECONDS[0] + 1)->seconds();
+
         (new ProcessInboxMessage($tenant->id, $message->id))->handle();
 
         $this->assertSame('processed', $message->fresh()->status);
@@ -604,6 +620,9 @@ final class InboundPipelineTest extends TestCase
         FakeOrderAdapter::$failuresBeforeSuccess = ProcessInboxMessage::MAX_ATTEMPTS + 1;
 
         for ($i = 1; $i <= ProcessInboxMessage::MAX_ATTEMPTS; $i++) {
+            // Her denemeden önce bekleme süresi dolar (P0-6: en uzun 15 dk).
+            $this->travel(max(InboxRetrySchedule::ERROR_BACKOFF_SECONDS) + 1)->seconds();
+
             try {
                 (new ProcessInboxMessage($tenant->id, $message->id))->handle();
             } catch (\RuntimeException) {

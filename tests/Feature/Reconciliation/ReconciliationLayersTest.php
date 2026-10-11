@@ -295,7 +295,10 @@ final class ReconciliationLayersTest extends TestCase
         // sürüklenme geçmişi yok — dört sebebin hiçbiri.
         $this->seedStock($tenant, $variant, 12);
 
-        ProgrammableInventoryAdapter::remoteQuantity('woocommerce', '10', 4);
+        // Kanal BEKLENENDEN YÜKSEK (fazla satış riski): bu yön ilk turda
+        // onarılır. Düşük yön P0-2'den beri alınmamış satış kapısında
+        // bekler (`UnrecordedSaleGuardTest`) — bu test katman seçimini sınar.
+        ProgrammableInventoryAdapter::remoteQuantity('woocommerce', '10', 20);
 
         $hot = $this->reconcile($tenant, $connection, ReconciliationScope::HOT);
         $warm = $this->reconcile($tenant, $connection, ReconciliationScope::WARM);
@@ -306,7 +309,7 @@ final class ReconciliationLayersTest extends TestCase
         $cold = $this->reconcile($tenant, $connection, ReconciliationScope::COLD);
 
         $this->assertSame(1, $cold->candidates_count, 'Soğuk katman örneklemi onu YAKALAMALI.');
-        $this->assertSame(1, $cold->drift_count, '12 ≠ 4 — sürüklenme.');
+        $this->assertSame(1, $cold->drift_count, '12 ≠ 20 — sürüklenme.');
 
         $item = $this->itemFor($tenant, $listing);
 

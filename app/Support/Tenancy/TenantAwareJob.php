@@ -61,12 +61,19 @@ abstract class TenantAwareJob implements ShouldQueue
 
     final public function handle(): void
     {
+        // İÇ İÇE ÇALIŞMADA ÖNCEKİ BAĞLAM GERİ YÜKLENİR: senkron kuyrukta bir
+        // iş başka bir işi içinden çalıştırırsa (ör. sipariş alınınca
+        // ertelenmiş iptali uyandırmak) içteki işin `clear()`'ı dıştakinin
+        // bağlamını silerdi. Üst düzeyde (işçi) önceki bağlam yoktur ve
+        // `clear()` bugünkü gibi sistem derinliğini de sıfırlar.
+        $previous = TenantContext::id();
+
         TenantContext::set($this->tenantId);
 
         try {
             $this->withLocale($this->locale, fn () => $this->handleForTenant());
         } finally {
-            TenantContext::clear();
+            $previous === null ? TenantContext::clear() : TenantContext::set($previous);
         }
     }
 

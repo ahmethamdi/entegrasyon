@@ -10,6 +10,7 @@ use App\Support\Uuid\HasUuidV7;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Kanaldan gelen ham mesaj — tek gelen hat.
@@ -36,7 +37,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $id
  * @property string $source webhook | polling
  * @property string|null $external_event_id
- * @property string $status pending | processed | failed
+ * @property string $status pending | processing | processed | failed | expired
+ * @property Carbon|null $next_attempt_at bu andan önce yeniden işlenmez
+ * @property string|null $awaiting_order_ref ertelenmiş olayın beklediği sipariş
  * @property array<string, mixed> $payload
  */
 class InboxMessage extends Model
@@ -60,6 +63,8 @@ class InboxMessage extends Model
         'status',
         'attempt_count',
         'last_error',
+        'next_attempt_at',
+        'awaiting_order_ref',
     ];
 
     /** dedupe_window generated column'dur; asla yazılmaz. */
@@ -73,6 +78,7 @@ class InboxMessage extends Model
             'attempt_count' => 'integer',
             'received_at' => 'datetime',
             'processed_at' => 'datetime',
+            'next_attempt_at' => 'datetime',
             'dedupe_window' => 'datetime',
         ];
     }
@@ -99,6 +105,10 @@ class InboxMessage extends Model
         return $this->forceFill([
             'status' => 'processed',
             'processed_at' => now(),
+            // Ertelenmiş olay artık UYGULANDI: sipariş yeniden alınırsa
+            // (yeniden oynatma) bu satır bir daha uyandırılmasın.
+            'awaiting_order_ref' => null,
+            'next_attempt_at' => null,
         ])->save();
     }
 

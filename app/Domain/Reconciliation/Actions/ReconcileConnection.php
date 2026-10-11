@@ -17,6 +17,7 @@ use App\Domain\Reconciliation\Models\ReconciliationRun;
 use App\Domain\Reconciliation\Support\CandidateSelector;
 use App\Domain\Reconciliation\Support\DriftHistory;
 use App\Domain\Reconciliation\Support\SampledCandidates;
+use App\Domain\Reconciliation\Support\UnrecordedSaleGuard;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
@@ -90,6 +91,7 @@ final class ReconcileConnection
         private readonly AdapterRegistry $registry,
         private readonly QueueRepair $queueRepair,
         private readonly DriftHistory $history,
+        private readonly UnrecordedSaleGuard $saleGuard,
     ) {}
 
     /**
@@ -295,7 +297,7 @@ final class ReconcileConnection
     ): ReconciliationItem {
         [$status, $magnitude, $local, $remote, $observedHash] = $domain === SyncDomain::PRICE
             ? $this->comparePrice($listing, $snapshot)
-            : $this->compareInventory($listing, $snapshot);
+            : $this->compareInventory($listing, $snapshot, $run);
 
         $item = ReconciliationItem::query()->create([
             'tenant_id' => $run->tenant_id,
@@ -322,7 +324,7 @@ final class ReconcileConnection
      *
      * @return array{0: ItemStatus, 1: int|null, 2: array<string, mixed>, 3: array<string, mixed>, 4: string|null}
      */
-    private function compareInventory(Listing $listing, RemoteInventorySnapshot $snapshot): array
+    private function compareInventory(Listing $listing, RemoteInventorySnapshot $snapshot, ReconciliationRun $run): array
     {
         $level = InventoryLevel::query()
             ->where('variant_id', $listing->variant_id)
@@ -341,6 +343,21 @@ final class ReconcileConnection
             $observedRemote,
             SyncDomain::INVENTORY,
         );
+
+        // ── ALINMAMIŞ SATIŞ KAPISI (P0-2) ─────────────────────────────
+        // Kanal BEKLENENDEN DÜŞÜKSE fark, siparişi henüz bize ulaşmamış bir
+        // satış olabilir. Onarım kanalı YUKARI çeker; satış gerçekse aynı
+        // mal ikinci kez satılır. Kanıt yetene kadar beklenir. Ters yön
+        // (kanal yüksek = fazla satış riski) bu kapıya hiç girmez.
+        //
+        // Yalnız `DRIFT_DETECTED` dönüştürülür: `MANUAL_REVIEW` (onarım zaten
+        // durmuş) görünür kalmalı.
+        if ($status === ItemStatus::DRIFT_DETECTED
+            && $observedRemote !== null
+            && $observedRemote < $expectedRemote
+            && ! $this->saleGuard->mayRaiseRemote($run->loadMissing('connection')->connection, $listing->id, $observedRemote)) {
+            $status = ItemStatus::SUSPECTED_SALE;
+        }
 
         return [
             $status,

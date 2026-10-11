@@ -70,6 +70,12 @@ const badges = {
         text: k('Elle inceleme'),
         class: 'bg-red-50 text-red-900 border-red-300',
     },
+    // Kanal stoğu düşük ve henüz alınmamış bir satış olabilir: sistem
+    // ONARMADAN bekliyor (fazla satış riski yaratmamak için).
+    SUSPECTED_SALE: {
+        text: k('Satış olabilir, bekleniyor'),
+        class: 'bg-amber-50 text-amber-900 border-amber-300',
+    },
     DRIFT_DETECTED: {
         text: k('Farklılık var'),
         class: 'bg-amber-50 text-amber-900 border-amber-300',
