@@ -2131,6 +2131,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
                 nodes {
                   id sku barcode price inventoryQuantity
                   inventoryItem { id }
+                  selectedOptions { name value }
                   media(first: 1) { nodes { ... on MediaImage { image { url } } } }
                   product {
                     id title status vendor descriptionHtml

@@ -69,6 +69,32 @@ final class TrendyolCatalogImportTest extends TestCase
         ], $product->listingIdentity);
     }
 
+    /**
+     * ADR-003: varyant düzeyindeki öznitelikler (Beden…) seçenek olur;
+     * içerik düzeyindekiler (bütün varyantlarda aynı) seçenek DEĞİLDİR.
+     * Aynı `contentId`'nin varyantları aynı grup kimliğini taşır.
+     */
+    #[Test]
+    public function variant_attributes_become_options_and_siblings_share_the_content_id(): void
+    {
+        $sized = fn (string $barcode, string $size): array => [
+            ...$this->variant($barcode, stock: 1, price: 10),
+            'attributes' => [['attributeId' => 293, 'attributeName' => 'Beden', 'attributeValue' => $size, 'attributeValueId' => 4381]],
+        ];
+
+        Http::fake(['*' => Http::response($this->page([[
+            ...$this->content('77', [$sized('B-S', 'S'), $sized('B-M', 'M')]),
+            'attributes' => [['attributeId' => 47, 'attributeName' => 'Materyal', 'attributeValue' => 'Pamuk']],
+        ]]), 200)]);
+
+        [$small, $medium] = $this->adapter()->fetchProductPage()->products;
+
+        $this->assertSame(['Beden' => 'S'], $small->options);
+        $this->assertSame(['Beden' => 'M'], $medium->options);
+        $this->assertSame('77', $small->groupId());
+        $this->assertSame('77', $medium->groupId());
+    }
+
     #[Test]
     public function the_sellers_own_stock_code_wins_over_the_barcode(): void
     {

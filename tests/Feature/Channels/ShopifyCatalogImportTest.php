@@ -81,6 +81,41 @@ final class ShopifyCatalogImportTest extends TestCase
     }
 
     /**
+     * ADR-003: `selectedOptions` seçenek olur; Shopify'ın tek varyantlı ürün
+     * varsayılanı ("Title / Default Title") sahte seçenek olarak YAZILMAZ.
+     * Sorgu `selectedOptions`'ı istemezse kardeş varyantlar ayırt edilemez.
+     */
+    #[Test]
+    public function selected_options_become_variant_options_without_the_default_title(): void
+    {
+        $node = fn (string $id, array $options): array => [
+            'id' => 'gid://shopify/ProductVariant/'.$id,
+            'sku' => 'SKU-'.$id,
+            'price' => '10.00',
+            'selectedOptions' => $options,
+            'product' => ['id' => 'gid://shopify/Product/1', 'title' => 'Tişört'],
+        ];
+
+        Http::fake(['*' => Http::response([
+            'data' => ['productVariants' => [
+                'nodes' => [
+                    $node('1', [['name' => 'Renk', 'value' => 'Kırmızı'], ['name' => 'Beden', 'value' => 'M']]),
+                    $node('2', [['name' => 'Title', 'value' => 'Default Title']]),
+                ],
+                'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+            ]],
+        ], 200)]);
+
+        $page = $this->adapter()->fetchProductPage();
+
+        $this->assertSame(['Renk' => 'Kırmızı', 'Beden' => 'M'], $page->products[0]->options);
+        $this->assertSame([], $page->products[1]->options);
+        $this->assertSame('gid://shopify/Product/1', $page->products[0]->groupId());
+
+        Http::assertSent(fn ($request): bool => str_contains((string) ($request->data()['query'] ?? ''), 'selectedOptions { name value }'));
+    }
+
+    /**
      * ⚠️ FİYAT STRING KALIR — float dönüşümü kuruş kayması üretir.
      *
      * `19.90 * 100` IEEE-754'te `1989.99...` olabilir ve `(int)` cast'i

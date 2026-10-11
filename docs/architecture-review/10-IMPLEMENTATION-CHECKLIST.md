@@ -50,7 +50,8 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 
 ## S3
 
-- [ ] ADR-003 gerçek varyant grubu: içe aktarma kanal grubunu toplar, seçenek değerleri yazılır, Trendyol `productMainId` ürün kimliğinden, SKU kuralı; mevcut veri için birleştirme komutu (onaylı).
+- [x] ADR-003 gerçek varyant grubu: içe aktarma kanal grubunu toplar, seçenek değerleri yazılır (Shopify/Trendyol/Etsy), Trendyol `productMainId` ürün kimliğinden, SKU kuralı (temel faz 5, 11 Eki).
+- [ ] ADR-003 kalanlar: eski bölünmüş veri için birleştirme komutu (kiracı onaylı, kanal ilanlarına dokunur); Woo/ikas/Ticimax/N11/Pazarama/Çiçeksepeti seçenek değerleri; panelde varyant ekleme/düzenleme; Shopify `productSet` çok varyant.
 - [ ] `brand_mappings`; ürün başına KDV oranı (`variants.vat_rate` ya da ürün); `ListingLifecycle` enum.
 - [ ] `OrderPayloadMapper`: listing bağı SKU'dan önce.
 - [ ] HB/N11 `SupportsCatalog` + "önce ara, sonra yarat"; test #16.

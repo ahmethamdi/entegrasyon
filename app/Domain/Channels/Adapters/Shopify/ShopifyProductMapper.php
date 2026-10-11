@@ -266,7 +266,40 @@ final class ShopifyProductMapper
             listingIdentity: isset($identity['external_id']) ? $identity : [],
             // Shopify'da varyant fiyatı MAĞAZA para birimindedir.
             currency: self::nonEmptyString($currency),
+            options: self::options($variant['selectedOptions'] ?? null),
         );
+    }
+
+    /**
+     * `selectedOptions[] { name value }` → `['Renk' => 'Kırmızı', …]` (ADR-003).
+     *
+     * Shopify'ın tek varyantlı ürün varsayılanı ("Title" / "Default Title")
+     * ATILIR: gerçek bir seçenek değildir; yazılsaydı her tek varyantlı ürün
+     * "Title" adlı sahte bir seçenek tanımı taşır ve Trendyol öznitelik
+     * eşleme ekranında anlamsız bir satır belirirdi.
+     *
+     * @return array<string, string>
+     */
+    private static function options(mixed $selected): array
+    {
+        $options = [];
+
+        foreach (is_array($selected) ? $selected : [] as $option) {
+            $name = is_array($option) ? self::nonEmptyString($option['name'] ?? null) : null;
+            $value = is_array($option) ? self::nonEmptyString($option['value'] ?? null) : null;
+
+            if ($name === null || $value === null) {
+                continue;
+            }
+
+            if ($name === self::DEFAULT_OPTION_NAME && $value === self::DEFAULT_OPTION_VALUE) {
+                continue;
+            }
+
+            $options[$name] = $value;
+        }
+
+        return $options;
     }
 
     /**

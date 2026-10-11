@@ -70,7 +70,40 @@ final readonly class RemoteProduct
          * ve TL kanallarına çevrilmeden giderdi.
          */
         public ?string $currency = null,
+        /**
+         * Varyantın seçenek değerleri, SIRALI: `['Renk' => 'Kırmızı', 'Beden' => 'M']`.
+         *
+         * ADR-003: aynı `external_parent_id` altındaki varyantlar TEK ürün
+         * altında toplanır ve birbirinden bu değerlerle ayrılır. Trendyol'a
+         * gönderimde öznitelik eşlemesi (`variant_options`) bunlardan
+         * beslenir; yazılmasaydı kardeş varyantlar kanalda ayırt edilemezdi.
+         *
+         * Boş dizi = kanal seçenek bildirmiyor ya da ürün tek varyantlı
+         * (Shopify "Title / Default Title" burada YER ALMAZ).
+         *
+         * @var array<string, string>
+         */
+        public array $options = [],
     ) {}
+
+    /**
+     * Kanaldaki ürün grubunun kimliği (Shopify ürün gid'i, Trendyol
+     * `contentId`, Etsy `listing_id`…). Yoksa null — ürün gruplanmaz.
+     */
+    public function groupId(): ?string
+    {
+        $parent = $this->listingIdentity['external_parent_id'] ?? null;
+
+        return is_string($parent) && trim($parent) !== '' ? $parent : null;
+    }
+
+    /**
+     * Seçenek değerleri tek satır: "Kırmızı / M". Seçenek yoksa null.
+     */
+    public function optionLabel(): ?string
+    {
+        return $this->options === [] ? null : implode(' / ', array_values($this->options));
+    }
 
     /**
      * SKU'su olan ürün doğrudan içe aktarılır.

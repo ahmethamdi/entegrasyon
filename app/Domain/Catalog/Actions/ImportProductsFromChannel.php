@@ -7,6 +7,7 @@ namespace App\Domain\Catalog\Actions;
 use App\Domain\Billing\Actions\EnforceQuota;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Support\ChannelImportResult;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -60,6 +61,20 @@ use Throwable;
  * SARILMAZ; her ürün kendi transaction'ında atomiktir (`CreateProduct`
  * kendi içinde sarar).
  *
+ * ─────────────────────────────────────────────────────────────────────
+ * ADR-003 — KANAL GRUBU TEK ÜRÜNDÜR
+ * ─────────────────────────────────────────────────────────────────────
+ * Kanal varyant başına satır döndürür; aynı `external_parent_id`'yi
+ * (Shopify ürün gid'i, Trendyol `contentId`, Etsy `listing_id`) taşıyan
+ * satırlar TEK ürünün varyantlarıdır. İlk gelen ürünü açar, kardeşleri
+ * `AddVariantToProduct` ile o ürüne eklenir; seçenek değerleri yazılır,
+ * fiyat ve kanal bağı DOĞRU VARYANTA gider.
+ *
+ * ESKİ BÖLÜNMÜŞ VERİ BİRLEŞTİRİLMEZ: ADR-003 öncesi içe aktarmada aynı
+ * grubun varyantları ayrı ürün açtı. Grup birden çok ürüne dağılmışsa yeni
+ * kardeş hangisine ekleneceği belirsizdir — eski davranışla ayrı ürün açılır.
+ * Birleştirme kanal ilanlarına dokunduğu için ayrı, kiracı onaylı bir iştir.
+ *
  * SAYFA HATASI İSE TURU DURDURUR ve bu ayrım bilinçlidir: tek ürünün
  * bozukluğu o ürüne özgüdür, ama sayfa çekilemiyorsa kanal konuşmuyor
  * demektir ve kalan sayfaları denemek yalnızca kotayı yakar. O ana kadar
@@ -73,7 +88,22 @@ final class ImportProductsFromChannel
         private readonly UpdateProduct $updateProduct,
         private readonly SyncImportedImages $syncImages,
         private readonly EnforceQuota $quota,
+        private readonly AddVariantToProduct $addVariant,
+        private readonly SetVariantPrice $setPrice,
+        private readonly AssignVariantOptions $assignOptions,
     ) {}
+
+    /**
+     * Turda görülen görseller, ürün başına BİRLEŞİK ve sıralı.
+     *
+     * Görsel senkronu kaynak başına "listede olmayanı sil" yapar. Gruplu
+     * üründe her varyant yalnız kendi görselini taşır; varyant başına
+     * senkron kardeşin görselini silerdi. Tur sonunda ürün başına BİR KEZ
+     * yazılır.
+     *
+     * @var array<string, array{product: Product, urls: list<string>}>
+     */
+    private array $images = [];
 
     public function run(ChannelConnection $connection, string $warehouseId): ChannelImportResult
     {
@@ -92,7 +122,9 @@ final class ImportProductsFromChannel
         }
 
         $created = 0;
+        $variantsAdded = 0;
         $updated = 0;
+        $this->images = [];
         $skipped = 0;
         $errors = [];
 
@@ -119,6 +151,8 @@ final class ImportProductsFromChannel
                     'error' => $e->getMessage(),
                 ]);
 
+                $errors = $this->flushImages($connection, $errors);
+
                 return new ChannelImportResult(
                     created: $created,
                     updated: $updated,
@@ -126,6 +160,7 @@ final class ImportProductsFromChannel
                     errors: $this->withQuotaNote($errors, $quotaBlocked),
                     stoppedEarly: true,
                     stopReason: $e->getMessage(),
+                    variantsAdded: $variantsAdded,
                 );
             }
 
@@ -160,14 +195,42 @@ final class ImportProductsFromChannel
                     // ÖNCE BAĞ, SONRA SKU: satıcı kanalda SKU'yu değiştirdiyse
                     // (ya da sonradan girdiyse) SKU araması tutmaz ve ürün
                     // ikinci kez açılırdı. Bağ kanal kimliğidir, değişmez.
+                    // Arama VARYANT döndürür: çok varyantlı üründe fiyat ve
+                    // bağ doğru bedene gitmeli (ADR-003).
                     $existing = $this->findByListing($connection, $product)
                         ?? $this->findBySku($tenantId, $sku);
 
                     if ($existing !== null) {
-                        $this->applyUpdate($existing, $product);
-                        $this->syncImages->run($existing, $connection->id, $product->images);
+                        $this->applyUpdate($connection, $existing, $product);
+                        $this->collectImages($existing->product, $product->images);
                         $this->linkListing($connection, $existing, $product);
                         $updated++;
+
+                        continue;
+                    }
+
+                    // KARDEŞ VARYANT: grubun ürünü bu turda ya da önceki bir
+                    // turda açılmışsa yeni ürün DEĞİL, o ürüne varyanttır.
+                    // Kota ürün sayar; varyant kotadan düşmez.
+                    [$group, $ambiguous] = $this->findGroup($connection, $product);
+
+                    if ($group !== null) {
+                        $variant = $this->addVariant->run(
+                            product: $group,
+                            sku: $sku,
+                            price: (float) ($product->price ?? 0),
+                            openingStock: max(0, $product->quantity ?? 0),
+                            warehouseId: $warehouseId,
+                            options: $product->options,
+                            currency: $product->currency ?? 'TRY',
+                            barcode: $product->barcode,
+                            originConnectionId: $connection->id,
+                        );
+                        $created++;
+                        $variantsAdded++;
+
+                        $this->collectImages($group, $product->images);
+                        $this->linkListing($connection, $variant, $product);
 
                         continue;
                     }
@@ -178,7 +241,7 @@ final class ImportProductsFromChannel
                         continue;
                     }
 
-                    $new = $this->applyCreate($product, $sku, $warehouseId, $connection->id);
+                    $new = $this->applyCreate($product, $sku, $warehouseId, $connection->id, $ambiguous);
                     $created++;
 
                     if ($remaining !== null) {
@@ -187,8 +250,8 @@ final class ImportProductsFromChannel
 
                     // Görsel hatası ürünü geri almaz: ürün yazıldı ve
                     // sayıldı, görsel hatası raporda ayrıca görünür.
-                    $this->syncImages->run($new, $connection->id, $product->images);
-                    $this->linkListing($connection, $new, $product);
+                    $this->collectImages($new, $product->images);
+                    $this->linkListing($connection, $new->variants()->firstOrFail(), $product);
                 } catch (Throwable $e) {
                     // SESSİZCE YUTULMAZ — tur devam eder, ürün rapora girer.
                     $errors[] = [
@@ -212,6 +275,8 @@ final class ImportProductsFromChannel
         // "içe aktarma tamamlandı" der, oysa katalogun kalanı hiç
         // görülmemiştir (§13 · "no silent caps").
         $hitPageCap = $page->hasMore && $pagesRead >= $maxPages;
+
+        $errors = $this->flushImages($connection, $errors);
 
         // Arşivli varyantlar ATLANDI sayılır ve TEK satırla açıklanır.
         if ($archived > 0) {
@@ -237,10 +302,54 @@ final class ImportProductsFromChannel
                     ['max' => $maxPages],
                 )
                 : null,
+            variantsAdded: $variantsAdded,
         );
     }
 
     // ---------------------------------------------------------------- iç
+
+    /**
+     * @param  list<string>  $urls
+     */
+    private function collectImages(Product $product, array $urls): void
+    {
+        $entry = $this->images[$product->id] ?? ['product' => $product, 'urls' => []];
+        $entry['urls'] = array_values(array_unique([...$entry['urls'], ...$urls]));
+        $this->images[$product->id] = $entry;
+    }
+
+    /**
+     * Toplanan görselleri ürün başına BİR KEZ yazar.
+     *
+     * Görsel hatası ürünü geri almaz: ürün yazıldı ve sayıldı, hata
+     * raporda ayrıca görünür.
+     *
+     * @param  list<array{line: int, message: string}>  $errors
+     * @return list<array{line: int, message: string}>
+     */
+    private function flushImages(ChannelConnection $connection, array $errors): array
+    {
+        foreach ($this->images as $entry) {
+            try {
+                $this->syncImages->run($entry['product'], $connection->id, $entry['urls']);
+            } catch (Throwable $e) {
+                $errors[] = [
+                    'line' => 0,
+                    'message' => sprintf('%s: %s', $entry['product']->sku, $e->getMessage()),
+                ];
+
+                Log::warning('catalog.channel_import_images_failed', [
+                    'connection' => $connection->id,
+                    'product' => $entry['product']->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $this->images = [];
+
+        return $errors;
+    }
 
     /**
      * Kota yüzünden atlananlar TEK satırla raporlanır — sessizce düşseydi
@@ -274,19 +383,42 @@ final class ImportProductsFromChannel
      * Arama her üründe YENİDEN yapılır ve önbelleğe alınmaz — `ImportProducts`
      * ile aynı gerekçe: ilk ürün kaydı yaratmışsa ikincisi onu BULMALIDIR,
      * yoksa `UNIQUE(tenant_id, sku)` ihlaline düşer.
+     *
+     * ÖNCE VARYANT SKU'SU: çok varyantlı üründe satılabilir birimin SKU'su
+     * varyantta yaşar. Ürün SKU'su (grup kodu) yalnız TEK varyantlı üründe
+     * eşleşme sayılır — çok varyantlıda hangi bedene denk geldiği belirsizdir.
      */
-    private function findBySku(string $tenantId, string $sku): ?Product
+    private function findBySku(string $tenantId, string $sku): ?Variant
     {
-        return Product::query()
+        $variant = Variant::query()
             ->where('tenant_id', $tenantId)
             ->where('sku', $sku)
             ->first();
+
+        if ($variant !== null) {
+            return $variant;
+        }
+
+        $product = Product::query()
+            ->where('tenant_id', $tenantId)
+            ->where('sku', $sku)
+            ->first();
+
+        if ($product === null) {
+            return null;
+        }
+
+        $variants = $product->variants()->limit(2)->get();
+
+        return $variants->count() === 1
+            ? $variants->first()->setRelation('product', $product)
+            : null;
     }
 
     /**
-     * Bu bağlantıda bu kanal kimliğine bağlı ürün — yeniden içe aktarmada.
+     * Bu bağlantıda bu kanal kimliğine bağlı VARYANT — yeniden içe aktarmada.
      */
-    private function findByListing(ChannelConnection $connection, RemoteProduct $product): ?Product
+    private function findByListing(ChannelConnection $connection, RemoteProduct $product): ?Variant
     {
         $externalId = $product->listingIdentity['external_id'] ?? null;
 
@@ -297,7 +429,63 @@ final class ImportProductsFromChannel
         return Listing::query()
             ->where('channel_connection_id', $connection->id)
             ->where('external_id', $externalId)
-            ->first()?->variant?->product;
+            ->first()?->variant;
+    }
+
+    /**
+     * Kanal grubunun (`external_parent_id`) bizdeki ürünü.
+     *
+     * Dönüş: [ürün, belirsiz mi]. Grup TEK ürüne bağlıysa o ürün döner.
+     * Birden çok ürüne dağılmışsa (ADR-003 öncesi bölünmüş veri) ürün
+     * DÖNMEZ ve `belirsiz = true`: hangisine eklendiği tahmin olurdu ve
+     * yanlış tahmin stoğu başka ürünün altına yazardı.
+     *
+     * @return array{0: Product|null, 1: bool}
+     */
+    private function findGroup(ChannelConnection $connection, RemoteProduct $product): array
+    {
+        $groupId = $product->groupId();
+
+        if ($groupId === null) {
+            return [null, false];
+        }
+
+        $productIds = Listing::query()
+            ->join('variants', 'variants.id', '=', 'listings.variant_id')
+            ->where('listings.channel_connection_id', $connection->id)
+            ->where('listings.external_parent_id', $groupId)
+            ->distinct()
+            ->limit(2)
+            ->pluck('variants.product_id');
+
+        if ($productIds->count() !== 1) {
+            return [null, $productIds->count() > 1];
+        }
+
+        return [Product::query()->find($productIds->first()), false];
+    }
+
+    /**
+     * Grup birden çok ürüne dağılmış mı (eski bölünmüş veri)?
+     *
+     * O durumda tek varyantlı ürünün başlığı kanaldaki GRUP başlığıyla
+     * EZİLMEZ: Etsy'de eski içe aktarma "Kolye — Altın" yazdı; grup başlığı
+     * ("Kolye") yazılsaydı kardeş ürünler panelde ayırt edilemez olurdu.
+     */
+    private function isSplitGroup(ChannelConnection $connection, Variant $variant, RemoteProduct $remote): bool
+    {
+        $groupId = $remote->groupId();
+
+        if ($groupId === null) {
+            return false;
+        }
+
+        return Listing::query()
+            ->join('variants', 'variants.id', '=', 'listings.variant_id')
+            ->where('listings.channel_connection_id', $connection->id)
+            ->where('listings.external_parent_id', $groupId)
+            ->where('variants.product_id', '!=', $variant->product_id)
+            ->exists();
     }
 
     /**
@@ -313,13 +501,12 @@ final class ImportProductsFromChannel
      * satıcının (ya da önceki gönderimin) kararıdır; sessizce çevirmek
      * stoğu başka ürüne yazdırırdı. Raporlanır, dokunulmaz.
      */
-    private function linkListing(ChannelConnection $connection, Product $product, RemoteProduct $remote): void
+    private function linkListing(ChannelConnection $connection, Variant $variant, RemoteProduct $remote): void
     {
         $identity = $remote->listingIdentity;
         $externalId = $identity['external_id'] ?? null;
-        $variant = $product->variants()->first();
 
-        if (! is_string($externalId) || $externalId === '' || $variant === null) {
+        if (! is_string($externalId) || $externalId === '') {
             return;
         }
 
@@ -338,7 +525,7 @@ final class ImportProductsFromChannel
         $metadata = is_array($identity['channel_metadata'] ?? null) ? $identity['channel_metadata'] : [];
 
         $listing->forceFill(array_filter([
-            'tenant_id' => $product->tenant_id,
+            'tenant_id' => $variant->tenant_id,
             'external_id' => $externalId,
             'external_parent_id' => $identity['external_parent_id'] ?? $listing->external_parent_id,
             'external_url' => $identity['external_url'] ?? $listing->external_url,
@@ -356,11 +543,19 @@ final class ImportProductsFromChannel
      * Kanala giden yol ayrıca `lifecycle_status = 'live'` kapısından geçer,
      * yani 0 fiyat kazara kanala gitmez.
      */
-    private function applyCreate(RemoteProduct $product, string $sku, string $warehouseId, string $originConnectionId): Product
+    private function applyCreate(RemoteProduct $product, string $sku, string $warehouseId, string $originConnectionId, bool $splitGroup): Product
     {
+        $title = $product->title ?? $sku;
+
+        // Bölünmüş eski grupta yeni kardeş ayrı ürün olur; ayırt edilsin
+        // diye seçenek değeri başlığa eklenir (eski Etsy davranışı).
+        if ($splitGroup && $product->optionLabel() !== null) {
+            $title .= ' — '.$product->optionLabel();
+        }
+
         return $this->createProduct->run(
             sku: $sku,
-            title: $product->title ?? $sku,
+            title: $title,
             price: (float) ($product->price ?? 0),
             // Kanaldaki stok YALNIZCA burada kullanılır: yeni üründe
             // ezilecek kanonik bakiye YOKTUR. Negatif gelirse 0'a çekilir —
@@ -373,6 +568,7 @@ final class ImportProductsFromChannel
             barcode: $product->barcode,
             internalCategoryId: null,
             originConnectionId: $originConnectionId,
+            options: $product->options,
         );
     }
 
@@ -389,19 +585,37 @@ final class ImportProductsFromChannel
      * veride karşılığı yoktur. NULL geçilseydi her içe aktarma turu
      * satıcının kurduğu eşleştirmeleri sessizce koparırdı.
      */
-    private function applyUpdate(Product $product, RemoteProduct $remote): void
+    private function applyUpdate(ChannelConnection $connection, Variant $variant, RemoteProduct $remote): void
     {
+        $product = $variant->product;
+
+        $title = $this->isSplitGroup($connection, $variant, $remote)
+            ? $product->title
+            : ($remote->title ?? $product->title);
+
         $this->updateProduct->run(
             product: $product,
-            title: $remote->title ?? $product->title,
-            // NULL "DEĞİŞMEDİ" DEMEKTİR, "SIFIRLA" DEĞİL — `UpdateProduct`
-            // null fiyata DOKUNMAZ. `(float)` dönüşümü yapılsaydı fiyat
-            // göndermeyen kanal ürünü 0.00'a düşürür ve o fiyat sonraki
-            // senkronda TÜM kanallara yayılırdı.
-            price: $remote->price !== null ? (float) $remote->price : null,
+            title: $title,
+            // Fiyat ÜRÜNE değil VARYANTA yazılır (aşağıda): çok varyantlı
+            // üründe `UpdateProduct` fiyata dokunmaz ve kanal fiyatı
+            // sessizce kaybolurdu.
+            price: null,
             description: $remote->description ?? $product->description,
             brand: $remote->brand ?? $product->brand,
             internalCategoryId: $product->internal_category_id,
         );
+
+        // NULL "DEĞİŞMEDİ" DEMEKTİR, "SIFIRLA" DEĞİL. `(float)` dönüşümü
+        // koşulsuz yapılsaydı fiyat göndermeyen kanal varyantı 0.00'a
+        // düşürür ve o fiyat sonraki senkronda TÜM kanallara yayılırdı.
+        if ($remote->price !== null) {
+            $this->setPrice->run($variant, (float) $remote->price);
+        }
+
+        // Seçenekler yalnız EKSİKSE yazılır: eski içe aktarmanın seçeneksiz
+        // bıraktığı varyant dolar, satıcının panelde düzelttiği ezilmez.
+        if ($remote->options !== []) {
+            $this->assignOptions->run($variant, $remote->options);
+        }
     }
 }

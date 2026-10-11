@@ -35,19 +35,22 @@ use Symfony\Component\Uid\UuidV7;
  * `LockInventoryRows` ile alır, hareketi `ApplyMovement`'a yaptırır — Catalog
  * domain'i Inventory'nin modeline yazmaz, action'ını çağırır.
  *
- * TEK VARYANTLI BAŞLANGIÇ: varsayılan varyant ürünün SKU'sunu taşır. Çok
- * varyantlı ürün (renk × beden) `variant_options` ile kurulur ve bu action'ın
- * kapsamı dışındadır; kullanıcıya ilk adımda ikinci bir SKU sormak gereksiz
- * karar yüklüyordu.
+ * TEK VARYANTLI BAŞLANGIÇ: varsayılan varyant ürünün SKU'sunu taşır; ürün
+ * SKU'su grubun kodudur. Sonraki varyantlar (renk × beden)
+ * `AddVariantToProduct` ile eklenir (ADR-003) — kullanıcıya ilk adımda
+ * ikinci bir SKU sormak gereksiz karar yüklüyordu.
  */
 final class CreateProduct
 {
     public function __construct(
         private readonly LockInventoryRows $lockRows,
         private readonly ApplyMovement $applyMovement,
+        private readonly AssignVariantOptions $assignOptions,
     ) {}
 
     /**
+     * @param  array<string, string>  $options  İlk varyantın seçenekleri (ADR-003)
+     *
      * @throws DuplicateSkuException Aynı kiracıda SKU zaten varsa
      */
     public function run(
@@ -62,6 +65,7 @@ final class CreateProduct
         ?string $barcode = null,
         ?string $internalCategoryId = null,
         ?string $originConnectionId = null,
+        array $options = [],
     ): Product {
         $tenantId = TenantContext::idOrFail();
 
@@ -75,6 +79,7 @@ final class CreateProduct
             return DB::transaction(function () use (
                 $tenantId, $sku, $title, $price, $openingStock, $warehouseId,
                 $description, $brand, $currency, $barcode, $internalCategoryId, $originConnectionId,
+                $options,
             ): Product {
                 $normalizedCategory = $internalCategoryId === null
                     ? null
@@ -103,6 +108,10 @@ final class CreateProduct
                     'status' => 'active',
                     'content_version' => 1,
                 ]);
+
+                // Kanaldan gelen grubun ilk varyantı seçeneğini taşır (ADR-003);
+                // kardeşleri `AddVariantToProduct` ile eklenir.
+                $this->assignOptions->run($variant, $options);
 
                 // STOK SATIRI HER ZAMAN AÇILIR (0 ile de). Açılmasaydı stoğu 0
                 // olan ürün Stok ekranında HİÇ görünmez ve satıcı ona stok

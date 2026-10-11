@@ -6,6 +6,7 @@ namespace Tests\Feature\Channels;
 
 use App\Domain\Catalog\Actions\ImportProductsFromChannel;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\VariantOption;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -49,7 +50,10 @@ final class EtsyCatalogImportTest extends TestCase
         [$small, $medium] = $page->products;
 
         $this->assertSame('TSH-S', $small->sku);
-        $this->assertSame('Kedi Tişört — Beyaz / S', $small->title, 'HTML varlığı çözülür, varyant değerleri eklenir.');
+        $this->assertSame('Kedi Tişört', $small->title, 'HTML varlığı çözülür; başlık ilanın başlığıdır.');
+        // ADR-003: varyant değerleri başlığa değil SEÇENEĞE gider.
+        $this->assertSame(['Renk' => 'Beyaz', 'Beden' => 'S'], $small->options);
+        $this->assertSame(['Renk' => 'Beyaz', 'Beden' => 'M'], $page->products[1]->options);
         $this->assertSame('19.90', $small->price);
         $this->assertSame(3, $small->quantity);
         $this->assertSame('TRY', $small->currency);
@@ -109,7 +113,8 @@ final class EtsyCatalogImportTest extends TestCase
 
     /**
      * Uçtan uca: içe aktarılan ürün Etsy ilanına bağlanır; SKU'suz varyanta
-     * SKU üretilir ve bağ `product_id` ile kurulur.
+     * SKU üretilir ve bağ `product_id` ile kurulur. ADR-003: aynı ilanın
+     * iki varyantı TEK ürünün iki varyantıdır, seçenekleriyle.
      */
     #[Test]
     public function imported_products_are_linked_to_their_etsy_listing(): void
@@ -128,6 +133,7 @@ final class EtsyCatalogImportTest extends TestCase
         ));
 
         $this->assertSame(2, $result->created);
+        $this->assertSame(1, $result->variantsAdded, 'İkinci varyant var olan ürüne eklenir.');
 
         $this->asTenant($connection->tenant_id, function (): void {
             $listings = Listing::query()->with('variant')->orderBy('external_id')->get();
@@ -136,7 +142,17 @@ final class EtsyCatalogImportTest extends TestCase
             $this->assertSame(['9001', '9001'], $listings->pluck('external_parent_id')->all());
             $this->assertSame('TSH-S', $listings[0]->variant->sku);
             $this->assertNotSame('', (string) $listings[1]->variant->sku, 'SKU\'suz varyanta SKU üretilmeli.');
-            $this->assertSame(2, Product::query()->count());
+            $this->assertSame(1, Product::query()->count(), 'Aynı ilan tek ürün olmalı.');
+
+            $product = Product::query()->sole();
+            $this->assertSame('Kedi Tişört', $product->title);
+            $this->assertSame(2, $product->variants()->count());
+            $sizes = VariantOption::query()
+                ->whereHas('definition', fn ($q) => $q->where('name', 'Beden'))
+                ->with('value')->get()
+                ->map(fn (VariantOption $o): string => $o->value->value)
+                ->sort()->values()->all();
+            $this->assertSame(['M', 'S'], $sizes, 'Her varyant kendi bedenini taşımalı.');
         });
     }
 

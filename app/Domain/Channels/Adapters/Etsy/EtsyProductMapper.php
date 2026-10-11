@@ -199,13 +199,23 @@ final class EtsyProductMapper
                 continue;
             }
 
-            $values = [];
+            // Seçenekler (ADR-003): `property_values[] { property_name, values[] }`.
+            // Ad yoksa (eski kayıt) değerler yine de seçenek olur — adı
+            // "Seçenek N" ile; atılsaydı kardeş varyantlar ayırt edilemezdi.
+            $options = [];
 
-            foreach ((array) ($product['property_values'] ?? []) as $property) {
+            foreach (array_values((array) ($product['property_values'] ?? [])) as $index => $property) {
+                $values = [];
+
                 foreach ((array) (is_array($property) ? ($property['values'] ?? []) : []) as $value) {
                     if (($value = $text($value)) !== null) {
                         $values[] = $value;
                     }
+                }
+
+                if ($values !== []) {
+                    $name = is_array($property) ? $text($property['property_name'] ?? null) : null;
+                    $options[$name ?? 'Seçenek '.($index + 1)] = implode(', ', $values);
                 }
             }
 
@@ -215,7 +225,9 @@ final class EtsyProductMapper
             $out[] = new RemoteProduct(
                 externalId: (string) $product['product_id'],
                 sku: $sku,
-                title: $values === [] ? $title : $title.' — '.implode(' / ', $values),
+                // Başlık İLANIN başlığıdır: varyantlar artık tek ürünün
+                // altında toplanır, değerler seçenek olarak taşınır.
+                title: $title,
                 price: $price === null ? null : self::money($price),
                 quantity: (int) ($offering['quantity'] ?? 0),
                 description: $text($listing['description'] ?? null),
@@ -231,6 +243,7 @@ final class EtsyProductMapper
                         : null,
                 ], static fn (mixed $v): bool => $v !== null),
                 currency: $price === null ? null : $text($price['currency_code'] ?? null),
+                options: $options,
             );
         }
 

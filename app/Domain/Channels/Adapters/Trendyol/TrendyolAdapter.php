@@ -1011,7 +1011,40 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
                 'external_url' => $url,
             ], static fn (?string $value): bool => $value !== null && $value !== ''),
             currency: 'TRY',
+            options: self::variantOptions($variant),
         );
+    }
+
+    /**
+     * Varyantı kardeşlerinden ayıran öznitelikler (ADR-003): Beden, Renk…
+     *
+     * Product V2 `products/approved` yanıtında `variants[].attributes[]`
+     * `{attributeId, attributeName, attributeValue, attributeValueId}`
+     * taşır (developers.trendyol.com · Ürün Filtreleme - Onaylı Ürün v2,
+     * 11 Eki 2026 okundu). İçerik düzeyindeki `attributes` (materyal, yaş
+     * grubu…) bütün varyantlarda aynıdır ve seçenek DEĞİLDİR — alınmaz.
+     *
+     * @param  array<string, mixed>  $variant
+     * @return array<string, string>
+     */
+    private static function variantOptions(array $variant): array
+    {
+        $options = [];
+
+        foreach ((array) ($variant['attributes'] ?? []) as $attribute) {
+            if (! is_array($attribute)) {
+                continue;
+            }
+
+            $name = trim((string) ($attribute['attributeName'] ?? ''));
+            $value = trim((string) ($attribute['attributeValue'] ?? ''));
+
+            if ($name !== '' && $value !== '') {
+                $options[$name] = $value;
+            }
+        }
+
+        return $options;
     }
 
     /** Trendyol bayrakları JSON'da bool, bazı uçlarda "true"/"false" metni gelir. */

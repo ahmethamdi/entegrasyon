@@ -32,6 +32,12 @@ final class ChannelImportResult
         public readonly ?string $stopReason = null,
         /** Kanal bu yeteneği hiç desteklemiyor. */
         public readonly bool $supported = true,
+        /**
+         * Var olan ürüne eklenen varyant sayısı (ADR-003). `created`'ın
+         * İÇİNDEDİR: yeni satılabilir birimdir ama yeni ürün değildir ve
+         * plan ürün kotasından düşmez.
+         */
+        public readonly int $variantsAdded = 0,
     ) {}
 
     /**

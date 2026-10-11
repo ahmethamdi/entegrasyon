@@ -1067,5 +1067,6 @@
     "Muhasebeye işlendi": "Recorded in accounting",
     "Satış olabilir, bekleniyor": "Possible sale, waiting",
     "Kısmi iade": "Partially returned",
-    "Paket bölündü": "Package split"
+    "Paket bölündü": "Package split",
+    ":combo seçeneği bu üründe zaten var.": "The option :combo already exists on this product."
 }
