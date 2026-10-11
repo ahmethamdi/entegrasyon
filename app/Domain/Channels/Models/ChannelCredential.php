@@ -38,6 +38,8 @@ class ChannelCredential extends Model
         'refresh_expires_at',
         'refreshed_at',
         'revoked_at',
+        'refresh_failures',
+        'refresh_retry_at',
     ];
 
     /** Şifreli yük hiçbir serileştirmede görünmez. */
@@ -51,6 +53,8 @@ class ChannelCredential extends Model
             'refresh_expires_at' => 'datetime',
             'refreshed_at' => 'datetime',
             'revoked_at' => 'datetime',
+            'refresh_failures' => 'integer',
+            'refresh_retry_at' => 'datetime',
         ];
     }
 

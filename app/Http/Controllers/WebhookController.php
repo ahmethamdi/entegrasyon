@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Channels\Contracts\VerifiesWebhookSender;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Messaging\Actions\IngestInboxMessage;
@@ -131,6 +132,18 @@ final class WebhookController extends Controller
         // (2) İmza doğrulama. Başarısızsa 401 ve KAYIT YOK.
         if (! $adapter->verifyWebhookSignature($raw, $request->headers->all())) {
             Log::warning('webhook.signature_invalid', [
+                'connection' => $connection->id,
+                'channel' => $connection->channel_type_code,
+            ]);
+
+            return response()->noContent(401);
+        }
+
+        // (2b) GÖNDEREN bu bağlantının hesabı mı? (P0-5) Uygulama sırrıyla
+        //      imzalanan kanalda A mağazasının geçerli webhook'u B'nin
+        //      adresine gelirse imza tutar; sipariş yanlış kiracıya işlenirdi.
+        if ($adapter instanceof VerifiesWebhookSender && ! $adapter->webhookSenderMatches($request->headers->all())) {
+            Log::warning('webhook.sender_mismatch', [
                 'connection' => $connection->id,
                 'channel' => $connection->channel_type_code,
             ]);

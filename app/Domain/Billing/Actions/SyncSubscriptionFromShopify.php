@@ -38,7 +38,13 @@ final class SyncSubscriptionFromShopify
         'EXPIRED' => 'expired',
     ];
 
-    public function apply(string $subscriptionId, string $shopifyStatus, ?DateTimeInterface $currentPeriodEnd = null): ?Subscription
+    /**
+     * @param  string|null  $connectionId  Webhook'tan gelince ZORUNLU (P0-5):
+     *                                     abonelik yalnız bu bağlantının
+     *                                     aboneliğiyse işlenir. Önceden kimlik
+     *                                     tüm kiracılarda aranıyordu.
+     */
+    public function apply(string $subscriptionId, string $shopifyStatus, ?DateTimeInterface $currentPeriodEnd = null, ?string $connectionId = null): ?Subscription
     {
         $status = self::STATUS_MAP[strtoupper($shopifyStatus)] ?? null;
 
@@ -48,7 +54,7 @@ final class SyncSubscriptionFromShopify
             return null;
         }
 
-        return TenantContext::runAsSystem(fn (): ?Subscription => DB::transaction(function () use ($subscriptionId, $status, $currentPeriodEnd): ?Subscription {
+        return TenantContext::runAsSystem(fn (): ?Subscription => DB::transaction(function () use ($subscriptionId, $status, $currentPeriodEnd, $connectionId): ?Subscription {
             $subscription = Subscription::query()
                 ->where('provider', 'shopify')
                 ->where('external_ref', $subscriptionId)
@@ -59,6 +65,16 @@ final class SyncSubscriptionFromShopify
                 // Bizim açmadığımız abonelik (ör. başka sürümden) — uydurma
                 // kiracıya yazılmaz.
                 Log::warning('billing.shopify.unknown_subscription', ['id' => $subscriptionId]);
+
+                return null;
+            }
+
+            // BAŞKA MAĞAZANIN ABONELİĞİ İŞLENMEZ (P0-5).
+            if ($connectionId !== null && $subscription->channel_connection_id !== $connectionId) {
+                Log::warning('billing.shopify.subscription_connection_mismatch', [
+                    'id' => $subscriptionId,
+                    'connection' => $connectionId,
+                ]);
 
                 return null;
             }

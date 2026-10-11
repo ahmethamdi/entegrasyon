@@ -7,6 +7,7 @@ namespace App\Domain\Orders\Support;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\ConnectionSettingsWriter;
 use App\Domain\Messaging\Actions\IngestInboxMessage;
 use App\Domain\Messaging\Jobs\ProcessInboxMessage;
 use App\Support\Tenancy\TenantContext;
@@ -63,6 +64,9 @@ final class PollChannelOrders
     /** İmlecin `settings` içindeki yeri — öğrenilen hız sınırıyla aynı mantık. */
     public const CURSOR_KEY = 'orders_polled_through';
 
+    /** Sayfa sınırında yarım kalan turun devam noktası (P0-6). */
+    public const RESUME_KEY = 'orders_poll_resume';
+
     /**
      * Pencere örtüşmesi.
      *
@@ -104,7 +108,20 @@ final class PollChannelOrders
         $ingested = 0;
 
         foreach ($connections as $connection) {
-            $ingested += $this->pollConnection($connection);
+            // BAĞLANTI BAŞINA TAM YALITIM (P0-4): adapter kurulumu, imleç
+            // okuma/yazma dahil HER ŞEY bu `try` içindedir. Önceden
+            // `adapters->for()` dışarıdaydı — tek yanlış yapılandırılmış
+            // bağlantı turu kırar ve SONRAKİ kiracıların siparişleri hiç
+            // yoklanmazdı.
+            try {
+                $ingested += $this->pollConnection($connection);
+            } catch (Throwable $e) {
+                Log::warning('orders.polling_connection_failed', [
+                    'connection' => $connection->id,
+                    'channel' => $connection->channel_type_code,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return $ingested;
@@ -131,11 +148,14 @@ final class PollChannelOrders
             return 0;
         }
 
-        $since = $this->windowStart($connection);
-        $startedAt = Carbon::now();
+        // YARIM KALMIŞ TUR VARSA ONDAN DEVAM (P0-6): önceki tur sayfa
+        // sınırına takıldıysa aynı pencere, kaldığı sayfadan sürer.
+        $resume = $this->resumePoint($connection);
+        $since = $resume['since'] ?? $this->windowStart($connection);
+        $startedAt = $resume['started_at'] ?? Carbon::now();
 
         try {
-            $ingested = $this->drainPages($connection, $adapter, $since);
+            [$ingested, $nextCursor] = $this->drainPages($connection, $adapter, $since, $resume['cursor'] ?? null);
         } catch (Throwable $e) {
             // İMLEÇ İLERLETİLMEZ: bu pencere bir sonraki turda yeniden
             // sorulacak. Hata yutulmaz, görünür kalır.
@@ -146,6 +166,15 @@ final class PollChannelOrders
             ]);
 
             return 0;
+        }
+
+        if ($nextCursor !== null) {
+            // SAYFA SINIRI DOLDU — İMLEÇ İLERLEMEZ. Önceden ilerliyordu ve
+            // kalan sayfalar bir daha HİÇ istenmezdi (sessiz sipariş kaybı).
+            // Aynı pencere bir sonraki turda kalan sayfadan sürer.
+            $this->saveResumePoint($connection, $since, $startedAt, $nextCursor);
+
+            return $ingested;
         }
 
         $this->advanceCursor($connection, $startedAt);
@@ -159,13 +188,16 @@ final class PollChannelOrders
      * İlk sayfayla yetinilseydi yoğun bir satıcının siparişlerinin çoğu
      * her turda görülmez ve hiç işlenmezdi.
      */
+    /**
+     * @return array{0: int, 1: string|null} [yeni yazılan, sayfa sınırında kalınan imleç]
+     */
     private function drainPages(
         ChannelConnection $connection,
         SupportsOrders $adapter,
         Carbon $since,
-    ): int {
+        ?string $cursor = null,
+    ): array {
         $ingested = 0;
-        $cursor = null;
         $pages = 0;
 
         do {
@@ -179,15 +211,18 @@ final class PollChannelOrders
             $pages++;
         } while ($page->hasMore && $cursor !== null && $pages < self::MAX_PAGES);
 
-        if ($page->hasMore && $pages >= self::MAX_PAGES) {
-            // Sessiz kırpma YAPILMAZ: kalan sayfalar görünür kalsın.
+        if ($page->hasMore && $cursor !== null && $pages >= self::MAX_PAGES) {
+            // Sessiz kırpma YAPILMAZ: kalan sayfalar görünür kalsın ve
+            // bir sonraki tur onlardan devam etsin.
             Log::warning('orders.polling_page_limit_reached', [
                 'connection' => $connection->id,
                 'pages' => $pages,
             ]);
+
+            return [$ingested, $cursor];
         }
 
-        return $ingested;
+        return [$ingested, null];
     }
 
     /**
@@ -267,13 +302,50 @@ final class PollChannelOrders
      */
     private function advanceCursor(ChannelConnection $connection, Carbon $startedAt): void
     {
-        TenantContext::runAsSystem(function () use ($connection, $startedAt): void {
-            $connection->forceFill([
-                'settings' => [
-                    ...$connection->settings ?? [],
-                    self::CURSOR_KEY => $startedAt->toIso8601String(),
-                ],
-            ])->save();
-        });
+        ConnectionSettingsWriter::merge($connection, [
+            self::CURSOR_KEY => $startedAt->toIso8601String(),
+        ], forget: [self::RESUME_KEY]);
+    }
+
+    /**
+     * Yarım kalan turun devam noktası — pencere başı, tur başlangıcı ve
+     * kanalın sayfa imleci.
+     *
+     * Pencere AYNI kalır: kanalın sayfa imleci o pencerenin sorgusuna aittir.
+     * Tur başlangıcı da korunur — tamamlanınca ana imleç ONA yazılır; o
+     * arada gelen siparişler sonraki normal turun penceresine girer.
+     *
+     * @return array{since?: Carbon, started_at?: Carbon, cursor?: string}
+     */
+    private function resumePoint(ChannelConnection $connection): array
+    {
+        $resume = $connection->settings[self::RESUME_KEY] ?? null;
+
+        if (! is_array($resume) || ! is_string($resume['cursor'] ?? null)) {
+            return [];
+        }
+
+        try {
+            return [
+                'since' => Carbon::parse((string) $resume['since']),
+                'started_at' => Carbon::parse((string) $resume['started_at']),
+                'cursor' => (string) $resume['cursor'],
+            ];
+        } catch (Throwable) {
+            // Bozuk devam noktası turu durdurmaz; baştan sorulur (örtüşme
+            // ve tekilleştirme kopyayı eler).
+            return [];
+        }
+    }
+
+    private function saveResumePoint(ChannelConnection $connection, Carbon $since, Carbon $startedAt, string $cursor): void
+    {
+        ConnectionSettingsWriter::merge($connection, [
+            self::RESUME_KEY => [
+                'since' => $since->toIso8601String(),
+                'started_at' => $startedAt->toIso8601String(),
+                'cursor' => $cursor,
+            ],
+        ]);
     }
 }

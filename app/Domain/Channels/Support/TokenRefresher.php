@@ -67,7 +67,25 @@ final class TokenRefresher
             $skipped = 0;
 
             foreach ($this->dueConnectionIds($limit) as $connectionId) {
-                $outcome = $this->refreshOne($connectionId);
+                // BAĞLANTI BAŞINA TAM YALITIM (P0-4): adapter kurulumu ve
+                // kasa yazımı da bu `try` içindedir. Önceden ikisi de
+                // dışarıdaydı — tek bozuk bağlantının istisnası turu kırar,
+                // sonraki kiracıların Etsy/eBay token'ları süresi dolarak
+                // ölürdü.
+                try {
+                    $outcome = $this->refreshOne($connectionId);
+                } catch (Throwable $e) {
+                    $outcome = 'failed';
+
+                    Log::warning('credentials.refresh_crashed', [
+                        'connection_id' => $connectionId,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+
+                if ($outcome === 'failed') {
+                    $this->postpone($connectionId);
+                }
 
                 match ($outcome) {
                     'refreshed' => $refreshed++,
@@ -107,6 +125,11 @@ final class TokenRefresher
             ->whereNull('revoked_at')
             ->whereNotNull('expires_at')
             ->whereRaw('expires_at <= clock_timestamp() + (? * interval \'1 second\')', [self::WIDEST_LEAD_SECONDS])
+            // GERİ ÇEKİLEN SATIR SIRAYI TIKAMAZ (P0-4): bozuk bağlantı
+            // bekleme süresi dolana kadar aday değildir ve dolunca da
+            // sağlam satırların ARKASINA dizilir.
+            ->where(static fn ($q) => $q->whereNull('refresh_retry_at')->orWhere('refresh_retry_at', '<=', now()))
+            ->orderBy('refresh_failures')
             ->orderBy('expires_at')
             ->limit($limit)
             ->pluck('channel_connection_id');
@@ -216,6 +239,33 @@ final class TokenRefresher
 
             return 'refreshed';
         });
+    }
+
+    /**
+     * Başarısız yenilemeden sonra bekleme: 5 dk × 2^(n−1), en çok 1 saat.
+     *
+     * Kısa token'lı kanal (Etsy 1 sa) için ilk bekleme turun (15 dk) altında
+     * kalır — geçici bir arıza token'ı öldürmez. Kalıcı bozuk satır ise
+     * seyrekleşir ve sıranın sonuna geçer.
+     */
+    private function postpone(string $connectionId): void
+    {
+        try {
+            DB::update(<<<'SQL'
+                UPDATE channel_credentials
+                   SET refresh_failures = refresh_failures + 1,
+                       refresh_retry_at = ?::timestamp
+                           + LEAST(3600, 300 * power(2, LEAST(refresh_failures, 10)))::int * interval '1 second'
+                 WHERE channel_connection_id = ?
+                   AND revoked_at IS NULL
+            SQL, [now()->toDateTimeString(), $connectionId]);
+        } catch (Throwable $e) {
+            // Geri çekilme yazılamadı — tur yine durmaz.
+            Log::warning('credentials.refresh_postpone_failed', [
+                'connection_id' => $connectionId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

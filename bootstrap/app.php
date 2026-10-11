@@ -12,6 +12,7 @@ use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
 use App\Domain\Orders\Console\PollChannelOrdersCommand;
+use App\Domain\Orders\Console\ReconcileChannelOrdersCommand;
 use App\Domain\Orders\Console\ResolveUnmatchedOrderLinesCommand;
 use App\Domain\Reconciliation\Console\ReconcileColdCommand;
 use App\Domain\Reconciliation\Console\ReconcileHotCommand;
@@ -72,6 +73,8 @@ return Application::configure(basePath: dirname(__DIR__))
         PollChannelBatchesCommand::class,
         // §13 · Faz 2 · sipariş yoklaması. Zamanlaması routes/console.php.
         PollChannelOrdersCommand::class,
+        // P0-3 · webhook kanallarında kaçan sipariş kurtarma. Zamanlaması routes/console.php.
+        ReconcileChannelOrdersCommand::class,
         // A12 · eşleşmemiş sipariş satırları. Zamanlaması routes/console.php.
         ResolveUnmatchedOrderLinesCommand::class,
         TickPriceCampaignsCommand::class,

@@ -88,6 +88,9 @@ final class CredentialVault
             'scope' => $scope,
             'expires_at' => $expiresAt,
             'refreshed_at' => now(),
+            // Yeni/yenilenmiş kimlik: yenileme geri çekilmesi sıfırlanır (P0-4).
+            'refresh_failures' => 0,
+            'refresh_retry_at' => null,
         ];
 
         // Yenileme anahtarının bitişi: null = DEĞİŞMEDİ (mevcut korunur).

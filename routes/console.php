@@ -178,6 +178,15 @@ Schedule::command('orders:poll')
     ->onOneServer()
     ->withoutOverlapping();
 
+// P0-3 · SİPARİŞ MUTABAKATI — webhook kanallarında kaçan siparişi kurtarır.
+// Webhook kanalları yoklanmaz; kaybolan webhook önceden kalıcı sipariş
+// kaybıydı. 30 dakika: kurtarma gecikmesi ile kanal maliyeti dengesi; pencere
+// imleçten 10 dk örtüşür, ilk turda 24 sa geriye bakar.
+Schedule::command('reconcile:orders')
+    ->everyThirtyMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // A12 · EŞLEŞMEMİŞ SİPARİŞ SATIRLARI — SKU sonradan kataloğa girince stok
 // düşülür. Zamanlanmazsa satır sonsuza kadar PENDING kalır, bakiye satılmış
 // adet kadar fazla görünür ve kanallara FAZLA STOK gider.

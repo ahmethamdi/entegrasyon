@@ -344,6 +344,9 @@ final class ShopifyAppUninstalledTest extends TestCase
                 'CONTENT_TYPE' => 'application/json',
                 'HTTP_X_SHOPIFY_TOPIC' => 'app/uninstalled',
                 'HTTP_X_SHOPIFY_EVENT_ID' => 'evt-http-1',
+                // Gerçek Shopify bu başlığı HER webhook'ta gönderir; P0-5'ten
+                // beri başlıksız ya da başka mağazanın webhook'u reddedilir.
+                'HTTP_X_SHOPIFY_SHOP_DOMAIN' => (string) $connection->external_account_id,
                 'HTTP_X_SHOPIFY_HMAC_SHA256' => base64_encode(
                     hash_hmac('sha256', $body, 'whsec-test', true)
                 ),

@@ -416,6 +416,120 @@ final class PollChannelOrdersTest extends TestCase
         $this->assertSame(2, $rows);
     }
 
+    /**
+     * BAĞLANTI A KURULAMAZ → B VE C YİNE YOKLANIR (P0-4).
+     *
+     * Önceden adapter kurulumu (`adapters->for()`) `try` dışındaydı: tek
+     * yanlış yapılandırılmış bağlantının istisnası turu kırar, sıradaki
+     * kiracıların siparişleri hiç yoklanmazdı. A sıralamada önce gelsin
+     * diye ilk açılır.
+     */
+    #[Test]
+    public function a_connection_whose_adapter_cannot_be_built_does_not_stop_the_others(): void
+    {
+        $this->asSystem(fn () => ChannelType::query()->updateOrCreate(
+            ['code' => 'kirik-kanal'],
+            ['name' => 'Kırık', 'kind' => 'marketplace', 'adapter_class' => 'App\\Yok\\KirikAdapter', 'supports_webhooks' => false, 'is_active' => true],
+        ));
+
+        [, $connectionA] = $this->setUpConnection(supplierId: '100');
+        $this->asSystem(fn () => DB::table('channel_connections')
+            ->where('id', $connectionA->id)
+            ->update(['channel_type_code' => 'kirik-kanal']));
+
+        [$tenantB] = $this->setUpConnection(supplierId: '200');
+        [$tenantC] = $this->setUpConnection(supplierId: '300');
+
+        Http::fake([
+            '*/sellers/200/*' => Http::response(['content' => [
+                ['shipmentPackageId' => 'PKG-B', 'orderNumber' => 'TY-B', 'status' => 'Created', 'lines' => []],
+            ], 'totalPages' => 1], 200),
+            '*/sellers/300/*' => Http::response(['content' => [
+                ['shipmentPackageId' => 'PKG-C', 'orderNumber' => 'TY-C', 'status' => 'Created', 'lines' => []],
+            ], 'totalPages' => 1], 200),
+        ]);
+
+        $count = app(PollChannelOrders::class)->run();
+
+        $this->assertSame(2, $count);
+        $this->assertSame(1, $this->asTenant($tenantB, fn (): int => InboxMessage::query()->count()), 'B yoklanmalı.');
+        $this->assertSame(1, $this->asTenant($tenantC, fn (): int => InboxMessage::query()->count()), 'C yoklanmalı.');
+    }
+
+    /**
+     * SAYFA SINIRI DOLUNCA İMLEÇ İLERLEMEZ, KALAN SAYFALAR SONRAKİ TURDA (P0-6).
+     *
+     * Önceden 50 sayfa dolunca imleç yine turun başlangıcına yazılıyordu ve
+     * 51. sayfadan sonrası bir daha HİÇ istenmiyordu — sessiz sipariş kaybı.
+     */
+    #[Test]
+    public function polling_stops_cursor_when_max_pages_is_reached_and_resumes_next_round(): void
+    {
+        [$tenant, $connection] = $this->setUpConnection();
+
+        $requested = [];
+
+        Http::fake(function ($request) use (&$requested) {
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+            $page = (int) ($query['page'] ?? 0);
+            $requested[] = $page;
+
+            return Http::response(['content' => [
+                ['shipmentPackageId' => "PKG-{$page}", 'orderNumber' => "TY-{$page}", 'status' => 'Created', 'lines' => []],
+            ], 'page' => $page, 'totalPages' => 53], 200);
+        });
+
+        $first = app(PollChannelOrders::class)->run();
+
+        $this->assertSame(50, $first);
+        $settings = $this->settingsOf($connection);
+        $this->assertArrayNotHasKey(PollChannelOrders::CURSOR_KEY, $settings, 'Yarım turda imleç ilerlememeli.');
+        $this->assertSame('50', $settings[PollChannelOrders::RESUME_KEY]['cursor'] ?? null);
+
+        $second = app(PollChannelOrders::class)->run();
+
+        $this->assertSame(3, $second, 'Kalan üç sayfa ikinci turda alınmalı.');
+        $this->assertSame([50, 51, 52], array_slice($requested, 50));
+        $settings = $this->settingsOf($connection);
+        $this->assertArrayHasKey(PollChannelOrders::CURSOR_KEY, $settings);
+        $this->assertArrayNotHasKey(PollChannelOrders::RESUME_KEY, $settings);
+        $this->assertSame(53, $this->asTenant($tenant, fn (): int => InboxMessage::query()->count()));
+    }
+
+    /**
+     * İMLEÇ YAZIMI EŞZAMANLI KAYDEDİLEN AYARI EZMEZ.
+     *
+     * Önceden imleç tüm `settings` dizisini bellekteki eski kopyayla yeniden
+     * yazıyordu: tur sürerken panelden kaydedilen ayar kaybolurdu.
+     */
+    #[Test]
+    public function the_cursor_write_does_not_clobber_a_concurrently_saved_setting(): void
+    {
+        [, $connection] = $this->setUpConnection();
+
+        Http::fake(function () {
+            // Tur sürerken satıcı panelden bir ayar kaydeder.
+            DB::update("UPDATE channel_connections SET settings = settings || '{\"vat_rate\": 10}'::jsonb");
+
+            return Http::response(['content' => [], 'totalPages' => 1], 200);
+        });
+
+        app(PollChannelOrders::class)->run();
+
+        $settings = $this->settingsOf($connection);
+        $this->assertSame(10, $settings['vat_rate'] ?? null, 'Panel ayarı imleç yazımıyla ezildi.');
+        $this->assertArrayHasKey(PollChannelOrders::CURSOR_KEY, $settings);
+    }
+
+    /** @return array<string, mixed> */
+    private function settingsOf(ChannelConnection $connection): array
+    {
+        return $this->asSystem(fn () => json_decode(
+            (string) DB::table('channel_connections')->where('id', $connection->id)->value('settings'),
+            true,
+        ));
+    }
+
     // ──────────────────────────────────────────────────────── yardımcı
 
     /** @return array{0: Tenant, 1: ChannelConnection} */

@@ -231,6 +231,64 @@ final class TokenRefreshTest extends TestCase
         $this->assertSame(2, $result['refreshed']);
     }
 
+    /**
+     * BAĞLANTI A ÇÖKER → B VE C YİNE YENİLENİR (P0-4).
+     *
+     * A'nın adapter'ı kurulamaz (sınıf yok). Önceden kurulum `try` dışındaydı:
+     * istisna turu kırar, sonraki kiracıların token'ları süresi dolarak
+     * ölürdü. A en erken dolan satırdır — sıranın başındadır.
+     */
+    #[Test]
+    public function one_broken_connection_does_not_stop_token_refresh_for_others(): void
+    {
+        $broken = $this->connectionWithCredential(expiresInSeconds: 60, adapterClass: 'App\\Yok\\KirikAdapter');
+        $b = $this->connectionWithCredential(expiresInSeconds: 300);
+        $c = $this->connectionWithCredential(expiresInSeconds: 400);
+
+        $result = app(TokenRefresher::class)->run();
+
+        $this->assertSame(2, $result['refreshed']);
+        $this->assertSame(1, $result['failed']);
+        $this->assertNotNull($this->credentialRow($b)->refreshed_at);
+        $this->assertGreaterThan(now()->addMinutes(30)->getTimestamp(), strtotime((string) $this->credentialRow($b)->expires_at));
+        $this->assertGreaterThan(now()->addMinutes(30)->getTimestamp(), strtotime((string) $this->credentialRow($c)->expires_at));
+
+        $row = $this->credentialRow($broken);
+        $this->assertSame(1, (int) $row->refresh_failures);
+        $this->assertNotNull($row->refresh_retry_at);
+    }
+
+    /**
+     * BAŞARISIZ SATIR SIRAYI TIKAMAZ (P0-4).
+     *
+     * Tur sınırı 1 iken bozuk satır (en erken dolan) her turda yine başta
+     * olsaydı sağlam satır HİÇ sıraya giremezdi. Geri çekilen satır bekleme
+     * süresince aday değildir; süre dolunca sağlam satırların ARKASINA geçer.
+     */
+    #[Test]
+    public function a_failing_connection_is_backed_off_and_does_not_block_the_queue(): void
+    {
+        $broken = $this->connectionWithCredential(expiresInSeconds: 60, adapterClass: 'App\\Yok\\KirikAdapter');
+        $healthy = $this->connectionWithCredential(expiresInSeconds: 300);
+
+        $first = app(TokenRefresher::class)->run(limit: 1);
+        $this->assertSame(1, $first['failed']);
+
+        $second = app(TokenRefresher::class)->run(limit: 1);
+        $this->assertSame(1, $second['refreshed'], 'Sağlam bağlantı bozuk olanın arkasında beklememeli.');
+        $this->assertGreaterThan(now()->addMinutes(30)->getTimestamp(), strtotime((string) $this->credentialRow($healthy)->expires_at));
+
+        // Bekleme dolmadan bozuk satır hiç denenmez (her tur kotası yanmaz).
+        $this->assertSame(0, app(TokenRefresher::class)->run()['failed']);
+        $this->assertSame(1, (int) $this->credentialRow($broken)->refresh_failures);
+
+        // Bekleme dolunca bozuk satır yeniden denenir.
+        $this->travel(6)->minutes();
+        $third = app(TokenRefresher::class)->run();
+        $this->assertSame(1, $third['failed']);
+        $this->assertSame(2, (int) $this->credentialRow($broken)->refresh_failures);
+    }
+
     private function connectionWithCredential(
         ?int $expiresInSeconds,
         string $adapterClass = ProgrammableTokenRefreshAdapter::class,

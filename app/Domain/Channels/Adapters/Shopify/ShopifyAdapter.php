@@ -17,10 +17,12 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOrderReconciliation;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Contracts\SupportsWebhookRegistration;
+use App\Domain\Channels\Contracts\VerifiesWebhookSender;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -34,6 +36,8 @@ use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
+use App\Domain\Sync\Support\RecoveredOrderEvent;
+use App\Domain\Sync\Support\RecoveredOrderPage;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
@@ -111,8 +115,46 @@ use Throwable;
  * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
  * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration
+final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration, VerifiesWebhookSender
 {
+    /** Sipariş mutabakatı sayfa boyu — 100 kalemli siparişte maliyet ~ sayfa × kalem. */
+    private const RECOVER_PAGE_SIZE = 25;
+
+    /** Şema 2026-01'e karşı doğrulandı (shopify-dev-mcp validate). */
+    private const RECOVER_ORDERS_QUERY = <<<'GQL'
+        query RecoverOrders($first: Int!, $after: String, $query: String) {
+          orders(first: $first, after: $after, query: $query, sortKey: UPDATED_AT) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              legacyResourceId
+              name
+              createdAt
+              updatedAt
+              cancelledAt
+              displayFinancialStatus
+              displayFulfillmentStatus
+              currencyCode
+              currentSubtotalPriceSet { shopMoney { amount } }
+              currentTotalTaxSet { shopMoney { amount } }
+              currentTotalPriceSet { shopMoney { amount } }
+              totalShippingPriceSet { shopMoney { amount } }
+              lineItems(first: 100) {
+                pageInfo { hasNextPage }
+                nodes {
+                  id
+                  sku
+                  title
+                  name
+                  quantity
+                  variant { legacyResourceId }
+                  originalUnitPriceSet { shopMoney { amount } }
+                }
+              }
+            }
+          }
+        }
+        GQL;
+
     use DeclaresRequestQuota;
 
     /** Kimlik başlığı — Bearer DEĞİL (sınıf başlığı). */
@@ -554,6 +596,28 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
     public function extractShopDomain(array $headers): ?string
     {
         return $this->header($headers, 'x-shopify-shop-domain');
+    }
+
+    /**
+     * Webhook bu bağlantının mağazasından mı geldi? (P0-5)
+     *
+     * Uygulama üzerinden bağlanan HER mağazanın webhook'u aynı istemci
+     * sırrıyla imzalanır; imza tek başına mağazayı kanıtlamaz. Alan adı
+     * bağlantının `external_account_id`'si ile BÜYÜK/KÜÇÜK HARF DUYARSIZ
+     * karşılaştırılır. Başlık yoksa REDDEDİLİR.
+     *
+     * @param  array<string, array<int, string|null>>  $headers
+     */
+    public function webhookSenderMatches(array $headers): bool
+    {
+        $sender = $this->extractShopDomain($headers);
+        $own = $this->connection->external_account_id;
+
+        if (! is_string($sender) || trim($sender) === '' || ! is_string($own) || $own === '') {
+            return false;
+        }
+
+        return hash_equals(mb_strtolower($own), mb_strtolower(trim($sender)));
     }
 
     // ------------------------------------------------------------- GraphQL
@@ -1670,6 +1734,146 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, Suppor
             'Shopify siparişleri webhook ile gelir ve YOKLANMAZ; olay kimliği '.
             'webhook başlığından (`extractEventId`) okunur.'
         );
+    }
+
+    /**
+     * Sipariş mutabakatı — kaybolan webhook'un siparişini kurtarır (P0-3).
+     *
+     * `fetchOrders()` BİLİNÇLİ OLARAK hâlâ istisna fırlatır: Shopify YOKLANMAZ
+     * ve yoklama turunun bu kanalı seçmesi bir programlama hatasıdır. Bu yol
+     * ayrı bir yetenektir ve yalnız `reconcile:orders` çağırır.
+     *
+     * Sonuç WEBHOOK GÖVDESİ BİÇİMİNDEDİR (REST alan adları): aynı
+     * `ShopifyOrderNormalizer` işler, alan eşlemesi ikinci kez yazılmaz.
+     * Kimlikler REST'teki gibi SAYIDIR (`legacyResourceId`; kalem gid'inden
+     * sayı) — sonraki `refunds/create` webhook'u kalemi `line_item_id`
+     * (sayı) ile arar.
+     *
+     * İptal edilmiş sipariş İKİ olay üretir (yaratma + iptal): sipariş hiç
+     * alınmamışsa önce düşülür sonra geri eklenir (net sıfır, defterde iz);
+     * alınmışsa yaratma elenir, iptal kalan adete kırpılır.
+     */
+    public function fetchOrdersForReconciliation(CarbonInterface $since, ?string $cursor = null): RecoveredOrderPage
+    {
+        $data = $this->gql(self::RECOVER_ORDERS_QUERY, array_filter([
+            'first' => self::RECOVER_PAGE_SIZE,
+            'after' => $cursor,
+            'query' => 'updated_at:>=\''.$since->copy()->utc()->format('Y-m-d\TH:i:s\Z').'\'',
+        ], static fn ($v): bool => $v !== null), 'orders.reconcile');
+
+        $connection = (array) ($data['orders'] ?? []);
+        $events = [];
+
+        foreach ((array) ($connection['nodes'] ?? []) as $node) {
+            if (! is_array($node) || ! isset($node['legacyResourceId'])) {
+                continue;
+            }
+
+            // 100'den çok kalemli sipariş EKSİK yaratılmaz: eksik kalemli
+            // sipariş asıl webhook'u "zaten var" diye eler ve kalan kalemler
+            // hiç düşülmezdi. Görünür bırakılır, webhook/elle beklenir.
+            if (($node['lineItems']['pageInfo']['hasNextPage'] ?? false) === true) {
+                Log::warning('orders.reconcile_skipped_large_order', [
+                    'connection' => $this->connection->id,
+                    'order' => (string) $node['legacyResourceId'],
+                ]);
+
+                continue;
+            }
+
+            $payload = self::restOrderFromGraphql($node);
+            $id = (string) $payload['id'];
+
+            $events[] = new RecoveredOrderEvent('orders/create', "reconcile:{$id}:create", $id, $payload);
+
+            if ($payload['cancelled_at'] !== null) {
+                $events[] = new RecoveredOrderEvent('orders/cancelled', "reconcile:{$id}:cancelled", $id, $payload);
+            }
+        }
+
+        $hasMore = (bool) ($connection['pageInfo']['hasNextPage'] ?? false);
+        $end = $connection['pageInfo']['endCursor'] ?? null;
+
+        return new RecoveredOrderPage(
+            events: $events,
+            nextCursor: $hasMore && is_string($end) ? $end : null,
+            hasMore: $hasMore && is_string($end),
+        );
+    }
+
+    /**
+     * GraphQL sipariş düğümü → `orders/create` webhook gövdesi (REST adları).
+     *
+     * Müşteri bilgisi OKUNMAZ: normalizer yalnız kimliğini taşır ve kurtarma
+     * için gerekmez — korunan müşteri verisi kapsamı da istenmez.
+     *
+     * @param  array<string, mixed>  $node
+     * @return array<string, mixed>
+     */
+    public static function restOrderFromGraphql(array $node): array
+    {
+        $money = static fn (mixed $set): ?string => is_array($set) && isset($set['shopMoney']['amount'])
+            ? (string) $set['shopMoney']['amount']
+            : null;
+
+        $lines = [];
+
+        foreach ((array) ($node['lineItems']['nodes'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $lines[] = [
+                'id' => self::numericId($item['id'] ?? null),
+                'sku' => $item['sku'] ?? null,
+                'title' => $item['title'] ?? ($item['name'] ?? null),
+                'name' => $item['name'] ?? null,
+                'quantity' => (int) ($item['quantity'] ?? 0),
+                'variant_id' => isset($item['variant']['legacyResourceId'])
+                    ? (string) $item['variant']['legacyResourceId']
+                    : null,
+                'price' => $money($item['originalUnitPriceSet'] ?? null) ?? '0',
+            ];
+        }
+
+        $fulfillment = match (strtoupper((string) ($node['displayFulfillmentStatus'] ?? ''))) {
+            'FULFILLED' => 'fulfilled',
+            'PARTIALLY_FULFILLED' => 'partial',
+            'RESTOCKED' => 'restocked',
+            default => null,
+        };
+
+        $financial = $node['displayFinancialStatus'] ?? null;
+
+        return [
+            'id' => (string) $node['legacyResourceId'],
+            'order_number' => ltrim((string) ($node['name'] ?? ''), '#') ?: null,
+            'created_at' => $node['createdAt'] ?? null,
+            'updated_at' => $node['updatedAt'] ?? null,
+            'cancelled_at' => $node['cancelledAt'] ?? null,
+            'financial_status' => is_string($financial) ? strtolower($financial) : null,
+            'fulfillment_status' => $fulfillment,
+            'currency' => $node['currencyCode'] ?? null,
+            'current_subtotal_price' => $money($node['currentSubtotalPriceSet'] ?? null),
+            'current_total_tax' => $money($node['currentTotalTaxSet'] ?? null),
+            'current_total_price' => $money($node['currentTotalPriceSet'] ?? null),
+            'total_shipping_price_set' => [
+                'shop_money' => ['amount' => $money($node['totalShippingPriceSet'] ?? null) ?? '0'],
+            ],
+            'line_items' => $lines,
+        ];
+    }
+
+    /** `gid://shopify/LineItem/123` → `123`; sayı değilse olduğu gibi. */
+    private static function numericId(mixed $gid): ?string
+    {
+        if (! is_string($gid) || $gid === '') {
+            return null;
+        }
+
+        $tail = substr($gid, (int) strrpos($gid, '/') + 1);
+
+        return ctype_digit($tail) ? $tail : $gid;
     }
 
     /**

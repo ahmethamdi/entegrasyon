@@ -77,7 +77,7 @@ final class ShopifyBillingRouter
             }
         }
 
-        $this->sync->apply($id, $status, $periodEnd);
+        $this->sync->apply($id, $status, $periodEnd, $connection->id);
 
         return true;
     }

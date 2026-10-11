@@ -245,6 +245,34 @@ final class ShopifyBillingTest extends TestCase
         $this->assertSame(0, $this->asTenant($tenant, fn (): int => Order::query()->count()));
     }
 
+    /**
+     * BAŞKA MAĞAZANIN ABONELİK WEBHOOK'U İŞLENMEZ (P0-5).
+     *
+     * Abonelik kimliği önceden tüm kiracılarda aranıyordu: B mağazasının
+     * bağlantısından gelen geçerli bir webhook A'nın aboneliğini
+     * değiştirebilirdi.
+     */
+    #[Test]
+    public function a_subscription_webhook_from_another_shop_is_ignored(): void
+    {
+        [$tenant, $user] = $this->shopifyTenant();
+        $this->fakeShopify();
+        $this->buy($user, 'starter');
+
+        $otherTenant = (new CreateTenant)->run(name: 'Başka '.uniqid(), owner: User::factory()->create());
+        $other = $this->asTenant($otherTenant, fn () => ChannelConnection::factory()->create([
+            'channel_type_code' => 'shopify',
+            'external_account_id' => 'baska-magaza.myshopify.com',
+            'status' => 'active',
+        ]));
+
+        $this->webhook($otherTenant, $other, 'app_subscriptions/update', 'evt-x', [
+            'app_subscription' => ['admin_graphql_api_id' => self::SUB_1, 'status' => 'CANCELLED'],
+        ]);
+
+        $this->assertSame('pending', $this->subscriptions($tenant)->sole()->status, 'Başka mağazanın webhook\'u aboneliği değiştirmemeli.');
+    }
+
     /** Uygulama kaldırıldı: abonelik kapanır VE erişim kapanır (ikisi birden). */
     #[Test]
     public function uninstalling_closes_the_subscription_and_the_connection(): void
