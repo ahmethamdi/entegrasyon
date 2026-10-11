@@ -53,6 +53,10 @@ Durum: **önerildi** (11 Ekim 2026 denetimi), aksi her ADR'nin altında yazılı
 
 - **S2 uygulama notu (12 Eki 2026) — SAPMA:** Trendyol ortak etiketi `fulfillments` yerine ayrı `shipping_labels` tablosunda. Gerekçe (kodda ölçüldü): `Order::scopeAwaitingShipment` fulfillment'ı olan siparişi "kargo bekliyor"dan düşürür — etiketi basılmış ama kargolanmamış sipariş listeden kaybolurdu; ayrıca Trendyol ortak etiketi yeni gönderi AÇMAZ (takip no paket oluşurken atanır), mevcut paket için barkod üretir. Paraşüt adım deseni korundu (`requested_at` koşullu talep, belirsiz sonuçta önce sorgu). Etiket ASLI saklanır (`payload`): ZPL tek kaynaktır ve kanal yeniden üretimi belgelenmemiştir. S6 taşıyıcı gönderisi (`SupportsCarrierShipment`) için ADR-004'ün (b) önerisi açık kalır.
 
+- **ZPL / PDF kararı (kullanıcı, 12 Eki 2026):** Labelary ya da başka bir BARINDIRILAN ZPL işleme servisi KULLANILMAZ — etiket alıcının kişisel/adres verisini taşır ve üçüncü tarafa gönderilmez. Asıl ZPL saklanır ve termal yazıcı için olduğu gibi indirilir; Trendyol PDF verirse o PDF (adres) doğrudan kullanılır. ZPL → A4 PDF S2 kabul engeli DEĞİLDİR; gerekirse ileride yalnız YEREL/kendi içinde çalışan bir işleyici değerlendirilir (veri bizim denetimimizde kalır), ve yalnız `LabelDocuments` katmanına eklenir.
+- **Değişmez:** ETİKET HAZIR ≠ KARGOLANDI. Etiket almak/basmak siparişin durumunu, `fulfillments`'ı ve stoğu değiştirmez; sipariş "kargo bekliyor"da kalır (regresyon testi `a_ready_label_does_not_ship_the_order_or_touch_stock`).
+- **Dış bağımlılık:** Trendyol satıcı hesabı için Ortak Etiket (Common Label) yetkisi Trendyol tarafından açılmalı (11 Eki canlı: `COMMON_LABEL_NOT_ALLOWED`). Yetkiyi aşmak için kod yazılmaz.
+
 ## ADR-005 · İade talebi yaşam döngüsü ayrı tabloda
 
 - **Karar:** `return_requests` (kanal talep kimliği tekil; `requested → approved/rejected → received → restocked/disposed`; kalem, adet, neden, tutar). Stok, **onay ya da depoya varış anında** mevcut `ApplyOrderReturn` ile (talep kimliği `external_ref`).

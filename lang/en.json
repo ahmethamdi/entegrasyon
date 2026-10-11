@@ -1174,7 +1174,7 @@
     "Bu kanalın siparişinde bu işlem desteklenmiyor.": "This action is not supported for this channel's orders.",
     "Kanal bağlantısı şu an kullanılamıyor; biraz sonra yeniden deneyin.": "The channel connection is unavailable right now; try again shortly.",
     "Paketin kargo firması ortak etiket sürecinde değil (yalnız Trendyol Express ve Aras).": "The package's carrier is not in the common label programme (Trendyol Express and Aras only).",
-    "Trendyol hesabınızın ortak etiket yetkisi yok; kategori sorumlunuzla görüşün.": "Your Trendyol account is not authorised for common labels; contact your category manager.",
+    "Trendyol hesabınızın ortak etiket yetkisi yok; kategori sorumlunuzla görüşün.": "Trendyol Common Label service is not authorized for this seller account; contact your Trendyol category manager.",
     "Pakete henüz kargo takip numarası atanmamış.": "No cargo tracking number has been assigned to the package yet.",
     "Paket kanalda bulunamadı.": "The package was not found on the channel.",
     "Etiket istendi, kanal henüz hazırlamadı.": "Label requested; the channel has not produced it yet.",

@@ -85,3 +85,31 @@ INVOICE_FAILED, INVOICE_ACCOUNT_MISSING, INVOICE_BOOKS_ONLY, VARIANT_UNMATCHED.
 ## 10. Kapsam dışı (bilerek)
 Çok depo, WMS, kargoya teslim bildirimi (Trendyol `updatePackage`), ZPL→PDF, AuditAction eklenmesi,
 işlem merkezi ekranı, S1 sınıflandırması, TD-37/38/39/41, A/B/B'.
+
+## 11. Ortak etiket yetkisi — davranış ve dış bağımlılık
+- Canlı kanıt: `COMMON_LABEL_NOT_ALLOWED` (11 Eki). **Dış yetki engeli**; kod ile aşılmaz, POST ile zorlanmaz (önce GET sorulur; ret gelince istek GÖNDERİLMEZ).
+- Kalem sonucu: `action_required` + `COMMON_LABEL_NOT_AUTHORIZED` ("Trendyol Common Label service is not authorized for this seller account"); toplu işin diğer kalemleri devam eder.
+- Kalıcı "yetkisiz" varsayımı YOK: satır `failed` kalır, aynı siparişe yeni etiket isteği satırı sıfırlar ve akışı baştan dener (test: `an_unauthorized_common_label_account_does_not_stop_the_rest_of_the_batch`).
+- Dış eylem: satıcı Trendyol kategori sorumlusundan Ortak Etiket yetkisini istemeli.
+
+## 12. Canlı etiket doğrulama prosedürü (yetki açılınca — ÖNCE YAPILMAZ)
+Ön koşul: yetki açık + TEX ya da Aras-by-Trendyol ile gelen GERÇEK bir paket (Picking/Invoiced). Ham yanıtlar sunucuda `/root` altında 600 izinle saklanır; kişisel veri belgeye yazılmaz.
+
+| # | Adım | Kanıt |
+|---|---|---|
+| A | Uygun paketi seç (kanonik `awaiting_shipment`) | sipariş/paket kimliği |
+| B | Paket okuma (GET v2/orders) | `cargoProviderName`, `cargoTrackingNumber`, `boxQuantity`, durum — **TAM METİN kaydedilir**; eşleşme gerekiyorsa yalnız bu kanıtla güncellenir (§8, tahmini takma ad eklenmez) |
+| C | Oluşturmadan önce GET common-label | durum kodu + gövde (boş liste mi, 404 mü, 400 mü) |
+| D | Panelden toplu "Kargo etiketi al" (tek POST) | POST durum kodu + gövde; `requested_at` |
+| E | Sorgu döngüsü | her GET'in zamanı ve sonucu; hazır olma süresi |
+| F | Hazır yanıt | `data[]` yapısı |
+| G | Biçim | `format` değeri (ZPL / PDF) |
+| H | Asıl korunuyor mu | `payload` = ham `label` bayt bayt; sha256; indirilen `.zpl` = asıl |
+| I | İkinci çalıştırma | aynı siparişe yeni toplu işlem → yeni POST YOK (`api_calls`'ta tek POST) |
+| J | Dışarıda kopya yok | Trendyol panelinde pakete tek etiket/barkod |
+| K | Çok kutu (varsa) | `boxQuantity` > 1 → `data[]` uzunluğu |
+
+Ancak A–J tamamlanınca S2 → COMPLETE; sınıflar belgede "LIVE VERIFIED (tarih)" olarak işaretlenir.
+
+## 13. Açıkça DOĞRULANMAMIŞ (fixture/mock anlamı canlı sayılmaz)
+Başarılı POST gövdesi · başarılı GET gövdesi · ZPL içeriği · PDF gövdesi/adresi · hazır olma süresi · çok kutu · geçersiz takip no yanıtı · ilgili 404 davranışı · TEX/Aras `cargoProviderName` metinleri.

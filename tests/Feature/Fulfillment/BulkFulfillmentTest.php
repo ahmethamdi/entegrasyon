@@ -16,6 +16,7 @@ use App\Domain\Orders\Models\Order;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
@@ -112,6 +113,84 @@ final class BulkFulfillmentTest extends TestCase
 
         $this->assertSame(self::ZPL_1."\n".self::ZPL_2."\n", $response->getContent());
         $this->assertStringContainsString('attachment;', (string) $response->headers->get('Content-Disposition'));
+    }
+
+    #[Test]
+    public function a_ready_label_does_not_ship_the_order_or_touch_stock(): void
+    {
+        // DEĞİŞMEZ: ETİKET HAZIR ≠ KARGOLANDI. Etiketi alınan sipariş kargo
+        // hazırlığı listesinde kalır, durumu değişmez, stok hareketi olmaz.
+        Queue::fake();
+        [$tenant, $connection] = $this->trendyolTenant();
+        $order = $this->awaitingOrder($tenant, $connection, '6250');
+        $movementsBefore = DB::table('inventory_movements')->count();
+
+        $this->actingAs($this->owner)->post('/orders/bulk', $this->form('labels', [$order]));
+        $this->labelGets = [$this->zplResponse(self::ZPL_1)];
+        $this->runLabelJob($tenant, $this->labelFor($tenant, $order)->id);
+        $this->assertSame(ShippingLabel::STATUS_READY, $this->labelFor($tenant, $order)->status);
+
+        $this->assertSame('awaiting_shipment', TenantContext::runFor($tenant->id, fn () => Order::query()->findOrFail($order->id)->state));
+        $this->assertTrue(TenantContext::runFor($tenant->id, fn () => Order::query()->awaitingShipment()->whereKey($order->id)->exists()));
+        $this->assertSame(0, DB::table('fulfillments')->where('order_id', $order->id)->count());
+        $this->assertSame($movementsBefore, DB::table('inventory_movements')->count(), 'Etiket işlemi stoğa dokunmaz.');
+
+        $this->actingAs($this->owner)->get('/orders?filter=awaiting_shipment')
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('rows.0.id', $order->id));
+    }
+
+    #[Test]
+    public function an_unauthorized_common_label_account_does_not_stop_the_rest_of_the_batch(): void
+    {
+        Queue::fake();
+        [$tenant, $connection] = $this->trendyolTenant();
+        $owner = $this->owner;
+        $a = $this->awaitingOrder($tenant, $connection, '6260');
+        $b = $this->awaitingOrder($tenant, $connection, '6261');
+        $this->actingAs($owner)->post('/orders/bulk', $this->form('labels', [$a, $b]));
+        $batch = TenantContext::runFor($tenant->id, fn () => FulfillmentBatch::query()->sole());
+        $this->labelGets = [Http::response(self::NOT_ALLOWED, 400), $this->zplResponse(self::ZPL_1)];
+
+        $this->runLabelJob($tenant, $this->labelFor($tenant, $a)->id);
+        $this->runLabelJob($tenant, $this->labelFor($tenant, $b)->id);
+
+        $this->actingAs($owner)->get("/fulfillment/batches/{$batch->id}")
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                // Yetki bir BAĞLANTI kısıtıdır: "işlem gerekli", açıklamalı; sistem hatası değil.
+                ->where('items.0.outcome', 'action_required')
+                ->where('items.0.reasonCode', FulfillmentReason::COMMON_LABEL_NOT_AUTHORIZED->value)
+                ->where('items.0.reason', FulfillmentReason::COMMON_LABEL_NOT_AUTHORIZED->label())
+                ->where('items.1.outcome', 'succeeded'));
+        $this->assertSame(0, $this->labelPostCount, 'Yetkisiz hesapta istek zorlanmaz.');
+
+        // Yetki sonradan açılırsa aynı sipariş yeniden denenebilir — kalıcı "yetkisiz" varsayımı yok.
+        $this->actingAs($owner)->post('/orders/bulk', $this->form('labels', [$a]));
+        $this->assertSame(ShippingLabel::STATUS_PENDING, $this->labelFor($tenant, $a)->status);
+        $this->labelGets = [Http::response(['data' => []]), $this->zplResponse(self::ZPL_2)];
+        $this->runLabelJob($tenant, $this->labelFor($tenant, $a)->id);
+        $this->runLabelJob($tenant, $this->labelFor($tenant, $a)->id);
+        $this->assertSame(ShippingLabel::STATUS_READY, $this->labelFor($tenant, $a)->status);
+        $this->assertSame(1, $this->labelPostCount);
+    }
+
+    #[Test]
+    public function invoice_document_actions_never_reach_another_tenants_order(): void
+    {
+        Queue::fake();
+        [$tenantA, $connectionA] = $this->trendyolTenant();
+        $ownerA = $this->owner;
+        $mine = $this->awaitingOrder($tenantA, $connectionA, '6270');
+        [$tenantB, $connectionB] = $this->trendyolTenant(seller: '779');
+        $foreign = $this->awaitingOrder($tenantB, $connectionB, '6271');
+        $this->invoice($tenantB, $foreign, Invoice::STATUS_ISSUED, 'e_archive');
+
+        foreach (['invoice_documents', 'issue_invoices', 'picking'] as $action) {
+            $this->actingAs($ownerA)->from('/orders')->post('/orders/bulk', $this->form($action, [$mine, $foreign]))->assertSessionHasErrors('bulk');
+        }
+
+        $this->assertSame(0, DB::table('fulfillment_batches')->count());
+        $this->assertSame(1, DB::table('invoices')->count());
+        Queue::assertNothingPushed();
     }
 
     // ─────────────────────────────────────────────── kiracı sınırı
