@@ -126,7 +126,9 @@ final class ContributionReportController extends Controller
         foreach ($views as $view) {
             $bucket = $out[$view->currency] ?? [
                 'complete' => 0, 'incomplete' => 0, 'notAvailable' => 0,
-                'contribution' => '0.00', 'unknown' => array_fill_keys(self::COMPONENTS, 0),
+                // null = dönemde TAMAM sipariş yok ("veri yok"). Hesaplanmış
+                // sıfır ile karışmasın diye ilk tamam siparişte '0.00'dan başlar.
+                'contribution' => null, 'unknown' => array_fill_keys(self::COMPONENTS, 0),
             ] + array_fill_keys(self::COMPONENTS, '0.00');
 
             if ($view->status === ContributionView::NOT_AVAILABLE) {
@@ -148,7 +150,7 @@ final class ContributionReportController extends Controller
 
             if ($view->status === ContributionView::COMPLETE) {
                 $bucket['complete']++;
-                $bucket['contribution'] = Money::add($bucket['contribution'], (string) $view->contribution);
+                $bucket['contribution'] = Money::add($bucket['contribution'] ?? '0.00', (string) $view->contribution);
             } else {
                 $bucket['incomplete']++;
             }

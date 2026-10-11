@@ -1138,5 +1138,7 @@
     "Kesinti para birimi siparişten farklı": "Deduction currency differs from the order",
     "dahil": "included",
     "Neden eksik?": "Why incomplete?",
-    "Satırın satış anı net tutarı yok": "A line has no sale-time net amount"
+    "Satırın satış anı net tutarı yok": "A line has no sale-time net amount",
+    "Bu dönemde hakedişi tamamlanmış sipariş yok.": "No completed settlements in this period.",
+    "Bu dönemde katkısı tam hesaplanabilen sipariş yok.": "No order in this period has a complete contribution."
 }

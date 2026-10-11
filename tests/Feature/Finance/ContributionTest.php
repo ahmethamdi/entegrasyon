@@ -332,7 +332,7 @@ final class ContributionTest extends TestCase
                 ->where('rows.0.settled.contribution', null)
                 ->where('rows.0.settled.status', 'incomplete')
                 ->where('totals.settled.TRY.incomplete', 1)
-                ->where('totals.settled.TRY.contribution', '0.00')
+                ->where('totals.settled.TRY.contribution', null)
                 ->where('totals.settled.TRY.unknown.shipping', 1)
                 ->where('unmatched.count', 1)
                 ->where('unmatched.rows.0.externalId', 'YETIM'));
@@ -345,6 +345,43 @@ final class ContributionTest extends TestCase
                 ->where('settled.sale', '1789.00')
                 ->has('settled.trace', 1)
                 ->where('settled.trace.0.ref', '14124406379'));
+    }
+
+    #[Test]
+    public function a_period_without_complete_orders_has_no_aggregate_contribution_not_zero(): void
+    {
+        // TD-40 (A): tamam sipariş yok → toplam katkı YOK (null), "0.00" değil.
+        $this->settledScenario(net: '1789.00', cost: '1000.00');
+
+        $this->actingAs($this->owner)
+            ->get('/reports/contribution?from=2026-10-01&to=2026-10-11')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('totals.settled.TRY.complete', 0)
+                ->where('totals.settled.TRY.contribution', null)
+                ->where('totals.expected.TRY.complete', 0)
+                ->where('totals.expected.TRY.contribution', null));
+    }
+
+    #[Test]
+    public function a_complete_contribution_that_is_exactly_zero_is_shown_as_zero(): void
+    {
+        // TD-40 (B): tam veri var ve matematik sıfır veriyor → "0.00" (gerçek sonuç).
+        [$tenant, $connection] = $this->trendyolTenant();
+        $order = $this->trendyolOrder($tenant, $connection, 'P-Z', 'N-Z', [['net' => '100.00', 'cost' => '60.00']]);
+        TenantContext::runFor($tenant->id, function () use ($order): void {
+            $record = app(RecordOrderCharge::class);
+            $record->run($order, 'commission', 'expected', '-25.00', 'TRY', 'order', 'C-Z', now());
+            $record->run($order, 'shipping_fee', 'expected', '-15.00', 'TRY', 'order', 'S-Z', now());
+        });
+
+        $this->assertSame(ContributionView::COMPLETE, $this->expected($tenant, $order)->status);
+
+        $this->actingAs($this->owner)
+            ->get('/reports/contribution?from=2026-10-01&to=2026-10-11')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('rows.0.expected.contribution', '0.00')
+                ->where('totals.expected.TRY.complete', 1)
+                ->where('totals.expected.TRY.contribution', '0.00'));
     }
 
     #[Test]

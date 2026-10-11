@@ -90,7 +90,12 @@ const components = [
                     </span>
                 </div>
                 <p class="mt-2">
-                    {{ t('Katkı (yalnız tamam siparişler)') }}: <strong>{{ money(bucket.contribution ?? '0.00', currency) }}</strong>
+                    {{ t('Katkı (yalnız tamam siparişler)') }}:
+                    <strong v-if="bucket.contribution !== null">{{ money(bucket.contribution, currency) }}</strong>
+                    <template v-else>
+                        <strong>—</strong>
+                        <span class="text-amber-800">({{ basis === 'settled' ? t('Bu dönemde hakedişi tamamlanmış sipariş yok.') : t('Bu dönemde katkısı tam hesaplanabilen sipariş yok.') }})</span>
+                    </template>
                     · {{ t('Tamam') }} {{ bucket.complete ?? 0 }}
                     · {{ t('Eksik') }} {{ bucket.incomplete ?? 0 }}
                     · {{ t('Hakediş yok') }} {{ bucket.notAvailable ?? 0 }}
