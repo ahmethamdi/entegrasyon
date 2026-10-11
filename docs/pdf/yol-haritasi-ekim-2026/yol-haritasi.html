@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>34Pazar Yol Haritası</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --ink: #15171c; --soft: #545a67; --muted: #8a909c; --line: #e3e5ea; --bg: #ffffff; --tint: #f6f7f9;
+    --brand: #ce310d; --brand-dark: #a8280b; --brand-soft: #fdf3f0; --brand-line: #fbe3dc;
+    --ok: #067647; --ok-soft: #ecfdf3; --warn: #b54708; --warn-soft: #fffaeb; --no: #b42318; --no-soft: #fef3f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; color: var(--ink); font-family: Inter, system-ui, sans-serif; font-size: 9.6pt; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; background: var(--bg); }
+  .page { width: 210mm; height: 297mm; padding: 17mm 16mm 18mm; position: relative; overflow: hidden; page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  h1, h2, h3, h4 { margin: 0; letter-spacing: -0.02em; }
+  h2 { font-size: 19pt; font-weight: 800; line-height: 1.15; margin-bottom: 3mm; }
+  h3 { font-size: 11.5pt; font-weight: 700; margin-bottom: 1.5mm; }
+  h4 { font-size: 9.6pt; font-weight: 700; margin-bottom: 1mm; }
+  p { margin: 0 0 2.6mm; }
+  .eyebrow { font-size: 7.5pt; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--brand); margin-bottom: 2.5mm; }
+  .lead { font-size: 10.6pt; color: var(--soft); }
+  .muted { color: var(--muted); }
+  .foot { position: absolute; left: 16mm; right: 16mm; bottom: 9mm; display: flex; justify-content: space-between; align-items: center; font-size: 7.5pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 2.5mm; }
+  .foot img { height: 4.2mm; }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 8pt; }
+
+  /* kapak */
+  .cover { background: var(--ink); color: #fff; display: flex; flex-direction: column; padding: 22mm 18mm; }
+  .cover .logo { height: 10mm; }
+  .cover h1 { font-size: 36pt; font-weight: 800; line-height: 1.04; margin: 40mm 0 7mm; }
+  .cover h1 span { color: #ff8a6b; }
+  .cover .sub { font-size: 12pt; color: #c9ccd3; max-width: 150mm; }
+  .cover .chips { display: flex; flex-wrap: wrap; gap: 2.5mm; margin-top: 10mm; }
+  .cover .chip { border: 1px solid #3a3e48; border-radius: 10mm; padding: 1.5mm 4mm; font-size: 8.5pt; color: #e3e5ea; }
+  .cover .meta { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; font-size: 8.5pt; color: #9aa0ab; }
+  .cover .meta img { height: 8mm; filter: invert(1); }
+
+  /* bileşenler */
+  .cards { display: grid; gap: 4mm; }
+  .c2 { grid-template-columns: 1fr 1fr; }
+  .c3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card { border: 1px solid var(--line); border-radius: 2.5mm; padding: 4mm; background: #fff; }
+  .card.tint { background: var(--tint); border-color: var(--tint); }
+  .card.brand { background: var(--brand-soft); border-color: var(--brand-line); }
+  .card.ok { background: var(--ok-soft); border-color: #c6ead6; }
+  .card.warn { background: var(--warn-soft); border-color: #fde7b0; }
+  .card p, .card li { font-size: 9pt; color: var(--soft); }
+  .big { font-size: 20pt; font-weight: 800; line-height: 1; letter-spacing: -0.03em; }
+  .big.brand { color: var(--brand); }
+  ul { margin: 1mm 0 0; padding-left: 4.2mm; }
+  li { margin-bottom: 1.1mm; }
+  li b, p b { color: var(--ink); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.4pt; }
+  th, td { text-align: left; padding: 1.7mm 2.2mm; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 7.3pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; background: var(--tint); }
+  td.k { font-weight: 600; }
+  tr.grp td { background: #fafafa; font-size: 7.3pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--brand); padding-top: 2.4mm; }
+  .us { background: #fffbfa; }
+  .s { display: inline-block; font-size: 7.2pt; font-weight: 700; padding: .3mm 1.8mm; border-radius: 8mm; white-space: nowrap; }
+  .s.ok { background: var(--ok-soft); color: var(--ok); }
+  .s.mid { background: var(--warn-soft); color: var(--warn); }
+  .s.no { background: var(--no-soft); color: var(--no); }
+  .s.gr { background: var(--tint); color: var(--soft); }
+
+  .sprint { border: 1px solid var(--line); border-radius: 2.5mm; padding: 3.6mm 4mm; margin-bottom: 3.4mm; display: grid; grid-template-columns: 30mm 1fr; gap: 4mm; }
+  .sprint .no { font-size: 17pt; font-weight: 800; color: var(--brand); line-height: 1; }
+  .sprint .dt { font-size: 7.8pt; color: var(--muted); margin-top: 1.2mm; }
+  .sprint .theme { font-size: 8pt; font-weight: 700; margin-top: 2mm; color: var(--ink); }
+  .sprint h3 { font-size: 10.6pt; margin-bottom: 1.2mm; }
+  .sprint ul { margin-top: .5mm; }
+  .sprint li { font-size: 8.6pt; color: var(--soft); margin-bottom: .6mm; }
+  .sprint .dod { font-size: 8.2pt; margin-top: 1.6mm; padding-top: 1.6mm; border-top: 1px dashed var(--line); color: var(--soft); }
+  .sprint .dod b { color: var(--ok); }
+  .sprint .dep { font-size: 8.2pt; color: var(--warn); margin-top: .8mm; }
+  .sprint.freeze { background: var(--tint); }
+
+  .timeline { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1.2mm; margin: 4mm 0 2mm; }
+  .tl { border-radius: 1.5mm; padding: 2mm 1.6mm; font-size: 7pt; line-height: 1.25; min-height: 22mm; color: #fff; }
+  .tl b { display: block; font-size: 8.5pt; margin-bottom: .8mm; }
+  .tl.a { background: var(--brand); } .tl.b { background: #e2603f; } .tl.c { background: #545a67; } .tl.d { background: #15171c; } .tl.f { background: #b4bac5; color: var(--ink); }
+  .legend { display: flex; gap: 5mm; font-size: 7.6pt; color: var(--soft); flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 3mm; height: 3mm; border-radius: .8mm; margin-right: 1.2mm; vertical-align: -.4mm; }
+  table.tight { font-size: 7.7pt; line-height: 1.32; }
+  table.tight th, table.tight td { padding: 1.05mm 2mm; }
+  table.tight tr.grp td { padding-top: 1.6mm; }
+  .note { font-size: 7.6pt; color: var(--muted); margin-top: 2.5mm; }
+</style>
+</head>
+<body>
+
+<!-- ═════════════ 1 KAPAK ═════════════ -->
+<section class="page cover">
+  <img class="logo" src="34pazar-logo-beyaz.png" alt="34Pazar">
+  <h1>Rakipleri yakala,<br><span>sonra geç.</span></h1>
+  <p class="sub">34Pazar yol haritası: Entegra ve Platin360 analizi, bugünkü farklarımız, 12 haftalık sprint planı ve Ocak 2027'de elimizde olacak ürün.</p>
+  <div class="chips">
+    <span class="chip">Rakip analizi</span><span class="chip">Fark analizi</span><span class="chip">12 sprint · 12 Eki – 1 Oca</span><span class="chip">Hedef ürün</span><span class="chip">Çalışma kuralları</span>
+  </div>
+  <div class="meta">
+    <div>İç belge · 11 Ekim 2026<br>Canlı sürüm: <span class="mono">bf0aaa1</span> · 2.085 otomatik test</div>
+    <img src="34devs-logo.png" alt="34Devs">
+  </div>
+</section>
+
+<!-- ═════════════ 2 ÖZET ═════════════ -->
+<section class="page">
+  <div class="eyebrow">Yönetici özeti</div>
+  <h2>Fiyatta öndeyiz, Türk satıcının günlük işinde geriyiz.</h2>
+  <p class="lead">İki rakip de yıllık peşin satıyor (24.750–125.000 ₺). Biz aylık ve ücretsiz girişle tek başımızayız. Ama satıcı ilk görüşmede "e-fatura var mı, kargo etiketi basıyor mu, Hepsiburada'ya ürün açıyor mu" diye soruyor. Bu üç soruya bugün tam "evet" diyemiyoruz.</p>
+
+  <div class="cards c3" style="margin:5mm 0">
+    <div class="card"><div class="big brand">3</div><p style="margin-top:2mm">Canlıda açık kanal: <b>Trendyol, Shopify, Etsy</b>. Kodda hazır ama kapalı 8 kanal daha var.</p></div>
+    <div class="card"><div class="big">26 / ~15</div><p style="margin-top:2mm">Entegra / Platin360'ın Türkiye pazar yeri sayısı. Bizde canlı olan 1.</p></div>
+    <div class="card"><div class="big brand">0 ₺</div><p style="margin-top:2mm">Bizim giriş fiyatımız. Rakiplerin en ucuz paketi yıllık 24.750 ₺ ve 29.990 ₺.</p></div>
+  </div>
+
+  <div class="cards c2">
+    <div class="card ok">
+      <h3>Öndeyiz</h3>
+      <ul>
+        <li><b>Aylık ödeme ve ücretsiz plan.</b> İki rakipte de yok.</li>
+        <li><b>Etsy canlı.</b> Platin360'ta "yakında"; eBay hiçbir rakipte yok, bizde kodu hazır.</li>
+        <li><b>Süreli kampanya + kanal fiyat kuralı + zarar koruması.</b></li>
+        <li><b>Stok çekirdeği:</b> fazla satışı önleyen kilit, sessiz hata avı, 2.085 test.</li>
+        <li><b>Alıcı verisi saklanmıyor:</b> e-fatura bilgiyi kanaldan anlık okuyor.</li>
+      </ul>
+    </div>
+    <div class="card warn">
+      <h3>Geriyiz</h3>
+      <ul>
+        <li><b>TR pazar yerleri kapalı:</b> HB, N11, Pazarama, ÇS kodda var, test hesabı bekliyor.</li>
+        <li><b>Bu dört kanalda ürün gönderme yok;</b> yalnız stok, fiyat ve sipariş.</li>
+        <li><b>Kargo etiketi yok,</b> yalnız takip numarası bildirimi var.</li>
+        <li><b>İade, soru-cevap, tedarikçi XML, hakediş raporu yok.</b></li>
+        <li><b>e-fatura:</b> 1 entegratör (Paraşüt), rakiplerde 11–13.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card brand" style="margin-top:4mm">
+    <h3>12 haftanın sonunda (Ocak 2027)</h3>
+    <p style="margin:0">Türk satıcının günlük döngüsünü baştan sona kapatan ürün: <b>sipariş → fatura → etiket → kargo → iade → hakediş → muhasebe</b>. Bu döngü 5 TR pazar yeri ile Shopify, ikas, Ticimax ve Woo'da çalışacak. Üstüne rakiplerin sunmadığı üç şey: aylık fiyat, yurt dışı paketi (eBay + Etsy) ve AI ile ürün listeleme. Kanal sayısında Entegra'yı yakalamayacağız; satıcının en çok kullandığı 10 kanalda eksiksiz olmayı hedefliyoruz.</p>
+  </div>
+
+  <div class="card tint" style="margin-top:4mm">
+    <h3>Planın önündeki üç engel</h3>
+    <ul style="margin:0">
+      <li><b>Test hesapları:</b> HB SIT, N11, Pazarama, Çiçeksepeti ve Paraşüt. Gelmezse S3 ve S6 kayar.</li>
+      <li><b>Gerçek hesap testi:</b> bir özellik ancak gerçek satıcı hesabında denenince "canlı" sayılır. Kodu hazır 8 kanal bu yüzden kapalı.</li>
+      <li><b>Ürün sınırı kararı:</b> 499 ₺ planda 500 ürün sınırı büyük satıcıyı ilk bakışta eliyor (öneri s. 6).</li>
+    </ul>
+  </div>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 3 RAKİPLER ═════════════ -->
+<section class="page">
+  <div class="eyebrow">1 · Rakip analizi</div>
+  <h2>İki rakip, iki farklı strateji.</h2>
+  <p class="lead">Entegra genişlikle (en çok kanal), Platin360 derinlikle (fatura, kargo, ERP) satıyor. İkisinin ortak noktası yıllık peşin fiyat ve "yıllardır buradayız" güveni.</p>
+
+  <div class="cards c2" style="margin-top:4mm">
+    <div class="card">
+      <h3>Entegra <span class="muted" style="font-weight:500">· entegrabilisim.com</span></h3>
+      <p><b>Konum:</b> pazarın en geniş kanal listesi. Paketler modül ekleyerek büyüyor.</p>
+      <table style="margin:2mm 0">
+        <tr><th>Paket (yıllık, KDV dahil)</th><th>Ne ekliyor</th></tr>
+        <tr><td class="k">P0 · 24.750 ₺</td><td>3 pazar yeri</td></tr>
+        <tr><td class="k">P1 · 39.000 ₺</td><td>Sınırsız kanal, AI listeleme, tedarikçi XML</td></tr>
+        <tr><td class="k">P2 · 54.000 ₺</td><td>İade, akıllı fiyat, kargo API</td></tr>
+        <tr><td class="k">P3 · 79.500 ₺</td><td>Muhasebe</td></tr>
+        <tr><td class="k">P4 · 98.000 ₺</td><td>Fulfillment, mobil depo</td></tr>
+        <tr><td class="k">P5 · 125.000 ₺</td><td>e-ihracat</td></tr>
+      </table>
+      <p><b>Kapsam:</b> 26 TR + 8 yurt dışı pazar yeri, 17 altyapı, 13 kargo, 11 e-fatura, 21 muhasebe/ERP.</p>
+      <p><b>Güçlü:</b> genişlik, otonom AI listeleme, tek çatı altında her modül.</p>
+      <p style="margin:0"><b>Zayıf:</b> eBay, ikas ve global Amazon yok. Aylık ya da ucuz giriş yok. Muhasebe için 79.500 ₺ ödemek gerekiyor.</p>
+    </div>
+    <div class="card">
+      <h3>Platin360 <span class="muted" style="font-weight:500">· platin360.com</span></h3>
+      <p><b>Konum:</b> "22 yıl, 1.000+ mağaza". Operasyon derinliği güçlü, AR-GE indirimiyle KDV %0.</p>
+      <table style="margin:2mm 0">
+        <tr><th>Paket (yıllık, KDV %0)</th><th>Ne ekliyor</th></tr>
+        <tr><td class="k">Starter · 29.990 ₺</td><td>3 pazar yeri, e-fatura, kargo, 1 kullanıcı</td></tr>
+        <tr><td class="k">Growth · 39.990 ₺</td><td>Tüm pazar yerleri</td></tr>
+        <tr><td class="k">Pro · 49.990 ₺</td><td>Altyapılar, hakediş</td></tr>
+        <tr><td class="k">Business · 59.990 ₺</td><td>Daha çok kullanıcı ve modül</td></tr>
+        <tr><td class="k">Enterprise</td><td>Teklifle</td></tr>
+      </table>
+      <p><b>Kapsam:</b> ~15 TR pazar yeri, yurt dışında Trendyol DE/AZ/SA/BAE, Amazon Global, Ozon. 6 altyapı, 8 kargo, 13 e-fatura, 8 ERP.</p>
+      <p><b>Güçlü:</b> e-fatura en ucuz pakette bile var. Toplu kargo etiketi, kâr/zarar sihirbazı, XML (Karo™).</p>
+      <p style="margin:0"><b>Zayıf:</b> eBay yok, Etsy "yakında". Kampanya modülü görünmüyor. AI yalnız çeviri. Aylık plan yok.</p>
+    </div>
+  </div>
+
+  <div class="card tint" style="margin-top:4mm">
+    <h3>Ne öğreniyoruz?</h3>
+    <ul style="margin:0">
+      <li><b>Satın alma kararını operasyon belirliyor.</b> Platin360 e-faturayı ve kargoyu en ucuz pakete koymuş, çünkü giriş bileti bunlar.</li>
+      <li><b>Fiyatı pazar yeri ve modül sayısı belirliyor, ürün sayısı değil.</b> Bizim ürün sınırımız piyasaya ters.</li>
+      <li><b>İkisi de yurt dışında zayıf.</b> eBay yok, Etsy yok ya da yeni. "Türkiye'den dünyaya" mesajı boşta duruyor.</li>
+      <li><b>Güven kanıtı:</b> rakipler "yıl" ve "mağaza sayısı" ile satıyor. Bizim kozumuz ölçülebilir sonuç olmalı: fazla satış sıfır, gecikme saniye.</li>
+    </ul>
+  </div>
+  <p class="note">Kaynak: rakiplerin web siteleri, 8 Eki (Entegra) ve 9 Eki 2026 (Platin360). Fiyatlar o günkü liste fiyatlarıdır; satışta indirim yapılıyor olabilir.</p>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 4 KARŞILAŞTIRMA ═════════════ -->
+<section class="page">
+  <div class="eyebrow">2 · Bugünkü tablo</div>
+  <h2>Özellik özellik karşılaştırma</h2>
+  <p class="lead" style="margin-bottom:3mm">34Pazar sütunu canlı veritabanından ve koddan ölçüldü (11 Eki). <span class="s ok">Canlı</span> satıcı bugün kullanabilir. <span class="s mid">Kodda</span> yazılı ve testli ama kapalı ya da gerçek hesapta denenmedi. <span class="s no">Yok</span></p>
+
+  <table class="tight">
+    <tr><th style="width:30%">Özellik</th><th class="us" style="width:30%">34Pazar</th><th style="width:20%">Entegra</th><th style="width:20%">Platin360</th></tr>
+    <tr class="grp"><td colspan="4">Fiyat</td></tr>
+    <tr><td class="k">Ödeme biçimi</td><td class="us"><span class="s ok">Aylık</span> ücretsiz plan var</td><td>Yıllık peşin</td><td>Yıllık, 3 taksit</td></tr>
+    <tr><td class="k">Giriş</td><td class="us">0 ₺ (25 ürün, 1 kanal) · 499 ₺/ay</td><td>24.750 ₺/yıl</td><td>29.990 ₺/yıl</td></tr>
+    <tr><td class="k">5 kanal</td><td class="us">1.499 ₺/ay ≈ 17.988 ₺/yıl</td><td>39.000 ₺/yıl</td><td>39.990 ₺/yıl</td></tr>
+    <tr><td class="k">Sınırı belirleyen</td><td class="us"><span class="s no">Ürün + kanal</span></td><td>Pazar yeri + modül</td><td>Kullanıcı + modül</td></tr>
+    <tr class="grp"><td colspan="4">Kanallar</td></tr>
+    <tr><td class="k">Trendyol</td><td class="us"><span class="s ok">Canlı</span> ürün, stok, fiyat, sipariş, onay</td><td>Var</td><td>Var</td></tr>
+    <tr><td class="k">Hepsiburada, N11, Pazarama, Çiçeksepeti</td><td class="us"><span class="s mid">Kodda</span> stok, fiyat, sipariş · <b>ürün gönderme yok</b></td><td>Var</td><td>Var</td></tr>
+    <tr><td class="k">Diğer TR pazar yerleri</td><td class="us"><span class="s no">Yok</span> İdefix, ePttAVM, MediaMarkt, Teknosa…</td><td>26 toplam</td><td>~15 toplam</td></tr>
+    <tr><td class="k">Shopify</td><td class="us"><span class="s ok">Canlı</span> tam, App Store'a gönderilmedi</td><td>Var</td><td>Var</td></tr>
+    <tr><td class="k">WooCommerce, ikas, Ticimax</td><td class="us"><span class="s mid">Kodda</span> kapalı</td><td>Var (17 altyapı)</td><td>Var (6 altyapı)</td></tr>
+    <tr><td class="k">Etsy</td><td class="us"><span class="s ok">Canlı</span> gerçek mağazada denendi</td><td>Var</td><td><span class="s gr">Yakında</span></td></tr>
+    <tr><td class="k">eBay</td><td class="us"><span class="s mid">Kodda</span> listeleme ve kargo · sipariş çekme yok</td><td><span class="s no">Yok</span></td><td><span class="s no">Yok</span></td></tr>
+    <tr><td class="k">Amazon</td><td class="us"><span class="s no">Yok</span> geliştirici başvurusu gerekli</td><td>Yalnız TR</td><td>Global</td></tr>
+    <tr class="grp"><td colspan="4">Operasyon</td></tr>
+    <tr><td class="k">e-fatura</td><td class="us"><span class="s mid">Kodda</span> Paraşüt, canlıda ama uygulama anahtarı bekliyor</td><td>11 entegratör</td><td>13 (en ucuz pakette)</td></tr>
+    <tr><td class="k">Fatura PDF'i pazar yerine</td><td class="us"><span class="s mid">Kodda</span> Trendyol</td><td>Var</td><td>Var</td></tr>
+    <tr><td class="k">Kargo etiketi</td><td class="us"><span class="s no">Yok</span> yalnız takip no bildirimi (6 kanal)</td><td>13 firma</td><td>8 firma + toplu</td></tr>
+    <tr><td class="k">İade / talep</td><td class="us"><span class="s no">Yok</span> iptal ve iade stoğa döner</td><td>Var (P2)</td><td>Var</td></tr>
+    <tr><td class="k">Soru-cevap</td><td class="us"><span class="s no">Yok</span></td><td>Var</td><td>Var</td></tr>
+    <tr><td class="k">Muhasebe aktarımı</td><td class="us"><span class="s mid">Kodda</span> Paraşüt: satış, tahsilat, otomatik</td><td>21 ERP (P3)</td><td>8 ERP</td></tr>
+    <tr><td class="k">Hakediş / kâr raporu</td><td class="us"><span class="s no">Yok</span></td><td>Var</td><td>Var (Pro)</td></tr>
+    <tr><td class="k">Tedarikçi XML / Excel</td><td class="us"><span class="s no">Yok</span></td><td>Var (P1)</td><td>Ek ücretli</td></tr>
+    <tr><td class="k">Çok kullanıcı / rol</td><td class="us"><span class="s no">Yok</span></td><td>Var</td><td>Kullanıcıyla fiyatlı</td></tr>
+    <tr class="grp"><td colspan="4">Fiyat ve büyüme</td></tr>
+    <tr><td class="k">Kanal fiyat kuralı + zarar koruması</td><td class="us"><span class="s ok">Canlı</span></td><td>Akıllı fiyat (P2)</td><td>Kâr/zarar sihirbazı</td></tr>
+    <tr><td class="k">Süreli kampanya</td><td class="us"><span class="s ok">Canlı</span></td><td>Belirsiz</td><td>Görünmüyor</td></tr>
+    <tr><td class="k">AI ile listeleme</td><td class="us"><span class="s no">Yok</span></td><td>Otonom (P1)</td><td>Yalnız çeviri</td></tr>
+    <tr><td class="k">Kanaldan ürün içe aktarma</td><td class="us"><span class="s ok">Canlı</span> 9 kanalda kodlu</td><td>Var</td><td>Var</td></tr>
+  </table>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 5 FARK ANALİZİ ═════════════ -->
+<section class="page">
+  <div class="eyebrow">3 · Fark analizi</div>
+  <h2>Hangi boşluk satışı ne kadar etkiliyor?</h2>
+  <p class="lead">Boşlukları satıcının satın alma kararına etkisine göre sıraladık. Sprint sırası bu tablodan çıkıyor.</p>
+
+  <table style="margin-top:3mm">
+    <tr><th style="width:24%">Boşluk</th><th style="width:34%">Satıcı ne der?</th><th style="width:10%">Etki</th><th style="width:12%">Engel</th><th style="width:20%">Sprint</th></tr>
+    <tr><td class="k">TR pazar yerleri kapalı</td><td>"Hepsiburada'da da satıyorum, onu bağlayamıyorsam ne işime yarar?"</td><td><span class="s no">Kritik</span></td><td>Test hesabı</td><td>S3 (hesap gelince)</td></tr>
+    <tr><td class="k">HB/N11'e ürün gönderme yok</td><td>"Ürünü yine her pazar yerinde elle açacaksam entegrasyon değil bu."</td><td><span class="s no">Kritik</span></td><td>—</td><td>S3</td></tr>
+    <tr><td class="k">Kargo etiketi</td><td>"Günde 50 sipariş, her birine ayrı panelden etiket mi basacağım?"</td><td><span class="s no">Kritik</span></td><td>Kargo hesabı (S6)</td><td>S2 · S6</td></tr>
+    <tr><td class="k">e-fatura canlı değil</td><td>"Faturayı kesmiyorsa almam."</td><td><span class="s no">Kritik</span></td><td>Paraşüt anahtarı</td><td>S1 (doğrulama)</td></tr>
+    <tr><td class="k">Hakediş / kâr</td><td>"Trendyol komisyondan sonra elime ne kaldı?"</td><td><span class="s mid">Yüksek</span></td><td>—</td><td>S1</td></tr>
+    <tr><td class="k">İade yönetimi</td><td>"İade geldiğinde stok geri gelsin, onayı tek yerden vereyim."</td><td><span class="s mid">Yüksek</span></td><td>—</td><td>S4</td></tr>
+    <tr><td class="k">Soru-cevap</td><td>"Cevapsız soru puanımı düşürüyor."</td><td><span class="s mid">Orta</span></td><td>—</td><td>S4</td></tr>
+    <tr><td class="k">Tedarikçi XML / Excel</td><td>"Toptancım XML veriyor, ürünlerim oradan gelsin."</td><td><span class="s mid">Yüksek</span></td><td>—</td><td>S5</td></tr>
+    <tr><td class="k">Altyapılar kapalı (Woo, ikas, Ticimax)</td><td>"Kendi sitem ikas'ta."</td><td><span class="s mid">Orta</span></td><td>Test mağazası</td><td>S5 · S10</td></tr>
+    <tr><td class="k">Çok kullanıcı</td><td>"Depocum yalnız siparişleri görsün."</td><td><span class="s gr">Orta</span></td><td>—</td><td>S7</td></tr>
+    <tr><td class="k">AI listeleme</td><td>"Öznitelik doldurmak saatlerimi alıyor."</td><td><span class="s gr">Fark</span></td><td>—</td><td>S8</td></tr>
+    <tr><td class="k">eBay kapalı, kur yok</td><td>"Yurt dışına da satmak istiyorum."</td><td><span class="s gr">Fark</span></td><td>eBay test</td><td>S9</td></tr>
+    <tr><td class="k">Yeni pazar yerleri</td><td>"İdefix / ePttAVM'de de varım."</td><td><span class="s gr">Orta</span></td><td>Hesap</td><td>S10</td></tr>
+  </table>
+
+  <div class="cards c2" style="margin-top:5mm">
+    <div class="card warn">
+      <h3>Düzeltmemiz gereken iki iddia</h3>
+      <ul style="margin:0">
+        <li><b>"eBay ve Etsy bugün canlı" doğru değil.</b> eBay canlıda kapalı ve sipariş çekmiyor. Mesaj S9'a kadar "Etsy canlı, eBay yakında" olmalı.</li>
+        <li><b>"Hepsiburada destekli" demek yanıltıcı.</b> Kanal kapalı ve ürün gönderemiyor. S3 bitmeden satış dilinde kullanılmamalı.</li>
+      </ul>
+    </div>
+    <div class="card ok">
+      <h3>Rakiplerin açık kapısı</h3>
+      <ul style="margin:0">
+        <li><b>eBay:</b> iki rakipte de yok. Kodumuz hazır.</li>
+        <li><b>Aylık fiyat:</b> küçük ve yeni satıcı yıllık 25–30 bin ₺'yi peşin ödeyemiyor.</li>
+        <li><b>Muhasebe ucuz:</b> Entegra'da muhasebe 79.500 ₺'lik pakette. Bizde Paraşüt aktarımını 1.499 ₺/ay pakete koymak güçlü bir koz.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 6 FİYAT ═════════════ -->
+<section class="page">
+  <div class="eyebrow">4 · Fiyat ve konumlandırma</div>
+  <h2>Aylık fiyat kozumuz, ürün sınırı zaafımız.</h2>
+
+  <table style="margin-top:3mm">
+    <tr><th>Plan (canlı)</th><th>Aylık</th><th>Yıllık karşılığı</th><th>Kanal</th><th>Ürün</th><th>Rakipte benzeri</th></tr>
+    <tr><td class="k">Ücretsiz</td><td>0 ₺</td><td>0 ₺</td><td>1</td><td>25</td><td>Yok</td></tr>
+    <tr><td class="k">Başlangıç</td><td>499 ₺</td><td>5.988 ₺</td><td>2</td><td><b style="color:var(--no)">500</b></td><td>24.750 / 29.990 ₺ (3 pazar yeri, ürün sınırsız)</td></tr>
+    <tr><td class="k">Profesyonel</td><td>1.499 ₺</td><td>17.988 ₺</td><td>5</td><td>5.000</td><td>39.000 / 39.990 ₺ (tüm pazar yerleri)</td></tr>
+    <tr><td class="k">Kurumsal</td><td>3.999 ₺</td><td>47.988 ₺</td><td>Sınırsız</td><td>Sınırsız</td><td>54.000–125.000 / 49.990–59.990 ₺</td></tr>
+  </table>
+
+  <div class="cards c2" style="margin-top:5mm">
+    <div class="card brand">
+      <h3>Öneri: ürün sınırını kaldır, modülle ayrış</h3>
+      <p>Rakiplerde ürün sınırsız. 800 ürünlü bir satıcı bizim 499 ₺ planımızı daha fiyatı görmeden eliyor. Önerimiz:</p>
+      <ul>
+        <li><b>Ürün: tüm ücretli planlarda sınırsız.</b> Kötüye kullanıma karşı 50.000 adil kullanım sınırı.</li>
+        <li><b>Planları kanal sayısı ve modül ayırsın:</b> Başlangıç 3 kanal; Profesyonel 6 kanal + e-fatura + muhasebe; Kurumsal sınırsız + çok kullanıcı + öncelikli destek.</li>
+        <li><b>e-fatura kotası</b> (aylık fatura sayısı) maliyet kontrolü için yeterli.</li>
+      </ul>
+      <p style="margin:0"><b>Karar senin.</b> S1'de uygulanabilir; plan tablosu ve kota kodu hazır.</p>
+    </div>
+    <div class="card tint">
+      <h3>Satış mesajı (düzeltilmiş)</h3>
+      <p style="font-size:10.5pt;color:var(--ink);font-weight:600">"Yıllık 30 bin ₺ peşin yok. Aylık başla, istediğin ay bırak."</p>
+      <ul>
+        <li>Destek mesajları: <b>"Etsy bugün canlı, eBay yakında"</b> · "Muhasebe aktarımı Profesyonel pakette".</li>
+        <li><b>Güven kanıtı:</b> "Fazla satış sıfır" ekranı (S11) ve ilk 3 referans müşterinin vaka yazısı.</li>
+        <li><b>Karşılaştırmalı reklam:</b> Türkiye'de nesnel ve doğrulanabilir olmak şartıyla serbest. Tarih ve kaynak yazılmalı, rakip adı geçecekse avukata sorulmalı.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:4mm">
+    <h3>Rakip fiyatına karşı yıllık maliyet (5 pazar yeri, muhasebe dahil)</h3>
+    <table style="margin-top:2mm">
+      <tr><th>Satıcı ihtiyacı</th><th>34Pazar (bugünkü plan)</th><th>Entegra</th><th>Platin360</th></tr>
+      <tr><td class="k">5 kanal + e-fatura + muhasebe</td><td><b>17.988 ₺</b> (Profesyonel)</td><td>79.500 ₺ (P3)</td><td>49.990 ₺ (Pro) + ERP</td></tr>
+      <tr><td class="k">Peşin ödeme</td><td>Yok, aylık</td><td>Var</td><td>Var (3 taksit)</td></tr>
+    </table>
+    <p class="note" style="margin-bottom:0">Karşılaştırma S1–S6 bittiğinde geçerli olur. Bugün e-fatura ve muhasebe canlıda açık değil.</p>
+  </div>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 7 TAKVİM ═════════════ -->
+<section class="page">
+  <div class="eyebrow">5 · Sprint planı</div>
+  <h2>12 hafta, 12 sprint.</h2>
+  <p class="lead">Her sprint bir hafta: Pazartesi plan, Cuma demo ve deploy. Sıra: önce satışı engelleyenler (S1–S3), sonra rakiplerle eşitlik (S4–S7), sonra fark yaratanlar (S8–S11), en son satışa hazırlık (S12).</p>
+
+  <div class="timeline">
+    <div class="tl a"><b>S1</b>Para: hakediş, kâr, fatura canlı</div>
+    <div class="tl a"><b>S2</b>Etiket I: Trendyol + toplu işlem</div>
+    <div class="tl a"><b>S3</b>TR pazar yerleri: ürün gönderme</div>
+    <div class="tl b"><b>S4</b>İade + soru-cevap</div>
+    <div class="tl b"><b>S5</b>XML / Excel</div>
+    <div class="tl b"><b>S6</b>Kargo II + fatura her kanalda</div>
+    <div class="tl f"><b>S7</b>Black Friday: dondurma + roller</div>
+    <div class="tl c"><b>S8</b>AI listeleme</div>
+    <div class="tl c"><b>S9</b>Yurt dışı paketi</div>
+    <div class="tl c"><b>S10</b>Yeni kanallar</div>
+    <div class="tl c"><b>S11</b>Kanıt ekranı + App Store</div>
+    <div class="tl d"><b>S12</b>Satışa hazırlık</div>
+  </div>
+  <div class="legend"><span><i style="background:var(--brand)"></i>Satışı engelleyenler</span><span><i style="background:#e2603f"></i>Rakiple eşitlik</span><span><i style="background:#545a67"></i>Fark yaratan</span><span><i style="background:#15171c"></i>Satış</span><span><i style="background:#b4bac5"></i>Dondurma haftası</span></div>
+
+  <table style="margin-top:5mm">
+    <tr><th>Sprint</th><th>Tarih</th><th>Hedef</th><th>Dışarıdan gereken</th></tr>
+    <tr><td class="k">S1</td><td>12–16 Eki</td><td>Hakediş + kâr raporu, Paraşüt'ü gerçek hesapta aç, plan sınırı kararı</td><td>Paraşüt anahtarı (yoksa doğrulama S2'ye kayar)</td></tr>
+    <tr><td class="k">S2</td><td>19–23 Eki</td><td>Trendyol ortak etiket, toplu etiket + fatura, sipariş listesi toplu işlem</td><td>Trendyol hesabında TEX/Aras anlaşması</td></tr>
+    <tr><td class="k">S3</td><td>26–30 Eki <span class="muted">(29 Eki tatil)</span></td><td>HB + N11 ürün gönderme, hesap gelen kanalları aç</td><td>HB SIT, N11, Pazarama, ÇS anahtarları</td></tr>
+    <tr><td class="k">S4</td><td>2–6 Kas</td><td>İade/talep (Trendyol, HB) + soru-cevap</td><td>—</td></tr>
+    <tr><td class="k">S5</td><td>9–13 Kas</td><td>Tedarikçi XML, Excel toplu fiyat/stok, Woo canlı</td><td>Gerçek bir tedarikçi XML örneği</td></tr>
+    <tr><td class="k">S6</td><td>16–20 Kas</td><td>Yurtiçi + Aras API, HB faturası, iade faturası</td><td>Kargo müşteri hesapları</td></tr>
+    <tr><td class="k">S7</td><td>23–27 Kas</td><td>Black Friday (27 Kas): yeni özellik yok; izleme, hız, çok kullanıcı</td><td>—</td></tr>
+    <tr><td class="k">S8</td><td>30 Kas–4 Ara</td><td>AI ile başlık, açıklama, öznitelik, kategori</td><td>—</td></tr>
+    <tr><td class="k">S9</td><td>7–11 Ara</td><td>eBay canlı, sipariş çekme, kur çevirisi</td><td>eBay satıcı hesabı</td></tr>
+    <tr><td class="k">S10</td><td>14–18 Ara</td><td>İdefix + ePttAVM, ikas/Ticimax canlı</td><td>Hesaplar</td></tr>
+    <tr><td class="k">S11</td><td>21–25 Ara</td><td>"Fazla satış yok" ekranı, onboarding, App Store'a gönderim</td><td>—</td></tr>
+    <tr><td class="k">S12</td><td>28 Ara–1 Oca</td><td>Fiyat sayfası, demo, 3 referans, belgeler, sağlamlaştırma</td><td>Pilot müşteriler</td></tr>
+  </table>
+  <p class="note">Süreler tahmindir, ölçülmedi. Dayanak: 15 Ağu–10 Eki arası 278 commit; e-fatura iki dilimi bir günde çıktı. Ama dış hesap beklemeleri bu hızı belirleyen asıl etkendir.</p>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 8 SPRINT DETAY 1–4 ═════════════ -->
+<section class="page">
+  <div class="eyebrow">6 · Sprint ayrıntıları · 1/3</div>
+  <h2 style="margin-bottom:4mm">Satışı engelleyenler</h2>
+
+  <div class="sprint">
+    <div><div class="no">S1</div><div class="dt">12–16 Ekim</div><div class="theme">Para nerede?</div></div>
+    <div>
+      <h3>Hakediş, kâr raporu ve faturanın gerçekten açılması</h3>
+      <ul>
+        <li>Trendyol finans API'sinden hakediş: sipariş başına komisyon, kargo kesintisi, ödeme tarihi.</li>
+        <li><b>Kâr raporu:</b> satış − komisyon − kargo − alış maliyeti (fiyat kuralındaki maliyet alanı). Kanal ve ürün bazında.</li>
+        <li><b>Paraşüt'e hakediş aktarımı:</b> Trendyol hesabından bankaya transfer. Komisyon gideri yazılmaz, aylık e-fatura zaten geliyor.</li>
+        <li>Paraşüt anahtarı geldiyse: sandbox'ta doğrulama (8 nokta), canlıda aç.</li>
+        <li>Ürün sınırı kararını plan tablosuna uygula.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> bir Trendyol siparişinin "elime kalan" tutarı panelde, hakediş Paraşüt'te. Gerçek hesapta tek bir fatura kesildi ve PDF Trendyol'a yüklendi.</div>
+      <div class="dep">Dışarıdan: Paraşüt client_id/secret + sandbox (e-posta gönderildi mi?)</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S2</div><div class="dt">19–23 Ekim</div><div class="theme">Depo hızı</div></div>
+    <div>
+      <h3>Kargo etiketi I ve sipariş listesinde toplu işlem</h3>
+      <ul>
+        <li><b>Trendyol ortak etiket</b> (<span class="mono">createCommonLabel</span>): Trendyol'un ödediği TEX ve Aras gönderilerinde. Etiket ZPL formatında geliyor; termal yazıcıya doğrudan, A4 için PDF'e çevrilerek.</li>
+        <li>Sipariş listesinde çoklu seçim: <b>toplu etiket, toplu fatura, toplu "kargoya verildi"</b>.</li>
+        <li>Toplama listesi (picking): seçili siparişlerin ürünleri SKU'ya göre toplanmış tek sayfa.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> 20 sipariş seçilip tek tıkla 20 etiket + 20 fatura. Gerçek bir Trendyol paketiyle denendi.</div>
+      <div class="dep">Dışarıdan: Trendyol hesabında anlaşmalı kargo (TEX/Aras) açık mı?</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S3</div><div class="dt">26–30 Ekim · 29 Eki tatil</div><div class="theme">Pazar yerleri</div></div>
+    <div>
+      <h3>Hepsiburada ve N11'e ürün gönderme, kanalların açılması</h3>
+      <ul>
+        <li><b>HB katalog:</b> kategori ağacı, öznitelik eşleme, ürün oluşturma, onay takibi (Trendyol'daki <span class="mono">ApprovalWorkflow</span> kalıbıyla).</li>
+        <li><b>N11 katalog:</b> aynı akış.</li>
+        <li>Hesabı gelen kanalı canlıya aç: uçtan uca test (ürün → stok → sipariş → iptal), ardından <span class="mono">is_active</span>.</li>
+        <li>Pazarama ve Çiçeksepeti ürün gönderme S10'a.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> 34Pazar'dan açılan bir ürün HB'de ve N11'de satışta. En az bir TR pazar yeri daha canlıda.</div>
+      <div class="dep">Dışarıdan: HB SIT bilgileri, N11 appKey/secret, Pazarama clientId, ÇS anahtarı + sunucu IP'si 212.227.142.108 bildirimi</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S4</div><div class="dt">2–6 Kasım</div><div class="theme">Satış sonrası</div></div>
+    <div>
+      <h3>İade/talep yönetimi ve soru-cevap</h3>
+      <ul>
+        <li>Trendyol <span class="mono">claims</span>, HB iade: panelde liste, onay/ret, sebep. Kabulde stok geri gelir (bugünkü iade çekirdeği kullanılır).</li>
+        <li>Trendyol + HB müşteri soruları: panelde, cevap panelden gider. Cevapsız soru sayacı ana sayfada.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> gerçek bir iade panelden onaylandı ve stok döndü. Bir soru panelden cevaplandı.</div>
+    </div>
+  </div>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 9 SPRINT DETAY 5–8 ═════════════ -->
+<section class="page">
+  <div class="eyebrow">6 · Sprint ayrıntıları · 2/3</div>
+  <h2 style="margin-bottom:4mm">Rakiple eşitlik</h2>
+
+  <div class="sprint">
+    <div><div class="no">S5</div><div class="dt">9–13 Kasım</div><div class="theme">Ürün kaynağı</div></div>
+    <div>
+      <h3>Tedarikçi XML, Excel toplu işlem, WooCommerce canlı</h3>
+      <ul>
+        <li><b>XML içe aktarma:</b> adres + alan eşleme ekranı (ad, SKU, barkod, fiyat, stok, görsel, kategori), zamanlanmış güncelleme (saatlik), değişiklik özeti.</li>
+        <li>Fiyat kuralı XML fiyatına uygulanır (alış + %kâr).</li>
+        <li><b>Excel:</b> fiyat/stok indir → düzenle → yükle, önizleme ve hata satırları.</li>
+        <li>WooCommerce: bağlantı sihirbazı (<span class="mono">/wc-auth/v1/authorize</span>), gerçek mağazada test, canlı.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> gerçek bir toptancı XML'inden 500 ürün geldi ve saatlik güncelleniyor.</div>
+      <div class="dep">Dışarıdan: gerçek bir tedarikçi XML örneği ve bir Woo test mağazası</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S6</div><div class="dt">16–20 Kasım</div><div class="theme">Kargo II · Fatura her yerde</div></div>
+    <div>
+      <h3>Doğrudan kargo API'leri ve faturanın diğer kanallara yayılması</h3>
+      <ul>
+        <li><b>Yurtiçi + Aras</b> (sonra HepsiJet): gönderi oluştur, etiket PDF'i, takip no otomatik kanala.</li>
+        <li><b>e-fatura HB + N11 + Shopify:</b> <span class="mono">SupportsInvoiceData</span> ve PDF yükleme.</li>
+        <li><b>İade faturası</b> ve iptal: Paraşüt'te karşılığı.</li>
+        <li>Aylık fatura kotası (plan sınırı).</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> Shopify siparişine Yurtiçi etiketi basıldı, takip no Shopify'a gitti, faturası kesildi.</div>
+      <div class="dep">Dışarıdan: Yurtiçi ve Aras kurumsal müşteri hesabı / API bilgileri</div>
+    </div>
+  </div>
+
+  <div class="sprint freeze">
+    <div><div class="no">S7</div><div class="dt">23–27 Kasım</div><div class="theme">Black Friday</div></div>
+    <div>
+      <h3>Dondurma haftası: yeni özellik canlıya çıkmaz</h3>
+      <ul>
+        <li>Satıcıların yılın en yoğun haftası (Black Friday 27 Kas). Deploy yalnız acil düzeltme için.</li>
+        <li>İzleme: kuyruk gecikmesi, hız sınırı, devre kesici alarmları; yük testi (S6 sonunda).</li>
+        <li>Arka planda (canlıya Pazartesi): <b>çok kullanıcı ve rol</b> (sahip / yönetici / depo).</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> hafta sıfır kesintiyle geçti. Rol sistemi testli ve 30 Kasım'da canlıda.</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S8</div><div class="dt">30 Kas–4 Aralık</div><div class="theme">Fark: AI</div></div>
+    <div>
+      <h3>AI ile ürün listeleme (Claude)</h3>
+      <ul>
+        <li>Pazar yerine göre başlık ve açıklama (karakter sınırları, yasaklı kelimeler).</li>
+        <li><b>Öznitelik doldurma:</b> ürün metni ve görselinden Trendyol/HB zorunlu özniteliklerini önerir, satıcı onaylar.</li>
+        <li>Kategori eşleme önerisi; toplu: "50 ürünü HB'ye hazırla".</li>
+        <li>Maliyet kontrolü: plan başına aylık AI kotası.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> 20 ürün HB'ye AI önerisiyle, satıcının yalnız onay vererek açıldı.</div>
+    </div>
+  </div>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 10 SPRINT DETAY 9–12 ═════════════ -->
+<section class="page">
+  <div class="eyebrow">6 · Sprint ayrıntıları · 3/3</div>
+  <h2 style="margin-bottom:4mm">Fark yaratanlar ve satış</h2>
+
+  <div class="sprint">
+    <div><div class="no">S9</div><div class="dt">7–11 Aralık</div><div class="theme">Türkiye'den dünyaya</div></div>
+    <div>
+      <h3>Yurt dışı paketi: eBay canlı</h3>
+      <ul>
+        <li><b>eBay sipariş çekme</b> (bugün yok) ve gerçek hesapta uçtan uca test; ardından canlı.</li>
+        <li><b>Otomatik kur:</b> TCMB kuru + yüzde + yuvarlama; kanal para birimi koruması eBay'de de.</li>
+        <li>Paket mesajı: "eBay + Etsy + Shopify Markets, tek stok".</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> TL fiyatlı ürün eBay'de USD fiyatla satışta, sipariş stoktan düştü.</div>
+      <div class="dep">Dışarıdan: eBay satıcı hesabı (yurt dışı satış açık)</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S10</div><div class="dt">14–18 Aralık</div><div class="theme">Genişlik</div></div>
+    <div>
+      <h3>Yeni pazar yerleri ve altyapılar</h3>
+      <ul>
+        <li><b>İdefix + ePttAVM</b> (rakiplerde var, bizde yok).</li>
+        <li>ikas + Ticimax gerçek hesapta test ve canlı.</li>
+        <li>Pazarama + Çiçeksepeti ürün gönderme.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> canlı kanal sayısı en az 10.</div>
+      <div class="dep">Dışarıdan: İdefix, ePttAVM satıcı API hesapları; ikas ve Ticimax test mağazası</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S11</div><div class="dt">21–25 Aralık</div><div class="theme">Kanıt</div></div>
+    <div>
+      <h3>"Fazla satış yok" ekranı, onboarding, Shopify App Store</h3>
+      <ul>
+        <li><b>Kanıt ekranı:</b> son 30 günde kaç sipariş, kaç stok çakışması önlendi, ortalama senkron gecikmesi. Satışta ekran görüntüsü olarak kullanılır.</li>
+        <li><b>Onboarding:</b> ilk girişte 5 adım (kanal bağla → ürün çek → stok → fatura → ilk sipariş), ilerleme çubuğu.</li>
+        <li>Shopify App Store'a inceleme gönderimi (karşılama sayfası, gizlilik webhook'ları).</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> yeni bir satıcı 15 dakikada ilk siparişini 34Pazar'da gördü.</div>
+    </div>
+  </div>
+
+  <div class="sprint">
+    <div><div class="no">S12</div><div class="dt">28 Ara–1 Ocak</div><div class="theme">Satış</div></div>
+    <div>
+      <h3>Satışa hazırlık ve sağlamlaştırma</h3>
+      <ul>
+        <li>Fiyat sayfası (yeni plan yapısı), karşılaştırma tablosu (kaynak + tarihli), demo hesabı.</li>
+        <li><b>3 referans müşteri</b> ve kısa vaka yazıları (rakiplerin "22 yıl" kozuna karşı).</li>
+        <li>Yardım belgeleri: her kanal için bağlanma rehberi.</li>
+        <li>Teknik borç: aralıklı kırılan test, yedek geri yükleme tatbikatı.</li>
+      </ul>
+      <div class="dod"><b>Bitti:</b> 34pazar.com'dan gelen bir satıcı satış görüşmesi olmadan ücretli plana geçti.</div>
+      <div class="dep">Dışarıdan: pilot müşteriler (ajans müşterilerinden 3 aday)</div>
+    </div>
+  </div>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 11 HEDEF ÜRÜN ═════════════ -->
+<section class="page">
+  <div class="eyebrow">7 · Günün sonunda</div>
+  <h2>Ocak 2027'de 34Pazar</h2>
+  <p class="lead">Plan tutarsa satıcının bir siparişi baştan sona şöyle akacak. Satıcı tek ekranda kalacak, hiçbir pazar yeri paneline girmeyecek:</p>
+
+  <div class="cards c3" style="margin:4mm 0">
+    <div class="card tint"><h4>1 · Ürün</h4><p style="margin:0">Tedarikçi XML'inden ya da Excel'den gelir. AI başlık, açıklama ve öznitelikleri doldurur. Tek tıkla 10 kanalda açılır.</p></div>
+    <div class="card tint"><h4>2 · Fiyat ve stok</h4><p style="margin:0">Kanal fiyat kuralı, kampanya, kur ve zarar koruması. Bir yerde satılan her yerde düşer, fazla satış olmaz.</p></div>
+    <div class="card tint"><h4>3 · Sipariş</h4><p style="margin:0">Tek listede gelir. Toplu seçim: etiket + fatura + toplama listesi tek tıkta.</p></div>
+    <div class="card tint"><h4>4 · Kargo</h4><p style="margin:0">Pazar yeri etiketi ya da Yurtiçi/Aras etiketi basılır, takip no her kanala kendiliğinden gider.</p></div>
+    <div class="card tint"><h4>5 · Fatura ve muhasebe</h4><p style="margin:0">e-arşiv/e-fatura otomatik kesilir, PDF pazar yerine gider. Satış, tahsilat ve hakediş Paraşüt'e işlenir.</p></div>
+    <div class="card tint"><h4>6 · Satış sonrası</h4><p style="margin:0">İade panelden onaylanır, stok döner. Sorular panelden cevaplanır. Kâr raporu "elime ne kaldı"yı söyler.</p></div>
+  </div>
+
+  <table>
+    <tr><th style="width:28%">Ölçüt</th><th class="us">34Pazar · bugün</th><th class="us">34Pazar · Ocak 2027</th><th>Entegra</th><th>Platin360</th></tr>
+    <tr><td class="k">Canlı TR pazar yeri</td><td class="us">1</td><td class="us"><b>5–7</b></td><td>26</td><td>~15</td></tr>
+    <tr><td class="k">Canlı altyapı</td><td class="us">1</td><td class="us"><b>4</b></td><td>17</td><td>6</td></tr>
+    <tr><td class="k">Canlı yurt dışı</td><td class="us">1 (Etsy)</td><td class="us"><b>2 + Shopify Markets</b></td><td>8 (eBay yok)</td><td>~6 (eBay yok)</td></tr>
+    <tr><td class="k">e-fatura entegratörü</td><td class="us">0 açık</td><td class="us"><b>1 (Paraşüt)</b></td><td>11</td><td>13</td></tr>
+    <tr><td class="k">Kargo</td><td class="us">Takip no</td><td class="us"><b>Pazar yeri etiketi + 2–3 firma</b></td><td>13</td><td>8</td></tr>
+    <tr><td class="k">Muhasebe</td><td class="us">0 açık</td><td class="us"><b>Paraşüt (satış + tahsilat + hakediş)</b></td><td>21</td><td>8</td></tr>
+    <tr><td class="k">İade · soru · XML · hakediş · roller</td><td class="us">Yok</td><td class="us"><b>Var</b></td><td>Var</td><td>Var</td></tr>
+    <tr><td class="k">AI listeleme</td><td class="us">Yok</td><td class="us"><b>Var (öznitelik dahil)</b></td><td>Var</td><td>Yalnız çeviri</td></tr>
+    <tr><td class="k">5 kanal + muhasebe, yıllık</td><td class="us">—</td><td class="us"><b>≈ 18.000 ₺, aylık</b></td><td>79.500 ₺</td><td>~50.000 ₺</td></tr>
+  </table>
+
+  <div class="cards c2" style="margin-top:4mm">
+    <div class="card ok"><h3>Kazandığımız pozisyon</h3><p style="margin:0">"En çok kullanılan 10 kanalda eksiksiz, aylık ödenen, AI'lı ve yurt dışına açık entegrasyon." Bu cümlenin tamamını rakiplerin ikisi de söyleyemez.</p></div>
+    <div class="card warn"><h3>Hâlâ geride olacağımız yer</h3><p style="margin:0">Kanal genişliği (26'ya karşı 7) ve ERP sayısı (21'e karşı 1). 2027'nin ilk çeyreğinde talebe göre: Logo İşbaşı, Mikro, BirFatura/EDM, Trendyol yurt dışı, Amazon.</p></div>
+  </div>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+<!-- ═════════════ 12 KURALLAR + RİSK ═════════════ -->
+<section class="page">
+  <div class="eyebrow">8 · Bu belgeyle nasıl çalışacağız</div>
+  <h2>Ritim, "bitti" tanımı ve riskler</h2>
+
+  <div class="cards c2" style="margin-top:3mm">
+    <div class="card">
+      <h3>Haftalık ritim</h3>
+      <ul style="margin:0">
+        <li><b>Pazartesi:</b> sprint kartı açılır. Dışarıdan gereken hesaplar geldi mi diye bakılır; gelmediyse sıradaki sprintle yer değiştirilir.</li>
+        <li><b>Salı–Perşembe:</b> dilim dilim yazılır, her dilim commit + test.</li>
+        <li><b>Cuma:</b> demo (ekran görüntüsü veya kısa video), deploy (onaylı), bu belgedeki kutu işaretlenir.</li>
+        <li><b>Sapma:</b> bir sprint kayarsa ertesi sprint bölünmez; kapsam kısılır ve kısılan iş "Sonra" listesine yazılır.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>"Bitti" tanımı (her iş için)</h3>
+      <ul style="margin:0">
+        <li>Otomatik testler yazıldı, tam paket yeşil, Pint temiz, ön yüz derleniyor.</li>
+        <li>En az 2 mutasyonla testlerin hatayı yakaladığı ölçüldü.</li>
+        <li><b>Gerçek hesapta</b> uçtan uca denendi. Denenmediyse "kodda" sayılır, satış dilinde kullanılmaz.</li>
+        <li>Panelde İngilizce karşılık, yardım metni, yol haritası belgesi güncel.</li>
+        <li>Canlıya alındı ve <span class="mono">/up</span> + loglar temiz.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3 style="margin-top:6mm">Riskler</h3>
+  <table style="margin-top:2mm">
+    <tr><th style="width:26%">Risk</th><th style="width:12%">Olasılık</th><th>Ne yaparız</th></tr>
+    <tr><td class="k">Test hesapları gecikir</td><td><span class="s no">Yüksek</span></td><td>Hesap gerektirmeyen işler öne alınır (S1, S2, S4, S5, S8 hesapsız ilerler). Hesap talepleri bu hafta topluca gönderilir.</td></tr>
+    <tr><td class="k">Sprint kayar (iş tahminden büyük çıkar)</td><td><span class="s mid">Orta</span></td><td>Sıra değişmez, kapsam kısılır. Kısılan iş "Sonra" listesine yazılır ve sonraki sprintin başında yeniden tartılır.</td></tr>
+    <tr><td class="k">Paraşüt API biçimi farklı çıkar</td><td><span class="s mid">Orta</span></td><td>8 doğrulama noktası kodda işaretli. Sandbox'ta yarım gün düzeltme.</td></tr>
+    <tr><td class="k">Black Friday'de kesinti</td><td><span class="s mid">Orta</span></td><td>S7 dondurma haftası, S6 sonunda yük testi, alarmlar.</td></tr>
+    <tr><td class="k">Rakip fiyat kırar</td><td><span class="s gr">Düşük</span></td><td>Aylık model kopyalanabilir ama yurt dışı + AI + muhasebe birlikte zor kopyalanır.</td></tr>
+    <tr><td class="k">Ürün sınırı kararı gecikir</td><td><span class="s mid">Orta</span></td><td>Büyük satıcı ilk görüşmede kaybedilir. Karar S1'in ilk günü.</td></tr>
+  </table>
+
+  <div class="card brand" style="margin-top:5mm">
+    <h3>Bu hafta senden gerekenler</h3>
+    <ul style="margin:0">
+      <li><b>Paraşüt:</b> e-posta (taslak hazır): OAuth uygulaması + sandbox.</li>
+      <li><b>Hesap talepleri:</b> HB SIT, N11 appKey, Pazarama clientId, Çiçeksepeti anahtarı + IP bildirimi.</li>
+      <li><b>Trendyol:</b> hesapta anlaşmalı kargo (TEX/Aras) açık mı?</li>
+      <li><b>Karar:</b> ürün sınırı (s. 6 önerisi) ve yeni plan yapısı.</li>
+      <li><b>Kargo:</b> Yurtiçi ve Aras kurumsal hesap başvurusu (S6 için, 5 hafta önceden).</li>
+    </ul>
+  </div>
+  <p class="note">Kaynak belge: <span class="mono">Entegrasyon/docs/RAKIP-YOL-HARITASI.md</span>. Bu PDF onun sprint'e bölünmüş hâlidir. İkisi çelişirse kod deposundaki belge esastır ve her Cuma güncellenir.</p>
+  <div class="foot"><span>34Pazar · Yol haritası · Ekim 2026</span><img src="34pazar-logo.png" alt=""></div>
+</section>
+
+</body>
+</html>

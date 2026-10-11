@@ -1,5 +1,7 @@
 # 34Pazar — rakiplere göre yapılacaklar
 
+> **Sprint planı (11 Eki 2026):** `docs/pdf/34Pazar-Yol-Haritasi-Ekim-2026.pdf` (kaynak `docs/pdf/yol-haritasi-ekim-2026/`) — 12 haftalık sprint (S1 12 Eki → S12 1 Oca), rakip karşılaştırması, hedef ürün. Her Cuma bu belge ve PDF güncellenir.
+
 Hazırlanma: 9 Ekim 2026. Rakip bilgileri o gün sitelerinden okundu (Entegra: entegrabilisim.com, 8 Eki; Platin360: platin360.com, 9 Eki).
 34Pazar durumu depodaki koddan (`635064c`) alındı. Süre tahminleri kaba tahmindir, ölçülmedi.
 
@@ -67,7 +69,7 @@ Hazırlanma: 9 Ekim 2026. Rakip bilgileri o gün sitelerinden okundu (Entegra: e
 
 ## 3. Satış ve konumlandırma
 
-- [ ] Ana mesaj: **"Yıllık 30 bin ₺ peşin yok — aylık başla. eBay ve Etsy bugün canlı."** İki rakipte de aylık plan ve ücretsiz giriş yok.
+- [ ] Ana mesaj: **"Yıllık 30 bin ₺ peşin yok — aylık başla."** İki rakipte de aylık plan ve ücretsiz giriş yok. ⚠️ 11 Eki ölçüldü: canlıda yalnız Trendyol, Shopify, Etsy açık; **eBay kapalı ve sipariş çekmiyor** → S9'a kadar "Etsy canlı, eBay yakında" denmeli.
 - [ ] Sitede fiyat karşılaştırma tablosu (Rakip adı verilecekse: karşılaştırmalı reklam TR'de nesnel ve doğrulanabilir olmak şartıyla serbest; tarih ve kaynak yazılmalı. Avukata sorulmalı.)
 - [ ] Ücretsiz deneme / demo akışı, ilk 3 referans müşteri ve kısa vaka yazıları (rakipler "1.000+ mağaza", "22 yıl" diyor; biz yeniyiz, somut sonuçla öne çıkmalıyız).
 - [ ] "Kod yazmadan kurulum" ve "Muhasebe yakında" kararları (kullanıcıda bekliyor).
