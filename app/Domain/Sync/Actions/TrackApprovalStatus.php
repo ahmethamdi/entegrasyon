@@ -7,9 +7,11 @@ namespace App\Domain\Sync\Actions;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\ApprovalTrackingResult;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Kanaldaki onay durumlarını okur ve listing'lere yazar.
@@ -46,6 +48,7 @@ final class TrackApprovalStatus
 
     public function __construct(
         private readonly AdapterRegistry $registry,
+        private readonly RequestResync $resync,
     ) {}
 
     public function run(ChannelConnection $connection): ApprovalTrackingResult
@@ -146,15 +149,54 @@ final class TrackApprovalStatus
             default => $listing->lifecycle_status,
         };
 
-        DB::transaction(function () use ($listing, $status, $lifecycle): void {
-            $listing->forceFill([
+        // KANALIN VERDİĞİ KALICI KİMLİK (S3): HB onaydan sonra kendi
+        // kodunu (`hbSku`) üretir; stok/fiyat/içe aktarma o kodla çalışır.
+        // Aynı bağlantıda o kimlik başka satırdaysa (satıcı ürünü daha önce
+        // içe aktarmış) geçilmez — ve onay UYGULANMAZ: satıcı koduyla canlı
+        // işaretlenen satır stoğu yanlış kimlikle gönderirdi.
+        $newId = $status['external_id'] ?? null;
+        $newId = is_string($newId) && $newId !== '' && $newId !== $listing->external_id ? $newId : null;
+
+        if ($newId !== null && Listing::query()
+            ->where('channel_connection_id', $listing->channel_connection_id)
+            ->where('external_id', $newId)
+            ->whereKeyNot($listing->id)
+            ->exists()) {
+            Log::warning('approval.identity_taken', ['listing' => $listing->id, 'external_id' => $newId]);
+
+            return;
+        }
+
+        $becameLive = $lifecycle === 'live' && $listing->lifecycle_status !== 'live';
+
+        DB::transaction(function () use ($listing, $status, $lifecycle, $becameLive, $newId): void {
+            $attributes = [
                 'lifecycle_status' => $lifecycle,
                 'approval_rejection_reason' => $status['reason'] ?? null,
                 'approval_checked_at' => now(),
                 'listed_at' => $lifecycle === 'live'
                     ? ($listing->listed_at ?? now())
                     : $listing->listed_at,
-            ])->save();
+            ];
+
+            if ($newId !== null) {
+                $attributes['external_id'] = $newId;
+            }
+
+            if (is_array($status['channel_metadata'] ?? null) && $status['channel_metadata'] !== []) {
+                $attributes['channel_metadata'] = [...($listing->channel_metadata ?? []), ...$status['channel_metadata']];
+            }
+
+            $listing->forceFill($attributes)->save();
+
+            // ONAYDA İLK STOK/FİYAT: korumalı akışla (HB/N11) açılan ürün
+            // onay beklerken canlı değildi; o arada değişen stok fan-out'a
+            // girmedi. Canlıya geçtiği anda kanonik değer yeniden gönderilir —
+            // yoksa kanal ESKİ stokla satar. Diğer kanalların davranışı değişmez.
+            if ($becameLive && $listing->create_requested_at !== null) {
+                $this->resync->run($listing, SyncDomain::INVENTORY, RequestResync::REASON_LISTING_APPROVED);
+                $this->resync->run($listing, SyncDomain::PRICE, RequestResync::REASON_LISTING_APPROVED);
+            }
         });
     }
 }

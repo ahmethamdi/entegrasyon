@@ -4,18 +4,28 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Hepsiburada;
 
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\Hepsiburada\Catalog\HepsiburadaCatalog;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
+use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
+use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
+use App\Domain\Channels\Contracts\ValidatesPublication;
+use App\Domain\Channels\Exceptions\ListingNotPublishable;
+use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -23,15 +33,22 @@ use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
+use App\Domain\Sync\Exceptions\RemoteListingStateUnknown;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\ApprovalStatusBatch;
 use App\Domain\Sync\Support\BatchItemFailure;
 use App\Domain\Sync\Support\BatchStatus;
+use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
+use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
+use App\Domain\Sync\Support\PublishIssue;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
+use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
@@ -112,7 +129,7 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -284,11 +301,27 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
             return ErrorClass::NETWORK;
         }
 
+        // Eksik veri — satıcı düzeltir; yeniden denemek boşuna (S3).
+        if ($e instanceof ListingNotPublishable) {
+            return ErrorClass::VALIDATION;
+        }
+
+        // Belirsiz yaratma: kısa beklemeyle yeniden ARANIR (POST yok).
+        if ($e instanceof RemoteListingStateUnknown) {
+            return ErrorClass::TIMEOUT;
+        }
+
         if (! $e instanceof RequestException) {
             return ErrorClass::NETWORK;
         }
 
         $status = $e->response->status();
+
+        // ⚠️ KATALOG (MPOP) HIZ AŞIMI 403 DÖNER (belge §7: "401/403'ü kimlik
+        // hatası sayma"). Kalıcı kimlik hatası sayılsaydı yayın ölürdü.
+        if ($status === 403 && str_contains((string) $e->response->effectiveUri(), '://mpop')) {
+            return ErrorClass::RATE_LIMITED;
+        }
 
         return match (true) {
             $status === 429 => ErrorClass::RATE_LIMITED,
@@ -518,6 +551,240 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
             ],
             currency: 'TRY',
         );
+    }
+
+    // ------------------------------------------------------- katalog (S3)
+
+    private function catalog(): HepsiburadaCatalog
+    {
+        return new HepsiburadaCatalog(
+            client: $this->client,
+            host: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_CATALOG, $this->isTest()),
+            merchantId: $this->merchantId(),
+            headers: $this->defaultHeaders(),
+            settings: (array) ($this->connection->settings ?? []),
+        );
+    }
+
+    public function fetchCategoryTree(): CategoryTreeSnapshot
+    {
+        return $this->catalog()->fetchCategoryTree();
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function fetchCategoryAttributes(string $categoryId): array
+    {
+        return $this->catalog()->fetchCategoryAttributes($categoryId);
+    }
+
+    public function taxonomyVersion(): string
+    {
+        return $this->fetchCategoryTree()->version;
+    }
+
+    /** @return list<PublishIssue> */
+    /** @return list<string> */
+    public function autoFilledAttributes(): array
+    {
+        return HepsiburadaCatalog::AUTO_FILLED;
+    }
+
+    public function validateForPublication(Product $product, ChannelCategory $category): array
+    {
+        return $this->catalog()->validate($product, $category);
+    }
+
+    /**
+     * Varyantı HB ürün girişine gönderir (asenkron, `trackingId`).
+     *
+     * Kimlik `merchantSku` HEMEN yazılır: ikinci gönderim (yeniden deneme,
+     * içerik düzeltmesi) aynı kimlikle güncelleme yoluna girer.
+     */
+    public function createListing(ListingPayload $payload): AdapterResult
+    {
+        $catalog = $this->catalog();
+        $item = $catalog->item($payload);
+
+        return $this->submitted($payload->listing, $item, $catalog->import([$item]));
+    }
+
+    /**
+     * ONAY ÖNCESİ güncelleme = aynı `merchantSku` ile yeniden yükleme (belge:
+     * "Ürün bilgileri eksik / Eşleşen / Görev açılmış" statüleri). HB
+     * katalog sürecindeki ya da satışa hazır ürünü reddeder; o red yükleme
+     * sonucunda (`trackingId`) okunur.
+     *
+     * CANLI (hbSku'lu) ürünün içeriği ayrı "Ürün Güncelleme" servisiyle
+     * (`/api/integrator/import`, katalog ekibi inceler) değişir — BU SÜRÜMDE
+     * YOK: açık sebep koduyla reddedilir, sessizce "güncellendi" denmez.
+     */
+    public function updateListing(ListingPayload $payload): AdapterResult
+    {
+        $listing = $payload->listing;
+
+        if ($listing->lifecycle_status === 'live' || isset($listing->channel_metadata['hb_sku']) || ! self::awaitsHbSku($listing)) {
+            throw ListingNotPublishable::because(PublishReason::LISTING_UPDATE_UNSUPPORTED, (string) $listing->external_id);
+        }
+
+        $catalog = $this->catalog();
+        $item = $catalog->item($payload);
+
+        return $this->submitted($listing, $item, $catalog->import([$item]));
+    }
+
+    public function delist(Listing $listing): AdapterResult
+    {
+        throw new RuntimeException('Hepsiburada listeden çıkarma bu sürümde KAPSAM DIŞI.');
+    }
+
+    /**
+     * Satıcının `merchantSku`'su HB ürün girişinde var mı (her statüde).
+     * "Önce ara, sonra yarat": varsa yaratma isteği GİTMEZ.
+     */
+    public function findExistingListing(Variant $variant): ?RemoteListing
+    {
+        $sku = HepsiburadaCatalog::merchantSku($variant);
+
+        if ($sku === '') {
+            return null;
+        }
+
+        $status = $this->catalog()->statuses([$sku])[$sku] ?? null;
+
+        return $status === null ? null : new RemoteListing(
+            externalId: $sku,
+            status: $status,
+            raw: ['productStatus' => $status],
+            parentExternalId: strtoupper((string) $variant->product?->sku),
+        );
+    }
+
+    public function fetchListing(Listing $listing): ?RemoteListing
+    {
+        throw new RuntimeException('Hepsiburada uzak listing okuma bu sürümde KAPSAM DIŞI.');
+    }
+
+    /**
+     * Onay durumu — `check-product-status` (merchantSku) + son yüklemenin
+     * satır sonucu (`status/{trackingId}`).
+     *
+     * Eşleme (belge "productStatus" tablosu; GERÇEK HESAPTA DOĞRULANMADI):
+     *   MATCHED (Satışa Hazır), CREATED (Yaratıldı) → approved — HB kodu
+     *     (`hbSku`) bulunursa; bulunamazsa durum UYDURULMAZ (bekler)
+     *   PRE_MATCHED (Eşleşen) → inactive: satıcı MPOP'ta onay/ret vermeli
+     *   MISSING_INFO, REJECTED → rejected (yükleme sebepleriyle)
+     *   WAITING, MATCHED_WITH_STAGED → bekliyor (durum yazılmaz)
+     *   girişte yok + yükleme FAILED → rejected
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchApprovalStatus(array $listings): ApprovalStatusBatch
+    {
+        $catalog = $this->catalog();
+        $keys = [];
+
+        foreach ($listings as $listing) {
+            $key = (string) $listing->external_id;
+
+            if ($key !== '' && self::awaitsHbSku($listing)) {
+                $keys[$key] = $listing;
+            }
+        }
+
+        if ($keys === []) {
+            return new ApprovalStatusBatch([]);
+        }
+
+        $statuses = $catalog->statuses(array_map('strtoupper', array_keys($keys)));
+        $tracking = [];
+        $out = [];
+
+        foreach ($keys as $key => $listing) {
+            $sku = strtoupper($key);
+            $trackingId = collect((array) ($listing->channel_metadata['hb_tracking_ids'] ?? []))->last();
+
+            if (is_string($trackingId) && ! array_key_exists($trackingId, $tracking)) {
+                $tracking[$trackingId] = $catalog->trackingResults($trackingId);
+            }
+
+            $row = is_string($trackingId) ? ($tracking[$trackingId][$sku] ?? null) : null;
+            $reason = $row === null || $row['reasons'] === [] ? null : mb_substr(implode(' · ', $row['reasons']), 0, 1000);
+            $status = $statuses[$sku] ?? null;
+
+            $entry = match (true) {
+                in_array($status, ['MATCHED', 'CREATED'], true) => $this->approvedEntry($sku, $row['hb_sku'] ?? null),
+                $status === 'PRE_MATCHED' => ['status' => 'inactive', 'reason' => 'Hepsiburada: PRE_MATCHED'],
+                in_array($status, ['MISSING_INFO', 'REJECTED'], true) => ['status' => 'rejected', 'reason' => $reason ?? 'Hepsiburada: '.$status],
+                $status === null && ($row['import'] ?? null) === 'FAILED' => ['status' => 'rejected', 'reason' => $reason ?? 'Hepsiburada: FAILED'],
+                default => null,
+            };
+
+            if ($entry !== null) {
+                $out[$key] = $entry;
+            }
+        }
+
+        return new ApprovalStatusBatch($out, new DateTimeImmutable);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function approvedEntry(string $merchantSku, ?string $hbSku): ?array
+    {
+        $hbSku ??= $this->hbSkuForMerchantSku($merchantSku);
+
+        // HB kodu yoksa listing henüz oluşmamış: canlı sayılmaz, stok gönderilemez.
+        return $hbSku === null ? null : [
+            'status' => 'approved',
+            'external_id' => $hbSku,
+            'channel_metadata' => ['hb_sku' => $hbSku, 'merchant_sku' => $merchantSku],
+        ];
+    }
+
+    private function hbSkuForMerchantSku(string $merchantSku): ?string
+    {
+        $response = $this->client->get(
+            endpoint: $this->listingPath(HepsiburadaEndpoints::LISTING_LIST),
+            query: ['offset' => 0, 'limit' => 1, 'merchantSkuList' => $merchantSku],
+            headers: $this->defaultHeaders(),
+        );
+        $response->throw();
+
+        foreach ((array) ($response->json('listings') ?? []) as $row) {
+            if (is_array($row) && strtoupper((string) ($row['merchantSku'] ?? '')) === $merchantSku && ! empty($row['hepsiburadaSku'])) {
+                return (string) $row['hepsiburadaSku'];
+            }
+        }
+
+        return null;
+    }
+
+    /** @param array<string, mixed> $item */
+    private function submitted(Listing $listing, array $item, string $trackingId): AdapterResult
+    {
+        $ids = array_values(array_unique([...array_filter((array) ($listing->channel_metadata['hb_tracking_ids'] ?? []), 'is_string'), $trackingId]));
+
+        return AdapterResult::success([
+            'external_id' => $item['attributes']['merchantSku'],
+            'external_parent_id' => $item['attributes']['VaryantGroupID'],
+            'channel_metadata' => [
+                'merchant_sku' => $item['attributes']['merchantSku'],
+                'hb_tracking_ids' => array_slice($ids, -5),
+            ],
+        ]);
+    }
+
+    /**
+     * Listing kimliği henüz SATICI KODU mu (yaratıldı, HB kodu bekleniyor)?
+     * İçe aktarılan ve onaylanan listing'in kimliği HB kodudur
+     * (`merchant_sku` meta verisinden farklı). Ad kalıbından tahmin edilmez.
+     */
+    private static function awaitsHbSku(Listing $listing): bool
+    {
+        $merchantSku = $listing->channel_metadata['merchant_sku'] ?? null;
+
+        return is_string($merchantSku) && $merchantSku !== ''
+            && strtoupper((string) $listing->external_id) === strtoupper($merchantSku)
+            && ! isset($listing->channel_metadata['hb_sku']);
     }
 
     // ------------------------------------------------------------- yetenekler

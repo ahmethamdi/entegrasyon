@@ -4,18 +4,28 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\N11;
 
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\N11\Catalog\N11Catalog;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
+use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
+use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
+use App\Domain\Channels\Contracts\ValidatesPublication;
+use App\Domain\Channels\Exceptions\ListingNotPublishable;
+use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
@@ -24,15 +34,22 @@ use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\LineFinancials;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
+use App\Domain\Sync\Exceptions\RemoteListingStateUnknown;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\ApprovalStatusBatch;
 use App\Domain\Sync\Support\BatchItemFailure;
 use App\Domain\Sync\Support\BatchStatus;
+use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
+use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
+use App\Domain\Sync\Support\PublishIssue;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
+use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
@@ -141,7 +158,7 @@ use Throwable;
  * kalmaz). Satıcı onayı N11'e otomatiğe de bağlatabilir
  * (`sellerintegration@n11.com`).
  */
-final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
 {
     use DeclaresRequestQuota;
     use MapsOrderStateFromTable;
@@ -312,6 +329,16 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, MapsO
                 in_array($e->errorCode, ['NoXml', 'NoResult', 'Fault'], true) => ErrorClass::SERVER_ERROR,
                 default => ErrorClass::VALIDATION,
             };
+        }
+
+        // Eksik veri — satıcı düzeltir (S3).
+        if ($e instanceof ListingNotPublishable) {
+            return ErrorClass::VALIDATION;
+        }
+
+        // Belirsiz yaratma: kısa beklemeyle yeniden ARANIR (POST yok).
+        if ($e instanceof RemoteListingStateUnknown) {
+            return ErrorClass::TIMEOUT;
         }
 
         if ($e instanceof ConnectionException || ! $e instanceof RequestException) {
@@ -789,6 +816,231 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, MapsO
         $response->throw();
 
         return self::jsonBody($response, 'content');
+    }
+
+    // ------------------------------------------------------- katalog (S3)
+
+    private function catalog(): N11Catalog
+    {
+        return new N11Catalog((array) ($this->connection->settings ?? []));
+    }
+
+    /** Belge: tüm ağaç tek istekte; `/cdn/` uçları da key + secret ister. */
+    public function fetchCategoryTree(): CategoryTreeSnapshot
+    {
+        $response = $this->get('/cdn/categories', []);
+        $response->throw();
+
+        return N11Catalog::tree(self::jsonBody($response, 'categories'));
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function fetchCategoryAttributes(string $categoryId): array
+    {
+        $response = $this->get('/cdn/category/'.rawurlencode($categoryId).'/attribute', []);
+        $response->throw();
+
+        return N11Catalog::attributes(self::jsonBody($response));
+    }
+
+    public function taxonomyVersion(): string
+    {
+        return $this->fetchCategoryTree()->version;
+    }
+
+    /** @return list<PublishIssue> */
+    /** @return list<string> */
+    public function autoFilledAttributes(): array
+    {
+        return [N11Catalog::BRAND_ATTRIBUTE_ID];
+    }
+
+    public function validateForPublication(Product $product, ChannelCategory $category): array
+    {
+        return $this->catalog()->validate($product, $category);
+    }
+
+    /**
+     * `POST /ms/product/tasks/product-create` — asenkron görev (`taskId`).
+     * Kimlik `stockCode` HEMEN yazılır; görev `REJECT` ise kesin red.
+     */
+    public function createListing(ListingPayload $payload): AdapterResult
+    {
+        $sku = $this->catalog()->createSku($payload);
+
+        $result = $this->productTask('product-create', $sku);
+
+        if ($result->failed()) {
+            return $result;
+        }
+
+        return AdapterResult::success([
+            'external_id' => (string) $sku['stockCode'],
+            'external_parent_id' => (string) $sku['productMainId'],
+            'channel_metadata' => [
+                'currency_type' => $sku['currencyType'],
+                'n11_task_ids' => $this->taskIds($payload->listing, (string) $result->data['task_id']),
+            ],
+        ]);
+    }
+
+    /**
+     * `product-update` — belge: yalnız `Active`/`Suspended` ürün güncellenir
+     * ve başlık/görsel/marka/renk-beden N11'de yönetilir. Onay bekleyen ya
+     * da reddedilmiş üründe açık sebep koduyla reddedilir.
+     */
+    public function updateListing(ListingPayload $payload): AdapterResult
+    {
+        $listing = $payload->listing;
+
+        if ($listing->lifecycle_status !== 'live') {
+            throw ListingNotPublishable::because(PublishReason::LISTING_UPDATE_UNSUPPORTED, (string) $listing->external_id);
+        }
+
+        $sku = $this->catalog()->updateSku($payload);
+        $result = $this->productTask('product-update', $sku);
+
+        if ($result->failed()) {
+            return $result;
+        }
+
+        return AdapterResult::success([
+            'external_id' => (string) $sku['stockCode'],
+            'channel_metadata' => ['n11_task_ids' => $this->taskIds($listing, (string) $result->data['task_id'])],
+        ]);
+    }
+
+    public function delist(Listing $listing): AdapterResult
+    {
+        throw new RuntimeException('N11 listeden çıkarma bu sürümde KAPSAM DIŞI.');
+    }
+
+    /** "Önce ara, sonra yarat": aynı stockCode N11'de VAR mı (her statüde). */
+    public function findExistingListing(Variant $variant): ?RemoteListing
+    {
+        $code = trim((string) $variant->sku);
+
+        return $code === '' ? null : $this->remoteByStockCode($code);
+    }
+
+    public function fetchListing(Listing $listing): ?RemoteListing
+    {
+        $code = (string) $listing->external_id;
+
+        return $code === '' ? null : $this->remoteByStockCode($code);
+    }
+
+    /**
+     * Onay — `product-query?stockCode=` (filtre TEK değer alır) + son
+     * görevin satır sonucu. Belge statüleri:
+     *   Active → approved · InCatalogApproval/InApproval → bekliyor
+     *   CatalogRejected → rejected (`rejectInfo`) · Suspended/Prohibited/
+     *   Unlisted → inactive · ürün yok + görev satırı FAIL → rejected
+     * GERÇEK MAĞAZADA DOĞRULANMADI.
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchApprovalStatus(array $listings): ApprovalStatusBatch
+    {
+        $out = [];
+
+        foreach ($listings as $listing) {
+            $code = (string) $listing->external_id;
+
+            if ($code === '') {
+                continue;
+            }
+
+            $row = self::rows($this->productQuery(['stockCode' => $code])['content'] ?? [])[0] ?? null;
+            $status = is_array($row) ? (string) ($row['status'] ?? '') : null;
+
+            $entry = match (true) {
+                $status === 'Active' => ['status' => 'approved', 'channel_metadata' => array_filter(['n11_product_id' => isset($row['n11ProductId']) ? (string) $row['n11ProductId'] : null])],
+                $status === 'CatalogRejected' => ['status' => 'rejected', 'reason' => self::rejectInfo($row) ?? 'N11: CatalogRejected'],
+                in_array($status, ['Suspended', 'Prohibited', 'Unlisted'], true) => ['status' => 'inactive', 'reason' => 'N11: '.$status],
+                $status === null => $this->taskFailure($listing, $code),
+                default => null,
+            };
+
+            if ($entry !== null) {
+                $out[$code] = $entry;
+            }
+        }
+
+        return new ApprovalStatusBatch($out, new DateTimeImmutable);
+    }
+
+    /** @param array<string, mixed> $sku */
+    private function productTask(string $task, array $sku): AdapterResult
+    {
+        $response = $this->client->postRaw(
+            self::BASE_URL.'/ms/product/tasks/'.$task,
+            self::jsonWithTwoDecimals(['payload' => ['integrator' => self::INTEGRATOR, 'skus' => [$sku]]]),
+            'application/json',
+            $this->authHeaders(),
+        );
+
+        $response->throw();
+
+        return $this->taskResult($response, 1);
+    }
+
+    /** @return list<string> */
+    private function taskIds(Listing $listing, string $taskId): array
+    {
+        $ids = array_values(array_unique([...array_filter((array) ($listing->channel_metadata['n11_task_ids'] ?? []), 'is_string'), $taskId]));
+
+        return array_slice($ids, -5);
+    }
+
+    private function remoteByStockCode(string $code): ?RemoteListing
+    {
+        $row = self::rows($this->productQuery(['stockCode' => $code])['content'] ?? [])[0] ?? null;
+
+        if (! is_array($row) || (string) ($row['stockCode'] ?? '') !== $code) {
+            return null;
+        }
+
+        return new RemoteListing(
+            externalId: $code,
+            title: isset($row['title']) ? (string) $row['title'] : null,
+            status: isset($row['status']) ? (string) $row['status'] : null,
+            raw: $row,
+            parentExternalId: isset($row['productMainId']) ? (string) $row['productMainId'] : null,
+        );
+    }
+
+    /** @return array{status: string, reason: string}|null */
+    private function taskFailure(Listing $listing, string $code): ?array
+    {
+        $taskId = collect((array) ($listing->channel_metadata['n11_task_ids'] ?? []))->last();
+
+        if (! is_string($taskId) || $taskId === '') {
+            return null;
+        }
+
+        $status = $this->fetchBatchStatus($taskId, SyncDomain::CONTENT);
+        $failure = $status->failed[$code] ?? $status->batchFailure;
+
+        return $failure === null ? null : ['status' => 'rejected', 'reason' => mb_substr($failure->reason, 0, 1000)];
+    }
+
+    /** @param array<string, mixed> $row */
+    private static function rejectInfo(array $row): ?string
+    {
+        $info = $row['rejectInfo'] ?? null;
+
+        if (is_string($info) && trim($info) !== '') {
+            return mb_substr(trim($info), 0, 1000);
+        }
+
+        if (is_array($info)) {
+            $text = implode(' · ', array_filter(array_map(static fn (mixed $v): string => is_scalar($v) ? trim((string) $v) : '', $info)));
+
+            return $text === '' ? null : mb_substr($text, 0, 1000);
+        }
+
+        return null;
     }
 
     // ------------------------------------------------------------- siparişler

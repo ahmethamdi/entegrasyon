@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Jobs;
 
 use App\Domain\Channels\Contracts\AdapterResult;
+use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
+use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Exceptions\RemoteListingStateUnknown;
 use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
@@ -217,6 +220,17 @@ final class PushListing implements ShouldQueue
         if ($listing->external_id === null) {
             $existing = $adapter->findExistingListing($listing->variant);
 
+            if ($existing !== null && $adapter instanceof GuardsAmbiguousCreate && $listing->create_requested_at !== null) {
+                // KENDİ belirsiz yaratmamızın UZLAŞTIRILMASI: kanal isteği
+                // almış ve ürünü açmış. Güncelleme DEĞİL — gönderilen içerik
+                // zaten oradadır; yalnız kimlik benimsenir.
+                return AdapterResult::success([
+                    'external_id' => $existing->externalId,
+                    'external_parent_id' => $existing->parentExternalId,
+                    'channel_metadata' => ['create_reconciled_at' => now()->toIso8601String()],
+                ]);
+            }
+
             if ($existing !== null) {
                 // Kimlik BELLEKTE benimsenir; kalıcı yazma başarıdan sonra.
                 // Çağrı patlarsa satır dokunulmamış kalmalı.
@@ -230,9 +244,61 @@ final class PushListing implements ShouldQueue
             }
         }
 
-        return $listing->external_id === null
-            ? $adapter->createListing($builder->build($listing, $version))
-            : $adapter->updateListing($builder->build($listing, $version));
+        if ($listing->external_id !== null) {
+            return $adapter->updateListing($builder->build($listing, $version));
+        }
+
+        if (! $adapter instanceof GuardsAmbiguousCreate) {
+            return $adapter->createListing($builder->build($listing, $version));
+        }
+
+        return $this->createOnce($adapter, $listing, $builder, $version);
+    }
+
+    /**
+     * Asenkron yaratmalı kanalda (HB, N11) yaratma isteği listing başına
+     * BİR KEZ gider.
+     *
+     * Talep istekten ÖNCE koşullu yazılır (`create_requested_at IS NULL`):
+     * kuyruk tekrarı ya da eşzamanlı ikinci iş yarışı kaybeder. Talep
+     * doluysa önceki istek kanala gitmiş OLABİLİR (zaman aşımı, 5xx) —
+     * arama (`findExistingListing`) zaten yukarıda yapıldı ve bulamadı;
+     * ikinci istek kopya ilan riskidir → `RemoteListingStateUnknown`
+     * (geçici; sonraki denemeler yine ARAR). Kesin ret (doğrulama, kimlik,
+     * hız sınırı) istek kabul edilmedi demektir; talep geri alınır.
+     */
+    private function createOnce(
+        SupportsCatalog&GuardsAmbiguousCreate $adapter,
+        Listing $listing,
+        ListingPayloadBuilder $builder,
+        int $version,
+    ): AdapterResult {
+        // Yük ÖNCE kurulur: eksik veri (ListingNotPublishable) talep almadan düşer.
+        $payload = $builder->build($listing, $version);
+
+        $claimed = Listing::query()
+            ->whereKey($listing->id)
+            ->whereNull('external_id')
+            ->whereNull('create_requested_at')
+            ->update(['create_requested_at' => now()]);
+
+        if ($claimed !== 1) {
+            throw new RemoteListingStateUnknown(
+                "Listing {$listing->id}: önceki yaratma isteğinin sonucu belirsiz ve kanalda kayıt bulunamadı; yeniden gönderilmedi."
+            );
+        }
+
+        try {
+            return AdapterReportedFailure::throwIfFailed($adapter->createListing($payload));
+        } catch (Throwable $e) {
+            $class = AdapterReportedFailure::classify($e, $adapter);
+
+            if (in_array($class, [ErrorClass::VALIDATION, ErrorClass::AUTHENTICATION, ErrorClass::RATE_LIMITED], true)) {
+                Listing::query()->whereKey($listing->id)->update(['create_requested_at' => null]);
+            }
+
+            throw $e;
+        }
     }
 
     /**

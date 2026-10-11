@@ -69,7 +69,8 @@ final class SeededRateLimitContractTest extends TestCase
             // seviyesine göre değişir ve yanıt başlığından ÖĞRENİLİR.
             'trendyol' => ['trendyol', 1],
 
-            'hepsiburada' => ['hepsiburada', 10],
+            // Katalog (MPOP) 180 istek/dk → 3/sn (S3).
+            'hepsiburada' => ['hepsiburada', 3],
             'shopify' => ['shopify', 50],
             'etsy' => ['etsy', 10],
         ];

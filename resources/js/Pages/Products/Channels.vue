@@ -65,6 +65,14 @@ const flashSuccess = computed(() => page.props.flash?.success);
 const flashWarning = computed(() => page.props.flash?.warning);
 const connectionError = computed(() => page.props.errors?.connection_id);
 
+function saveAttribute(channel, attr, value) {
+    router.post(`/products/${props.product.id}/channel-attributes`, {
+        channel_category_id: channel.requirements.categoryId,
+        external_attribute_id: attr.id,
+        ...value,
+    }, { preserveScroll: true });
+}
+
 /** Gönderim sürerken butonu kilitle: çift tıklama iki istek atardı. */
 const sending = ref(null);
 
@@ -422,6 +430,69 @@ function send(connectionId) {
                 >
                     {{ t('Kanal reddetti: :reason', { reason: channel.rejectionReason }) }}
                 </p>
+
+                <!--
+                    VARYANT BAŞINA SONUÇ (S3): çok varyantlı üründe her kardeş
+                    kendi durumu ve sebebiyle görünür; biri reddedildiyse
+                    kanal özetinde kaybolmaz.
+                -->
+                <section
+                    v-if="channel.published && channel.variants?.length > 1"
+                    class="mt-4 border-t border-stone-100 pt-4"
+                >
+                    <h3 class="text-xs font-medium text-stone-900">{{ t('Varyantlar') }}</h3>
+                    <ul class="mt-2 space-y-1 text-xs">
+                        <li v-for="v in channel.variants" :key="v.variantId" class="flex flex-wrap gap-x-3">
+                            <span class="font-mono text-stone-700">{{ v.sku }}</span>
+                            <span class="text-stone-500">{{ v.lifecycle ? t(lifecycleTexts[v.lifecycle] ?? lifecycleLabels[v.lifecycle] ?? v.lifecycle) : '—' }}</span>
+                            <span v-if="v.reason" class="text-amber-800">{{ v.reason }}</span>
+                            <span v-if="v.rejectionReason" class="text-amber-800">{{ t('Kanal reddetti: :reason', { reason: v.rejectionReason }) }}</span>
+                        </li>
+                    </ul>
+                </section>
+
+                <!--
+                    KANAL ÖZNİTELİKLERİ (S3): kanalın zorunlu betimleyici
+                    öznitelikleri ürün düzeyinde girilir; varyant belirleyiciler
+                    (beden, renk) eşleştirme ekranından gelir.
+                -->
+                <section
+                    v-if="channel.requirements"
+                    class="mt-4 border-t border-stone-100 pt-4"
+                >
+                    <h3 class="text-xs font-medium text-stone-900">{{ t('Kanal öznitelikleri') }}</h3>
+                    <p v-if="!channel.requirements.categoryId" class="mt-1 text-xs text-amber-800">
+                        {{ t('Ürünün kategorisi bu kanalda eşleştirilmemiş; önce eşleştirme ekranından kategori seçin.') }}
+                    </p>
+                    <template v-else>
+                        <p class="mt-0.5 text-xs text-stone-500">{{ channel.requirements.categoryPath }}</p>
+                        <ul class="mt-3 space-y-2">
+                            <li v-for="attr in channel.requirements.attributes" :key="attr.id" class="flex flex-wrap items-center gap-2 text-xs">
+                                <span class="w-40 shrink-0 text-stone-700">
+                                    {{ attr.name }}<span v-if="attr.required" class="text-red-700"> *</span>
+                                </span>
+                                <select
+                                    v-if="attr.values.length"
+                                    class="min-w-0 flex-1 rounded border-stone-300 text-xs"
+                                    :value="attr.valueId ?? ''"
+                                    @change="saveAttribute(channel, attr, { value_id: $event.target.value || null, custom_value: null })"
+                                >
+                                    <option value="">{{ attr.customValue ? t('Serbest: :v', { v: attr.customValue }) : t('— seçilmedi —') }}</option>
+                                    <option v-for="v in attr.values" :key="v.id" :value="v.id">{{ v.label }}</option>
+                                </select>
+                                <input
+                                    v-if="attr.freeText"
+                                    type="text"
+                                    class="min-w-0 flex-1 rounded border-stone-300 text-xs"
+                                    :placeholder="t('Serbest değer')"
+                                    :value="attr.customValue ?? ''"
+                                    @change="saveAttribute(channel, attr, { value_id: null, custom_value: $event.target.value || null })"
+                                >
+                            </li>
+                        </ul>
+                        <p v-if="!channel.requirements.attributes.length" class="mt-1 text-xs text-stone-500">{{ t('Bu kategoride ürün düzeyinde girilecek öznitelik yok.') }}</p>
+                    </template>
+                </section>
 
                 <!-- KANAL FİYATI: varyant başına; boşsa ürün fiyatı gider. -->
                 <section

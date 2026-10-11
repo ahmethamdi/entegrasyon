@@ -7,12 +7,15 @@ namespace Tests\Feature\Channels;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaEndpoints;
 use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
+use App\Domain\Channels\Contracts\ValidatesPublication;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelHttpClient;
@@ -79,9 +82,13 @@ final class HepsiburadaAdapterTest extends TestCase
         $this->assertInstanceOf(SupportsOrders::class, $adapter);
         $this->assertInstanceOf(SupportsCatalogImport::class, $adapter);
 
-        // Bu ikisi HENÜZ yazılmadı ve ilan EDİLMEMELİ.
-        $this->assertNotInstanceOf(SupportsCatalog::class, $adapter);
-        $this->assertNotInstanceOf(SupportsTaxonomy::class, $adapter);
+        // S3: ürün girişi, taksonomi, onay, yayın doğrulaması ve
+        // belirsiz yaratma koruması.
+        $this->assertInstanceOf(SupportsCatalog::class, $adapter);
+        $this->assertInstanceOf(SupportsTaxonomy::class, $adapter);
+        $this->assertInstanceOf(SupportsApprovalWorkflow::class, $adapter);
+        $this->assertInstanceOf(ValidatesPublication::class, $adapter);
+        $this->assertInstanceOf(GuardsAmbiguousCreate::class, $adapter);
     }
 
     // ─────────────────────────────────────────────────── User-Agent

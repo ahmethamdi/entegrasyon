@@ -71,6 +71,7 @@ class Listing extends Model
     {
         return [
             'listed_at' => 'datetime',
+            'create_requested_at' => 'datetime',
             'delisted_at' => 'datetime',
             'approval_checked_at' => 'datetime',
             'channel_metadata' => 'array',

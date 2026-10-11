@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Support;
 
+use App\Domain\Sync\Enums\PublishReason;
+
 /**
  * Ön koşul kapısının sonucu.
  *
@@ -31,6 +33,8 @@ final readonly class PrerequisiteResult
         private ?string $missingCategoryReason,
         private array $missingAttributes,
         public ?string $channelCategoryId = null,
+        private array $issues = [],
+        private ?PublishReason $categoryCode = null,
     ) {}
 
     /** Kanalın taksonomisi yok — ön koşul aranmaz. */
@@ -61,13 +65,55 @@ final readonly class PrerequisiteResult
         ?string $missingCategoryReason = null,
         array $missingAttributes = [],
         ?string $channelCategoryId = null,
+        ?PublishReason $categoryCode = null,
     ): self {
         return new self(
             applies: true,
             missingCategoryReason: $missingCategoryReason,
             missingAttributes: $missingAttributes,
             channelCategoryId: $channelCategoryId,
+            categoryCode: $categoryCode,
         );
+    }
+
+    /**
+     * Kanalın kendi doğrulamasının (`ValidatesPublication`) bulduğu eksikler.
+     *
+     * @param  list<PublishIssue>  $issues
+     */
+    public static function invalid(array $issues, string $channelCategoryId): self
+    {
+        return new self(
+            applies: true,
+            missingCategoryReason: null,
+            missingAttributes: [],
+            channelCategoryId: $channelCategoryId,
+            issues: array_values($issues),
+        );
+    }
+
+    /** @return list<PublishIssue> */
+    public function issues(): array
+    {
+        return $this->issues;
+    }
+
+    /** Engelin KARARLI kodu (ilk eksik); engel yoksa null. */
+    public function reasonCode(): ?PublishReason
+    {
+        if ($this->satisfied()) {
+            return null;
+        }
+
+        if ($this->missingCategoryReason !== null) {
+            return $this->categoryCode ?? PublishReason::CATEGORY_MAPPING_REQUIRED;
+        }
+
+        if ($this->missingAttributes !== []) {
+            return PublishReason::ATTRIBUTE_MAPPING_REQUIRED;
+        }
+
+        return $this->issues[0]->reason ?? null;
     }
 
     /**
@@ -83,7 +129,7 @@ final readonly class PrerequisiteResult
     public function satisfied(): bool
     {
         return ! $this->applies
-            || ($this->missingCategoryReason === null && $this->missingAttributes === []);
+            || ($this->missingCategoryReason === null && $this->missingAttributes === [] && $this->issues === []);
     }
 
     public function missingCategoryReason(): ?string
@@ -119,6 +165,10 @@ final readonly class PrerequisiteResult
             $parts[] = __('Eksik zorunlu öznitelik: :attributes.', [
                 'attributes' => implode(', ', $this->missingAttributes),
             ]);
+        }
+
+        foreach ($this->issues as $issue) {
+            $parts[] = $issue->describe();
         }
 
         return implode(' ', $parts);

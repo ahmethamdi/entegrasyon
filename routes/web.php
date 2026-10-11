@@ -250,6 +250,9 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
         ->name('products.listings.price');
     Route::post('/products/{product}/channels', [ProductChannelController::class, 'store'])
         ->name('products.channels.store');
+    // S3 · kanal kategorisinin betimleyici öznitelik değeri (ürün düzeyi).
+    Route::post('/products/{product}/channel-attributes', [ProductChannelController::class, 'storeAttribute'])
+        ->name('products.channel-attributes.store');
     Route::post('/products/{product}/images/{image}/channels', [ProductChannelController::class, 'updateImageChannel'])
         ->name('products.images.channels');
 

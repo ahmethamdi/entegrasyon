@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Support;
 
 use App\Domain\Channels\Contracts\AdapterResult;
+use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
+use App\Domain\Sync\Exceptions\RemoteListingStateUnknown;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncAttempt;
 use App\Domain\Sync\Models\SyncOperation;
@@ -182,7 +185,9 @@ final class SyncResultRecorder
             $error->getMessage(),
         );
 
-        DB::transaction(function () use ($operations, $attempt, $class, $message): void {
+        $reasonCode = self::reasonCodeFor($error, $class)->value;
+
+        DB::transaction(function () use ($operations, $attempt, $class, $message, $reasonCode): void {
             $this->closeAttempt($attempt, outcome: $class->isPermanent() ? 'permanent' : 'transient',
                 class: $class, message: $message);
 
@@ -197,7 +202,7 @@ final class SyncResultRecorder
                     'last_error_class' => $class->value,
                 ])->save();
 
-                $this->markSyncStateFailed($operation, $class, $message);
+                $this->markSyncStateFailed($operation, $class, $message, $reasonCode);
             }
         });
     }
@@ -380,6 +385,7 @@ final class SyncResultRecorder
             'status' => $this->statusAfterSuccess($state, $operation),
             'last_synced_at' => now(),
             'last_error' => null,
+            'reason_code' => null,
             'error_count' => 0,
         ])->save();
     }
@@ -396,7 +402,22 @@ final class SyncResultRecorder
         return $state->desired_version > $operation->entity_version ? 'pending' : 'synced';
     }
 
-    private function markSyncStateFailed(SyncOperation $operation, ErrorClass $class, ?string $message): void
+    /**
+     * Hatanın KARARLI kodu (S3, `PublishReason`): adapter eksik veriyi
+     * kodla bildirdiyse o; belirsiz yaratma; hız sınırı; diğer her şey
+     * genel senkron hatası. Metin `last_error`'da kalır.
+     */
+    public static function reasonCodeFor(Throwable $error, ErrorClass $class): PublishReason
+    {
+        return match (true) {
+            $error instanceof ListingNotPublishable && $error->reason !== null => $error->reason,
+            $error instanceof RemoteListingStateUnknown => PublishReason::REMOTE_STATE_UNKNOWN,
+            $class === ErrorClass::RATE_LIMITED => PublishReason::RATE_LIMITED,
+            default => PublishReason::LISTING_SYNC_FAILED,
+        };
+    }
+
+    private function markSyncStateFailed(SyncOperation $operation, ErrorClass $class, ?string $message, ?string $reasonCode = null): void
     {
         $state = $this->lockState($operation);
 
@@ -413,6 +434,7 @@ final class SyncResultRecorder
         $state->forceFill([
             'status' => $class->syncStateStatus(),
             'last_error' => $message,
+            'reason_code' => $reasonCode,
             'error_count' => $state->error_count + 1,
         ])->save();
     }

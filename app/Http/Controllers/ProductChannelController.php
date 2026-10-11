@@ -4,15 +4,23 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Catalog\Actions\SaveProductChannelAttributeValue;
 use App\Domain\Catalog\Actions\SetChannelPrice;
 use App\Domain\Catalog\Actions\SetImageChannelExclusion;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductChannelAttributeValue;
 use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
+use App\Domain\Channels\Contracts\ValidatesPublication;
+use App\Domain\Channels\Models\CategoryMapping;
+use App\Domain\Channels\Models\ChannelCategory;
+use App\Domain\Channels\Models\ChannelCategoryAttribute;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\CatalogRequirements;
 use App\Domain\Sync\Actions\PublishListing;
+use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
@@ -371,6 +379,11 @@ final class ProductChannelController extends Controller
                 ...$this->syncSummary($forConnection, $states),
                 'stockPriceError' => $this->stockPriceError($forConnection, $stockPriceStates),
                 ...$this->pricesFor($connection, $forConnection, $product),
+                // VARYANT BAŞINA sonuç (S3): çok varyantlı üründe bir kardeşin
+                // hatası kanal özetinde kaybolmasın.
+                'variants' => $this->variantResults($product, $forConnection, $states),
+                // Kanalın betimleyici öznitelikleri — satıcı burada doldurur.
+                'requirements' => $this->requirementsFor($connection, $product),
             ];
         }
 
@@ -468,6 +481,111 @@ final class ProductChannelController extends Controller
             ->first();
 
         return $state?->last_error;
+    }
+
+    /**
+     * @param  Collection<int, Listing>  $listings
+     * @return list<array<string, mixed>>
+     */
+    private function variantResults(Product $product, Collection $listings, Collection $states): array
+    {
+        $byVariant = $listings->keyBy('variant_id');
+        $out = [];
+
+        foreach ($product->variants as $variant) {
+            $listing = $byVariant->get($variant->id);
+            $state = $listing === null ? null : $states->get($listing->id);
+            $code = $state?->reason_code;
+
+            $out[] = [
+                'variantId' => $variant->id,
+                'sku' => $variant->sku,
+                'barcode' => $variant->barcode,
+                'lifecycle' => $listing?->lifecycle_status,
+                'externalId' => $listing?->external_id,
+                'syncStatus' => $state?->status,
+                'reasonCode' => $code,
+                'reason' => $code === null ? null : PublishReason::tryFrom($code)?->label(),
+                'detail' => $state?->last_error,
+                'rejectionReason' => $listing?->approval_rejection_reason,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Kanalın yayın doğrulaması varsa (HB, N11): ürünün eşlenmiş kategorisinin
+     * BETİMLEYİCİ öznitelikleri ve girilmiş değerleri. Varyant belirleyiciler
+     * ve kanalın ürün alanlarından doldurdukları listelenmez.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function requirementsFor(ChannelConnection $connection, Product $product): ?array
+    {
+        try {
+            $adapter = $this->registry->for($connection);
+        } catch (Throwable) {
+            return null;
+        }
+
+        if (! $adapter instanceof ValidatesPublication || $product->internal_category_id === null) {
+            return null;
+        }
+
+        $mapping = CategoryMapping::query()
+            ->where('internal_category_id', $product->internal_category_id)
+            ->where('channel_type_code', $connection->channel_type_code)
+            ->first();
+
+        $category = $mapping === null ? null : ChannelCategory::query()->find($mapping->channel_category_id);
+
+        if ($category === null) {
+            return ['categoryId' => null, 'categoryPath' => null, 'attributes' => []];
+        }
+
+        $values = ProductChannelAttributeValue::query()
+            ->where('product_id', $product->id)
+            ->where('channel_category_id', $category->id)
+            ->get()
+            ->keyBy('external_attribute_id');
+
+        $attributes = ChannelCategoryAttribute::query()
+            ->where('channel_category_id', $category->id)
+            ->where('is_variant_defining', false)
+            ->whereNotIn('external_attribute_id', $adapter->autoFilledAttributes())
+            ->orderByDesc('is_required')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (ChannelCategoryAttribute $a): array => [
+                'id' => (string) $a->external_attribute_id,
+                'name' => $a->name,
+                'required' => (bool) $a->is_required,
+                'freeText' => CatalogRequirements::acceptsFreeText($a),
+                'values' => array_slice((array) $a->allowed_values, 0, 1000),
+                'valueId' => $values->get($a->external_attribute_id)?->external_value_id,
+                'customValue' => $values->get($a->external_attribute_id)?->custom_value,
+            ])
+            ->all();
+
+        return ['categoryId' => $category->id, 'categoryPath' => $category->path, 'attributes' => $attributes];
+    }
+
+    /** Betimleyici öznitelik değeri (S3) — ürün ve kategori kiracı scope'unda. */
+    public function storeAttribute(Request $request, string $product, SaveProductChannelAttributeValue $save): RedirectResponse
+    {
+        $model = Product::query()->findOrFail($product);
+
+        $data = $request->validate([
+            'channel_category_id' => ['required', 'string', 'max:64'],
+            'external_attribute_id' => ['required', 'string', 'max:255'],
+            'value_id' => ['nullable', 'string', 'max:255'],
+            'custom_value' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $save->run($model, $data['channel_category_id'], $data['external_attribute_id'], $data['value_id'] ?? null, $data['custom_value'] ?? null);
+
+        return redirect("/products/{$model->id}/channels")->with('success', __('Öznitelik kaydedildi. Kanala yansıması için ürünü yeniden gönder.'));
     }
 
     private function syncSummary(Collection $listings, Collection $states): array

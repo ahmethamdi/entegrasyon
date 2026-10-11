@@ -59,6 +59,9 @@ final class RequestResync
 
     public const REASON_CAMPAIGN_CHANGED = 'campaign_changed';
 
+    /** Kanal onayından sonra ilk stok/fiyat projeksiyonu (S3, HB/N11). */
+    public const REASON_LISTING_APPROVED = 'listing_approved';
+
     /**
      * @param  string  $reason  Neden resync istendi — yükte taşınır
      */

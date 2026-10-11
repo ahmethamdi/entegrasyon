@@ -90,6 +90,13 @@ final class PublishListing
                 // panelde engelli görünürdü.
                 $this->unblock($listing);
 
+                // AÇIK YENİDEN YAYIN (RE-PUBLISH): kanalda kimliği olmayan
+                // satırın belirsiz yaratma talebi satıcının bu kararıyla
+                // sıfırlanır. Otomatik yeniden deneme (RETRY) talebe dokunmaz.
+                if ($listing->external_id === null && $listing->create_requested_at !== null) {
+                    $listing->forceFill(['create_requested_at' => null])->save();
+                }
+
                 // Sürüm kapısı burada da geçerlidir: aynı sürüm iki kez
                 // gönderilirse ikinci çağrı null döner ve iş atılmaz.
                 $operation = $this->openSyncOperation->run(
@@ -176,6 +183,7 @@ final class PublishListing
             'tenant_id' => $listing->tenant_id,
             'status' => 'blocked',
             'last_error' => $prerequisite->reason(),
+            'reason_code' => $prerequisite->reasonCode()?->value,
         ])->save();
     }
 
@@ -200,6 +208,6 @@ final class PublishListing
             ->where('listing_id', $listing->id)
             ->where('domain', SyncDomain::CONTENT->value)
             ->where('status', 'blocked')
-            ->update(['status' => 'pending', 'last_error' => null]);
+            ->update(['status' => 'pending', 'last_error' => null, 'reason_code' => null]);
     }
 }

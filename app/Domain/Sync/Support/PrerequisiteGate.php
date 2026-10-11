@@ -6,11 +6,14 @@ namespace App\Domain\Sync\Support;
 
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
+use App\Domain\Channels\Contracts\ValidatesPublication;
 use App\Domain\Channels\Models\AttributeMapping;
 use App\Domain\Channels\Models\CategoryMapping;
+use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelCategoryAttribute;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Sync\Enums\PublishReason;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -77,6 +80,7 @@ final class PrerequisiteGate
                     ':sku ürününe iç kategori atanmamış; ürünü düzenleyip iç kategori alanını doldurun.',
                     ['sku' => $product->sku],
                 ),
+                categoryCode: PublishReason::CATEGORY_REQUIRED,
             );
         }
 
@@ -93,6 +97,28 @@ final class PrerequisiteGate
                     ['category' => $internalCategoryId],
                 ),
             );
+        }
+
+        // KANALIN KENDİ DOĞRULAMASI (S3): zorunlu öznitelik, marka, barkod,
+        // görsel, fiyat… kanaldan gelen kurallarla, TÜM varyantlar için
+        // birlikte. Yalnız uygulayan kanalda; diğerleri genel kontrolde kalır.
+        $adapter = $this->registry->for($connection);
+
+        if ($adapter instanceof ValidatesPublication) {
+            $category = ChannelCategory::query()->find($mapping->channel_category_id);
+
+            if ($category === null) {
+                return PrerequisiteResult::blocked(
+                    missingCategoryReason: PublishReason::CATEGORY_MAPPING_REQUIRED->label(),
+                    channelCategoryId: $mapping->channel_category_id,
+                );
+            }
+
+            $issues = $adapter->validateForPublication($product, $category);
+
+            return $issues === []
+                ? PrerequisiteResult::ok($mapping->channel_category_id)
+                : PrerequisiteResult::invalid($issues, $mapping->channel_category_id);
         }
 
         $missingAttributes = $this->missingRequiredAttributes($mapping->channel_category_id);

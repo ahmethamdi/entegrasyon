@@ -140,17 +140,17 @@ class ChannelTypeSeeder extends Seeder
                 'kind' => 'marketplace',
                 'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Hepsiburada\\HepsiburadaAdapter',
                 'capabilities' => [
-                    // Katalog ve taksonomi HENÜZ yazılmadı; ilan edilen
-                    // ama çalışmayan yetenek panelde çalışmayan sekme
-                    // demektir.
-                    'catalog' => false,
+                    // S3 (12 Eki 2026): ürün girişi (`/api/products/import`),
+                    // kategori/öznitelik, onay takibi. Belgeye göre yazıldı,
+                    // GERÇEK HESAPLA SINANMADI → kanal yine kapalı.
+                    'catalog' => true,
                     // İlan çekme (6 Eki 2026): /Listings + katalogdan ad/görsel.
                     'catalog_import' => true,
                     'inventory' => true,
                     'pricing' => true,
                     'orders' => true,
-                    'taxonomy' => false,
-                    'approval' => false,
+                    'taxonomy' => true,
+                    'approval' => true,
                     'fulfillment' => false,
                 ],
                 'rate_limit_profile' => [
@@ -161,8 +161,10 @@ class ChannelTypeSeeder extends Seeder
                     // sınır sipariş çağrılarını sürekli 429'a sokardı.
                     // ⚠️ ANAHTAR ADI `requests_per_second` — `requests`
                     // yazıldığında profil SESSİZCE 5/sn'ye düşer.
-                    'requests_per_second' => 10,
-                    'burst_capacity' => 10,
+                    // Katalog (MPOP) belgesi: IP başına 180 istek/dakika
+                    // (11 Eki 2026) → 3/sn; aşımda 403 + IP engeli.
+                    'requests_per_second' => 3,
+                    'burst_capacity' => 3,
                     'window_seconds' => 1,
                     // İkincil kaynak 4000 diyor; doğrulanmadığı için
                     // 1000'de tutuluyor. Küçük parti yalnızca daha çok
@@ -272,14 +274,16 @@ class ChannelTypeSeeder extends Seeder
                 'kind' => 'marketplace',
                 'adapter_class' => 'App\\Domain\\Channels\\Adapters\\N11\\N11Adapter',
                 'capabilities' => [
-                    // Ürün açma (`product-create`) ve kargo adımı bu turda YAZILMADI.
-                    'catalog' => false,
+                    // S3 (12 Eki 2026): `product-create`/`product-update`,
+                    // `/cdn/` taksonomi, onay takibi. Sandbox YOK, gerçek
+                    // mağazada SINANMADI → kanal kapalı. Kargo adımı yok.
+                    'catalog' => true,
                     'catalog_import' => true,
                     'inventory' => true,
                     'pricing' => true,
                     'orders' => true,
-                    'taxonomy' => false,
-                    'approval' => false,
+                    'taxonomy' => true,
+                    'approval' => true,
                     'fulfillment' => false,
                 ],
                 'rate_limit_profile' => [

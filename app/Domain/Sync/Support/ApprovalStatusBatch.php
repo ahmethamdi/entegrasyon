@@ -15,7 +15,13 @@ namespace App\Domain\Sync\Support;
  */
 final readonly class ApprovalStatusBatch
 {
-    /** @param array<string, array{status: string, reason?: string|null}> $statusesByExternalId */
+    /**
+     * Girdi isteğe bağlı olarak kanalın verdiği KALICI kimliği
+     * (`external_id`, ör. HB `hbSku`) ve birleştirilecek `channel_metadata`'yı
+     * taşıyabilir (S3).
+     *
+     * @param  array<string, array{status: string, reason?: string|null, external_id?: string, channel_metadata?: array<string, mixed>}>  $statusesByExternalId
+     */
     public function __construct(
         public array $statusesByExternalId,
         public ?\DateTimeImmutable $observedAt = null,

@@ -6,12 +6,16 @@ namespace Tests\Feature\Channels;
 
 use App\Domain\Channels\Adapters\N11\N11Adapter;
 use App\Domain\Channels\Adapters\N11\N11SoapFault;
+use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
+use App\Domain\Channels\Contracts\ValidatesPublication;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelHttpClient;
@@ -56,7 +60,12 @@ final class N11AdapterTest extends TestCase
         $this->assertInstanceOf(SupportsInventory::class, $adapter);
         $this->assertInstanceOf(SupportsPricing::class, $adapter);
         $this->assertInstanceOf(SupportsOrders::class, $adapter);
-        $this->assertNotInstanceOf(SupportsCatalog::class, $adapter);
+        // S3: product-create/update, /cdn/ taksonomi, onay, doğrulama, belirsiz yaratma koruması.
+        $this->assertInstanceOf(SupportsCatalog::class, $adapter);
+        $this->assertInstanceOf(SupportsTaxonomy::class, $adapter);
+        $this->assertInstanceOf(SupportsApprovalWorkflow::class, $adapter);
+        $this->assertInstanceOf(ValidatesPublication::class, $adapter);
+        $this->assertInstanceOf(GuardsAmbiguousCreate::class, $adapter);
         $this->assertNotInstanceOf(SupportsTokenRefresh::class, $adapter);
         $this->assertSame('TRY', $adapter->channelCurrency());
     }
