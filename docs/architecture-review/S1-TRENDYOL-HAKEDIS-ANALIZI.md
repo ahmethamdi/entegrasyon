@@ -1,9 +1,8 @@
 # S1 · Trendyol hakediş ve Paraşüt — ön analiz ve durma raporu (11 Ekim 2026)
 
-Durum: **UYGULAMA BAŞLAMADI.** S1 talimatındaki durma koşulları ("finans
-anlamı belirsiz", "KDV tahmin edilecek", "iade çift sayılabilir", "Paraşüt
-muhasebe eşlemesi belirsiz") karşılandı. Bu belge ölçülenleri, belirsizlikleri
-ve karar önerilerini kaydeder.
+Durum (11 Eki akşam): **UYGULANDI — kararlar §8'de, uygulama §9'da.**
+§1–§7 ilk durma raporudur (ölçülenler, belirsizlikler, öneriler); kararlar
+verildikten sonra uygulama §9'a göre yapıldı.
 
 ## 1. Kaynaklar
 
@@ -135,3 +134,122 @@ doğrulanamaz.
    VERIFIED** kalır ve bilinmeyen tür kâra girmez.
 5. Komisyon faturası DCA2026000453682 (339,91): panelde/PDF'te KDV dahil
    toplam mı (matrah 283,26 + KDV 56,65)?
+
+## 8. Verilen kararlar (kullanıcı, 11 Eki)
+
+1. Kâr tabanı: **Katkı (KDV dahil)** — muhasebe kârı değil; maliyet = satış
+   anındaki KDV dahil alış maliyeti. KDV hariç kârlılık fatura/muhasebe aşamasında.
+2. Ham defter onaylandı; ham olgu yorumdan ayrı.
+3. Sınıflar: `verified` / `unverified` / `unknown`; doğrulanmamış tür gerçekleşen
+   katkıya girmez, varsa gerçekleşen katkı EKSİK.
+4. Satış yalnız gözlenen davranış için VERIFIED.
+5. Komisyon faturası ile satış komisyonu iki kez düşülmez.
+6. İade: doğrulanmış hakediş iadesi → gerçekleşen; yoksa iç kayıt → beklenen; asla ikisi.
+7–8. İndirim, kargo, diğer: ham saklanır, anlam doğrulanmadan katkıya girmez.
+9. Eşleme: paket numarası, bağlantı sınırı içinde; emin değilse eşleşmemiş.
+10. Beklenen ve gerçekleşen ayrı; eksik gerçekleşen son rakam değildir.
+11. **Paraşüt: seçenek C — S1'de finansal yazma YOK.**
+12. Komisyon faturası KDV'si tersine hesaplanmaz.
+13. Canlı örneği olmayan sınıflar: **IMPLEMENTED — NOT LIVE VERIFIED**.
+
+## 9. Uygulama
+
+### 9.1 Şema
+`channel_financial_transactions` (`2026_10_12_000100`): ham olgu kolonları
+(`source, external_id, type_raw, debt, credit, commission_amount,
+commission_rate, seller_revenue, currency, order_number, shipment_package_id,
+barcode, transaction_date, payment_date, payment_order_id, receipt_id,
+commission_invoice_serial, description, raw jsonb, raw_hash`) **DB
+tetikleyicisiyle değişmez**; yorum kolonları (`type, classification,
+classification_reason, order_id, match_status, match_reason, matched_at`)
+güncellenebilir. Tekil: `(channel_connection_id, source, external_id)`.
+CHECK: `classification ∈ {verified, unverified, unknown}`, `match_status ∈
+{matched, unmatched, ambiguous, not_order_level}`.
+
+### 9.2 İçe aktarma (`finance:sync`, 3 saatte bir)
+- Uçlar: `GET …/finance/che/sellers/{id}/settlements` ve `/otherfinancials`,
+  `transactionTypes` = kaynağın tüm enum listesi, `startDate/endDate` ms,
+  `page`, `size=500`. HTTP hatası sayfayı boş SAYMAZ (`throw`).
+- Pencere 15 gün; ilk tur bağlantı tarihinden 30 gün geri; sonraki turlar
+  imleçten **3 gün örtüşmeli**. İmleç (`finance_ingested_through`) yalnız
+  pencere tüm kaynak ve sayfalarıyla bitince ilerler; tur başına en çok 12
+  pencere, kaynak başına en çok 50 sayfa.
+- İdempotens: `insertOrIgnore` + tekil indeks. Aynı kimlik **farklı içerikle**
+  gelirse (`raw_hash`) satır ezilmez, `conflicts` sayılır ve uyarı yazılır.
+  Aynı içerikle gelirse yalnız yorum güncellenir (yeniden sınıflama).
+- Bağlantı başına yalıtım; devre kesici açıksa atlanır.
+
+### 9.3 Sınıflandırma (`TrendyolFinancialTypes`)
+| Ham etiket | Tür | Sınıf | Sipariş düzeyi |
+|---|---|---|---|
+| `Satış` | sale | **verified** yalnız: borç 0, alacak > 0, komisyon+oran dolu, hakediş = alacak − komisyon (kuruş), TRY, paket dolu; aksi **unverified** (sebebiyle) | evet |
+| `Ödeme` | payout | verified | hayır |
+| `Komisyon Faturası` | commission_invoice | verified (belge; katkı bileşeni değil) | hayır |
+| `Gelen Havale` | incoming_transfer | verified | hayır |
+| Belgedeki 34 İngilizce enum (`Sale`, `Return`, `Discount`, `TyDiscount`, `DeliveryFee`, `Commission±`, `Stoppage`, `DeductionInvoices`…) | eşlenen tür | **unverified** | settlements türleri evet, otherfinancials hayır |
+| Başka her etiket | NULL | **unknown** | paket/sipariş no varsa evet |
+
+Gözlenen tüm ham `transactionType` değerleri: `Satış`, `Ödeme`,
+`Komisyon Faturası`, `Gelen Havale` (iki canlı yoklama, 11 Eki 12:00 ve 14:23 UTC).
+
+### 9.4 Eşleme (`MatchFinancialTransactions`, ham defterden ayrı)
+1. Paket: aynı bağlantıda `orders.external_id = shipmentPackageId`
+   (`orders_external_unique` bağlantı içinde tekil). İşlemin sipariş numarası
+   siparişinkiyle çelişirse `ambiguous`. Paket var ama sipariş yoksa
+   `unmatched` — sipariş numarasına DÜŞÜLMEZ (aynı siparişin başka paketi ayrı kayıttır).
+2. Paket yoksa sipariş numarası: tam bir sipariş → `matched`; birden çok → `ambiguous`.
+Eşleşmeyen/belirsiz işlemler her turda yeniden denenir (gecikmeli sipariş),
+raporda "Eşleşmeyen hakediş işlemleri" olarak görünür, katkıya girmez.
+
+### 9.5 Formüller (`ContributionCalculator`) — hepsi KDV DAHİL, işaretli
+**Beklenen:**
+Satış = Σ net_line_total × (adet − iade kaydıyla karşılanmayan iptal) / adet ·
+İade = −Σ order_refunds.amount · Komisyon = Σ beklenen commission(+_refund),
+kayıt yoksa BİLİNMİYOR · Kargo = Σ beklenen shipping_fee, yoksa BİLİNMİYOR ·
+Diğer = Σ beklenen service_fee/withholding/other (yoksa 0) · Maliyet =
+−Σ unit_cost × (adet − iptal − iade) · Katkı = toplam, **yalnız hiçbir bileşen
+bilinmiyor değilse**.
+
+**Gerçekleşen:** Satış = Σ(alacak − borç) eşleşmiş VERIFIED `sale` ·
+Komisyon = −Σ commissionAmount aynı satırlar · İade = iade/iptal varsa
+BİLİNMİYOR (doğrulanmış iade türü yok), yoksa 0 · Kargo = **BİLİNMİYOR**
+(doğrulanmadı) · Diğer = eşleşmiş unverified/unknown varsa BİLİNMİYOR, yoksa
+0 · Maliyet = satış anı görüntüsü · Katkı = yalnız tamamsa.
+Sonuç: **bugün hiçbir Trendyol siparişinin gerçekleşen katkısı TAMAM
+olamaz** (kargo doğrulanmadı) — rapor "eksik" ve "bilinenler: X" gösterir.
+
+**Çift sayım korumaları:** (1) Komisyon faturası sipariş düzeyi değil; bir
+strateji bağlasa bile doğrulanmış katkı-dışı tür olarak düşülmez. (2) İç iade
+kaydı yalnız beklenende; gerçekleşende iade bilinmiyor → ikisi asla toplanmaz.
+(3) Doğrulanmamış `Return`/düzeltme satırı satışı/komisyonu değiştirmez.
+(4) Beklenen yalnız `expected` kesintileri okur.
+
+### 9.6 Rapor
+`/reports/contribution` (menü: Modüller → Katkı raporu): dönem (TR saati),
+sipariş başına iki satır (beklenen/gerçekleşen), bileşenler, "bilinmiyor"
+vurgusu, durum (Tamam/Eksik/Hakediş yok), dönem toplamı (bileşenler yalnız
+bilinen değerler + bilinmeyen sayısı; katkı yalnız tamam siparişlerden),
+eşleşmeyen işlemler listesi. `/reports/contribution/{sipariş}`: "neden bu
+rakam?" — her bileşen, eksiklik sebepleri ve kaynak kayıtlar (satır görüntüsü,
+maliyet görüntüsü ve yakalanma anı, iade kayıtları, eşleşmiş ham işlemler,
+hariç tutulanlar ve nedeni).
+
+### 9.7 Paraşüt
+**BLOCKED — ACCOUNTING MAPPING / ENVIRONMENT VALIDATION REQUIRED.** S1'de
+Paraşüt'e finansal yazma yok (karar 11). Mevcut fatura/tahsilat akışı değişmedi.
+
+### 9.8 Doğrulama durumu
+| Sınıf | Durum |
+|---|---|
+| Satış (`Satış`, gözlenen biçim) | **LIVE VERIFIED** (1 satır, 11 Eki) |
+| Ödeme, Komisyon Faturası, Gelen Havale | **LIVE VERIFIED** (tanıma; katkı dışı) |
+| İade, indirim, kupon, TY indirim/kupon, provizyon, manuel iade, komisyon ±, hakediş ±, teslimat ücreti, PayByLink, stopaj, kargo/kesinti faturası, diğer | **IMPLEMENTED — NOT LIVE VERIFIED** (saklanır, katkıya girmez) |
+| Uçtan uca canlı eşleşme | **NOT LIVE VERIFIED** — canlı tek satışın siparişi bizde yok |
+| Üretimde `finance:sync` | **ÇALIŞTIRILMADI** — S1 kodu canlıya alınmadı |
+
+### 9.9 Bilinen sınırlar
+- Adet alanı yok; katkı paket (sipariş) düzeyinde, satır düzeyinde değil.
+- Kargo, indirim, iade anlamı doğrulanmadan gerçekleşen katkı TAMAM olmaz.
+- `match_reason` / `classification_reason` DB'de Türkçe tanı metni (İngilizce panelde de Türkçe görünür).
+- Rapor dönem başına en çok 200 sipariş.
+- Canlıda `currency` alanı var ama belgede yok; yoksa satış unverified olur.

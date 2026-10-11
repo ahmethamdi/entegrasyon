@@ -37,7 +37,8 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
   - Mevcut `unit_price/line_total/subtotal/grand_total` anlamı DEĞİŞTİRİLMEDİ (Trendyol `grand_total` indirim öncesi kalır — yeni rapor yeni kolonları okur).
 - [ ] `InvoiceLine::netUnitPrice` BigDecimal; test #12.
 - [ ] Pano: TR günü + `state` ile ciro.
-- [ ] Trendyol hakediş (`SupportsSettlement`), idempotent içe aktarma (`external_ref`); kâr raporu; testler #9–#11, #13.
+- [x] Trendyol hakediş (`SupportsFinancialLedger`), idempotent ham defter (`channel_financial_transactions`), eşleme, sınıflandırma, beklenen/gerçekleşen katkı (KDV dahil), rapor; testler `FinancialLedgerIngestionTest` (14), `ContributionTest` (19). Ayrıntı `S1-TRENDYOL-HAKEDIS-ANALIZI.md` §9.
+  - **Kalan:** gerçekleşen katkı TAMAM olamıyor (kargo/iade/indirim canlı örneği yok → NOT LIVE VERIFIED); Paraşüt hakediş aktarımı **BLOCKED** (muhasebe eşlemesi + ortam); S1 kodu canlıda değil.
   - 11 Eki: **DURDURULDU, karar bekliyor** — canlı finans API yoklaması ve belirsizlikler `S1-TRENDYOL-HAKEDIS-ANALIZI.md`. Ölçülen: `transactionType` Türkçe etiket döner, `currency` alanı var, komisyon hem satış satırında hem `Komisyon Faturası` olarak gelir (çift sayım tuzağı), adet alanı yok. Karar istenen: kâr KDV tabanı, iade otoritesi, Paraşüt A/B/C, gerçek doğrulama hesabı.
 
 ## Açık bilinen konular (S1 kapsamı dışı, izleniyor)
