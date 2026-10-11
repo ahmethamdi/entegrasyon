@@ -20,6 +20,7 @@ use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsFinancialLedger;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsInvoiceUpload;
@@ -30,6 +31,9 @@ use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
+use App\Domain\Finance\Support\RemoteFinancialPage;
+use App\Domain\Finance\Support\RemoteFinancialTransaction;
+use App\Domain\Finance\Support\TrendyolFinancialTypes;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceBuyer;
@@ -55,6 +59,7 @@ use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
+use App\Support\Money\Money;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use DateTimeImmutable;
@@ -109,7 +114,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsFinancialLedger, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -1990,6 +1995,117 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
     private function taxonomy(): TaxonomyClient
     {
         return new TaxonomyClient($this->client, self::baseUrl(), $this->defaultHeaders());
+    }
+
+    // ------------------------------------------------ finans defteri (S1)
+
+    /** @return list<string> */
+    public function financialSources(): array
+    {
+        return ['settlements', 'otherfinancials'];
+    }
+
+    /** Cari hesap ekstresi: `startDate`–`endDate` en fazla 15 gün. */
+    public function financialWindowDays(): int
+    {
+        return 15;
+    }
+
+    /**
+     * Cari hesap ekstresi — `finance/che/sellers/{id}/{settlements|otherfinancials}`.
+     *
+     * Canlıda doğrulandı (11 Eki 2026): `transactionTypes` virgüllü enum
+     * listesi kabul edilir, tarih milisaniye, sayfa zarfı
+     * `{page,size,totalPages,totalElements,content}`. Yanıtta tür TÜRKÇE
+     * etiketle döner ve belgede olmayan `currency` alanı vardır.
+     *
+     * Tutarlar JSON sayısıdır; decimal string'e çevrilir, float hesap
+     * yapılmaz. Alan yoksa NULL — 0 uydurulmaz.
+     */
+    public function fetchFinancialPage(string $source, CarbonInterface $from, CarbonInterface $to, int $page): RemoteFinancialPage
+    {
+        $types = TrendyolFinancialTypes::QUERY_TYPES[$source]
+            ?? throw new RuntimeException("Bilinmeyen Trendyol finans kaynağı: {$source}");
+
+        $response = $this->get($this->sellerUrl('finance/che', $source), [
+            'transactionTypes' => $types,
+            'startDate' => $from->getTimestampMs(),
+            'endDate' => $to->getTimestampMs(),
+            'page' => $page,
+            'size' => 500,
+        ]);
+
+        // HATA SAYFASI BOŞ SAYFA SAYILMAZ: 5xx/4xx sessizce geçilseydi imleç
+        // o pencerenin ötesine ilerler ve penceredeki işlemler bir daha
+        // sorulmazdı (testte yakalandı).
+        $response->throw();
+
+        $transactions = [];
+
+        foreach ((array) ($response->json('content') ?? []) as $row) {
+            if (! is_array($row) || ! isset($row['id'])) {
+                continue;
+            }
+
+            $transactions[] = new RemoteFinancialTransaction(
+                source: $source,
+                externalId: (string) $row['id'],
+                typeRaw: (string) ($row['transactionType'] ?? ''),
+                debt: self::financeAmount($row['debt'] ?? null),
+                credit: self::financeAmount($row['credit'] ?? null),
+                commissionAmount: self::financeAmount($row['commissionAmount'] ?? null),
+                commissionRate: self::financeAmount($row['commissionRate'] ?? null, 4),
+                sellerRevenue: self::financeAmount($row['sellerRevenue'] ?? null),
+                currency: self::financeText($row['currency'] ?? null),
+                orderNumber: self::financeText($row['orderNumber'] ?? null),
+                shipmentPackageId: self::financeText($row['shipmentPackageId'] ?? null),
+                barcode: self::financeText($row['barcode'] ?? null),
+                transactionDate: self::financeTime($row['transactionDate'] ?? null),
+                paymentDate: self::financeTime($row['paymentDate'] ?? null),
+                paymentOrderId: self::financeText($row['paymentOrderId'] ?? null),
+                receiptId: self::financeText($row['receiptId'] ?? null),
+                commissionInvoiceSerial: self::financeText($row['commissionInvoiceSerialNumber'] ?? null),
+                description: self::financeText($row['description'] ?? null),
+                raw: $row,
+            );
+        }
+
+        return new RemoteFinancialPage(
+            transactions: $transactions,
+            page: (int) ($response->json('page') ?? $page),
+            totalPages: (int) ($response->json('totalPages') ?? 0),
+        );
+    }
+
+    private static function financeAmount(mixed $value, int $scale = 2): ?string
+    {
+        if ($value === null || $value === '' || ! is_numeric($value)) {
+            return null;
+        }
+
+        // JSON sayısı float gelir; dizeye çevirip decimal olarak ölçeklenir
+        // (339.91 → "339.91"), float aritmetiği yapılmaz.
+        return Money::normalize(is_float($value) ? self::floatString($value) : (string) $value, $scale);
+    }
+
+    private static function floatString(float $value): string
+    {
+        // En kısa gidiş-dönüş gösterimi (serialize_precision = -1).
+        return (string) json_encode($value);
+    }
+
+    private static function financeText(mixed $value): ?string
+    {
+        if ($value === null || (is_string($value) && trim($value) === '')) {
+            return null;
+        }
+
+        return is_scalar($value) ? trim((string) $value) : null;
+    }
+
+    private static function financeTime(mixed $value): ?CarbonImmutable
+    {
+        return is_numeric($value) ? CarbonImmutable::createFromTimestampMsUTC((int) $value) : null;
     }
 
     /**

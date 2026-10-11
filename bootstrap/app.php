@@ -8,6 +8,7 @@ use App\Domain\Channels\Console\PruneApiCallsCommand;
 use App\Domain\Channels\Console\RefreshExpiringTokensCommand;
 use App\Domain\Channels\Console\RegisterWebhooksCommand;
 use App\Domain\Channels\Console\SyncTaxonomyCommand;
+use App\Domain\Finance\Console\SyncFinancialTransactionsCommand;
 use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
@@ -79,6 +80,7 @@ return Application::configure(basePath: dirname(__DIR__))
         PollChannelOrdersCommand::class,
         // P0-3 · webhook kanallarında kaçan sipariş kurtarma. Zamanlaması routes/console.php.
         ReconcileChannelOrdersCommand::class,
+        SyncFinancialTransactionsCommand::class,
         // ADR-001 · tek seferlik kanonik durum geri doldurma (zamanlanmaz).
         BackfillOrderStateCommand::class,
         // A12 · eşleşmemiş sipariş satırları. Zamanlaması routes/console.php.

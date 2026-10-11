@@ -70,6 +70,11 @@ const navGroups = [
              * satıcı Paraşüt'ü iki kez bağlaması gerektiğini sanırdı.
              */
             { href: '/settings/invoicing', label: k('Fatura ve muhasebe') },
+            /*
+             * Katkı raporu (S1) — sipariş başına KDV dahil katkı, beklenen ve
+             * gerçekleşen ayrı; her rakam ayrıntıda kaynağına iner.
+             */
+            { href: '/reports/contribution', label: k('Katkı raporu') },
         ],
     },
     {

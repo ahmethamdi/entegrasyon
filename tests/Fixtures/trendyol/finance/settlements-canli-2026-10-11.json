@@ -1,0 +1,35 @@
+{
+  "page": 0,
+  "size": 500,
+  "totalPages": 1,
+  "totalElements": 1,
+  "content": [
+    {
+      "id": "14124406379",
+      "transactionDate": 1789389169250,
+      "barcode": "FSSSTT-D87405",
+      "transactionType": "Satış",
+      "receiptId": 631076473,
+      "description": "Satış",
+      "debt": 0,
+      "credit": 1789,
+      "paymentPeriod": 28,
+      "commissionRate": 19,
+      "commissionAmount": 339.91,
+      "commissionInvoiceSerialNumber": "DCA2026000453682",
+      "sellerRevenue": 1449.09,
+      "orderNumber": "10000000001",
+      "orderDate": 1789150382563,
+      "paymentOrderId": null,
+      "paymentDate": 1792672369253,
+      "sellerId": 999001,
+      "storeId": null,
+      "storeName": null,
+      "storeAddress": null,
+      "country": "Türkiye",
+      "currency": "TRY",
+      "affiliate": "TRENDYOLTR",
+      "shipmentPackageId": 3000000001
+    }
+  ]
+}

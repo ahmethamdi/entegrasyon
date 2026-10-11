@@ -51,7 +51,11 @@ final class OrderContribution
         return $this->missing === [];
     }
 
-    public static function for(Order $order): self
+    /**
+     * @param  bool  $expectedChargesOnly  true = yalnız `expected` kesintiler
+     *                                     (S1 beklenen katkı; gerçekleşen ayrı hesaplanır)
+     */
+    public static function for(Order $order, bool $expectedChargesOnly = false): self
     {
         $currency = strtoupper((string) $order->currency);
         $missing = [];
@@ -121,7 +125,7 @@ final class OrderContribution
         $rows = OrderCharge::query()->where('order_id', $order->id)->get(['kind', 'basis', 'amount', 'currency']);
 
         foreach ($rows->groupBy('kind') as $kind => $group) {
-            $actual = $group->where('basis', OrderCharge::BASIS_ACTUAL);
+            $actual = $expectedChargesOnly ? collect() : $group->where('basis', OrderCharge::BASIS_ACTUAL);
             $used = $actual->isNotEmpty() ? $actual : $group->where('basis', OrderCharge::BASIS_EXPECTED);
             $sum = BigDecimal::zero();
 

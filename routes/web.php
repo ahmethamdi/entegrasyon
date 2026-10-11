@@ -13,6 +13,7 @@ use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\ChannelPricingController;
 use App\Http\Controllers\ChannelSettingsController;
+use App\Http\Controllers\ContributionReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EbayOAuthController;
 use App\Http\Controllers\EtsyOAuthController;
@@ -274,6 +275,11 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     // çözer; başka kiracının siparişi 404 verir.
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
+
+    // S1 · Katkı raporu (KDV dahil) — beklenen ve gerçekleşen, sipariş
+    // başına izlenebilir. Salt okunur.
+    Route::get('/reports/contribution', [ContributionReportController::class, 'index'])->name('reports.contribution');
+    Route::get('/reports/contribution/{order}', [ContributionReportController::class, 'show'])->name('reports.contribution.show');
 
     // Kargo bildirimi — satıcı takip numarasını TEK yerden girer, sipariş
     // geldiği kanala gönderilir (Shopify, Woo). Siparişin kendisi yine

@@ -187,6 +187,14 @@ Schedule::command('reconcile:orders')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S1 · HAKEDİŞ DEFTERİ — Trendyol cari hesap ekstresi ham olarak içe alınır
+// ve siparişlerle eşlenir. Kayıtlar teslimattan sonra oluşur ve haftalık
+// ödenir; 3 saat yeterli. Pencere imleçten 3 gün örtüşür, tekrar zararsız.
+Schedule::command('finance:sync')
+    ->cron('20 */3 * * *')
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // A12 · EŞLEŞMEMİŞ SİPARİŞ SATIRLARI — SKU sonradan kataloğa girince stok
 // düşülür. Zamanlanmazsa satır sonsuza kadar PENDING kalır, bakiye satılmış
 // adet kadar fazla görünür ve kanallara FAZLA STOK gider.
