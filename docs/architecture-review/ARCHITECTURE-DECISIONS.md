@@ -18,6 +18,7 @@ Durum: **önerildi** (11 Ekim 2026 denetimi), aksi her ADR'nin altında yazılı
 
 ## ADR-002 · Satış anı finansal görüntüsü ve hakediş modeli
 
+- **Durum:** **Kabul edildi** — 11 Eki 2026, temel faz (görüntü + kesinti + iade). Uygulanan: `order_lines` satış anı görüntüsü (DB tetikleyicisiyle değişmez), `order_charges` (işaretli, `expected|actual` taban, idempotent, ekleme-yalnız), `order_refunds` + `order_refund_lines` (refund|return, tutar NULL = bilinmiyor, idempotent, ekleme-yalnız), `App\Support\Money`, `OrderContribution` hesap çekirdeği. Sapmalar: `settlement_lines` ayrı tablo yerine `order_charges(basis=actual, source=settlement)`; `settlements` başlık tablosu ve hakediş içe aktarma S1; `orders.discount_total/refunded_total` eklenmedi (türetilir); mevcut `grand_total` tanımı DEĞİŞTİRİLMEDİ (geçmiş veriyi yeniden yorumlamamak için — yeni rapor yeni kolonları okur).
 - **Karar:** `order_lines` satış anı değerlerini saklar; iade tutarı ve hakediş ayrı tablolarda, işaretli tutarlarla tutulur; ortak `Money` yardımcı sınıfı.
 - **Mevcut durum:** decimal kolonlar ve kuruş aritmetiği fiyat tarafında sağlam; ama siparişte maliyet/komisyon/KDV/indirim yok, Trendyol ve Shopify tutarları indirim öncesi, iade tutarı ve hakediş hiç yok, `toMinor` 5 kopya, fatura net fiyatı float.
 - **Sorun:** S1 kâr raporu bugünkü verilerle yanlış çıkar ve maliyet değiştikçe geçmiş kâr değişir.

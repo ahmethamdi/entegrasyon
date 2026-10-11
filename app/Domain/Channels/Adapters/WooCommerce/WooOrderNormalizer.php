@@ -211,6 +211,9 @@ final class WooOrderNormalizer
             // Woo iadeyi siparişin DURUMU olarak gönderir — miktarlar
             // HEDEFTİR, artış değil (`ReturnEvent::$cumulative`).
             'returned_quantities_cumulative' => $type === 'returned',
+            // İadenin PARA tarafı (ADR-002): Woo her olayda TÜM iadeleri
+            // taşır; kayıt iade kimliğiyle idempotenttir.
+            'refund_records' => $type === 'returned' ? self::refundRecords($payload) : [],
             // Kişisel veri taşınmaz; yalnızca referans. PayloadRedactor
             // e-posta ve adı zaten maskeler, ama kanonik yükte hiç tutmamak
             // daha güvenlidir.
@@ -327,6 +330,50 @@ final class WooOrderNormalizer
         }
 
         return array_values($lines);
+    }
+
+    /**
+     * Woo iadelerinin para kayıtları — `orders/{id}/refunds` ayrıntısından.
+     *
+     * Tutar `amount` (pozitif); yoksa özetteki `total` (negatif) mutlak değeri.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<array<string, mixed>>
+     */
+    private static function refundRecords(array $payload): array
+    {
+        $records = [];
+
+        foreach ((array) ($payload['refunds'] ?? []) as $refund) {
+            if (! is_array($refund) || ! isset($refund['id'])) {
+                continue;
+            }
+
+            $lines = [];
+
+            foreach ((array) ($refund['line_items'] ?? []) as $item) {
+                if (is_array($item)) {
+                    $lines[] = [
+                        'external_line_id' => self::refundedItemId($item),
+                        'quantity' => abs((int) ($item['quantity'] ?? 0)),
+                        'amount' => isset($item['total']) ? ltrim((string) $item['total'], '-') : null,
+                    ];
+                }
+            }
+
+            $amount = $refund['amount'] ?? (isset($refund['total']) ? ltrim((string) $refund['total'], '-') : null);
+
+            $records[] = array_filter([
+                'external_refund_id' => (string) $refund['id'],
+                'amount' => $amount,
+                'currency' => $payload['currency'] ?? null,
+                'reason' => $refund['reason'] ?? null,
+                'occurred_at' => $refund['date_created_gmt'] ?? $refund['date_created'] ?? null,
+                'lines' => $lines,
+            ], static fn (mixed $v): bool => $v !== null && $v !== '');
+        }
+
+        return $records;
     }
 
     /**

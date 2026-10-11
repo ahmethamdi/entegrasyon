@@ -146,6 +146,9 @@ final class ShopifyOrderNormalizer
             'lines' => $type === 'returned'
                 ? self::refundLines($payload)
                 : self::orderLines($payload),
+            // İadenin PARA tarafı (ADR-002) — stok satırlarından ayrı:
+            // `no_restock` kalemi stok üretmez ama para iadesidir.
+            'refund_records' => $type === 'returned' ? [self::refundRecord($payload)] : [],
             // KİŞİSEL VERİ TAŞINMAZ, yalnızca referans. `PayloadRedactor`
             // e-postayı ve adı zaten maskeler ama kanonik yükte HİÇ
             // tutmamak daha güvenlidir (Woo normalizer'ıyla aynı kural).
@@ -296,6 +299,64 @@ final class ShopifyOrderNormalizer
         }
 
         return $lines;
+    }
+
+    /**
+     * `refunds/create` gövdesinin para kaydı.
+     *
+     * Tutar = başarılı `refund` işlemlerinin toplamı (müşteriye gerçekten
+     * dönen). `transactions` yoksa tutar BİLİNMİYOR (NULL), 0 değil. Kargo
+     * iadesi `order_adjustments` içinde `shipping_refund` (negatif) satırıdır.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private static function refundRecord(array $payload): array
+    {
+        $amount = null;
+        $currency = null;
+
+        if (is_array($payload['transactions'] ?? null)) {
+            $paid = array_values(array_filter(
+                $payload['transactions'],
+                static fn (mixed $t): bool => is_array($t) && ($t['kind'] ?? null) === 'refund' && ($t['status'] ?? null) === 'success',
+            ));
+            $amount = $paid === [] ? '0' : Money::add(...array_map(static fn (array $t): string => (string) ($t['amount'] ?? '0'), $paid));
+            $currency = $paid[0]['currency'] ?? null;
+        }
+
+        $shipping = null;
+
+        foreach ((array) ($payload['order_adjustments'] ?? []) as $adjustment) {
+            if (is_array($adjustment) && ($adjustment['kind'] ?? null) === 'shipping_refund') {
+                $shipping = Money::add($shipping ?? '0', ltrim((string) ($adjustment['amount'] ?? '0'), '-'));
+            }
+        }
+
+        $lines = [];
+
+        foreach ((array) ($payload['refund_line_items'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $lines[] = [
+                'external_line_id' => (string) ($item['line_item_id'] ?? ($item['line_item']['id'] ?? '')),
+                'quantity' => abs((int) ($item['quantity'] ?? 0)),
+                'amount' => $item['subtotal'] ?? null,
+                'restock' => ($item['restock_type'] ?? null) !== 'no_restock',
+            ];
+        }
+
+        return array_filter([
+            'external_refund_id' => isset($payload['id']) ? (string) $payload['id'] : null,
+            'amount' => $amount,
+            'shipping_amount' => $shipping,
+            'currency' => $currency,
+            'reason' => $payload['note'] ?? null,
+            'occurred_at' => $payload['created_at'] ?? $payload['processed_at'] ?? null,
+            'lines' => $lines,
+        ], static fn (mixed $v): bool => $v !== null);
     }
 
     /**

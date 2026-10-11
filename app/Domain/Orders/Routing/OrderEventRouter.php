@@ -14,6 +14,7 @@ use App\Domain\Messaging\Support\DeferUntilOrderArrives;
 use App\Domain\Orders\Actions\ApplyOrderCancellation;
 use App\Domain\Orders\Actions\ApplyOrderReturn;
 use App\Domain\Orders\Actions\IngestChannelOrder;
+use App\Domain\Orders\Actions\RecordOrderRefunds;
 use App\Domain\Orders\Actions\TransitionOrderState;
 use App\Domain\Orders\Actions\UpdateFulfillment;
 use App\Domain\Orders\Actions\UpdateOrderSnapshot;
@@ -68,6 +69,8 @@ final class OrderEventRouter
         private readonly WakeDeferredOrderEvents $wakeDeferred = new WakeDeferredOrderEvents,
         // ADR-001 · kanonik durumun tek yazma noktası.
         private readonly TransitionOrderState $transition = new TransitionOrderState,
+        // ADR-002 · iadenin para tarafı — stoktan ayrı.
+        private readonly RecordOrderRefunds $recordRefunds = new RecordOrderRefunds,
     ) {}
 
     public function route(InboxMessage $message): void
@@ -202,6 +205,10 @@ final class OrderEventRouter
         $this->syncHeaderStatus($order, $normalized, $state);
 
         $lines = OrderPayloadMapper::toAffectedLines($normalized, $order);
+
+        // PARA TARAFI STOKTAN ÖNCE ve ondan BAĞIMSIZ: stoğa dönmeyen
+        // (no_restock) bir iade de para iadesidir ve kâr hesabına girer.
+        $this->recordRefunds->run($order, $normalized, $message->id, $lines);
 
         if ($lines === []) {
             Log::warning('inbox.return_without_matching_lines', ['message' => $message->id]);
