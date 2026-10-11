@@ -1,6 +1,6 @@
 <script setup>
-import { Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Link, router, useForm } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
@@ -38,6 +38,36 @@ const badges = {
     PENDING: { text: k('Stok düşülmedi'), class: 'bg-amber-50 text-amber-900 border-amber-200' },
     APPLIED: { text: k('Stok düştü'), class: 'bg-stone-50 text-stone-600 border-stone-200' },
 };
+
+/*
+ * TOPLU DEPO İŞLEMİ (S2). Seçim yalnız bu sayfadaki satırlardır; sunucu
+ * kimlikleri kiracı içinde yeniden çözer. Form tek kullanımlık anahtar
+ * taşır: çift tıklama ya da yeniden gönderim AYNI toplu işi açar.
+ */
+const selected = ref([]);
+const allSelected = computed(() => props.rows.length > 0 && selected.value.length === props.rows.length);
+const newKey = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+const bulk = useForm({ action: '', order_ids: [], idempotency_key: newKey() });
+
+watch(selected, () => { bulk.idempotency_key = newKey(); });
+
+function toggleAll() {
+    selected.value = allSelected.value ? [] : props.rows.map((r) => r.id);
+}
+
+function runBulk(action) {
+    if (bulk.processing || selected.value.length === 0) return;
+    bulk.action = action;
+    bulk.order_ids = [...selected.value];
+    bulk.post('/orders/bulk', { preserveScroll: true });
+}
+
+const bulkActions = [
+    ['labels', k('Kargo etiketi al')],
+    ['picking', k('Toplama listesi')],
+    ['invoice_documents', k('Fatura belgeleri')],
+    ['issue_invoices', k('Fatura kes')],
+];
 
 function placedAt(row) {
     if (!row.placedAt) return '—';
@@ -146,6 +176,28 @@ function placedAt(row) {
             </form>
         </div>
 
+        <div
+            v-if="selected.length"
+            class="mt-6 flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-stone-50 px-4 py-3"
+            role="region"
+            :aria-label="t('Toplu işlem')"
+        >
+            <span class="text-sm text-stone-800">{{ t(':count sipariş seçildi', { count: selected.length }) }}</span>
+            <button
+                v-for="[action, label] in bulkActions"
+                :key="action"
+                type="button"
+                class="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-100 disabled:opacity-50"
+                :disabled="bulk.processing"
+                @click="runBulk(action)"
+            >
+                {{ t(label) }}
+            </button>
+            <p v-if="bulk.errors.bulk || bulk.errors.order_ids" class="w-full text-sm text-red-700">
+                {{ bulk.errors.bulk ?? bulk.errors.order_ids }}
+            </p>
+        </div>
+
         <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
             <p class="text-sm text-stone-600">{{ t('Bu ölçütlerle sipariş bulunamadı.') }}</p>
         </div>
@@ -156,6 +208,9 @@ function placedAt(row) {
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
+                        <th class="w-10 px-4 py-2.5">
+                            <input type="checkbox" :checked="allSelected" :aria-label="t('Tümünü seç')" @change="toggleAll">
+                        </th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Sipariş') }}</th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kanal') }}</th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Durum') }}</th>
@@ -173,6 +228,10 @@ function placedAt(row) {
                         class="border-b border-stone-100"
                         :class="row.hasOversold ? 'bg-red-50/60 hover:bg-red-100/60' : (row.hasUnmatched ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-stone-50')"
                     >
+                        <td class="px-4 py-3">
+                            <input v-model="selected" type="checkbox" :value="row.id" :aria-label="t('Siparişi seç')">
+                        </td>
+
                         <td class="px-4 py-3">
                             <Link :href="`/orders/${row.id}`" class="font-medium text-stone-900 hover:underline">
                                 {{ row.externalNumber ?? '—' }}

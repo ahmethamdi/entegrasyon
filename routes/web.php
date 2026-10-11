@@ -17,6 +17,7 @@ use App\Http\Controllers\ContributionReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EbayOAuthController;
 use App\Http\Controllers\EtsyOAuthController;
+use App\Http\Controllers\FulfillmentController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\InvoiceSettingsController;
@@ -287,6 +288,13 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::post('/orders/{order}/shipments', [OrderController::class, 'ship'])->name('orders.ship');
     Route::post('/orders/{order}/shipments/{fulfillment}/retry', [OrderController::class, 'retryShipment'])
         ->name('orders.ship.retry');
+
+    // S2 · Depo akışı — seçilen siparişlere toplu etiket / fatura belgesi /
+    // toplama listesi. Ağ işi kuyrukta; sonuç kalem başına izlenir.
+    Route::post('/orders/bulk', [FulfillmentController::class, 'store'])->name('fulfillment.batches.store');
+    Route::get('/fulfillment/batches/{batch}', [FulfillmentController::class, 'show'])->name('fulfillment.batches.show');
+    Route::get('/fulfillment/batches/{batch}/picking', [FulfillmentController::class, 'picking'])->name('fulfillment.batches.picking');
+    Route::get('/fulfillment/batches/{batch}/labels.zpl', [FulfillmentController::class, 'labelsZpl'])->name('fulfillment.batches.labels');
 
     // e-fatura — alıcı kanaldan ANLIK okunur, Paraşüt'e gider; bizde
     // saklanmaz. PDF bağlantısı her tıklamada taze istenir (süreli).

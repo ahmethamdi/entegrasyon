@@ -20,6 +20,7 @@ use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
+use App\Domain\Channels\Contracts\SupportsCommonLabel;
 use App\Domain\Channels\Contracts\SupportsFinancialLedger;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
@@ -34,12 +35,17 @@ use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Finance\Support\RemoteFinancialPage;
 use App\Domain\Finance\Support\RemoteFinancialTransaction;
 use App\Domain\Finance\Support\TrendyolFinancialTypes;
+use App\Domain\Fulfillment\Enums\FulfillmentReason;
+use App\Domain\Fulfillment\Exceptions\LabelRejected;
+use App\Domain\Fulfillment\Support\CommonLabel;
+use App\Domain\Fulfillment\Support\ShipmentInfo;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceBuyer;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\LineFinancials;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -114,7 +120,7 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsFinancialLedger, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsCommonLabel, SupportsFinancialLedger, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
 {
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
@@ -1598,26 +1604,7 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
      */
     public function fetchInvoiceDraft(Order $order): InvoiceDraft
     {
-        $placed = $order->placed_at === null ? null : CarbonImmutable::instance($order->placed_at);
-
-        $response = $this->get($this->sellerUrl('order', 'v2/orders'), array_filter([
-            'shipmentPackageIds' => $order->external_id,
-            'orderNumber' => $order->external_number,
-            'startDate' => $placed?->subDay()->getTimestampMs(),
-            'endDate' => $placed === null ? null : min($placed->addDays(13)->getTimestampMs(), now()->getTimestampMs()),
-            'page' => 0,
-            'size' => 50,
-        ], static fn (mixed $v): bool => $v !== null && $v !== ''));
-
-        $response->throw();
-
-        $package = null;
-
-        foreach ((array) ($response->json('content') ?? []) as $row) {
-            if (is_array($row) && self::packageId($row) === $order->external_id) {
-                $package = $row;
-            }
-        }
+        $package = $this->findPackage($order);
 
         if ($package === null) {
             throw new InvoiceDataUnavailable('Paket Trendyol\'da bulunamadı.');
@@ -1773,6 +1760,164 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
         $response->throw();
 
         return AdapterResult::success(['already_uploaded' => false]);
+    }
+
+    /**
+     * Siparişin paketini Trendyol'dan ANLIK okur (fatura taslağı ve kargo
+     * etiketi ortak kullanır); bulunamazsa null.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findPackage(Order $order): ?array
+    {
+        $placed = $order->placed_at === null ? null : CarbonImmutable::instance($order->placed_at);
+
+        $response = $this->get($this->sellerUrl('order', 'v2/orders'), array_filter([
+            'shipmentPackageIds' => $order->external_id,
+            'orderNumber' => $order->external_number,
+            'startDate' => $placed?->subDay()->getTimestampMs(),
+            'endDate' => $placed === null ? null : min($placed->addDays(13)->getTimestampMs(), now()->getTimestampMs()),
+            'page' => 0,
+            'size' => 50,
+        ], static fn (mixed $v): bool => $v !== null && $v !== ''));
+
+        $response->throw();
+
+        $package = null;
+
+        foreach ((array) ($response->json('content') ?? []) as $row) {
+            if (is_array($row) && self::packageId($row) === $order->external_id) {
+                $package = $row;
+            }
+        }
+
+        return $package;
+    }
+
+    /**
+     * Ortak etiket sürecindeki taşıyıcılar (belge: "TEX ve Aras Kargo by
+     * Trendyol", Trendyol ödemeli). Eşleşme adapter İÇİNDE kalır; çekirdek
+     * yalnız `commonLabelEligible` okur.
+     *
+     * ⚠️ NOT LIVE VERIFIED: canlı hesabımızın tek paketi "Yurtiçi Kargo
+     * Marketplace" ile geldi (11 Eki); TEX/Aras paketinin `cargoProviderName`
+     * metni görülmedi. Ad tanınmazsa satır "kargo firması desteklenmiyor"
+     * olur — yanlış pozitifle istek gönderilmez; kesin karar yine kanalın
+     * cevabıdır.
+     */
+    private const COMMON_LABEL_CARRIERS = ['trendyol express', 'tex', 'aras'];
+
+    public function fetchShipment(Order $order): ShipmentInfo
+    {
+        $package = $this->findPackage($order);
+
+        if ($package === null) {
+            throw new LabelRejected(FulfillmentReason::SHIPMENT_NOT_FOUND, 'Paket Trendyol\'da bulunamadı.');
+        }
+
+        $provider = trim((string) ($package['cargoProviderName'] ?? ''));
+        $tracking = trim((string) ($package['cargoTrackingNumber'] ?? ''));
+        $key = mb_strtolower($provider);
+        $eligible = false;
+
+        foreach (self::COMMON_LABEL_CARRIERS as $carrier) {
+            if ($key === $carrier || str_starts_with($key, $carrier.' ')) {
+                $eligible = true;
+            }
+        }
+
+        $state = self::ORDER_STATE_MAP[self::orderStateKey(self::packageStatus($package))] ?? null;
+        $boxes = (int) ($package['boxQuantity'] ?? 0);
+
+        return new ShipmentInfo(
+            packageId: (string) $order->external_id,
+            trackingNumber: $tracking === '' || $tracking === '0' ? null : $tracking,
+            cargoProvider: $provider === '' ? null : $provider,
+            commonLabelEligible: $eligible,
+            state: $state === null ? null : OrderState::from($state),
+            boxQuantity: max($boxes, 1),
+        );
+    }
+
+    /**
+     * `POST /sellers/{id}/common-label/{cargoTrackingNumber}` — gövde
+     * `{format: ZPL, boxQuantity}`; başarı 200, gövdesiz (belge, 11 Eki).
+     * Belge "PICKING ya da INVOICED durumundan sonra" istenmesini önerir.
+     */
+    public function requestCommonLabel(ShipmentInfo $shipment, int $boxQuantity): void
+    {
+        $response = $this->post(
+            $this->sellerUrl('', 'common-label/'.rawurlencode((string) $shipment->trackingNumber)),
+            ['format' => 'ZPL', 'boxQuantity' => max($boxQuantity, 1)],
+        );
+
+        $this->rejectCommonLabelError($response);
+        $response->throw();
+    }
+
+    /**
+     * `GET /sellers/{id}/common-label/{cargoTrackingNumber}` →
+     * `{data: [{label, format}]}`, kutu başına bir etiket. Boş liste ya da
+     * 404 = henüz hazır değil.
+     */
+    public function fetchCommonLabel(ShipmentInfo $shipment): ?CommonLabel
+    {
+        $response = $this->get($this->sellerUrl('', 'common-label/'.rawurlencode((string) $shipment->trackingNumber)));
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $this->rejectCommonLabelError($response);
+        $response->throw();
+
+        $labels = [];
+
+        foreach ((array) ($response->json('data') ?? []) as $row) {
+            $label = is_array($row) ? ($row['label'] ?? null) : null;
+
+            if (is_string($label) && $label !== '') {
+                $labels[] = ['format' => strtoupper((string) ($row['format'] ?? 'ZPL')), 'label' => $label];
+            }
+        }
+
+        return $labels === [] ? null : new CommonLabel($labels);
+    }
+
+    /**
+     * Kanalın KESİN retlerini sebep koduna çevirir; geçici hataları
+     * (5xx, 429) çağırana `throw()` ile bırakır.
+     *
+     * Canlıda gözlenen (11 Eki, GET): 400 `{"error":{"errors":[{"type":
+     * "COMMON_LABEL_NOT_ALLOWED","title":"Bu servisi kullanmak için
+     * yetkiniz bulunmamaktadır…"}]}}`. Belgedeki diğerleri: 400 "kargo takip
+     * numarasını kontrol edin", 404 "Shipment not found".
+     */
+    private function rejectCommonLabelError(Response $response): void
+    {
+        $status = $response->status();
+
+        if ($status < 400 || $status >= 500 || $status === 429) {
+            return;
+        }
+
+        $body = $response->body();
+        $type = '';
+
+        foreach ((array) ($response->json('error.errors') ?? $response->json('errors') ?? []) as $error) {
+            if (is_array($error) && isset($error['type'])) {
+                $type = (string) $error['type'];
+            }
+        }
+
+        $detail = mb_substr($body, 0, 500);
+
+        throw match (true) {
+            $type === 'COMMON_LABEL_NOT_ALLOWED' => new LabelRejected(FulfillmentReason::COMMON_LABEL_NOT_AUTHORIZED, $detail),
+            $status === 404 => new LabelRejected(FulfillmentReason::SHIPMENT_NOT_FOUND, $detail),
+            $status === 401, $status === 403 => new LabelRejected(FulfillmentReason::CHANNEL_UNAVAILABLE, $detail),
+            default => new LabelRejected(FulfillmentReason::LABEL_CREATION_FAILED, $detail),
+        };
     }
 
     public function acknowledgeOrder(Order $order): AdapterResult
