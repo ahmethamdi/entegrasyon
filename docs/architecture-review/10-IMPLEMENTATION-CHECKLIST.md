@@ -101,3 +101,9 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 - [x] Toplu seçim + kalem başına sonuç, ortak etiket (ZPL), toplama listesi (varyant), fatura belgesi durumu — `S2-DEPO-AKISI.md`
 - [ ] Canlı: Trendyol ortak etiket YETKİSİ (kategori sorumlusu) + TEX/Aras paketiyle POST/GET doğrulaması
 - [ ] Karar: ZPL → A4 PDF dönüşümü (harici servis = kişisel veri üçüncü tarafa)
+
+## S3 · HB + N11 ürün gönderme (12 Eki 2026) — PARTIAL (IMPLEMENTED, LIVE VERIFICATION BLOCKED)
+- [x] Taksonomi, yayın doğrulaması, varyant gruplu yayın, belirsiz yaratma koruması, onay takibi, ürün düzeyi kanal öznitelikleri — `S3-URUN-YAYINI.md`
+- [ ] Dış: HB entegratör kaydı + SIT/canlı servis anahtarı; N11 appKey/appSecret + panelde teslimat şablonu
+- [ ] Canlı doğrulama → `is_active` (iki kanal kapalı)
+- [ ] TD-42 (sipariş listesi kanonik durum sunumu) — S3 bağımlı değil

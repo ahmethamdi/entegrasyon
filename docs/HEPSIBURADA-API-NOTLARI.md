@@ -125,6 +125,24 @@ yalnız HB'nin önceden yüklediği ürünlerle açılır.
 - Görsel sunucusunda HB IP'leri beyaz listede olmalı: 193.28.225.94,
   185.92.214.94, 34.78.190.48, 104.155.47.90, 34.76.71.175, 35.240.98.85.
 
+## 6b. Katalog — yeni portal (11 Eki 2026, gerçek Chrome + portal genel belge API'si)
+
+Portal yeniden yapılandı: eski `…/reference/katalog-onemli-bilgiler` 404. Belge
+gövdeleri `/api/v1/public/nav-tree?company=hepsiburada&locale=tr` ve
+`/api/v1/public/docs/hepsiburada/{ürün}/guides/{rehber}?locale=tr` ile okunur
+(WAF bot isteğini 403 ile keser; tarayıcı oturumu içinden `fetch`).
+- Öznitelik değeri `{id, value}`; içe aktarmada **value** metni gönderilir.
+- İçe aktarma: `trackingId`; fiyat "14,50" (virgül, ≤2 hane), barkod EAN-13.
+- Aynı merchantSku ile yeniden yükleme = güncelleme (Ürün bilgileri eksik /
+  Eşleşen / Görev açılmış); Katalog Sürecinde / Satışa Hazır / Ön katalog
+  eşleşen → "Can not update product in matched or in catalog progress status".
+- `check-product-status` statüleri: WAITING, MISSING_INFO, MATCHED (Satışa
+  Hazır), PRE_MATCHED (Eşleşen), REJECTED, MATCHED_WITH_STAGED, CREATED.
+- Onaydan sonra ürün gönderilen fiyat/stokla OTOMATİK satışa açılır.
+- Canlı ürün içerik güncellemesi ayrı servis: `POST /api/integrator/import`
+  (hbSku ile, katalog ekibi inceler; 100 istek/dk) — S3'te yazılmadı.
+- Katalog hız sınırı (güncel belge): IP başına 180 istek/dakika.
+
 ## 7. Hız sınırları
 
 - Sipariş: 1000 istek/sn; aşımda 429 + `X-RateLimit-Remaining/Limit/Reset`.
