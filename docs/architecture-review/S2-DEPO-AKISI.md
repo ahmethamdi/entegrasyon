@@ -113,3 +113,12 @@ Ancak A–J tamamlanınca S2 → COMPLETE; sınıflar belgede "LIVE VERIFIED (ta
 
 ## 13. Açıkça DOĞRULANMAMIŞ (fixture/mock anlamı canlı sayılmaz)
 Başarılı POST gövdesi · başarılı GET gövdesi · ZPL içeriği · PDF gövdesi/adresi · hazır olma süresi · çok kutu · geçersiz takip no yanıtı · ilgili 404 davranışı · TEX/Aras `cargoProviderName` metinleri.
+
+## 14. Canlıya alma (11 Eki 2026 ~16:13 UTC) — `38f6b91`
+- Yedek `/var/backups/oncesi-s2-34pazar-20261011-1610.dump` sha256 `913277b30338dc116ad5f4e69c1a0cef95df97795657f0ab91dd4535cf25bc37`; `pg_restore --list` 62 tablo verisi, shipping_labels YOK. Runbook `/root/34pazar-s2-runbook.md`.
+- Migration `2026_10_13_000100` batch 14, 48 ms. Yerelde rollback/yeniden uygulama temiz. Paket 2319/2319.
+- Taban farkı (`/root/s2-once.txt` ↔ `s2-sonra*.txt`): orders, order_lines, inventory_movements/levels, invoices, fulfillments, S1 fin_tx — **AYNI**.
+- Smoke (kiracı kullanıcısıyla HTTP çekirdeği, tek DB işleminde + ROLLBACK; Trendyol'a yalnız GET):
+  sipariş listesi 200 (2 sipariş) · toplu picking/labels/invoice_documents → her kalem `action_required / INVALID_ORDER_STATE` (iptal Trendyol + ödeme bekleyen Etsy; doğru) · toplama sayfası 200, 0 sipariş · başka kiracı: toplu iş/picking/zpl 404/404/404 · yabancı kimlik ile olmayan kimlik AYNI hata · gerçek veriyle toplama hesabı: "Masaj Kremi 60 ml · Menşei: TR · 34PZR-TEST-1-60 · 34PZRTEST0001 × 1" · TD-40: tamam sipariş 0 → toplam katkı `null` ("—") · `fetchShipment` gerçek paket: Yurtiçi, uygun değil, kanonik `cancelled` · `GET common-label` → `COMMON_LABEL_NOT_AUTHORIZED`. Geri alma sonrası shipping_labels 0, fulfillment_batches 0.
+- Gözlem: failed_jobs 0, jobs 0, inbox 28/28, outbox bekleyen 0, dağıtım sonrası Trendyol API hatası 0, devre kesici kapalı, stok hareketi 0, durum değişimi 0; log'da yalnız bilinen Etsy `credentials.refresh_failed`.
+- Not (S2 dışı, gözlem): sipariş listesi satırında `state` anahtarı boş geliyor (`presentRow`); rozet ham duruma düşüyor. Yeni değil; düzeltilmedi.
