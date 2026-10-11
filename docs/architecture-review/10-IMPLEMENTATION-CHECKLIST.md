@@ -38,6 +38,13 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 - [ ] `InvoiceLine::netUnitPrice` BigDecimal; test #12.
 - [ ] Pano: TR günü + `state` ile ciro.
 - [ ] Trendyol hakediş (`SupportsSettlement`), idempotent içe aktarma (`external_ref`); kâr raporu; testler #9–#11, #13.
+  - 11 Eki: **DURDURULDU, karar bekliyor** — canlı finans API yoklaması ve belirsizlikler `S1-TRENDYOL-HAKEDIS-ANALIZI.md`. Ölçülen: `transactionType` Türkçe etiket döner, `currency` alanı var, komisyon hem satış satırında hem `Komisyon Faturası` olarak gelir (çift sayım tuzağı), adet alanı yok. Karar istenen: kâr KDV tabanı, iade otoritesi, Paraşüt A/B/C, gerçek doğrulama hesabı.
+
+## Açık bilinen konular (S1 kapsamı dışı, izleniyor)
+
+- [ ] **A.** Trendyol `UnSupplied` paket stoğu geri getirmiyor.
+- [ ] **B.** Shopify iade kurtarma yok (kaçan `refunds/create` geri alınmaz).
+- [ ] **B'.** Shopify iade stok değişmezi: aynı iade FARKLI olay kimliğiyle gelirse stok iki kez iade edilir (`ApplyOrderReturn` → `MovementKey::returnOf(orderEvent.id, line)`; para kaydı `order_refunds` iade kimliğiyle tekil kalır). Bugün tetiklenmez (Shopify tekrar teslimatta aynı `X-Shopify-Event-Id`); 11 Eki canlı smoke'unda yerelde ölçüldü. **B açılmadan önce** stok iadesinin idempotens anahtarı iade/iş kimliğine (Shopify `refund.id` + kalem) bağlanmalı.
 - [ ] Yeni iş eylemlerine `AuditAction` (kâr raporu yok; hakediş içe aktarma `system` aktörü).
 
 ## S2
