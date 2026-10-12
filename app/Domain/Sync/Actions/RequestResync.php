@@ -62,6 +62,9 @@ final class RequestResync
     /** Kanal onayından sonra ilk stok/fiyat projeksiyonu (S3, HB/N11). */
     public const REASON_LISTING_APPROVED = 'listing_approved';
 
+    /** Bağlantının stok/fiyat gönderim izni açıldı (ADR-010). */
+    public const REASON_OUTBOUND_WRITE_ENABLED = 'outbound_write_enabled';
+
     /**
      * @param  string  $reason  Neden resync istendi — yükte taşınır
      */
@@ -136,6 +139,7 @@ final class RequestResync
                 'status' => 'pending',
                 'error_count' => 0,
                 'last_error' => null,
+                'reason_code' => null,
                 'last_requested_at' => now(),
                 'updated_at' => now(),
             ]);

@@ -385,6 +385,7 @@ function send(connectionId) {
                     </div>
 
                     <button
+                        v-if="channel.publishEnabled"
                         type="button"
                         :disabled="sending === channel.connectionId"
                         class="shrink-0 rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
@@ -392,6 +393,12 @@ function send(connectionId) {
                     >
                         {{ channel.published ? t('Yeniden gönder') : t('Kanala gönder') }}
                     </button>
+                    <span
+                        v-else
+                        class="shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600"
+                    >
+                        {{ t('Yayın kapalı') }}
+                    </span>
                 </div>
 
                 <!--

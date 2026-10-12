@@ -13,6 +13,7 @@ use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Sync\Actions\OpenSyncOperation;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Enums\SyncOperationStatus;
@@ -25,6 +26,7 @@ use App\Domain\Sync\Support\ContentPushDispatcher;
 use App\Domain\Sync\Support\ListingPayloadBuilder;
 use App\Domain\Sync\Support\SyncResultRecorder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Support\Channels\ProgrammableCatalogAdapter;
@@ -502,6 +504,30 @@ final class PushOfferListingTest extends TestCase
     // ──────────────────────────────────────────────────────── yardımcılar
 
     /** @return array{0: Tenant, 1: Variant} */
+    /** ADR-010 · yayın izni kapalıysa zincirin İLK adımı bile çağrılmaz. */
+    #[Test]
+    public function a_disabled_publishing_permission_stops_the_chain_before_any_channel_call(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+        $listing = $this->draftListing($tenant, $variant);
+
+        $this->asSystem(fn () => DB::table('channel_connections')
+            ->where('id', $listing->channel_connection_id)
+            ->update(['product_publish_enabled' => false]));
+
+        ProgrammableOfferAdapter::succeed();
+
+        $operation = $this->openOperation($tenant, $listing, version: 1);
+        $this->runJob($tenant, $operation->id);
+
+        $this->assertSame([], ProgrammableOfferAdapter::calls());
+        $this->assertSame(SyncOperationStatus::DEAD, $this->asTenant($tenant, fn () => $operation->fresh())->status);
+        $this->assertSame(
+            PublishReason::PRODUCT_PUBLISHING_DISABLED->value,
+            $this->stateFor($tenant, $listing->id)->reason_code,
+        );
+    }
+
     private function makeContext(): array
     {
         $tenant = (new CreateTenant)->run(

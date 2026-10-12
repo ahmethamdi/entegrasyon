@@ -13,6 +13,7 @@ use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\ValidatesPublication;
+use App\Domain\Channels\Exceptions\OutboundWriteDisabled;
 use App\Domain\Channels\Models\CategoryMapping;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelCategoryAttribute;
@@ -190,7 +191,13 @@ final class ProductChannelController extends Controller
         // anlayamaz. (Gerçek tarayıcı çalıştırmasında bulundu.)
         $prerequisite = $this->gate->check($model, $connection);
 
-        $operationIds = $publish->run($model, $connection);
+        // ADR-010 · yayın izni kapalı: hiçbir şey kuyruğa alınmadı. Sebep
+        // koddan çevrilir; kapı işte de yeniden sorulur.
+        try {
+            $operationIds = $publish->run($model, $connection);
+        } catch (OutboundWriteDisabled $e) {
+            return redirect("/products/{$model->id}/channels")->with('warning', $e->write->reason()->label());
+        }
 
         if (! $prerequisite->satisfied()) {
             return redirect("/products/{$model->id}/channels")->with(
@@ -354,7 +361,7 @@ final class ProductChannelController extends Controller
                 ->whereIn('listing_id', $listings->pluck('id')->all())
                 ->whereIn('domain', [SyncDomain::INVENTORY->value, SyncDomain::PRICE->value])
                 ->whereIn('status', ['error_permanent', 'error_transient'])
-                ->whereNotNull('last_error')
+                ->where(static fn ($q) => $q->whereNotNull('last_error')->orWhereNotNull('reason_code'))
                 ->get();
 
         $rows = [];
@@ -367,6 +374,9 @@ final class ProductChannelController extends Controller
                 'label' => $connection->label,
                 'channel' => $connection->channelType?->name ?? $connection->channel_type_code,
                 'account' => $connection->external_account_id,
+                // ADR-010 · yayın izni. Kapalıyken düğme çizilmez; sunucu
+                // yine de reddeder (`PublishListing`).
+                'publishEnabled' => $connection->product_publish_enabled === true,
                 'published' => $forConnection->isNotEmpty(),
                 'externalId' => $forConnection->first()?->external_id,
                 'externalUrl' => $forConnection->first()?->external_url,
@@ -480,7 +490,9 @@ final class ProductChannelController extends Controller
             ->sortBy(static fn (ListingSyncState $s): int => $s->status === 'error_permanent' ? 0 : 1)
             ->first();
 
-        return $state?->last_error;
+        $code = $state?->reason_code;
+
+        return ($code === null ? null : PublishReason::tryFrom($code)?->label()) ?? $state?->last_error;
     }
 
     /**

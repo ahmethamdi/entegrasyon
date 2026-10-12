@@ -25,6 +25,7 @@ use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\AssertsLedgerIntegrity;
@@ -144,6 +145,29 @@ final class ReconcileInventoryTest extends TestCase
 
         // Onarım anahtarı kalem kimliğini taşır — normalle ÇAKIŞMAZ.
         $this->assertStringContainsString(':repair:'.$item->id, $operation->idempotency_key);
+    }
+
+    /** ADR-010 · stok gönderim izni kapalıysa kayma görünür kalır, onarım AÇILMAZ. */
+    #[Test]
+    public function drift_on_a_connection_without_stock_permission_opens_no_repair(): void
+    {
+        [$tenant, $variant, $connection] = $this->makeContext();
+
+        $listing = $this->listing($tenant, $variant, $connection, externalId: '10');
+
+        $this->seedStock($tenant, $variant, 17);
+        $this->markRecentlySold($tenant, $variant);
+        ProgrammableInventoryAdapter::remoteQuantity('woocommerce', '10', 19);
+
+        $this->asSystem(fn () => DB::table('channel_connections')
+            ->where('id', $connection->id)
+            ->update(['stock_sync_enabled' => false]));
+
+        $run = $this->reconcile($tenant, $connection);
+
+        $this->assertSame(1, $run->drift_count, 'Okuma serbest: kayma yine ölçülür.');
+        $this->assertNotSame('REPAIR_QUEUED', $this->itemFor($tenant, $listing)->status);
+        $this->assertSame(0, $this->asTenant($tenant, fn () => SyncOperation::query()->count()));
     }
 
     /**

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Actions;
 
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Channels\Enums\OutboundWrite;
+use App\Domain\Channels\Exceptions\OutboundWriteDisabled;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Support\OutboundWriteGate;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Models\Listing;
@@ -49,6 +52,12 @@ use Illuminate\Support\Facades\DB;
  *   olur, operasyon AÇILMAZ ve iş atılmaz. Kapı yeteneğe göre çalışır;
  *   WooCommerce'te hiç devreye girmez. **STOK AKIŞI ETKİLENMEZ** —
  *   engellenen satır yalnızca içerik gönderiminin dışında kalır.
+ *
+ * DEĞİŞMEZ KURAL — YAYIN İZNİ HER ŞEYDEN ÖNCE (ADR-010):
+ *   Bağlantının `product_publish_enabled` izni kapalıysa hiçbir satır
+ *   yaratılmaz/değiştirilmez, operasyon açılmaz, iş atılmaz;
+ *   `OutboundWriteDisabled` fırlar. Kapı işte de yeniden sorulur — bu
+ *   kontrol yalnız panelde erken ve anlaşılır cevap içindir.
  */
 final class PublishListing
 {
@@ -56,6 +65,7 @@ final class PublishListing
         private readonly OpenSyncOperation $openSyncOperation,
         private readonly PrerequisiteGate $gate,
         private readonly ContentPushDispatcher $dispatcher,
+        private readonly OutboundWriteGate $writes,
     ) {}
 
     /**
@@ -63,9 +73,13 @@ final class PublishListing
      */
     public function run(Product $product, ChannelConnection $connection): array
     {
-        $product->loadMissing('variants');
-
         $tenantId = $product->tenant_id;
+
+        if (! $this->writes->allows($connection->id, $tenantId, OutboundWrite::PRODUCT_PUBLISH)) {
+            throw new OutboundWriteDisabled(OutboundWrite::PRODUCT_PUBLISH, $connection->id);
+        }
+
+        $product->loadMissing('variants');
 
         // ÖN KOŞUL KAPISI transaction'dan ÖNCE: yalnızca okuma yapar ve
         // sonucu tüm varyantlar için aynıdır (iç kategori üründedir).

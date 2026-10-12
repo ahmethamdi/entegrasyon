@@ -154,6 +154,33 @@ function recheck(id) {
     });
 }
 
+/*
+ * ADR-010 · YAZMA İZİNLERİ — "bağlı" ile "kanala yazabilir" ayrı sorulardır.
+ * Kimlik doğrulaması hiçbir izni açmaz; her biri burada açık bir eylemle
+ * açılır. Doğrulaması bitmemiş kanalda (`writesLocked`) açma düğmesi
+ * çizilmez; sunucu da reddeder.
+ */
+const writeLabels = {
+    product_publish: k('Ürün yayını'),
+    price_sync: k('Fiyat gönderimi'),
+    stock_sync: k('Stok gönderimi'),
+};
+
+const switching = ref(null);
+
+function setWrite(connection, write, enabled) {
+    if (switching.value !== null) return;
+
+    switching.value = `${connection.id}:${write}`;
+
+    router.put(`/channels/${connection.id}/outbound`, { write, enabled }, {
+        preserveScroll: true,
+        onFinish: () => {
+            switching.value = null;
+        },
+    });
+}
+
 function formatDate(iso) {
     if (!iso) return '—';
     return new Date(iso).toLocaleString(intlLocale());
@@ -344,6 +371,37 @@ function formatDate(iso) {
                             {{ savingLocation === connection.id ? t('Kaydediliyor…') : t('Kaydet') }}
                         </button>
                     </div>
+                </div>
+
+                <div class="mt-4 border-t border-stone-100 pt-4">
+                    <p class="text-xs text-stone-500">{{ t('Kanala yazma izinleri') }}</p>
+                    <ul class="mt-2 grid gap-2 sm:grid-cols-3">
+                        <li
+                            v-for="(label, write) in writeLabels"
+                            :key="write"
+                            class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
+                            :class="connection.writes?.[write] ? 'border-emerald-200 bg-emerald-50' : 'border-stone-200 bg-stone-50'"
+                        >
+                            <span>
+                                <span class="font-medium text-stone-900">{{ t(label) }}</span>
+                                <span :class="connection.writes?.[write] ? 'text-emerald-800' : 'text-stone-600'">
+                                    · {{ connection.writes?.[write] ? t('Açık') : t('Kapalı') }}
+                                </span>
+                            </span>
+                            <button
+                                v-if="connection.writes?.[write] || !connection.writesLocked"
+                                type="button"
+                                class="rounded border border-stone-300 bg-white px-2 py-1 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                :disabled="switching !== null"
+                                @click="setWrite(connection, write, !connection.writes?.[write])"
+                            >
+                                {{ switching === `${connection.id}:${write}` ? t('Kaydediliyor…') : (connection.writes?.[write] ? t('Kapat') : t('Aç')) }}
+                            </button>
+                        </li>
+                    </ul>
+                    <p v-if="connection.writesLocked" class="mt-2 text-xs text-stone-600">
+                        {{ t('Bu kanalın canlı doğrulaması tamamlanmadı; kanala yazma izinleri açılamaz.') }}
+                    </p>
                 </div>
 
                 <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">

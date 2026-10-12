@@ -8,9 +8,11 @@ use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
+use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
+use App\Domain\Channels\Support\OutboundWriteGate;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Exceptions\RemoteListingStateUnknown;
 use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
@@ -110,6 +112,17 @@ final class PushListing implements ShouldQueue
         // Superseded burada elenir — kuyrukta beklerken yeni sürüm istenmişse
         // bayat içeriği göndermek kanalda doğru olan veriyi eskisiyle ezerdi.
         if ($operation === null || $operation->status->isTerminal()) {
+            return;
+        }
+
+        // ADR-010 · YAZMA İZNİ — kimlik bilgisi ve adapter yeteneği izin
+        // DEĞİLDİR. Kapı İŞİN ÇALIŞTIĞI ANDA veritabanından okunur: atıldıktan
+        // sonra kapatılan izin, bayat kuyruk işi ve yeniden deneme de burada
+        // durur. Devre kesici ve hız sınırından ÖNCE: kapalı izinde kanala
+        // tek istek (arama dahil) gitmez.
+        if (! app(OutboundWriteGate::class)->allows($operation->channel_connection_id, $this->tenantId, OutboundWrite::PRODUCT_PUBLISH)) {
+            $recorder->markOutboundDisabled($operation, OutboundWrite::PRODUCT_PUBLISH);
+
             return;
         }
 

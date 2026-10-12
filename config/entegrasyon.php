@@ -87,6 +87,17 @@ return [
     | Kuyruk paneli (/horizon) erişimi — virgülle ayrılmış e-postalar.
     | Boşsa üretimde kimse göremez (HorizonServiceProvider).
     */
+    /*
+    | ADR-010 · Canlı doğrulama kapısından GEÇMEMİŞ kanallar. Bu türlerin
+    | bağlantılarında yazma izinleri (ürün yayını, fiyat, stok) panelden
+    | AÇILAMAZ. Bir kanal listeden yalnız canlı doğrulama tamamlanıp açık
+    | onay verildiğinde çıkarılır.
+    */
+    'outbound_write_locked_channels' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', (string) env('OUTBOUND_WRITE_LOCKED_CHANNELS', 'hepsiburada,n11')),
+    ))),
+
     'horizon_admin_emails' => env('HORIZON_ADMIN_EMAILS', ''),
 
     /*

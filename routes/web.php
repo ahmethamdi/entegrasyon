@@ -147,6 +147,9 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::post('/channels', [ChannelConnectionController::class, 'store'])->name('channels.store');
     Route::post('/channels/{connection}/health', [ChannelConnectionController::class, 'health'])
         ->name('channels.health');
+    // ADR-010 · yazma izni (ürün yayını / fiyat / stok) — açık eylem.
+    Route::put('/channels/{connection}/outbound', [ChannelConnectionController::class, 'outbound'])
+        ->name('channels.outbound');
 
     // Bağlantı SONRASI kanal ayarları (Etsy beyanları, kargo profili). GET
     // ekranı kanaldan seçenek okur — yan etkisi yoktur, yalnızca okur.

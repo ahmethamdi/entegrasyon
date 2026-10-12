@@ -10,11 +10,14 @@ use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Catalog\Support\ChannelPriceRules;
 use App\Domain\Channels\Actions\CheckChannelHealth;
 use App\Domain\Channels\Actions\ConnectChannel;
+use App\Domain\Channels\Actions\SetOutboundWrite;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresMissingAuthorization;
+use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Exceptions\AccountAlreadyConnectedException;
+use App\Domain\Channels\Exceptions\OutboundWriteLocked;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Registry\AdapterRegistry;
@@ -323,6 +326,43 @@ final class ChannelConnectionController extends Controller
         );
     }
 
+    /**
+     * Yazma iznini açar/kapatır — ADR-010. Kimlik doğrulaması izin VERMEZ;
+     * izin yalnız bu açık eylemle değişir. Doğrulaması bitmemiş kanalda
+     * açma `SetOutboundWrite` içinde reddedilir (sunucu tarafı kural).
+     */
+    public function outbound(
+        Request $request,
+        string $connection,
+        SetOutboundWrite $set,
+    ): RedirectResponse {
+        // Kiracı scope'u altında aranır: başka kiracının bağlantısı 404.
+        $model = ChannelConnection::query()->findOrFail($connection);
+
+        $validated = $request->validate([
+            'write' => ['required', Rule::enum(OutboundWrite::class)],
+            'enabled' => ['required', 'boolean'],
+        ]);
+
+        $write = OutboundWrite::from($validated['write']);
+        $enabled = (bool) $validated['enabled'];
+
+        try {
+            $set->run($model, $write, $enabled);
+        } catch (OutboundWriteLocked) {
+            return redirect('/channels')->with('warning', __(
+                ':channel için canlı doğrulama tamamlanmadı; :write açılamaz.',
+                ['channel' => $model->channelType?->name ?? $model->channel_type_code, 'write' => $write->label()],
+            ));
+        }
+
+        $replace = ['label' => $model->label, 'write' => $write->label()];
+
+        return redirect('/channels')->with('success', $enabled
+            ? __(':label · :write açıldı.', $replace)
+            : __(':label · :write kapatıldı.', $replace));
+    }
+
     // ─────────────────────────────────────────────────── yardımcılar
 
     /**
@@ -450,6 +490,16 @@ final class ChannelConnectionController extends Controller
             'lastError' => $connection->last_error,
             'connectedAt' => $connection->connected_at?->toIso8601String(),
             'capabilities' => $this->capabilitiesOrEmpty($connection),
+
+            // ADR-010 · yazma izinleri — "bağlı" ile "yazabilir" AYRI
+            // sorulardır. `writesLocked`: kanal canlı doğrulama kapısında,
+            // açma düğmesi çizilmez (sunucu da reddeder).
+            'writes' => [
+                OutboundWrite::PRODUCT_PUBLISH->value => $connection->product_publish_enabled === true,
+                OutboundWrite::PRICE_SYNC->value => $connection->price_sync_enabled === true,
+                OutboundWrite::STOCK_SYNC->value => $connection->stock_sync_enabled === true,
+            ],
+            'writesLocked' => SetOutboundWrite::isLocked($connection),
 
             // Fiyat kuralının kısa özeti ("+%15 · ,90 ile bitir"); kural yoksa null.
             'priceRule' => ChannelPricingController::summary(

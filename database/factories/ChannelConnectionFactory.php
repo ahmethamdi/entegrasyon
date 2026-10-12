@@ -28,6 +28,21 @@ class ChannelConnectionFactory extends Factory
             'settings' => [],
             'health_status' => 'healthy',
             'connected_at' => now(),
+            // Testlerdeki bağlantı YETKİLİ bağlantıdır (geçişte korunan
+            // davranış). Kapalı varsayılanı ayrı testler sınar (ADR-010).
+            'product_publish_enabled' => true,
+            'price_sync_enabled' => true,
+            'stock_sync_enabled' => true,
         ];
+    }
+
+    /** Yeni bağlantının gerçek varsayılanı: kanala hiçbir şey yazamaz. */
+    public function outboundDisabled(): static
+    {
+        return $this->state([
+            'product_publish_enabled' => false,
+            'price_sync_enabled' => false,
+            'stock_sync_enabled' => false,
+        ]);
     }
 }

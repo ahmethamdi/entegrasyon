@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Reconciliation\Actions;
 
+use App\Domain\Channels\Enums\OutboundWrite;
+use App\Domain\Channels\Support\OutboundWriteGate;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Reconciliation\Enums\ItemStatus;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
@@ -37,6 +39,7 @@ final class QueueRepair
 {
     public function __construct(
         private readonly OpenSyncOperation $openSyncOperation,
+        private readonly OutboundWriteGate $writes,
     ) {}
 
     public function run(ReconciliationItem $item): ?SyncOperation
@@ -44,6 +47,12 @@ final class QueueRepair
         $listing = $item->listing;
 
         if ($listing === null) {
+            return null;
+        }
+
+        // ADR-010 · stok gönderim izni kapalıysa onarım AÇILMAZ: kayma kalem
+        // olarak görünür kalır, kanala yazılmaz. Kapı işte de sorulur.
+        if (! $this->writes->allows($listing->channel_connection_id, $listing->tenant_id, OutboundWrite::STOCK_SYNC)) {
             return null;
         }
 

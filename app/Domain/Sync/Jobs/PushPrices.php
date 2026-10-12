@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Jobs;
 
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
+use App\Domain\Channels\Support\OutboundWriteGate;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
@@ -105,6 +107,17 @@ final class PushPrices implements ShouldQueue
         }
 
         if ($operation->status === SyncOperationStatus::DEAD) {
+            return;
+        }
+
+        // ADR-010 · YAZMA İZNİ — kimlik bilgisi ve adapter yeteneği izin
+        // DEĞİLDİR. Kapı İŞİN ÇALIŞTIĞI ANDA veritabanından okunur: atıldıktan
+        // sonra kapatılan izin, bayat kuyruk işi ve yeniden deneme de burada
+        // durur. Devre kesici ve hız sınırından ÖNCE: kapalı izinde kanala
+        // tek istek (arama dahil) gitmez.
+        if (! app(OutboundWriteGate::class)->allows($operation->channel_connection_id, $this->tenantId, OutboundWrite::PRICE_SYNC)) {
+            $recorder->markOutboundDisabled($operation, OutboundWrite::PRICE_SYNC);
+
             return;
         }
 

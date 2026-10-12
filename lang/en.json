@@ -1220,5 +1220,18 @@
     "Kanal ürünü reddetti.": "The channel rejected the product.",
     "Ürün kanala gönderilemedi.": "The product could not be sent to the channel.",
     "Kanal istek sınırına ulaşıldı; otomatik yeniden denenecek.": "The channel rate limit was reached; it will be retried automatically.",
-    "Kanala gönderim sonucu belirsiz; tekrar göndermeden önce kanalda durumu kontrol edin.": "The result of sending to the channel is unknown; check the channel before sending again."
+    "Kanala gönderim sonucu belirsiz; tekrar göndermeden önce kanalda durumu kontrol edin.": "The result of sending to the channel is unknown; check the channel before sending again.",
+    "Ürün yayını": "Product publishing",
+    "Fiyat gönderimi": "Price sync",
+    "Stok gönderimi": "Stock sync",
+    "Bu bağlantıda ürün yayını kapalı; kanala hiçbir şey gönderilmedi.": "Product publishing is disabled for this connection; nothing was sent to the channel.",
+    "Bu bağlantıda fiyat gönderimi kapalı; kanala hiçbir şey gönderilmedi.": "Price sync is disabled for this connection; nothing was sent to the channel.",
+    "Bu bağlantıda stok gönderimi kapalı; kanala hiçbir şey gönderilmedi.": "Stock sync is disabled for this connection; nothing was sent to the channel.",
+    ":channel için canlı doğrulama tamamlanmadı; :write açılamaz.": "Live verification for :channel is not complete; :write cannot be enabled.",
+    ":label · :write açıldı.": ":label · :write enabled.",
+    ":label · :write kapatıldı.": ":label · :write disabled.",
+    "Yayın kapalı": "Publishing disabled",
+    "Kanala yazma izinleri": "Channel write permissions",
+    "Açık": "On",
+    "Bu kanalın canlı doğrulaması tamamlanmadı; kanala yazma izinleri açılamaz.": "Live verification for this channel is not complete; write permissions cannot be enabled."
 }

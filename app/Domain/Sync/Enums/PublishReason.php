@@ -36,6 +36,9 @@ enum PublishReason: string
     case LISTING_SYNC_FAILED = 'LISTING_SYNC_FAILED';
     case RATE_LIMITED = 'RATE_LIMITED';
     case REMOTE_STATE_UNKNOWN = 'REMOTE_STATE_UNKNOWN';
+    case PRODUCT_PUBLISHING_DISABLED = 'PRODUCT_PUBLISHING_DISABLED';
+    case PRICE_SYNC_DISABLED = 'PRICE_SYNC_DISABLED';
+    case STOCK_SYNC_DISABLED = 'STOCK_SYNC_DISABLED';
 
     public function label(): string
     {
@@ -63,6 +66,9 @@ enum PublishReason: string
             self::LISTING_SYNC_FAILED => 'Ürün kanala gönderilemedi.',
             self::RATE_LIMITED => 'Kanal istek sınırına ulaşıldı; otomatik yeniden denenecek.',
             self::REMOTE_STATE_UNKNOWN => 'Kanala gönderim sonucu belirsiz; tekrar göndermeden önce kanalda durumu kontrol edin.',
+            self::PRODUCT_PUBLISHING_DISABLED => 'Bu bağlantıda ürün yayını kapalı; kanala hiçbir şey gönderilmedi.',
+            self::PRICE_SYNC_DISABLED => 'Bu bağlantıda fiyat gönderimi kapalı; kanala hiçbir şey gönderilmedi.',
+            self::STOCK_SYNC_DISABLED => 'Bu bağlantıda stok gönderimi kapalı; kanala hiçbir şey gönderilmedi.',
         });
     }
 }

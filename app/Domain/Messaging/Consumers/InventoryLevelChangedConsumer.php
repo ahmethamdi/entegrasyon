@@ -46,6 +46,13 @@ final class InventoryLevelChangedConsumer
             ->where('tenant_id', $event->tenant_id)
             ->where('variant_id', $payload['variant_id'])
             ->live()
+            // ADR-010 · stok gönderim izni kapalı bağlantıya operasyon
+            // açılmaz (her değişimde ölü iş birikmesin). İzin açılınca
+            // `SetOutboundWrite` canlı satırları yeniden senkronlar; kapı
+            // işte de ayrıca sorulur.
+            ->whereIn('channel_connection_id', static fn ($q) => $q->select('id')
+                ->from('channel_connections')
+                ->where('stock_sync_enabled', true))
             ->get();
 
         /** @var list<string> $pending Kuyruğa atılacak operasyon kimlikleri */

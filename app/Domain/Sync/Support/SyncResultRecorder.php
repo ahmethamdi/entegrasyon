@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Sync\Support;
 
 use App\Domain\Channels\Contracts\AdapterResult;
+use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -271,6 +272,32 @@ final class SyncResultRecorder
             $this->lockState($operation)?->forceFill([
                 'status' => ErrorClass::VALIDATION->syncStateStatus(),
                 'last_error' => mb_substr($reason, 0, 2000),
+            ])->save();
+        });
+    }
+
+    /**
+     * Bağlantının yazma izni kapalı (ADR-010) — kanala HİÇBİR ŞEY gitmedi.
+     *
+     * Deneme AÇILMAZ, operasyon ölür ve yeniden denenmez: izin açılınca
+     * gönderim açık bir eylemle (yeniden yayın, `SetOutboundWrite`'ın
+     * resync'i, /failures) yeniden başlar. Sebep KOD olarak yazılır, metin
+     * panelde çevrilir. Listing kimliği, yaşam döngüsü ve sürüm alanlarına
+     * dokunulmaz: geçmiş yayın durumu izin kapandı diye silinmez.
+     */
+    public function markOutboundDisabled(SyncOperation $operation, OutboundWrite $write): void
+    {
+        DB::transaction(function () use ($operation, $write): void {
+            $operation->forceFill([
+                'status' => SyncOperationStatus::DEAD->value,
+                'completed_at' => now(),
+                'last_error_class' => ErrorClass::VALIDATION->value,
+            ])->save();
+
+            $this->lockState($operation)?->forceFill([
+                'status' => ErrorClass::VALIDATION->syncStateStatus(),
+                'last_error' => null,
+                'reason_code' => $write->reason()->value,
             ])->save();
         });
     }

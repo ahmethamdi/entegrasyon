@@ -26,6 +26,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string $channel_type_code
  * @property string $external_account_id
  * @property string $status
+ * @property bool $product_publish_enabled
+ * @property bool $price_sync_enabled
+ * @property bool $stock_sync_enabled
+ *
+ * Yazma izinleri (ADR-010) `$fillable` DIŞINDADIR: form ya da toplu
+ * atama yoluyla açılamaz; yalnız `SetOutboundWrite` açık eylemiyle.
  */
 class ChannelConnection extends Model
 {
@@ -52,6 +58,9 @@ class ChannelConnection extends Model
             'settings' => 'array',
             'last_healthy_at' => 'datetime',
             'connected_at' => 'datetime',
+            'product_publish_enabled' => 'boolean',
+            'price_sync_enabled' => 'boolean',
+            'stock_sync_enabled' => 'boolean',
         ];
     }
 
