@@ -114,7 +114,7 @@ Mutasyon 19/19 öldü: ekonomik kimlik, iade adedi, fazla iade koruması, varı�
 
 ## 27. IMPLEMENTED — NOT LIVE VERIFIED
 
-Trendyol iade okuma (uç 200 döndü ama veri yok: alan eşlemesi canlıda görülmedi) · Trendyol onay · Trendyol red (gövde biçimi dahil) · varış kanıtı (denetim kaydı ucu) · claimItem = tek birim varsayımı · `orderLine.id` = bizim `external_line_id` (v2 `lineId`) varsayımı · Trendyol soru okuma (uç ve alan kümesi canlı yanıtta gözlendi; 34Pazar kod yolu canlıda KOŞMADI) · Trendyol cevap · cevap reddinin algılanması · HB talep okuma.
+Trendyol iade okuma (uç 200 döndü ama veri yok: alan eşlemesi canlıda görülmedi) · Trendyol onay · Trendyol red (gövde biçimi dahil) · varış kanıtı (denetim kaydı ucu) · claimItem = tek birim varsayımı · `orderLine.id` = bizim `external_line_id` (v2 `lineId`) varsayımı · ~~Trendyol soru okuma~~ (13 Eki canlıda doğrulandı, §Canlıya alma) · Trendyol cevap · cevap reddinin algılanması · HB talep okuma.
 
 ## 28. Engeller
 
@@ -133,13 +133,14 @@ TD-43 (HB eski Accepted stok yolu, varış kanıtsız) · TD-44 (Trendyol red: e
 
 | Yetenek | Durum |
 |---|---|
-| Trendyol iade okuma | IMPLEMENTED — uç canlıda 200, veri yok → LIVE PENDING |
+| Trendyol iade uç/okuma taşıması | LIVE VERIFIED — boş gerçek sonuçla (13 Eki, üretim kodu, 200, 0 talep) |
+| Trendyol gerçek talep yükü ayrıştırma | LIVE VERIFICATION PENDING (canlıda talep yok) |
 | Trendyol iade onay | IMPLEMENTED — LIVE PENDING |
 | Trendyol iade red | IMPLEMENTED — LIVE PENDING |
 | Trendyol stok iadesi | IMPLEMENTED — LIVE PENDING |
-| Trendyol soru okuma | IMPLEMENTED — LIVE PENDING (uç + alanlar canlıda gözlendi, kod yolu canlıda koşmadı; deploy sonrası ilk turda 4 gerçek soru ile doğrulanabilir) |
+| Trendyol soru okuma | **LIVE VERIFIED** (13 Eki, üretim kodu: 4 gerçek soru içe alındı, iki tur idempotent, zaman/durum ham yanıtla aynı) |
 | Trendyol soru cevap | IMPLEMENTED — LIVE PENDING |
-| Cevapsız sayacı | IMPLEMENTED — yerel |
+| Cevapsız sayacı | LIVE VERIFIED — kanonik durumdan 0 (4 sorunun hiçbiri `WAITING_FOR_ANSWER` değil) |
 | HB iade okuma | IMPLEMENTED — NOT LIVE VERIFIED |
 | HB iade onay/red | BLOCKED |
 | HB soru okuma / cevap | BLOCKED |
@@ -147,3 +148,17 @@ TD-43 (HB eski Accepted stok yolu, varış kanıtsız) · TD-44 (Trendyol red: e
 ## Canlıya alma notu
 
 1 migration (veri dönüşümü yok). Deploy sonrası: `returns:sync` ve `questions:sync` zamanlayıcıda; ilk turda Trendyol talepleri (0) ve son 28 günün soruları içe alınır. İki yeni izin TÜM bağlantılarda kapalı başlar — satıcı Kanallar ekranından açar.
+
+## Canlıya alma (13 Eki 2026 ~08:22 UTC) — `3789115`
+- Push: `2733671` (kod) + `3789115` (belge); çalışma ağacındaki ilgisiz değişiklik yoktu. Canlı HEAD `3789115`.
+- Yedek `/var/backups/oncesi-s4-34pazar-20261013-0820.dump` sha256 `bfa0b6255b9d066cc5cef4bde4bad7e9c83e359e1905504990c70b2f35936118`. Geçici DB'ye `pg_restore --exit-on-error` tamam; 21 tablonun adet + içerik md5'i alındı (connections 4, products 606, variants 606, listings 606, orders 5, order_lines 5, inventory_movements 611, inventory_levels 606, invoices 0, S1 fin_tx 4, inbox 28, outbox 612, failed_jobs 0), sonra silindi.
+- Migration `2026_10_16_000100` batch 17, 57 ms. Yerelde up → rollback (3 tablo + 2 kolon gitti) → up temiz.
+- İzinler: 4 bağlantının hepsinde `return_decision_enabled=false`, `question_answer_enabled=false` (Trendyol dahil; test için AÇILMADI). HB/N11 kilidi, kimlik≠yetki, kuyruktaki işin izni yeniden okuması, izin kapatılınca tekrar yazmama: `ReturnDecisionTest`, `QuestionTest`, `CustomerServicePanelTest` — 56/56 yeşil (yerel, 13 Eki).
+- **Soru okuma (üretim kodu, yalnız GET):** varsayılan yoklama ilk turda son 28 günü okur → 0 (4 soru 11–15 Eyl). Aynı üretim yolu (`TrendyolAdapter::fetchQuestionPage` + `StoreRemoteQuestion`) tinker ile 6×14 günlük pencerede koşturuldu: 449538774 UNANSWERED→closed, 449544418 UNANSWERED→closed, 449565081 ANSWERED→answered, 450502715 REJECTED→rejected. `asked_at`/`answered_at` ham yanıtla saniyesine kadar aynı. İkinci tur: aynı 4 satır, aynı kimlikler, yalnız `updated_at`/`last_seen_at`. İmleç değiştirilmedi.
+- Pano sayacı: 0 (kanonik `awaiting_answer` yok). Kiracı: 5 kiracıdan yalnız sahibi 4 soruyu görür; başka kiracıda yabancı kimlik ve olmayan kimlik ikisi de `null` → aynı 404.
+- **İade yoklaması:** zamanlayıcı + elle `returns:sync` → `stored=0 restored=0 failed=0`. Bu yalnız taşıma düzeyini kanıtlar; talep yükü, eşleme, onay/red, varış, stok iadesi KANITLANMADI.
+- **Dış yazma:** deploy sonrası `api_calls`'ta GET dışı tek çağrı Etsy OAuth token yenilemesi (S4 öncesinden süren, 403). Trendyol/HB iade onay/red ve soru cevabı = 0. qna/claims çağrıları 24×GET 200.
+- **Stok:** inventory_movements 611 → 611, son hareket 8 Eki; canlıda hiç iade tipli hareket yok (IMPORT 599, MANUAL 9, SALE 3) → eski paket `Returned` yolunun yeniden yorumladığı kayıt yok; yolun stoğa dokunmadığı `trendyol_package_return_event_no_longer_restocks_by_itself` ile.
+- **Taban farkı** (yedek ↔ +34 dk gözlem): products, variants, listings, orders, order_lines, order_refunds, inventory_movements/levels, invoices, S1 fin_tx, fulfillments, shipping_labels, inbox, outbox, jobs, failed_jobs içerik md5'i AYNI. `channel_connections`: eski sütunlar (settings/updated_at hariç) md5 aynı; settings'te yalnız Trendyol'a `returns_ingested_through`/`questions_ingested_through` eklendi ve `orders_polled_through` olağan yoklamayla ilerledi. Yeni: `channel_questions` 4.
+- Sağlık: `/up` 200, 5 konteyner ayakta, Horizon running, failed 0, bekleyen iş 0; zamanlayıcıda `questions:sync` 08:30/08:40/08:50 ve `returns:sync` 08:45 hatasız; `questions.ingest_failed`/devre kesici/izin reddi günlüğü yok. Anomali: Etsy `credentials.refresh_failed` saatlik (pending bağlantı, S4'ten bağımsız).
+- HB: bağlantı yok, kilitler yerinde. TD-43 HB etkinleştirme listesine SERT ENGEL olarak yazıldı.

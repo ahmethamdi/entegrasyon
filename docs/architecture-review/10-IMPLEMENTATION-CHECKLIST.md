@@ -107,3 +107,17 @@ Her madde bitince işaretlenir. "Bitti" tanımı yol haritası PDF'indekiyle ayn
 - [ ] Dış: HB entegratör kaydı + SIT/canlı servis anahtarı; N11 appKey/appSecret + panelde teslimat şablonu
 - [ ] Canlı doğrulama → `is_active` (iki kanal kapalı)
 - [ ] TD-42 (sipariş listesi kanonik durum sunumu) — S3 bağımlı değil
+
+## S4 · İade/talep + müşteri soruları (13 Eki 2026) — PARTIAL (IMPLEMENTED, LIVE VERIFICATION PENDING)
+- [x] Kanonik talep/soru modeli, varış kanıtlı stok iadesi, iki ayrı yazma izni (varsayılan kapalı), HB/N11 kilidi — `S4-IADE-VE-SORU.md`, ADR-011
+- [x] Canlıya alma `3789115` (yedek + geri yükleme, migration batch 17, taban farkı) — `S4-IADE-VE-SORU.md` §Canlıya alma
+- [x] Trendyol soru OKUMA canlıda doğrulandı (4 gerçek soru, iki tur idempotent)
+- [ ] Trendyol gerçek talep yükünün ayrıştırılması, onay, red, stok iadesi — ilk gerçek iade talebinde
+- [ ] Trendyol soru cevabı — ilk cevaplanabilir (`WAITING_FOR_ANSWER`) soruda; test için müşteri işlemi ÜRETİLMEZ
+- [ ] TD-44, TD-45, TD-46
+
+## HB etkinleştirme listesi (bağlantı açılmadan ÖNCE hepsi)
+- [ ] Entegratör kaydı + SIT/canlı servis anahtarı; S3 yayın canlı doğrulaması
+- [ ] **TD-43 çözüldü** — S4 öncesi `Accepted` stok yolu kapatıldı, HB stok iadesi yalnız S4 talep yolundan (ekonomik kimlik + varış kanıtı). **SERT ENGEL: TD-43 açıkken HB açılmaz.**
+- [ ] HB talep okuma canlıda doğrulandı; karar ve soru yazma kilitleri ancak belge çelişkisi giderilince ayrıca değerlendirilir
+- [ ] `return_decision_enabled` / `question_answer_enabled` HB'de kilitli kalır (ADR-011) — kilit kaldırma ayrı karar
