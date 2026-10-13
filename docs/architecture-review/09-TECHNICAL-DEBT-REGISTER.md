@@ -21,7 +21,7 @@ Etki: Y (veri/güvenlik/para) · O (yanlış görünüm, operasyon yükü) · D 
 | TD-15 | Marka eşleme yok (isimle tam eşleşme) | `TrendyolAdapter::brandId` | O | P1 | S3 |
 | TD-16 | `lifecycle_status` tipsiz; delist çekirdekten çağrılmıyor | `PushListing`, `TrackApprovalStatus` | D/O | P1 | S3 |
 | TD-17 | Sipariş kalemi eşlemede SKU listing bağından önce | `OrderPayloadMapper.php:68` | Y | P1 | S3 |
-| TD-18 | İade = anında stoğa geri; talep yaşam döngüsü yok; HB yalnız `Accepted` | `ApplyOrderReturn`, `HepsiburadaAdapter` | Y | P1 | S4 |
+| TD-18 | ✅ KISMEN ÇÖZÜLDÜ (S4) — Trendyol: talep yaşam döngüsü + varış kanıtlı stok iadesi (ADR-011). HB kalan kısım → TD-43 | `ApplyOrderReturn`, `HepsiburadaAdapter` | Y | P1 | S4 |
 | TD-19 | Defter silmeyle kaybolabiliyor (`cascadeOnDelete`), DB değişmezliği yok | `create_inventory_tables` migration, `InventoryMovement` | Y | P1 | S5 |
 | TD-20 | Sipariş başına tek fatura kısıtı iade faturasını engelliyor | `invoices_order_unique` | Y | P1 | S6 |
 | TD-21 | Paraşüt POST sonrası kimlik kaydedilmeden ölürse kopya taslak | `ParasutInvoiceProvider::submit` | O | P1 | S6 (gerçek hesap doğrulamasıyla) |
@@ -46,3 +46,7 @@ Etki: Y (veri/güvenlik/para) · O (yanlış görünüm, operasyon yükü) · D 
 | TD-40 | ✅ ÇÖZÜLDÜ (S2 öncesi) — Dönem toplamında tamam sipariş 0 iken katkı kalın "0,00" görünüyor (etiketli ama kesin rakam gibi okunabilir) → "—" | `resources/js/Pages/Reports/Contribution.vue:93` | O | P2 | S2 içinde küçük düzeltme |
 | TD-41 | Finans ilk turu yalnız bağlantı − 30 gün; geriye dönük doldurma/önizleme seçeneği yok (yeni kiracıda eski hakediş gelmez) | `IngestFinancialTransactions::INITIAL_LOOKBACK_DAYS`, `finance:sync` | O | P2 | ilk gerçek kiracıdan önce |
 | TD-42 | Sipariş listesi satırı kanonik `state` taşımıyor (`presentRow`), rozet ham kanal durumuna düşüyor; `show()`'da `'state'` iki kez yazılmış. S3 denetimi: YALNIZ SUNUM — iş mantığı bu dizileri okumuyor, S3 bağımlı değil | `OrderController::presentRow`, `OrderController::show:117`, `Orders/Index.vue` | O | P2 | — |
+| TD-43 | HB `Accepted` talebi S4 öncesi yoldan (sipariş yoklaması) stoğa dönüyor; HB belgesine göre kabul 'ürün müşteride kalsın, para iadesi' de olabilir → fiziksel varış kanıtı YOK. HB canlı doğrulanınca stok S4 talep yoluna taşınmalı (ekonomik kimlik + varış kanıtı) ve eski yol kapatılmalı | `HepsiburadaAdapter::fetchAcceptedClaims` | Y | P1 | HB canlı doğrulamasından önce |
+| TD-44 | Trendyol red (createClaimIssue) yalnız EK GEREKTİRMEYEN sebeplerle (1651, 451); fotoğraf/belge isteyen sebepler panelden yapılamıyor. Red isteğinin gövdesi (sorgu parametreleri, ek dosyasız) canlıda doğrulanmadı | `HandlesCustomerService::rejectReturnItem` | O | P2 | ilk gerçek red |
+| TD-45 | Soru cevabının kanal tarafından reddi yalnız `answerId` döndüyse bizim cevabımızla eşlenir; `answerId` gelmezse red algılanmaz ve soru `submitted` görünebilir | `StoreRemoteQuestion::settleAnswer` | O | P2 | ilk gerçek cevap |
+| TD-46 | Belirsiz eşleşen (ambiguous / line_missing) iade kalemi için panelde elle eşleştirme yok; satır aksiyon bekler ama satıcı bağlayamaz | `StoreRemoteReturn`, `Returns/Index.vue` | O | P2 | — |
