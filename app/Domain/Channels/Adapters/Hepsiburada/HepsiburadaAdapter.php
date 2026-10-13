@@ -22,6 +22,7 @@ use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsReturns;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\ValidatesPublication;
 use App\Domain\Channels\Exceptions\ListingNotPublishable;
@@ -129,8 +130,10 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsReturns, SupportsTaxonomy, ValidatesPublication
 {
+    use ReadsClaims;
+
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
     {

@@ -384,6 +384,39 @@ final class TrendyolOrderSliceTest extends TestCase
     }
 
     /**
+     * S4 · PAKET İADESİ STOĞA KENDİ BAŞINA DOKUNMAZ.
+     *
+     * Trendyol iadesinin stoğu talep (claim) yolundan, kalem kimliğiyle ve
+     * fiziksel varış kanıtıyla döner. Paket `Returned` olayı da stoğu
+     * getirseydi aynı ekonomik iade İKİ KEZ stoklanırdı (farklı olay kimliği).
+     */
+    #[Test]
+    public function a_polled_package_return_leaves_restocking_to_the_claim_path(): void
+    {
+        [$tenant] = $this->setUpConnection();
+
+        $variant = $this->variant($tenant, sku: 'BARKOD-A');
+        $this->seedStock($tenant, $variant, 10);
+
+        $line = ['id' => 9001, 'barcode' => 'BARKOD-A', 'productName' => 'Tişört', 'quantity' => 3, 'amount' => 240.0];
+
+        Http::fake(['*' => Http::sequence()
+            ->push(['content' => [['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Created', 'lines' => [$line]]], 'totalPages' => 1], 200)
+            ->push(['content' => [['shipmentPackageId' => 'PKG-1', 'orderNumber' => 'TY-1', 'status' => 'Returned', 'lines' => [$line]]], 'totalPages' => 1], 200),
+        ]);
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+        $this->assertSame(7, $this->availableFor($tenant, $variant));
+
+        app(PollChannelOrders::class)->run();
+        $this->processInbox($tenant);
+
+        $this->assertSame(7, $this->availableFor($tenant, $variant), 'Paket iadesi stoğu getirmemeli — talep yolu getirir.');
+        $this->assertSame('Returned', $this->asTenant($tenant, fn () => Order::query()->where('external_id', 'PKG-1')->value('status')));
+    }
+
+    /**
      * ⚠️ `orderDate` TÜRKİYE SAATİNİ UTC GİBİ TAŞIR — 3 saat düzeltilir.
      *
      * Olay anı ise `lastModifiedDate`'tir: iptal, siparişin verildiği

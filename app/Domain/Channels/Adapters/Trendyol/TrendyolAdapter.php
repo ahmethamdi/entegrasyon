@@ -27,6 +27,8 @@ use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsInvoiceUpload;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsQuestions;
+use App\Domain\Channels\Contracts\SupportsReturnDecisions;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -120,8 +122,10 @@ use Throwable;
  * Yetenek arayüzleri §14'teki sözleşmeyi ilan eder, gövdeler açıkça
  * "henüz yazılmadı" der ve SESSİZCE BAŞARILI DÖNMEZ.
  */
-final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsCommonLabel, SupportsFinancialLedger, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsTaxonomy
+final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsCommonLabel, SupportsFinancialLedger, SupportsInventory, SupportsInvoiceData, SupportsInvoiceUpload, SupportsOrders, SupportsPricing, SupportsQuestions, SupportsReturnDecisions, SupportsTaxonomy
 {
+    use HandlesCustomerService;
+
     /** Türk pazaryeri — fiyatlar yalnızca TL. */
     public function channelCurrency(): ?string
     {
@@ -1441,6 +1445,11 @@ final class TrendyolAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
             'external_number' => $orderNumber,
             'status' => $status !== '' ? $status : 'pending',
             'financial_status' => $status === 'Returned' ? 'refunded' : null,
+            // S4 · İADE STOĞU TALEP (claim) YOLUNDAN döner: paket `Returned`
+            // tüm paketi ve hiçbir birim kimliğini taşımaz; ürünün depoya
+            // döndüğünü de kanıtlamaz. Bu yol stoğa dokunsaydı aynı iade
+            // claim yolunda İKİNCİ kez stoklanırdı (farklı olay kimliği).
+            'returns_restocked_via_claims' => true,
             'currency' => (string) ($payload['currencyCode'] ?? 'TRY'),
             'subtotal' => (string) $total,
             'shipping_total' => (string) ($payload['totalShippingPrice'] ?? '0'),

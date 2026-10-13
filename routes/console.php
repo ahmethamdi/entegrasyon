@@ -195,6 +195,20 @@ Schedule::command('finance:sync')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S4 · İADE TALEPLERİ — yoklama + uzlaştırma (eşleşme, varış kanıtı, stok
+// iadesi). Dışarı yazmaz. Pencere imleçten 1 gün (HB: 30 gün) örtüşür.
+Schedule::command('returns:sync')
+    ->everyFifteenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
+// S4 · MÜŞTERİ SORULARI — Trendyol soruyu 3 iş gününde kapatır; 10 dk
+// yeterli. Açık sorular tek tek tazelenir. Dışarı yazmaz.
+Schedule::command('questions:sync')
+    ->everyTenMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // A12 · EŞLEŞMEMİŞ SİPARİŞ SATIRLARI — SKU sonradan kataloğa girince stok
 // düşülür. Zamanlanmazsa satır sonsuza kadar PENDING kalır, bakiye satılmış
 // adet kadar fazla görünür ve kanallara FAZLA STOK gider.

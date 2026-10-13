@@ -498,6 +498,8 @@ final class ChannelConnectionController extends Controller
                 OutboundWrite::PRODUCT_PUBLISH->value => $connection->product_publish_enabled === true,
                 OutboundWrite::PRICE_SYNC->value => $connection->price_sync_enabled === true,
                 OutboundWrite::STOCK_SYNC->value => $connection->stock_sync_enabled === true,
+                OutboundWrite::RETURN_DECISION->value => $connection->return_decision_enabled === true,
+                OutboundWrite::QUESTION_ANSWER->value => $connection->question_answer_enabled === true,
             ],
             'writesLocked' => SetOutboundWrite::isLocked($connection),
 

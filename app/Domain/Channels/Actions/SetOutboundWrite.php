@@ -44,7 +44,7 @@ final class SetOutboundWrite
 
         $connection->forceFill([$column => $enabled])->save();
 
-        if (! $enabled || $wasEnabled || $write === OutboundWrite::PRODUCT_PUBLISH) {
+        if (! $enabled || $wasEnabled || $write === OutboundWrite::PRODUCT_PUBLISH || ! $write->isSync()) {
             return;
         }
 

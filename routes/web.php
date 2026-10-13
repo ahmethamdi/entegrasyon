@@ -28,7 +28,9 @@ use App\Http\Controllers\PriceCampaignController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\ReconciliationController;
+use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\ShopifyInstallController;
 use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
@@ -294,6 +296,16 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::post('/orders/{order}/shipments', [OrderController::class, 'ship'])->name('orders.ship');
     Route::post('/orders/{order}/shipments/{fulfillment}/retry', [OrderController::class, 'retryShipment'])
         ->name('orders.ship.retry');
+
+    // S4 · İade talepleri ve müşteri soruları. Ekranlar kanala istek atmaz;
+    // karar ve cevap yalnız durum yazar, kanala yazma kuyrukta ve yazma
+    // izninin (ADR-010) arkasında. Model bağlaması kiracı scope'u altında:
+    // başka kiracının talebi/sorusu 404.
+    Route::get('/returns', [ReturnController::class, 'index'])->name('returns.index');
+    Route::post('/returns/{return}/approve', [ReturnController::class, 'approve'])->name('returns.approve');
+    Route::post('/returns/{return}/reject', [ReturnController::class, 'reject'])->name('returns.reject');
+    Route::get('/questions', [QuestionController::class, 'index'])->name('questions.index');
+    Route::post('/questions/{question}/answer', [QuestionController::class, 'answer'])->name('questions.answer');
 
     // S2 · Depo akışı — seçilen siparişlere toplu etiket / fatura belgesi /
     // toplama listesi. Ağ işi kuyrukta; sonuç kalem başına izlenir.

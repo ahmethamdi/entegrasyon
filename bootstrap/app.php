@@ -17,10 +17,12 @@ use App\Domain\Orders\Console\BackfillOrderStateCommand;
 use App\Domain\Orders\Console\PollChannelOrdersCommand;
 use App\Domain\Orders\Console\ReconcileChannelOrdersCommand;
 use App\Domain\Orders\Console\ResolveUnmatchedOrderLinesCommand;
+use App\Domain\Questions\Console\SyncQuestionsCommand;
 use App\Domain\Reconciliation\Console\ReconcileColdCommand;
 use App\Domain\Reconciliation\Console\ReconcileHotCommand;
 use App\Domain\Reconciliation\Console\ReconcilePricesCommand;
 use App\Domain\Reconciliation\Console\ReconcileWarmCommand;
+use App\Domain\Returns\Console\SyncReturnsCommand;
 use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\PollChannelBatchesCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
@@ -81,6 +83,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // P0-3 · webhook kanallarında kaçan sipariş kurtarma. Zamanlaması routes/console.php.
         ReconcileChannelOrdersCommand::class,
         SyncFinancialTransactionsCommand::class,
+        SyncReturnsCommand::class,
+        SyncQuestionsCommand::class,
         // ADR-001 · tek seferlik kanonik durum geri doldurma (zamanlanmaz).
         BackfillOrderStateCommand::class,
         // A12 · eşleşmemiş sipariş satırları. Zamanlaması routes/console.php.

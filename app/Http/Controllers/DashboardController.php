@@ -9,7 +9,10 @@ use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
+use App\Domain\Questions\Models\ChannelQuestion;
 use App\Domain\Reconciliation\Enums\ItemStatus;
+use App\Domain\Returns\Enums\ReturnStatus;
+use App\Domain\Returns\Models\ReturnRequest;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
@@ -97,6 +100,24 @@ final class DashboardController extends Controller
                 'hint' => __('Takip numarasını kontrol edip tekrar gönder.'),
                 'href' => '/orders',
                 'tone' => 'urgent',
+            ],
+            [
+                // S4 · cevapsız soru: YEREL kanonik kayıttan (pano kanala
+                // istek atmaz). Tanım `ChannelQuestion::scopeUnanswered`.
+                'key' => 'unanswered_questions',
+                'count' => ChannelQuestion::query()->unanswered()->count(),
+                'title' => __('müşteri sorusu cevap bekliyor'),
+                'hint' => __('Trendyol cevapsız soruyu birkaç iş gününde kapatır.'),
+                'href' => '/questions',
+                'tone' => 'action',
+            ],
+            [
+                'key' => 'returns_awaiting_decision',
+                'count' => ReturnRequest::query()->where('status', ReturnStatus::AWAITING_ACTION->value)->count(),
+                'title' => __('iade talebi kararını bekliyor'),
+                'hint' => __('Ürün deponuza ulaştı; onaylayın ya da sebebiyle reddedin.'),
+                'href' => '/returns',
+                'tone' => 'action',
             ],
             [
                 'key' => 'unmatched',

@@ -34,6 +34,8 @@ const navGroups = [
         items: [
             { href: '/panel', label: k('Ana sayfa') },
             { href: '/orders', label: k('Siparişler') },
+            { href: '/returns', label: k('İadeler') },
+            { href: '/questions', label: k('Müşteri soruları') },
             { href: '/products', label: k('Ürünler') },
         ],
     },

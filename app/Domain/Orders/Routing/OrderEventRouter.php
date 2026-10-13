@@ -210,6 +210,13 @@ final class OrderEventRouter
         // (no_restock) bir iade de para iadesidir ve kâr hesabına girer.
         $this->recordRefunds->run($order, $normalized, $message->id, $lines);
 
+        // Kanal iade stoğunu AYRI bir talep yolundan getiriyor (S4 · Trendyol
+        // claim): bu olay yalnız başlığı ve para kaydını günceller; stok ve
+        // kalem sayaçları talep yolunun işidir — aynı iade iki kez stoklanmaz.
+        if (($normalized->payload['returns_restocked_via_claims'] ?? false) === true) {
+            return;
+        }
+
         if ($lines === []) {
             Log::warning('inbox.return_without_matching_lines', ['message' => $message->id]);
 

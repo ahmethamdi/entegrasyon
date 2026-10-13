@@ -29,6 +29,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property bool $product_publish_enabled
  * @property bool $price_sync_enabled
  * @property bool $stock_sync_enabled
+ * @property bool $return_decision_enabled
+ * @property bool $question_answer_enabled
  *
  * Yazma izinleri (ADR-010) `$fillable` DIŞINDADIR: form ya da toplu
  * atama yoluyla açılamaz; yalnız `SetOutboundWrite` açık eylemiyle.
@@ -61,6 +63,8 @@ class ChannelConnection extends Model
             'product_publish_enabled' => 'boolean',
             'price_sync_enabled' => 'boolean',
             'stock_sync_enabled' => 'boolean',
+            'return_decision_enabled' => 'boolean',
+            'question_answer_enabled' => 'boolean',
         ];
     }
 

@@ -13,6 +13,9 @@ use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsQuestions;
+use App\Domain\Channels\Contracts\SupportsReturnDecisions;
+use App\Domain\Channels\Contracts\SupportsReturns;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
@@ -123,6 +126,12 @@ final class AdapterRegistry
             'taxonomy' => $adapter instanceof SupportsTaxonomy,
             'approval' => $adapter instanceof SupportsApprovalWorkflow,
             'fulfillment' => $adapter instanceof SupportsFulfillment,
+            // S4 · okuma ile karar/cevap AYRI: HB talepleri okunur ama
+            // karar verilemez — tek anahtar olsaydı panel çalışmayan
+            // onay düğmesi çizerdi.
+            'returns' => $adapter instanceof SupportsReturns,
+            'return_decisions' => $adapter instanceof SupportsReturnDecisions,
+            'questions' => $adapter instanceof SupportsQuestions,
         ];
     }
 

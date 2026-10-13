@@ -164,6 +164,9 @@ const writeLabels = {
     product_publish: k('Ürün yayını'),
     price_sync: k('Fiyat gönderimi'),
     stock_sync: k('Stok gönderimi'),
+    // S4 · müşteri hizmeti yazmaları — senkrondan ayrı izinler.
+    return_decision: k('İade kararı'),
+    question_answer: k('Soru cevabı'),
 };
 
 const switching = ref(null);
