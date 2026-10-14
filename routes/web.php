@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BillingController;
+use App\Http\Controllers\BulkEditController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\ChannelPricingController;
@@ -256,6 +257,13 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     // kaynağı; AYNI durum satırını ve raporu kullanır.
     Route::post('/products/import/channel', [ProductImportController::class, 'storeFromChannel'])
         ->name('products.import.channel');
+    // S5 · Excel toplu fiyat/stok: yükleme yalnız ÖNİZLER, uygulama ayrı
+    // ve tek seferlik. `/products/{product}/edit`'ten ÖNCE (bkz. yukarı).
+    Route::get('/products/bulk-edit', [BulkEditController::class, 'index'])->name('products.bulk-edit.index');
+    Route::get('/products/bulk-edit/export', [BulkEditController::class, 'export'])->name('products.bulk-edit.export');
+    Route::post('/products/bulk-edit', [BulkEditController::class, 'store'])->name('products.bulk-edit.store');
+    Route::get('/products/bulk-edit/{import}', [BulkEditController::class, 'show'])->name('products.bulk-edit.show');
+    Route::post('/products/bulk-edit/{import}/apply', [BulkEditController::class, 'apply'])->name('products.bulk-edit.apply');
     Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
     Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
     Route::put('/products/{product}/variants/{variant}/cost', [ProductController::class, 'updateCost'])
