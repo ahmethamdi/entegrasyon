@@ -37,6 +37,7 @@ use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SupplierSourceController;
 use App\Http\Controllers\SyncFailureController;
+use App\Http\Controllers\WooAuthController;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
@@ -180,6 +181,14 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     // sır yazar) ve GET olsaydı tarayıcı ön yüklemesi el sıkışmayı
     // habersiz başlatır, satıcının gerçek denemesindeki `state`'i
     // EZERDİ — sağlık kontrolünün POST olma gerekçesinin aynısı.
+    // S5 · WooCommerce "uygulamayla bağlan" (resmî /wc-auth/v1/authorize).
+    // Başlatma POST (oturum + CSRF); anahtarlar mağaza sunucusundan
+    // `webhooks.woocommerce.auth`'a gelir; dönüş GET yalnız bilgi verir.
+    Route::post('/channels/woocommerce/authorize', [WooAuthController::class, 'authorize'])
+        ->name('channels.woocommerce.authorize');
+    Route::get('/channels/woocommerce/return', [WooAuthController::class, 'return'])
+        ->name('channels.woocommerce.return');
+
     Route::post('/channels/{connection}/etsy/authorize', [EtsyOAuthController::class, 'redirect'])
         ->name('channels.etsy.authorize');
 

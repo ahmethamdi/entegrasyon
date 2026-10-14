@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
@@ -66,6 +66,12 @@ const asksStoreUrl = computed(() => selected.value?.asksStoreUrl !== false);
 // App Store kuralı 2.3.1 mağaza adresinin elle sorulmasını yasaklar.
 const installUrl = computed(() => selected.value?.installUrl ?? null);
 
+// Sihirbazı olan kanal (Woo `/wc-auth`): varsayılan yol sihirbaz; anahtar
+// alanları yalnız satıcı "elle gir"i seçerse görünür (yedek yol).
+const wizardUrl = computed(() => selected.value?.wizardUrl ?? null);
+const manualKeys = ref(false);
+const viaWizard = computed(() => wizardUrl.value !== null && !manualKeys.value);
+
 // Kanal değişince ESKİ KANALIN ALANLARI BOŞALTILIR.
 //
 // ⚠️ Boşaltılmasaydı Woo'yu deneyip Shopify'a geçen satıcının `ck_...`
@@ -81,6 +87,7 @@ watch(
         });
 
         form.clearErrors();
+        manualKeys.value = false;
     },
 );
 
@@ -97,6 +104,13 @@ function submit() {
         ...(asksStoreUrl.value ? ['store_url'] : []),
         ...allFields.value.map((field) => field.name),
     ];
+
+    if (viaWizard.value) {
+        form.transform((data) => ({ label: data.label, store_url: data.store_url }))
+            .post(wizardUrl.value);
+
+        return;
+    }
 
     form.transform((data) => Object.fromEntries(
         Object.entries(data).filter(([key]) => allowed.includes(key)),
@@ -224,6 +238,15 @@ function submit() {
                 </p>
             </div>
 
+            <div v-else-if="viaWizard" class="rounded-lg border border-sky-200 bg-sky-50 p-4">
+                <p class="text-sm text-sky-900">
+                    {{ t('Mağaza adresini yaz; WooCommerce yönetimine gidip 34Pazar\'a izin vereceksin. Anahtar kopyalaman gerekmez. Ürün, fiyat ve stok yazma izinleri kapalı başlar; Kanallar ekranından sen açarsın.') }}
+                </p>
+                <button type="button" class="mt-2 text-xs text-sky-900 underline" @click="manualKeys = true">
+                    {{ t('Anahtarları elle girmek istiyorum') }}
+                </button>
+            </div>
+
             <div v-else-if="allFields.length" class="rounded-lg border border-stone-200 bg-stone-50 p-4">
                 <p class="text-sm font-medium text-stone-900">
                     {{ t(':channel kimlik bilgileri', { channel: selected?.name ?? '' }) }}
@@ -281,7 +304,7 @@ function submit() {
                         {{ usesOauth ? t('Yönlendiriliyor…') : t('Bağlanıyor…') }}
                     </template>
                     <template v-else>
-                        {{ usesOauth ? t(':channel ile bağlan', { channel: selected?.name ?? '' }) : t('Bağla ve doğrula') }}
+                        {{ usesOauth || viaWizard ? t(':channel ile bağlan', { channel: selected?.name ?? '' }) : t('Bağla ve doğrula') }}
                     </template>
                 </button>
 

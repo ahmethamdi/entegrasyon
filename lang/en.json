@@ -1502,5 +1502,9 @@
     "Dışa aktarımdan sonra stok değişti": "Stock changed after export",
     "Dışa aktarımdan sonra fiyat değişti": "Price changed after export",
     "Bu dosya zaten uygulandı": "This file was already applied",
-    "Satır uygulanamadı": "Row could not be applied"
+    "Satır uygulanamadı": "Row could not be applied",
+    "Mağaza adresini yaz; WooCommerce yönetimine gidip 34Pazar'a izin vereceksin. Anahtar kopyalaman gerekmez. Ürün, fiyat ve stok yazma izinleri kapalı başlar; Kanallar ekranından sen açarsın.": "Enter your store address; you'll go to WooCommerce admin and grant 34Pazar access. No keys to copy. Product, price and stock write permissions start off; you turn them on from the Channels screen.",
+    "Anahtarları elle girmek istiyorum": "I want to enter keys manually",
+    "WooCommerce mağazasında izin verilmedi. Yeniden deneyebilir ya da anahtarları elle girebilirsin.": "Access was not granted in the WooCommerce store. You can try again or enter the keys manually.",
+    "WooCommerce izni alındı; bağlantı birkaç saniye içinde hazır olur. Kanala yazma izinleri kapalı başlar.": "WooCommerce access granted; the connection will be ready in a few seconds. Channel write permissions start off."
 }

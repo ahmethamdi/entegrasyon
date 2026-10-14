@@ -89,6 +89,7 @@ final class ChannelConnectForm
      *     oauth: bool,
      *     help?: string,
      *     install_only?: bool,
+     *     wizard_route?: string,
      * }>
      */
     private const CHANNELS = [
@@ -99,6 +100,10 @@ final class ChannelConnectForm
             ],
             'identity' => [],
             'oauth' => false,
+            // S5 · önerilen yol resmî `/wc-auth/v1/authorize` sihirbazıdır
+            // (WooAuthController); elle anahtar girişi kalıcı bağlantıları
+            // kapalı mağazalar için YEDEK olarak kalır.
+            'wizard_route' => 'channels.woocommerce.authorize',
             'help' => 'WooCommerce yönetiminde Ayarlar → Gelişmiş → REST API '
                 .'altından Okuma/Yazma izinli bir anahtar üret.',
         ],
@@ -780,6 +785,9 @@ final class ChannelConnectForm
             'connectable' => self::appConfigured($channelTypeCode),
             'appMissing' => ! self::appConfigured($channelTypeCode),
             'installUrl' => self::installUrl($channelTypeCode),
+            'wizardUrl' => isset(self::definition($channelTypeCode)['wizard_route'])
+                ? route(self::definition($channelTypeCode)['wizard_route'], [], false)
+                : null,
         ];
     }
 
