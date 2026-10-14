@@ -199,13 +199,14 @@ final class ReconcileChannelOrders
             'message' => $message->id,
         ]);
 
-        return $event->eventType === 'orders/create' ? 1 : 0;
+        return in_array($event->eventType, ['orders/create', 'order.created'], true) ? 1 : 0;
     }
 
     private function placedBeforeConnection(ChannelConnection $connection, RecoveredOrderEvent $event): bool
     {
         $connectedAt = $connection->connected_at;
-        $created = $event->payload['created_at'] ?? null;
+        // Shopify `created_at` (ofsetli), Woo `date_created_gmt` (ofsetsiz GMT).
+        $created = $event->payload['created_at'] ?? $event->payload['date_created_gmt'] ?? null;
 
         if ($connectedAt === null || ! is_string($created) || $created === '') {
             // Bilinmiyorsa yaratılmaz değil: router'ın A14 kuralı ve sipariş
@@ -216,7 +217,7 @@ final class ReconcileChannelOrders
         }
 
         try {
-            return Carbon::parse($created)->lessThan($connectedAt);
+            return Carbon::parse($created, 'UTC')->lessThan($connectedAt);
         } catch (Throwable) {
             return false;
         }

@@ -669,7 +669,11 @@ final class WooCommerceAdapterTest extends TestCase
 
         $this->assertCount(1, $page->products, 'Ürün DÜŞÜRÜLMEMELİ.');
         $this->assertNull($page->products[0]->sku, 'Boş SKU null olmalı, uydurulmamalı.');
-        $this->assertFalse($page->products[0]->isImportable());
+        // S5: ürün kanal kimliğine bağlanır (listingIdentity) → içe aktarma
+        // Shopify'daki gibi kimlikten otomatik SKU üretebilir; bağ sayesinde
+        // stok/fiyat eşleşmesi SKU'ya kalmaz.
+        $this->assertSame('11', $page->products[0]->listingIdentity['external_id']);
+        $this->assertTrue($page->products[0]->isImportable());
     }
 
     /** Yetenek `instanceof` ile okunur — panelde kanal adı kontrol edilmez. */

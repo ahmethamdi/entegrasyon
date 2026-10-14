@@ -146,7 +146,7 @@ final class PriceBatchBuilder
                 'price' => (string) $listing->effectivePrice(),
                 'compare_at_price' => $listing->effectiveCompareAtPrice(),
                 'version' => $operation->entity_version,
-            ];
+            ] + ($listing->external_parent_id !== null ? ['external_parent_id' => $listing->external_parent_id] : []);
         }
 
         return new PricePushBatch(

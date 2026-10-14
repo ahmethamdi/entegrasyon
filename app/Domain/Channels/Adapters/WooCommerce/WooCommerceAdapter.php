@@ -16,6 +16,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsOrderReconciliation;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsWebhookRegistration;
@@ -34,10 +35,11 @@ use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
+use App\Domain\Sync\Support\RecoveredOrderEvent;
+use App\Domain\Sync\Support\RecoveredOrderPage;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
-use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
@@ -76,7 +78,7 @@ use Throwable;
  * Webhook bir yetenek değil taşıma biçimidir — SupportsWebhooks arayüzü
  * YOKTUR. İmza doğrulama ve olay kimliği çıkarma ChannelAdapter'ın parçası.
  */
-final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrders, SupportsPricing, SupportsWebhookRegistration
+final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsWebhookRegistration
 {
     /**
      * Sipariş akışının ihtiyaç duyduğu konular — `WooOrderNormalizer` üçünü
@@ -84,6 +86,9 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
      * ile, durum alanını değiştirerek gönderir.
      */
     private const WEBHOOK_TOPICS = ['order.created', 'order.updated', 'order.deleted'];
+
+    /** Değişken ürün başına en çok 10 × 100 varyasyon (Woo arayüz sınırı 100'ün çok üstü). */
+    private const MAX_VARIATION_PAGES = 10;
 
     use DeclaresRequestQuota;
     use MapsOrderStateFromTable;
@@ -143,28 +148,19 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
     public function pushInventory(InventoryPushBatch $batch): AdapterResult
     {
         if ($batch->isEmpty()) {
-            // Boş yük için çağrı yapılmaz; kota boşa harcanmaz.
             return AdapterResult::success(['pushed' => 0]);
         }
 
-        $updates = array_map(
+        return $this->pushGrouped(
+            $batch->toArray(),
+            $batch->operations(),
             static fn (array $item): array => [
                 'id' => (int) $item['external_id'],
                 'manage_stock' => true,
-                // MUTLAK değer. Kırpma yukarıda yapıldı; burada tekrar yok.
                 'stock_quantity' => $item['quantity'],
                 'stock_status' => $item['quantity'] > 0 ? 'instock' : 'outofstock',
             ],
-            $batch->toArray(),
         );
-
-        $response = $this->client->post('products/batch', ['update' => $updates]);
-
-        // Başarısızlık İSTİSNA olarak yükselir: sınıflandırma ve yeniden
-        // deneme kararı iş tarafındaki tek try/catch'te toplanır (§12).
-        $response->throw();
-
-        return $this->batchResult($response, $batch->toArray(), $batch->operations());
     }
 
     /**
@@ -174,33 +170,12 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
      */
     public function fetchInventory(array $listings): RemoteInventorySnapshot
     {
-        $ids = array_values(array_filter(array_map(
-            static fn (Listing $l): ?string => $l->external_id,
-            $listings,
-        )));
-
-        if ($ids === []) {
-            return new RemoteInventorySnapshot([]);
-        }
-
-        $response = $this->client->get('products', [
-            'include' => implode(',', $ids),
-            'per_page' => 100,
-        ]);
-
-        $response->throw();
-
         $quantities = [];
 
-        foreach ((array) $response->json() as $product) {
-            if (! is_array($product) || ! isset($product['id'])) {
-                continue;
-            }
-
-            $quantities[(string) $product['id']] = (int) ($product['stock_quantity'] ?? 0);
+        foreach ($this->readGrouped($listings) as $id => $product) {
+            $quantities[$id] = (int) ($product['stock_quantity'] ?? 0);
         }
 
-        // Okuma anı taşınır: gecikmeli okuma sürüklenme sanılmamalı (§10).
         return new RemoteInventorySnapshot($quantities, new DateTimeImmutable);
     }
 
@@ -217,20 +192,112 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
             return AdapterResult::success(['pushed' => 0]);
         }
 
-        $updates = array_map(
+        return $this->pushGrouped(
+            $batch->items,
+            $batch->operations(),
             static fn (array $item): array => [
                 'id' => (int) $item['external_id'],
-                // Fiyat da MUTLAK: yüzde indirim veya delta gönderilmez.
                 'regular_price' => (string) $item['price'],
             ],
-            $batch->items,
         );
+    }
 
-        $response = $this->client->post('products/batch', ['update' => $updates]);
+    /**
+     * S5 · Basit ürünler `products/batch`'e, varyasyonlar ÜST ÜRÜNLERİNİN
+     * `products/{parent}/variations/batch` ucuna gider. Varyasyon kimliği
+     * `products/batch`'e gönderilseydi Woo kalemi reddeder (yanlış tür).
+     *
+     * Değerler MUTLAKTIR (stok sayısı, fiyat): bir grup isteği başarısız
+     * olup iş yeniden denenirse önceki gruplar aynı değerle tekrar yazılır,
+     * zararsızdır.
+     *
+     * @param  list<array<string, mixed>>  $items
+     * @param  array<int, mixed>  $operations
+     * @param  \Closure(array<string, mixed>): array<string, mixed>  $payloadFor
+     */
+    private function pushGrouped(array $items, array $operations, \Closure $payloadFor): AdapterResult
+    {
+        $groups = [];
 
-        $response->throw();
+        foreach ($items as $item) {
+            $groups[(string) ($item['external_parent_id'] ?? '')][] = $item;
+        }
 
-        return $this->batchResult($response, $batch->items, $batch->operations());
+        $sent = 0;
+        $failed = [];
+
+        foreach ($groups as $parent => $groupItems) {
+            // Sayısal dizi anahtarı int'e döner ("50" → 50) — açıkça dize.
+            $parent = (string) $parent;
+
+            if ($parent !== '' && preg_match('/^\d+$/', $parent) !== 1) {
+                continue;   // sayısal olmayan üst kimlik Woo kaydı değildir; yol enjeksiyonu yok
+            }
+
+            $endpoint = $parent === '' ? 'products/batch' : "products/{$parent}/variations/batch";
+            $response = $this->client->post($endpoint, ['update' => array_map($payloadFor, $groupItems)]);
+            $response->throw();
+
+            [$count, $groupFailed] = $this->batchFailures($response, $groupItems, $operations);
+            $sent += $count;
+            $failed += $groupFailed;
+        }
+
+        if ($failed === []) {
+            return AdapterResult::success(['pushed' => $sent]);
+        }
+
+        return AdapterResult::partial(
+            failedOperations: $failed,
+            data: ['pushed' => $sent - count($failed)],
+            errorClass: ErrorClass::VALIDATION,
+        );
+    }
+
+    /**
+     * Basit ürün ve varyasyonları kendi uçlarından okur; kimlik → ham kayıt.
+     *
+     * @param  array<int, Listing>  $listings
+     * @return array<string, array<string, mixed>>
+     */
+    private function readGrouped(array $listings): array
+    {
+        $groups = [];
+
+        foreach ($listings as $listing) {
+            if ($listing->external_id === null || $listing->external_id === '') {
+                continue;
+            }
+
+            $groups[(string) ($listing->external_parent_id ?? '')][] = $listing->external_id;
+        }
+
+        $out = [];
+
+        foreach ($groups as $parent => $ids) {
+            $parent = (string) $parent;
+
+            if ($parent !== '' && preg_match('/^\d+$/', $parent) !== 1) {
+                continue;
+            }
+
+            foreach (array_chunk($ids, 100) as $chunk) {
+                $response = $this->client->get($parent === '' ? 'products' : "products/{$parent}/variations", [
+                    'include' => implode(',', $chunk),
+                    'per_page' => 100,
+                ]);
+
+                $response->throw();
+
+                foreach ((array) $response->json() as $product) {
+                    if (is_array($product) && isset($product['id'])) {
+                        $out[(string) $product['id']] = $product;
+                    }
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -249,7 +316,10 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
      * @param  list<array<string, mixed>>  $items  Yük kalemleri (`external_id`, `listing_id`)
      * @param  list<SyncOperation>  $operations
      */
-    private function batchResult(Response $response, array $items, array $operations): AdapterResult
+    /**
+     * @return array{0: int, 1: array<string, string>} gönderilen, başarısız işlem → sebep
+     */
+    private function batchFailures(Response $response, array $items, array $operations): array
     {
         $operationByListing = [];
 
@@ -290,48 +360,16 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
             ));
         }
 
-        $sent = count($items);
-
-        if ($failed === []) {
-            return AdapterResult::success(['pushed' => $sent]);
-        }
-
-        return AdapterResult::partial(
-            failedOperations: $failed,
-            data: ['pushed' => $sent - count($failed)],
-            // Kalem hatası (silinmiş ürün, geçersiz kimlik) yeniden denemeyle
-            // DÜZELMEZ — eBay'deki kuralın aynısı.
-            errorClass: ErrorClass::VALIDATION,
-        );
+        return [count($items), $failed];
     }
 
     /** @param list<Listing> $listings */
     public function fetchPrices(array $listings): RemotePriceSnapshot
     {
-        $ids = array_values(array_filter(array_map(
-            static fn (Listing $l): ?string => $l->external_id,
-            $listings,
-        )));
-
-        if ($ids === []) {
-            return new RemotePriceSnapshot([]);
-        }
-
-        $response = $this->client->get('products', [
-            'include' => implode(',', $ids),
-            'per_page' => 100,
-        ]);
-
-        $response->throw();
-
         $prices = [];
 
-        foreach ((array) $response->json() as $product) {
-            if (! is_array($product) || ! isset($product['id'])) {
-                continue;
-            }
-
-            $prices[(string) $product['id']] = (string) ($product['regular_price'] ?? '0');
+        foreach ($this->readGrouped($listings) as $id => $product) {
+            $prices[$id] = (string) ($product['regular_price'] ?? '0');
         }
 
         return new RemotePriceSnapshot($prices, new DateTimeImmutable);
@@ -520,14 +558,66 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
 
         $totalPages = (int) ($response->header('X-WP-TotalPages') ?: 1);
 
+        $remote = [];
+
+        foreach ($products as $product) {
+            // S5 · DEĞİŞKEN ÜRÜN: satılabilir birim varyasyondur (ADR-003).
+            // Üst ürün tek başına satılmaz; varyasyonları ayrı uçtan, TAMAMI
+            // okunur. Okuma patlarsa sayfa yarım dönmez — istisna yükselir.
+            if (($product['type'] ?? null) === 'variable') {
+                foreach ($this->variationsOf($product) as $variation) {
+                    $remote[] = WooProductMapper::variationToRemoteProduct($product, $variation);
+                }
+
+                continue;
+            }
+
+            $remote[] = WooProductMapper::toRemoteProduct($product);
+        }
+
         return new RemoteProductPage(
-            products: array_map(
-                static fn (array $product): RemoteProduct => WooProductMapper::toRemoteProduct($product),
-                $products,
-            ),
+            products: $remote,
             nextCursor: $page < $totalPages ? (string) ($page + 1) : null,
             hasMore: $page < $totalPages,
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $product
+     * @return list<array<string, mixed>>
+     */
+    private function variationsOf(array $product): array
+    {
+        $id = (int) ($product['id'] ?? 0);
+
+        if ($id <= 0) {
+            return [];
+        }
+
+        $out = [];
+        $page = 1;
+
+        do {
+            $response = $this->client->get("products/{$id}/variations", [
+                'per_page' => 100,
+                'page' => $page,
+                'orderby' => 'id',
+                'order' => 'asc',
+            ]);
+
+            $response->throw();
+
+            foreach ((array) $response->json() as $variation) {
+                if (is_array($variation) && isset($variation['id'])) {
+                    $out[] = $variation;
+                }
+            }
+
+            $total = (int) ($response->header('X-WP-TotalPages') ?: 1);
+            $page++;
+        } while ($page <= $total && $page <= self::MAX_VARIATION_PAGES);
+
+        return $out;
     }
 
     /**
@@ -566,6 +656,63 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
 
         return new OrderPage(
             orders: $orders,
+            nextCursor: $page < $totalPages ? (string) ($page + 1) : null,
+            hasMore: $page < $totalPages,
+        );
+    }
+
+    /**
+     * S5 · SİPARİŞ MUTABAKATI — kaybolan webhook = kaybolan sipariş olmasın.
+     *
+     * `modified_after` (GMT) penceresindeki siparişler okunur; her sipariş
+     * için bir "yaratıldı" olayı (`reconcile:{id}:created`) ve iptal/iade/
+     * tamamlanma gibi durumlar için durum başına bir "güncellendi" olayı
+     * (`reconcile:{id}:status:{durum}`). Kimlikler sabittir: aynı pencere
+     * tekrar okunduğunda inbox tekilliği ikinci mesajı eler; sipariş
+     * zaten varsa çekirdek (sipariş/satır tekilliği, kalan adede kırpılan
+     * iptal/iade) ikinci etkiyi engeller. Yalnız OKUR.
+     */
+    public function fetchOrdersForReconciliation(CarbonInterface $since, ?string $cursor = null): RecoveredOrderPage
+    {
+        $page = $cursor === null ? 1 : (int) $cursor;
+
+        $response = $this->client->get('orders', [
+            'modified_after' => $since->copy()->utc()->format('Y-m-d\TH:i:s'),
+            'dates_are_gmt' => 'true',
+            'per_page' => 50,
+            'page' => $page,
+            'orderby' => 'id',
+            'order' => 'asc',
+        ]);
+
+        $response->throw();
+
+        $events = [];
+
+        foreach ((array) $response->json() as $order) {
+            if (! is_array($order) || ! isset($order['id'])) {
+                continue;
+            }
+
+            $id = (string) $order['id'];
+            $status = mb_strtolower((string) ($order['status'] ?? ''));
+
+            // Taslak sepet ve çöp sipariş değildir.
+            if (in_array($status, ['checkout-draft', 'trash'], true)) {
+                continue;
+            }
+
+            $events[] = new RecoveredOrderEvent('order.created', "reconcile:{$id}:created", $id, $order);
+
+            if (in_array($status, ['cancelled', 'refunded', 'completed', 'failed'], true)) {
+                $events[] = new RecoveredOrderEvent('order.updated', "reconcile:{$id}:status:{$status}", $id, $order);
+            }
+        }
+
+        $totalPages = (int) ($response->header('X-WP-TotalPages') ?: 1);
+
+        return new RecoveredOrderPage(
+            events: $events,
             nextCursor: $page < $totalPages ? (string) ($page + 1) : null,
             hasMore: $page < $totalPages,
         );

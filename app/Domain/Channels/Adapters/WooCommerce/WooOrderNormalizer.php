@@ -245,6 +245,11 @@ final class WooOrderNormalizer
                 // SKU eşleşmezse order_lines.variant_id NULL kalır ve satır
                 // PENDING olur — sipariş KAYBEDİLMEZ (Karar 24).
                 'sku' => (string) ($item['sku'] ?? ''),
+                // S5 · SKU'suz satır İLAN KİMLİĞİYLE eşleşir: varyasyonlu
+                // üründe `variation_id`, basit üründe `product_id` (Woo
+                // basit üründe variation_id = 0 gönderir). İçe aktarma bu
+                // kimliği `listings.external_id` olarak yazar.
+                'external_variant_id' => self::listingId($item),
                 'title' => (string) ($item['name'] ?? ($item['sku'] ?? '')),
                 'quantity' => (int) ($item['quantity'] ?? 0),
                 'unit_price' => (string) ($item['price'] ?? '0'),
@@ -268,6 +273,22 @@ final class WooOrderNormalizer
         }
 
         return $lines;
+    }
+
+    /**
+     * @param  array<string, mixed>  $item
+     */
+    private static function listingId(array $item): ?string
+    {
+        foreach (['variation_id', 'product_id'] as $key) {
+            $value = (int) ($item[$key] ?? 0);
+
+            if ($value > 0) {
+                return (string) $value;
+            }
+        }
+
+        return null;
     }
 
     /**

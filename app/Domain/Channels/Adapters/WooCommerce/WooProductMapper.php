@@ -101,6 +101,65 @@ final class WooProductMapper
             status: isset($product['status']) ? (string) $product['status'] : null,
             images: self::imageUrls($product),
             raw: $product,
+            // S5 · İÇE AKTARILAN ÜRÜN KANAL KİMLİĞİNE BAĞLANIR: bağ
+            // yazılmasaydı sonraki gönderim Woo'da KOPYA ürün yaratır ve
+            // stok/fiyat eşleşmesi SKU'ya kalırdı (Shopify'da 5 Eki'de
+            // kapatılan açığın Woo eşi).
+            listingIdentity: isset($product['id']) ? array_filter([
+                'external_id' => (string) $product['id'],
+                'external_url' => isset($product['permalink']) ? (string) $product['permalink'] : null,
+            ], static fn (?string $v): bool => $v !== null && $v !== '') : [],
+        );
+    }
+
+    /**
+     * Varyasyon → satılabilir birim (ADR-003). Kimlik VARYASYON kimliği,
+     * grup kimliği ÜST ürün kimliği; ad/açıklama/marka üstten, fiyat/stok/
+     * SKU/seçenekler varyasyondan. Stok yönetimi kapalı varyasyonda adet
+     * BİLİNMEZ (null) — 0 sayılmaz.
+     *
+     * @param  array<string, mixed>  $parent
+     * @param  array<string, mixed>  $variation
+     */
+    public static function variationToRemoteProduct(array $parent, array $variation): RemoteProduct
+    {
+        $sku = isset($variation['sku']) ? trim((string) $variation['sku']) : '';
+        $options = [];
+
+        foreach ((array) ($variation['attributes'] ?? []) as $attribute) {
+            if (is_array($attribute) && trim((string) ($attribute['name'] ?? '')) !== '' && trim((string) ($attribute['option'] ?? '')) !== '') {
+                $options[trim((string) $attribute['name'])] = trim((string) $attribute['option']);
+            }
+        }
+
+        $image = is_array($variation['image'] ?? null) && is_string($variation['image']['src'] ?? null) && trim($variation['image']['src']) !== ''
+            ? [trim($variation['image']['src'])]
+            : [];
+
+        $manages = ($variation['manage_stock'] ?? false) === true;
+
+        return new RemoteProduct(
+            externalId: (string) ($variation['id'] ?? ''),
+            sku: $sku !== '' ? $sku : null,
+            title: isset($parent['name']) ? (string) $parent['name'] : null,
+            price: isset($variation['regular_price']) && $variation['regular_price'] !== ''
+                ? (string) $variation['regular_price']
+                : null,
+            quantity: $manages && isset($variation['stock_quantity']) && $variation['stock_quantity'] !== null
+                ? (int) $variation['stock_quantity']
+                : null,
+            description: isset($parent['description']) ? (string) $parent['description'] : null,
+            brand: self::firstBrandName($parent),
+            barcode: null,
+            status: isset($variation['status']) ? (string) $variation['status'] : (isset($parent['status']) ? (string) $parent['status'] : null),
+            images: array_values(array_unique([...$image, ...self::imageUrls($parent)])),
+            raw: $variation,
+            listingIdentity: array_filter([
+                'external_id' => (string) ($variation['id'] ?? ''),
+                'external_parent_id' => (string) ($parent['id'] ?? ''),
+                'external_url' => isset($variation['permalink']) ? (string) $variation['permalink'] : null,
+            ], static fn (?string $v): bool => $v !== null && $v !== ''),
+            options: $options,
         );
     }
 

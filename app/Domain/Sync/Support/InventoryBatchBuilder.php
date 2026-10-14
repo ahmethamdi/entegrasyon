@@ -116,6 +116,7 @@ final class InventoryBatchBuilder
                 // GİDEN DÖNÜŞÜM — kırpmanın tek meşru yeri.
                 quantity: OutboundQuantity::forChannel($level),
                 version: $operation->entity_version,
+                externalParentId: $listing->external_parent_id,
             );
         }
 

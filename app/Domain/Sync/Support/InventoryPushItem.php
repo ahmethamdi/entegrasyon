@@ -25,6 +25,9 @@ final readonly class InventoryPushItem
         public int $quantity,
         /** Operasyonun taşıdığı iş sürümü — sonuç yazımında kullanılır. */
         public int $version,
+        // S5 · Kanalın grup/üst kimliği (Woo varyasyonu üst ürünün altında
+        // yazılır). Yalnız doluysa diziye girer; diğer adapter'lar yok sayar.
+        public ?string $externalParentId = null,
     ) {
         if ($quantity < 0) {
             throw new InvalidArgumentException(
@@ -43,6 +46,6 @@ final readonly class InventoryPushItem
             'sku' => $this->sku,
             'quantity' => $this->quantity,
             'version' => $this->version,
-        ];
+        ] + ($this->externalParentId !== null ? ['external_parent_id' => $this->externalParentId] : []);
     }
 }
