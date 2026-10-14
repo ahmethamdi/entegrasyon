@@ -98,6 +98,12 @@ return [
         explode(',', (string) env('OUTBOUND_WRITE_LOCKED_CHANNELS', 'hepsiburada,n11')),
     ))),
 
+    /*
+    | S5 · Tedarikçi XML akışı en büyük boyutu (bayt). Okuma bu sınırda
+    | KESİLİR; tur FETCH_FAILED (SUPPLIER_FEED_TOO_LARGE) olur.
+    */
+    'supplier_feed_max_bytes' => (int) env('SUPPLIER_FEED_MAX_BYTES', 64_000_000),
+
     'horizon_admin_emails' => env('HORIZON_ADMIN_EMAILS', ''),
 
     /*

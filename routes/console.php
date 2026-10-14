@@ -209,6 +209,15 @@ Schedule::command('questions:sync')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S5 · TEDARİKÇİ XML — her kaynak kendi `next_run_at`'inde, SAATTE BİR
+// (son turun bitişinden 60 dk sonra). Komut 5 dakikada bir yalnız zamanı
+// geleni kuyruğa koyar ve yarıda kalan turları kapatır; akışı kendisi
+// indirmez. Kaynaklar aynı dakikaya yığılmaz (her biri kendi saatinde).
+Schedule::command('suppliers:sync')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // A12 · EŞLEŞMEMİŞ SİPARİŞ SATIRLARI — SKU sonradan kataloğa girince stok
 // düşülür. Zamanlanmazsa satır sonsuza kadar PENDING kalır, bakiye satılmış
 // adet kadar fazla görünür ve kanallara FAZLA STOK gider.

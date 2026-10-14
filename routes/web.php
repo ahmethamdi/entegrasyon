@@ -34,6 +34,7 @@ use App\Http\Controllers\ReturnController;
 use App\Http\Controllers\ShopifyInstallController;
 use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\SupplierSourceController;
 use App\Http\Controllers\SyncFailureController;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
@@ -224,6 +225,20 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+
+    // S5 · Tedarikçi XML kaynakları (ADR-012). Örnek okuma POST'tur (dışarı
+    // istek atar); önizleme/uygulama turu KUYRUĞA koyar, istekte indirmez.
+    Route::get('/suppliers', [SupplierSourceController::class, 'index'])->name('suppliers.index');
+    Route::get('/suppliers/create', [SupplierSourceController::class, 'create'])->name('suppliers.create');
+    Route::post('/suppliers', [SupplierSourceController::class, 'store'])->name('suppliers.store');
+    Route::get('/suppliers/{source}', [SupplierSourceController::class, 'edit'])->name('suppliers.edit');
+    Route::put('/suppliers/{source}', [SupplierSourceController::class, 'update'])->name('suppliers.update');
+    Route::delete('/suppliers/{source}', [SupplierSourceController::class, 'destroy'])->name('suppliers.destroy');
+    Route::post('/suppliers/{source}/sample', [SupplierSourceController::class, 'sample'])->name('suppliers.sample');
+    Route::post('/suppliers/{source}/preview', [SupplierSourceController::class, 'preview'])->name('suppliers.preview');
+    Route::post('/suppliers/{source}/apply', [SupplierSourceController::class, 'apply'])->name('suppliers.apply');
+    Route::put('/suppliers/{source}/active', [SupplierSourceController::class, 'activate'])->name('suppliers.activate');
+    Route::get('/suppliers/{source}/runs/{run}', [SupplierSourceController::class, 'run'])->name('suppliers.runs.show');
 
     // Toplu içe aktarma (§13 · Faz 3). Yükleme dosyayı KAYDEDER ve
     // `listing:bulk` kuyruğuna iş atar — istekte işlenseydi 500 satırlık

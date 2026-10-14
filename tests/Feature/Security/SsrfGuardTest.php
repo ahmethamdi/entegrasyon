@@ -131,6 +131,28 @@ final class SsrfGuardTest extends TestCase
         $guard->resolve('karisik.example.com');
     }
 
+    /**
+     * S5 · http adresine görsel indirme ENGELLENİR: sabitleme 443 için
+     * yazılır, 80'e giden istekte işlemezdi (curl kendi DNS'ini çözer).
+     * Görsel adresi tedarikçi/kullanıcı denetimindedir.
+     */
+    #[Test]
+    public function an_http_download_is_blocked_before_any_request(): void
+    {
+        Http::fake(['*' => Http::response('x', 200, ['Content-Type' => 'image/jpeg'])]);
+
+        [$tenant] = $this->context();
+        $client = $this->clientFor($tenant, 'https://iyi.example.com/wp-json/wc/v3');
+
+        try {
+            TenantContext::runFor($tenant->id, fn () => $client->download('http://cdn.example.com/a.jpg'));
+            $this->fail('http adresine istek GİTMEMELİ.');
+        } catch (BlockedDestinationException) {
+        }
+
+        Http::assertNothingSent();
+    }
+
     /** Genel adrese çözülen ad normal çalışır. */
     #[Test]
     public function a_public_name_is_requested_normally(): void

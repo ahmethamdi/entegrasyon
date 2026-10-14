@@ -343,6 +343,14 @@ final class ChannelHttpClient
             return ['allow_redirects' => false];
         }
 
+        // YALNIZ https (S5 denetiminde bulundu): sabitleme `ana makine:443`
+        // için yazılır; `http://` isteği 80'e gider, sabitleme işlemez ve
+        // curl kendi DNS'ini çözer — port 80 SSRF + DNS rebinding. Görsel
+        // adresi kullanıcı/tedarikçi denetimindedir (download()).
+        if (strtolower((string) ($parts['scheme'] ?? '')) !== 'https') {
+            throw new BlockedDestinationException("Yalnız https adreslerine bağlanılır: {$host}");
+        }
+
         $ip = app(OutboundUrlGuard::class)->resolve($host, $port);
 
         $pinnedIp = str_contains($ip, ':') ? '['.$ip.']' : $ip;

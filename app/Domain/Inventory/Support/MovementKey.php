@@ -78,6 +78,22 @@ final class MovementKey
         return "import:{$importRowId}";
     }
 
+    /**
+     * Tedarikçi stoğu (S5, ADR-012): kayıt + tur. Aynı turun yeniden
+     * denenmesi defterde ikinci hareket üretmez; asıl koruma kaydın
+     * `last_applied_stock` alanıdır (hareketle aynı transaction).
+     */
+    public static function supplier(string $supplierRecordId, string $runId): string
+    {
+        return "supplier:{$supplierRecordId}:{$runId}";
+    }
+
+    /** Excel toplu düzenleme (S5): yükleme + satır, bir kez. */
+    public static function bulkEdit(string $importId, int $row): string
+    {
+        return "bulk:{$importId}:{$row}";
+    }
+
     public static function transferIn(string $transferId): string
     {
         return "transfer_in:{$transferId}";

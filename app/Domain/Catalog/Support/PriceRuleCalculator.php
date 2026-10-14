@@ -55,6 +55,24 @@ final class PriceRuleCalculator
         return self::fromMinor(self::roundMinor(max($minor, 0), $rounding));
     }
 
+    /**
+     * MALİYET ÜZERİNE MARKUP (S5, tedarikçi alış fiyatı → satış fiyatı):
+     * `maliyet × (1 + yüzde/100) + tutar`, kuruşta yarım yukarı, sonra
+     * kanal kuralıyla AYNI yuvarlama (daima yukarı).
+     *
+     * MARGIN DEĞİLDİR: %25 markup 100 → 125 (kâr/maliyet = %25); %25
+     * margin olsaydı 133,34 (kâr/satış = %25) olurdu. Ekran "alış
+     * fiyatının üzerine %" der.
+     */
+    public static function costMarkup(string $cost, string $percent, string $amount, string $rounding): string
+    {
+        $minor = self::toMinor($cost);
+        $minor = intdiv($minor * (10000 + self::toMinor($percent)) + 5000, 10000);
+        $minor += self::toMinor($amount);
+
+        return self::fromMinor(self::roundMinor(max($minor, 0), $rounding));
+    }
+
     private static function roundMinor(int $minor, string $rounding): int
     {
         return match ($rounding) {

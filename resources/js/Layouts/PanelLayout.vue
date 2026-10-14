@@ -37,6 +37,7 @@ const navGroups = [
             { href: '/returns', label: k('İadeler') },
             { href: '/questions', label: k('Müşteri soruları') },
             { href: '/products', label: k('Ürünler') },
+            { href: '/suppliers', label: k('Tedarikçi XML') },
         ],
     },
     {
