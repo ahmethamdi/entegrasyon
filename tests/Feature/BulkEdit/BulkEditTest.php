@@ -10,6 +10,7 @@ use App\Domain\BulkEdit\Models\BulkEditImport;
 use App\Domain\BulkEdit\Models\BulkEditRow;
 use App\Domain\BulkEdit\Support\BulkEditSheet;
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Inventory\Actions\ApplyMovement;
@@ -17,6 +18,8 @@ use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Inventory\Models\InventoryMovement;
 use App\Domain\Messaging\Models\OutboxEvent;
+use App\Domain\Sync\Models\Listing;
+use Database\Seeders\ChannelTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -158,6 +161,36 @@ final class BulkEditTest extends TestCase
         $this->assertSame('149.90', (string) $variant->refresh()->price);
         $this->assertSame(1, $this->asTenant($tenant, fn () => OutboxEvent::query()->where('event_type', 'VariantPriceChanged')->where('aggregate_id', $variant->id)->count()));
         Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function preview_counts_only_channels_whose_write_permission_is_on(): void
+    {
+        $this->seed(ChannelTypeSeeder::class);
+        [$tenant, $user, $warehouse] = $this->makeTenant();
+        $variant = $this->stockedVariant($tenant, $warehouse, 5, ['sku' => 'CH-1', 'price' => 10]);
+
+        $this->asTenant($tenant, function () use ($variant): void {
+            $open = ChannelConnection::factory()->create(['external_account_id' => 'a.example.com']);
+            $closed = ChannelConnection::factory()->create(['external_account_id' => 'b.example.com']);
+            $open->forceFill(['stock_sync_enabled' => true, 'price_sync_enabled' => false])->save();
+            $closed->forceFill(['stock_sync_enabled' => false, 'price_sync_enabled' => false])->save();
+
+            foreach ([$open, $closed] as $connection) {
+                Listing::factory()->create([
+                    'channel_connection_id' => $connection->id,
+                    'variant_id' => $variant->id,
+                    'external_id' => 'X-'.$connection->id,
+                    'lifecycle_status' => 'live',
+                ]);
+            }
+        });
+
+        $import = $this->upload($user, [$this->row($variant, 5, 4, 10, '12')]);
+        $row = $this->asTenant($tenant, fn () => BulkEditRow::query()->where('bulk_edit_import_id', $import->id)->firstOrFail());
+
+        $this->assertSame(1, $row->stock_channels, 'Yalnız stok izni açık bağlantı sayılır.');
+        $this->assertSame(0, $row->price_channels, 'Fiyat izni hiçbir bağlantıda açık değil.');
     }
 
     // ─────────────────────────────────────────── satır hataları
