@@ -146,3 +146,35 @@ Migration'lar: `2026_10_17_000100_create_supplier_tables`, `2026_10_17_000200_cr
 **Yeni teknik borç:** TD-47 `min_margin_percent` adı (formül markup) · TD-48 tedarikçi turunda kayıt başına sorgu (toplu ön yükleme) · TD-49 Woo değişken ürün YAYINI yok (gönderim hâlâ `type=simple`; çok varyantlı ürünü Woo'ya göndermek tek ürün gibi gider) · TD-50 Woo `PushFulfillment` ADR-010 kapısız (S5 öncesi) · TD-51 bağlanırken Woo webhook kaydı izinsiz yapılandırma yazması (sipariş okumak için gerekli, bilinçli) · TD-52 tedarikçi alış fiyatı KDV dahil/hariç ayrımı yok (olduğu gibi alınır).
 
 **Sprint durumları:** S1–S4 DEĞİŞMEDİ. **S5: PARTIAL — IMPLEMENTED, LIVE VERIFICATION PENDING.**
+
+---
+
+## 4. Canlıya alma (15 Eki 2026 21:20 UTC) — `8d48a11`
+
+- **Push:** altı S5 commit'i (`6d7d73d` `e278ed7` `0c52fd2` `896a393` `59e5b0f` `8d48a11`). Push öncesi Pint `55d939e`'deki M25 testinde 1 biçim hatası verdi (tam nitelikli sınıf adı); push'lanmamış commit'e katıldı (`55d939e`→`59e5b0f`, belge `7be6e1c`→`8d48a11`), içerik farkı yalnız `use` satırları. İlgisiz dosya yok. Önceki canlı `3789115`.
+- **OpenSpout:** kilitte yalnız `openspout/openspout v4.32.0` eklendi (başka paket değişmedi), PROD bağımlılığı; ister php ~8.3, ext-dom/fileinfo/filter/libxml/xmlreader/zip — canlı PHP 8.3.35'te hepsi var. Üretim imajı (`composer install --no-dev` kilitten + `dump-autoload --optimize --classmap-authoritative` + `check-platform-reqs`) yerelde ve sunucuda derlendi; canlıda `OpenSpout\Writer\XLSX\Writer` yükleniyor (classmap'te 150 sınıf).
+- **Yedek:** `/var/backups/oncesi-s5-34pazar-20261015-2112.dump` (21:12:45Z) sha256 `b38969eca25c1757c4af3c44dedc5657453bb16c6091f71f48f8eb467f083ab3`. `s5_restore_test`'e `pg_restore --exit-on-error` tamam; 38 tablonun adet + içerik md5'i canlıyla birebir aynı (products 646, variants 653, listings 653, orders 5, order_lines 5, inventory_movements 655, inventory_levels 653, invoices 0, S1 fin_tx 4, return_requests 0, channel_questions 4, inbox 32, outbox 661, jobs 0, failed_jobs 0, bağlantı 6).
+- **Migration (yedek kopyasında, S5 imajıyla):** UP 62,7 ms + 23,4 ms → DOWN 29,0 ms + 44,2 ms (6 tablo gitti) → UP 62,5 ms + 24,6 ms; üç durumda da 38 tablonun md5'i yedekle aynı, `channel_connections` izinleri değişmedi. Varsayılanlar: `is_active=false`, `stock_policy=informational`, `price_policy=none`, `create_products=false`. **Canlıda:** `2026_10_17_000100_create_supplier_tables` 74,5 ms, `2026_10_17_000200_create_bulk_edit_tables` 28,2 ms.
+- **Ölçüm (yerel ayrı DB `s5_bench`, üretim verisi yok, bağlantı 0 → dış yazma imkânsız; Postgres 16.15 ayarları canlıyla aynı: max_locks_per_transaction 64, shared_buffers 128 MB):**
+
+| N | Tur | Süre | Pik bellek | Sorgu/kayıt | Sonuç | Stok hareketi |
+|---|---|---|---|---|---|---|
+| 500 | ilk | 2,0 sn | 50,5 MB | 19,2 | 500 yeni, 0 hata | +429 (71 kayıt stok 0) |
+| 500 | aynı akış | 0,5 sn | 50,5 MB | 3,0 | 500 değişmedi | 0 |
+| 500 | %10 stok | 0,5 sn | 50,5 MB | 3,9 | 50 değişti | +50 |
+| 1000 | ilk | 4,2 sn | 50,5 MB | 19,2 | 1000 yeni | +858 |
+| 1000 | aynı akış | 0,9 sn | 50,5 MB | 3,0 | 1000 değişmedi | 0 |
+| 1000 | %10 stok | 1,1 sn | 50,5 MB | 3,9 | 100 değişti | +100 |
+| 5000 | ilk | 22,2 sn | 52,5 MB | 19,1 | 5000 yeni, 0 hata | +4286 |
+| 5000 | aynı akış | 6,1 sn | 52,5 MB | 3,0 | 5000 değişmedi | 0 |
+| 5000 | %10 stok | 7,2 sn | 52,5 MB | 3,9 | 500 değişti | +500 |
+
+  Doğrusal ölçekleniyor, bellek sabit; iş zaman aşımı 540 sn'nin çok altında. Ölçüm sonrası defter = projeksiyon (uyuşmazlık 0), çift anahtar 0; ölçüm penceresinde Postgres hatası 0. **Kök neden doğrulandı:** önceki "out of shared memory" `RefreshDatabase`'in tek dış transaction'ında kayıt başına savepoint kilitlerinin birikmesiydi; üretim yolunda kayıt başına commit olduğundan oluşmuyor. Kalan maliyet: ilk turda kayıt başına ~19 sorgu (oluşturma), sonraki turlarda ~3 → TD-48 (toplu ön yükleme) iyileştirme, engel değil.
+- **Testler:** tam takım **2532 yeşil** (belge 2531 diyordu: sayı M25 testinden önce alınmıştı), Pint temiz (düzeltme sonrası), `npm run build` tamam. S5 dosyaları 134/134.
+- **Deploy:** `nohup ./deploy.sh`, 21:20:42 başladı; app/horizon/scheduler/relay/web yeniden oluşturuldu, dördünde de S5 kodu. `/up` 200, Horizon running, failed 0, jobs 0.
+- **Kapalı doğma (tedarikçi):** zamanlayıcıda `suppliers:sync` */5; 21:25 turu 254 ms, kaynak 0 → tur 0, iş 0. supplier_sources/records/sync_runs/run_changes, bulk_edit_imports/rows = 0. Deploy sonrası (21:20–21:27) yeni stok hareketi 0, outbox 0, GET dışı dış çağrı 0 (yalnız 5 olağan GET 200).
+- **Kapalı doğma (Woo):** canlıda Woo bağlantısı YOK, `channel_types.woocommerce.is_active=false`; üretimde bağlantı açılmadı. `channel_connections` izin sütunlarının DB varsayılanı beşi de `false`; sihirbaz yolu `callback_stores_keys_once_then_health_and_webhooks_run_with_writes_closed` ile.
+- **Taban farkı T0 (21:20:38) ↔ T1 (21:27:17):** 38 tablonun adet + içerik md5'i, bağlantıların sabit sütunları ve 6 bağlantının 5 izni AYNI. Fiyat toplamı 112463.24, maliyet tanımlı varyant 0, on_hand toplamı 589057 — değişmedi.
+- **Gözlem T2 (21:58:17, deploy +38 dk):** 38 tablodan 37'si T0 ile aynı; tek fark `channel_credentials` — yedekle sütun sütun karşılaştırıldı, değişen yalnız `refresh_failures` ve `refresh_retry_at` (Etsy pending bağlantısının saatlik token yenilemesi, 21:30 `POST oauth/token` 403 — S4'ten beri bilinen anomali, S5 ile ilgisiz). İzinler aynı; deploy'dan beri GET dışı tek dış çağrı bu Etsy yenilemesi; outbox 0, stok hareketi 0, S5 tabloları 0, jobs/failed 0; `suppliers:sync` 35 dk'da 7 kez DONE; Horizon running, `/up` 200, uygulama günlüğünde ERROR 0. Geçici DB'ler (`s5_restore_test`, `s5_mig_test`) ve kontrol imajı silindi; yedek yerinde.
+- **Ek kanıt testleri (commit'lenmedi, kapsam altı commit):** Woo içe aktarma → 3 kaydın üçüne dış kimlik bağı → içerik değişikliği + yayın → tek yazma `PUT /products/60`, `POST /products` 0. SSRF görsel indirme: http ve https için 127.0.0.1, localhost, 10/8, 192.168, 172.16, 169.254.169.254, [::1], [fd00::1], [fe80::1], [::ffff:127.0.0.1] ve iç IP'ye çözülen genel ad → 29/29 engel, istek 0; genel https → 302 → metadata: tek istek, iç hedefe 0 (yönlendirme kapalı). Bu iki dosya bir sonraki işte kalıcı teste dönüştürülmeli (TD-53).
+- **Yeni teknik borç:** TD-53 yukarıdaki iki kanıt testinin depoya alınması.
