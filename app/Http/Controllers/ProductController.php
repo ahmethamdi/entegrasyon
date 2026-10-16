@@ -355,8 +355,8 @@ final class ProductController extends Controller
             ->where('l.tenant_id', $tenantId)
             ->where('v.tenant_id', $tenantId)
             ->where('l.lifecycle_status', '!=', 'delisted')
-            ->groupBy('v.product_id', 'c.id', 'c.label', 'c.channel_type_code', 'ct.name')
-            ->select('v.product_id', 'c.id', 'c.label', 'c.channel_type_code', 'ct.name')
+            ->groupBy('v.product_id', 'c.id', 'c.label', 'c.channel_type_code', 'ct.name', 'c.stock_sync_enabled')
+            ->select('v.product_id', 'c.id', 'c.label', 'c.channel_type_code', 'ct.name', 'c.stock_sync_enabled')
             ->selectRaw('bool_or(EXISTS ('.$problem->toSql().')) AS has_problem', $problem->getBindings())
             ->selectRaw("bool_or(l.lifecycle_status IN ('pending_approval', 'draft')
                 OR EXISTS (SELECT 1 FROM listing_sync_states s WHERE s.listing_id = l.id
@@ -372,6 +372,9 @@ final class ProductController extends Controller
                 'label' => $row->label ?: ($row->name ?? $row->channel_type_code),
                 'code' => $row->channel_type_code,
                 'state' => $row->has_problem ? 'problem' : ($row->has_pending ? 'pending' : 'live'),
+                // Stok sayımı bu kanala GİDER mi (ADR-010) — sayım kutusu
+                // "gönderilir" sözünü yalnız buna göre verir.
+                'stockSync' => (bool) $row->stock_sync_enabled,
             ];
         }
 

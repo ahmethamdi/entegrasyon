@@ -6,8 +6,10 @@ namespace App\Http\Controllers;
 
 use App\Domain\Channels\Actions\CheckChannelHealth;
 use App\Domain\Channels\Actions\RegisterChannelWebhooks;
+use App\Domain\Channels\Actions\SetOutboundWrite;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
+use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\CredentialVault;
@@ -53,6 +55,7 @@ final class ShopifyOAuthController extends Controller
         private readonly CheckChannelHealth $checkHealth,
         private readonly RecordAuditLog $audit,
         private readonly RegisterChannelWebhooks $registerWebhooks,
+        private readonly SetOutboundWrite $writes,
     ) {}
 
     public function redirect(Request $request, string $connectionId): Response|RedirectResponse
@@ -159,7 +162,12 @@ final class ShopifyOAuthController extends Controller
      */
     public function complete(ChannelConnection $connection, array $credentials): RedirectResponse
     {
-        DB::transaction(function () use ($connection, $credentials): void {
+        // İLK YETKİLENDİRME mi: sağlık kontrolü `connected_at`'i ilk başarıda
+        // yazar. Yeniden yetkilendirme (anahtar yenileme, kapsam değişikliği)
+        // satıcının kapattığı izni GERİ AÇMAZ.
+        $firstAuthorization = $connection->connected_at === null;
+
+        DB::transaction(function () use ($connection, $credentials, $firstAuthorization): void {
             $this->vault->store(
                 $connection,
                 $credentials['secrets'],
@@ -177,11 +185,36 @@ final class ShopifyOAuthController extends Controller
                     'secret_keys' => array_keys($credentials['secrets']),
                 ],
             );
+
+            if ($firstAuthorization) {
+                $this->grantInstallWrites($connection);
+            }
         });
 
         $this->resolveLocation($connection);
 
         return $this->finish($connection);
+    }
+
+    /**
+     * ADR-010 İSTİSNASI — Shopify'da stok ve fiyat gönderimi kurulumla açılır.
+     *
+     * Satıcı 34Pazar'ı mağazasına KENDİSİ kurdu ve Shopify'ın onay ekranında
+     * stok/ürün yazma kapsamlarını onayladı; uygulamanın işi bu ikisi. Kapalı
+     * doğduğunda panelde değişen stok Shopify'a hiç gitmiyordu ve App Store
+     * incelemesi 2.1.4 (veri senkronu) ile reddetti (16 Eki 2026, ref 140131).
+     *
+     * ÜRÜN YAYINI KAPALI KALIR: içe aktarılan ürünün içeriği ilk yayında
+     * Shopify'dakini ezebilir — o hâlâ satıcının ürün başına açık eylemi.
+     * Diğer kanallarda ADR-010 aynen geçerli.
+     */
+    private function grantInstallWrites(ChannelConnection $connection): void
+    {
+        foreach ([OutboundWrite::STOCK_SYNC, OutboundWrite::PRICE_SYNC] as $write) {
+            $this->writes->run($connection, $write, true);
+        }
+
+        Log::info('shopify.install.writes_enabled', ['connection' => $connection->id]);
     }
 
     /**

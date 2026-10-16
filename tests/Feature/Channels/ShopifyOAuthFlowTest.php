@@ -296,6 +296,52 @@ final class ShopifyOAuthFlowTest extends TestCase
     // ─────────────────────────────────────────────────────── yardımcılar
 
     /** @return array{0: User, 1: ChannelConnection} */
+    // ═════════════════════════════════════════════════════ yazma izinleri (ADR-010 istisnası)
+
+    /**
+     * App Store incelemesi 2.1.4 reddi (16 Eki 2026, ref 140131): kurulan
+     * mağazada izinler kapalı doğuyordu, panelde değişen stok Shopify'a HİÇ
+     * gitmiyordu. İlk yetkilendirme stok + fiyatı açar; ürün yayını kapalı.
+     */
+    #[Test]
+    public function the_first_authorization_turns_on_stock_and_price_sync_but_not_publishing(): void
+    {
+        [$user, $connection] = $this->pendingShop();
+        $this->asSystem(fn () => $connection->forceFill([
+            'connected_at' => null,
+            'product_publish_enabled' => false,
+            'price_sync_enabled' => false,
+            'stock_sync_enabled' => false,
+        ])->save());
+        $this->fakeShopify(locations: [['id' => 'gid://shopify/Location/1', 'name' => 'Ana depo', 'isActive' => true]]);
+
+        $this->returnFromShopify($user, $connection)->assertRedirect(route('channels.index'));
+
+        $fresh = $this->fresh($connection);
+        $this->assertTrue($fresh->stock_sync_enabled);
+        $this->assertTrue($fresh->price_sync_enabled);
+        $this->assertFalse($fresh->product_publish_enabled, 'İçe aktarılan ürünün içeriği ezilmesin: yayın satıcının kararı.');
+    }
+
+    /** Yeniden yetkilendirme satıcının KAPATTIĞI izni geri açmaz. */
+    #[Test]
+    public function a_reauthorization_keeps_writes_the_seller_turned_off(): void
+    {
+        [$user, $connection] = $this->pendingShop();
+        $this->asSystem(fn () => $connection->forceFill([
+            'connected_at' => now()->subDay(),
+            'price_sync_enabled' => false,
+            'stock_sync_enabled' => false,
+        ])->save());
+        $this->fakeShopify(locations: [['id' => 'gid://shopify/Location/1', 'name' => 'Ana depo', 'isActive' => true]]);
+
+        $this->returnFromShopify($user, $connection)->assertRedirect(route('channels.index'));
+
+        $fresh = $this->fresh($connection);
+        $this->assertFalse($fresh->stock_sync_enabled);
+        $this->assertFalse($fresh->price_sync_enabled);
+    }
+
     private function pendingShop(): array
     {
         $this->asSystem(fn () => ChannelType::query()->updateOrCreate(['code' => 'shopify'], [

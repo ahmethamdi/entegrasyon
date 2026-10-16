@@ -309,6 +309,30 @@ final class ProductStockScreenTest extends TestCase
         $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
     }
 
+    /**
+     * Sayım kutusu "kanala gönderilir" sözünü yalnız stok izni AÇIK kanal
+     * için verir (App Store 2.1.4 reddi, 16 Eki 2026): liste kanal başına
+     * izni taşır.
+     */
+    #[Test]
+    public function each_channel_chip_says_whether_stock_counts_reach_it(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+        $open = $this->stockedVariant($tenant, $warehouseId, sku: 'ACIK-1', onHand: 5);
+        $closed = $this->stockedVariant($tenant, $warehouseId, sku: 'KAPALI-1', onHand: 5);
+
+        $this->listOn($tenant, $open, desiredVersion: 1, syncedVersion: 1, status: 'synced');
+        $closedConnection = $this->asTenant($tenant, fn () => ChannelConnection::factory()->outboundDisabled()->create(['channel_type_code' => 'woocommerce'])->id);
+        $this->listOn($tenant, $closed, desiredVersion: 1, syncedVersion: 1, status: 'synced', connectionId: $closedConnection);
+
+        $reach = [];
+        foreach ($this->rows($this->actingAs($user)->get('/products')) as $row) {
+            $reach[$row['sku']] = $row['channels'][0]['stockSync'];
+        }
+
+        $this->assertSame(['ACIK-1' => true, 'KAPALI-1' => false], array_intersect_key($reach, ['ACIK-1' => 1, 'KAPALI-1' => 1]));
+    }
+
     // ─────────────────────────────────────────────────── yardımcılar
 
     /** @return array<int, array<string, mixed>> */

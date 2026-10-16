@@ -86,6 +86,14 @@ const items = computed(() => {
         : { type: 'group', key: item.key, ...summarize(item.members) }));
 });
 
+/* Stok sayımı hangi kanala GİDER (ADR-010 stok izni) — kutudaki söz buna göre. */
+function stockReach(row) {
+    return {
+        on: row.channels.filter((c) => c.stockSync).map((c) => c.label),
+        off: row.channels.filter((c) => !c.stockSync).map((c) => c.label),
+    };
+}
+
 function summarize(members) {
     const prices = members.map((m) => Number(m.price)).filter((p) => !Number.isNaN(p));
     const channels = new Map();
@@ -459,7 +467,17 @@ function submitCount() {
                         <button type="button" class="px-2 py-1.5 text-sm text-stone-600 underline" @click="counting = null">
                             {{ t('Vazgeç') }}
                         </button>
-                        <p class="w-full text-xs text-stone-500">{{ t('Fark kaydedilir ve bağlı kanallara gönderilir.') }}</p>
+                        <!-- ADR-010: söz yalnız gerçeğe göre — stok izni kapalı kanala sayım GİTMEZ. -->
+                        <p v-if="stockReach(item.row).on.length" class="w-full text-xs text-stone-500">
+                            {{ t('Fark kaydedilir ve şu kanallara gönderilir: :channels', { channels: stockReach(item.row).on.join(', ') }) }}
+                        </p>
+                        <p v-if="stockReach(item.row).off.length" class="w-full text-xs text-amber-800">
+                            {{ t(':channels için stok gönderimi kapalı; bu sayım oraya gitmez.', { channels: stockReach(item.row).off.join(', ') }) }}
+                            <Link href="/channels" class="underline">{{ t('Kanallarda aç') }}</Link>
+                        </p>
+                        <p v-if="!item.row.channels.length" class="w-full text-xs text-stone-500">
+                            {{ t('Ürün henüz bir kanala bağlı değil; sayım yalnız 34Pazar\'da kaydedilir.') }}
+                        </p>
                         <p v-if="countForm.errors.target" class="w-full text-sm text-red-700">{{ countForm.errors.target }}</p>
                     </form>
                 </li>
