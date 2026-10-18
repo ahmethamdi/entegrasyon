@@ -165,7 +165,13 @@ final class ShopifyOAuthController extends Controller
         // İLK YETKİLENDİRME mi: sağlık kontrolü `connected_at`'i ilk başarıda
         // yazar. Yeniden yetkilendirme (anahtar yenileme, kapsam değişikliği)
         // satıcının kapattığı izni GERİ AÇMAZ.
-        $firstAuthorization = $connection->connected_at === null;
+        //
+        // KALDIRILIP YENİDEN KURULAN uygulama da ilk kurulumdur: `app/uninstalled`
+        // bağlantıyı silmez, `inactive` işaretler (RevokeChannelAccess) ve
+        // kurulum aynı satırı yeniden kullanır. `connected_at` dolu kaldığı için
+        // izinler kapalı kalıyordu — App Store inceleyicisi aynı mağazaya yeniden
+        // kurduğunda 2.1.4 reddi tekrar ederdi (18 Eki, ej5ezr-cd ölçüldü).
+        $firstAuthorization = $connection->connected_at === null || $connection->status === 'inactive';
 
         DB::transaction(function () use ($connection, $credentials, $firstAuthorization): void {
             $this->vault->store(

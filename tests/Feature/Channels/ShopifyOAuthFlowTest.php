@@ -295,7 +295,6 @@ final class ShopifyOAuthFlowTest extends TestCase
 
     // ─────────────────────────────────────────────────────── yardımcılar
 
-    /** @return array{0: User, 1: ChannelConnection} */
     // ═════════════════════════════════════════════════════ yazma izinleri (ADR-010 istisnası)
 
     /**
@@ -342,6 +341,33 @@ final class ShopifyOAuthFlowTest extends TestCase
         $this->assertFalse($fresh->price_sync_enabled);
     }
 
+    /**
+     * Kaldırılıp yeniden kurulan uygulama yeni kurulumdur: `app/uninstalled`
+     * satırı `inactive` bırakır, `connected_at` dolu kalır. İnceleyici aynı
+     * mağazaya yeniden kurunca izinler kapalı kalıyordu (2.1.4 tekrarı).
+     */
+    #[Test]
+    public function a_reinstall_after_uninstall_turns_stock_and_price_sync_back_on(): void
+    {
+        [$user, $connection] = $this->pendingShop();
+        $this->asSystem(fn () => $connection->forceFill([
+            'connected_at' => now()->subDay(),
+            'status' => 'inactive',
+            'product_publish_enabled' => false,
+            'price_sync_enabled' => false,
+            'stock_sync_enabled' => false,
+        ])->save());
+        $this->fakeShopify(locations: [['id' => 'gid://shopify/Location/1', 'name' => 'Ana depo', 'isActive' => true]]);
+
+        $this->returnFromShopify($user, $connection)->assertRedirect(route('channels.index'));
+
+        $fresh = $this->fresh($connection);
+        $this->assertTrue($fresh->stock_sync_enabled);
+        $this->assertTrue($fresh->price_sync_enabled);
+        $this->assertFalse($fresh->product_publish_enabled);
+    }
+
+    /** @return array{0: User, 1: ChannelConnection} */
     private function pendingShop(): array
     {
         $this->asSystem(fn () => ChannelType::query()->updateOrCreate(['code' => 'shopify'], [
