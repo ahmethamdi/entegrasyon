@@ -124,8 +124,15 @@ class Order extends Model
         return $this->hasMany(Fulfillment::class);
     }
 
+    /** Siparişin SATIŞ faturası — iade/iptal kayıtları `invoiceCorrections()`. */
     public function invoice(): HasOne
     {
-        return $this->hasOne(Invoice::class);
+        return $this->hasOne(Invoice::class)->where('kind', Invoice::KIND_SALE);
+    }
+
+    /** Satış faturasının düzeltmeleri (iade, iptal) — ADR-007. */
+    public function invoiceCorrections(): HasMany
+    {
+        return $this->hasMany(Invoice::class)->where('kind', '!=', Invoice::KIND_SALE);
     }
 }

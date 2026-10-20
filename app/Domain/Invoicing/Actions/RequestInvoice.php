@@ -22,9 +22,10 @@ use Illuminate\Database\UniqueConstraintViolationException;
  * kanal o an cevap vermese de istek KAYBOLMAZ ve satıcı durumu sipariş
  * ekranında görür.
  *
- * SİPARİŞ BAŞINA TEK FATURA veritabanı kısıtıyla korunur
- * (`invoices_order_unique`): iki sekmeden aynı anda basılan düğme ikinci
- * satırı açamaz, var olan satır döner.
+ * SİPARİŞ BAŞINA TEK SATIŞ FATURASI veritabanı kısıtıyla korunur
+ * (`invoices_order_kind_ref_unique`): iki sekmeden aynı anda basılan düğme
+ * ikinci satırı açamaz, var olan satır döner. İade/iptal ayrı türdür
+ * (`RequestInvoiceCorrection`).
  *
  * AYLIK FATURA KOTASI (S6) YALNIZ YENİ SATIRDA sorulur: siparişin satırı
  * zaten varsa o döner ve hak harcanmaz; yeniden deneme (`retry`) de aynı
@@ -41,7 +42,7 @@ final class RequestInvoice
     {
         $tenantId = TenantContext::idOrFail();
 
-        $existing = Invoice::query()->where('order_id', $order->id)->first();
+        $existing = Invoice::query()->sales()->where('order_id', $order->id)->first();
 
         if ($existing !== null) {
             return $existing;
@@ -58,7 +59,7 @@ final class RequestInvoice
                 'requested_by' => $actorId,
             ]);
         } catch (UniqueConstraintViolationException) {
-            return Invoice::query()->where('order_id', $order->id)->firstOrFail();
+            return Invoice::query()->sales()->where('order_id', $order->id)->firstOrFail();
         }
 
         IssueInvoice::dispatch($invoice->id, $tenantId)->onQueue('orders:high');

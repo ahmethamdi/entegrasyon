@@ -69,7 +69,7 @@ final class MaybeAutoInvoice
      * da iptaldir: kalemler yeni paketlerde yeniden gelir ve fatura onlara
      * kesilir.
      */
-    private const CANCELLED_STATUSES = ['cancelled', 'canceled', 'unpacked'];
+    public const CANCELLED_STATUSES = ['cancelled', 'canceled', 'unpacked'];
 
     public function __construct(private readonly RequestInvoice $requestInvoice = new RequestInvoice) {}
 

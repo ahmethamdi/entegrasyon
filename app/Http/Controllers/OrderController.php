@@ -8,15 +8,20 @@ use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Invoicing\Actions\RequestInvoice;
+use App\Domain\Invoicing\Actions\RequestInvoiceCorrection;
+use App\Domain\Invoicing\Exceptions\InvoiceCorrectionRefused;
+use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
 use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Invoicing\Support\InvoiceProviders;
+use App\Domain\Invoicing\Support\ReturnDraftBuilder;
 use App\Domain\Orders\Actions\RecordPanelShipment;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Models\OrderEvent;
 use App\Domain\Orders\Models\OrderLine;
+use App\Domain\Returns\Models\ReturnRequest;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -105,6 +110,7 @@ final class OrderController extends Controller
             'events' => fn ($query) => $query->orderByDesc('occurred_at'),
             'fulfillments' => fn ($query) => $query->orderBy('created_at'),
             'invoice',
+            'invoiceCorrections',
             'connection:id,channel_type_code,label',
             'connection.channelType:code,adapter_class',
         ])->findOrFail($order);
@@ -184,8 +190,77 @@ final class OrderController extends Controller
                 ],
                 'invoiceChannelSupported' => $this->channelSupportsInvoicing($order),
                 'invoiceAccountReady' => (bool) InvoiceAccount::query()->first()?->isUsable(),
+
+                // S6 · düzeltmeler (iptal, iade kaydı) ve açılabilecek olanlar.
+                'invoiceCorrections' => $order->invoiceCorrections
+                    ->sortBy('created_at')
+                    ->map(fn (Invoice $correction): array => [
+                        'id' => $correction->id,
+                        'kind' => $correction->kind,
+                        'status' => $correction->status,
+                        'error' => $correction->error,
+                        'issuedAt' => $correction->issued_at?->toIso8601String(),
+                        'returnRequestId' => $correction->kind === Invoice::KIND_RETURN ? $correction->ref : null,
+                    ])->values()->all(),
+                'canCancelInvoice' => $this->canCancelInvoice($order),
+                'returnInvoiceCandidates' => $this->returnInvoiceCandidates($order),
             ],
         ]);
+    }
+
+    /**
+     * İptal edilen siparişin kesilmiş faturasını iptal eder (Paraşüt).
+     * Ön koşul tutmazsa satır açılmaz, sebep ekranda söylenir.
+     */
+    public function cancelInvoice(Request $request, string $order, RequestInvoiceCorrection $corrections): RedirectResponse
+    {
+        $order = Order::query()->findOrFail($order);
+        $account = InvoiceAccount::query()->first();
+
+        if ($account === null || ! $account->isUsable()) {
+            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından Paraşüt hesabınızı bağlayın.')]);
+        }
+
+        try {
+            $corrections->cancel($order, $account, $request->user()?->id);
+        } catch (InvoiceCorrectionRefused $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
+        return back()->with('success', __('Fatura iptal ediliyor.'));
+    }
+
+    /** Kabul edilen iade talebini satış faturasının carisine kaydeder. */
+    public function recordInvoiceReturn(Request $request, string $order, string $returnRequest, RequestInvoiceCorrection $corrections): RedirectResponse
+    {
+        $claim = ReturnRequest::query()->where('order_id', $order)->findOrFail($returnRequest);
+        $account = InvoiceAccount::query()->first();
+
+        if ($account === null || ! $account->isUsable()) {
+            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından Paraşüt hesabınızı bağlayın.')]);
+        }
+
+        try {
+            $corrections->recordReturn($claim, $account, $request->user()?->id);
+        } catch (InvoiceCorrectionRefused $e) {
+            return back()->withErrors(['invoice' => $e->getMessage()]);
+        }
+
+        return back()->with('success', __('İade muhasebeye kaydediliyor.'));
+    }
+
+    /** Başarısız iptal/iade kaydını yeniden dener. */
+    public function retryInvoiceCorrection(string $order, string $correction, RequestInvoiceCorrection $corrections): RedirectResponse
+    {
+        $row = Invoice::query()
+            ->where('order_id', $order)
+            ->where('kind', '!=', Invoice::KIND_SALE)
+            ->where('status', Invoice::STATUS_FAILED)
+            ->findOrFail($correction);
+
+        $corrections->retry($row);
+
+        return back()->with('success', __('Yeniden deneniyor.'));
     }
 
     /**
@@ -226,6 +301,7 @@ final class OrderController extends Controller
     public function retryInvoice(string $order, RequestInvoice $requestInvoice): RedirectResponse
     {
         $invoice = Invoice::query()
+            ->sales()
             ->where('order_id', $order)
             ->where('status', Invoice::STATUS_FAILED)
             ->firstOrFail();
@@ -242,6 +318,7 @@ final class OrderController extends Controller
     public function retryInvoiceUpload(string $order, RequestInvoice $requestInvoice): RedirectResponse
     {
         $invoice = Invoice::query()
+            ->sales()
             ->where('order_id', $order)
             ->where('status', Invoice::STATUS_ISSUED)
             ->where('upload_status', Invoice::UPLOAD_FAILED)
@@ -262,6 +339,7 @@ final class OrderController extends Controller
     public function invoicePdf(string $order, InvoiceProviders $providers): RedirectResponse
     {
         $invoice = Invoice::query()
+            ->sales()
             ->where('order_id', $order)
             ->where('status', Invoice::STATUS_ISSUED)
             ->firstOrFail();
@@ -372,6 +450,70 @@ final class OrderController extends Controller
         $class = $order->connection?->channelType?->adapter_class;
 
         return is_string($class) && $class !== '' && is_subclass_of($class, SupportsInvoiceData::class);
+    }
+
+    /**
+     * İptal düğmesi yalnız işe yarayacağı yerde görünür: e-arşiv / muhasebe
+     * kaydı, sipariş iptal, açık düzeltme yok. Süre (e-arşiv
+     * `cancellable_until`) burada SORULMAZ — ekran Paraşüt'e gitmesin;
+     * geçtiyse iş sebebiyle "iptal edilemedi" der.
+     */
+    private function canCancelInvoice(Order $order): bool
+    {
+        $sale = $order->invoice;
+
+        if ($sale === null || $sale->status !== Invoice::STATUS_ISSUED || $sale->document_type === Invoice::TYPE_E_INVOICE) {
+            return false;
+        }
+
+        $blocked = $order->invoiceCorrections->contains(static fn (Invoice $c): bool => $c->status !== Invoice::STATUS_FAILED);
+
+        return ! $blocked && RequestInvoiceCorrection::isCancelled($order);
+    }
+
+    /**
+     * Siparişin iade talepleri — kaydedilebilir olanlar ve neden olamayanlar.
+     * Hesap kanonik kayıttan yapılır (`ReturnDraftBuilder`), ağa çıkılmaz.
+     *
+     * @return list<array{id: string, claim: string, recordable: bool, reason: string|null}>
+     */
+    private function returnInvoiceCandidates(Order $order): array
+    {
+        $sale = $order->invoice;
+
+        if ($sale === null || $sale->status !== Invoice::STATUS_ISSUED || $sale->document_type === Invoice::TYPE_E_INVOICE) {
+            return [];
+        }
+
+        if ($order->invoiceCorrections->contains(static fn (Invoice $c): bool => $c->kind === Invoice::KIND_CANCEL && $c->status !== Invoice::STATUS_FAILED)) {
+            return [];
+        }
+
+        $recorded = $order->invoiceCorrections
+            ->filter(static fn (Invoice $c): bool => $c->kind === Invoice::KIND_RETURN)
+            ->pluck('ref')
+            ->all();
+
+        return ReturnRequest::query()
+            ->where('order_id', $order->id)
+            ->whereNotIn('id', $recorded)
+            ->orderBy('created_at')
+            ->get()
+            ->map(static function (ReturnRequest $claim): array {
+                try {
+                    ReturnDraftBuilder::build($claim);
+                    $reason = null;
+                } catch (InvoiceDataUnavailable $e) {
+                    $reason = $e->getMessage();
+                }
+
+                return [
+                    'id' => $claim->id,
+                    'claim' => $claim->external_claim_id,
+                    'recordable' => $reason === null,
+                    'reason' => $reason,
+                ];
+            })->values()->all();
     }
 
     private function blankToNull(?string $value): ?string

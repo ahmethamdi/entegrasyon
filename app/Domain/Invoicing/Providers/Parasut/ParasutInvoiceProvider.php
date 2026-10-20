@@ -5,14 +5,18 @@ declare(strict_types=1);
 namespace App\Domain\Invoicing\Providers\Parasut;
 
 use App\Domain\Invoicing\Contracts\InvoiceProvider;
+use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceBuyer;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Invoicing\Support\IssueOutcome;
+use App\Domain\Invoicing\Support\ReturnDraft;
 use App\Domain\Invoicing\Support\SubmitOptions;
+use App\Domain\Sync\Enums\ErrorClass;
 use DateTimeImmutable;
 use DateTimeZone;
+use Exception;
 use RuntimeException;
 
 /**
@@ -51,6 +55,20 @@ use RuntimeException;
  *     dönmesi; TRL dışı para biriminde `exchange_rate` zorunlu mu
  *   · `accounts` listesinin alan adları (`name`, `account_type`) ve arşivli
  *     hesapların listeye gelip gelmediği
+ *
+ * İPTAL VE İADE (S6) — uçlar Paraşüt'ün GitHub'daki resmî swagger'ından
+ * (parasutcom/api-doc `spec/swagger.yaml`); DAVRANIŞ gerçek hesapta
+ * doğrulanacak:
+ *   · `DELETE sales_invoices/{id}/cancel` e-arşivi GİB'de de iptal ediyor
+ *     mu, yoksa yalnız Paraşüt kaydını mı; tahsilat kendiliğinden geri
+ *     alınıyor mu
+ *   · iptal sonrası `item_type`'ın `cancelled` dönmesi (idempotentlik buna
+ *     dayanır)
+ *   · `e_archives/{id}` → `cancellable_until` biçimi (ISO 8601 varsayıldı)
+ *   · iade için `purchase_bills` + `item_type = refund` + `supplier` =
+ *     satışın müşteri carisi kabul ediliyor mu (cari `account_type =
+ *     customer` açılmıştı); muhasebeciyle doğrulanacak: nihai tüketiciden
+ *     iadenin Paraşüt'te doğru kaydı bu mu
  */
 final class ParasutInvoiceProvider implements InvoiceProvider
 {
@@ -143,6 +161,94 @@ final class ParasutInvoiceProvider implements InvoiceProvider
         $url = $response['data']['attributes']['url'] ?? null;
 
         return is_string($url) && str_starts_with($url, 'https://') ? $url : null;
+    }
+
+    /**
+     * İptal: önce fatura okunur — zaten `cancelled` ise iş biter (iş
+     * DELETE'ten sonra ölmüş olabilir; ikinci DELETE 422 dönerdi).
+     *
+     * e-ARŞİV yalnız `cancellable_until`'e kadar iptal edilebilir; tarih
+     * yoksa ya da geçtiyse istek GÖNDERİLMEZ ve satıcıya iade yolu söylenir.
+     * e-FATURA API'den iptal edilmez (GİB'de alıcının reddi/iade faturası
+     * gerekir) — talep aşamasında zaten reddedilir, burada ikinci kapı.
+     */
+    public function cancel(Invoice $cancellation, Invoice $sale): void
+    {
+        if ($sale->provider_invoice_id === null) {
+            throw new InvoiceProviderException(ErrorClass::VALIDATION, 'İptal edilecek satış faturası Paraşüt\'te yok.');
+        }
+
+        if ($sale->document_type === Invoice::TYPE_E_INVOICE) {
+            throw new InvoiceProviderException(ErrorClass::VALIDATION, 'e-Fatura Paraşüt\'ten iptal edilemez; alıcının iade faturası kesmesi gerekir.');
+        }
+
+        $current = $this->client->get("sales_invoices/{$sale->provider_invoice_id}");
+
+        if (($current['data']['attributes']['item_type'] ?? null) === 'cancelled') {
+            return;
+        }
+
+        if ($sale->document_type === Invoice::TYPE_E_ARCHIVE) {
+            $this->assertArchiveCancellable($sale);
+        }
+
+        $this->client->delete("sales_invoices/{$sale->provider_invoice_id}/cancel");
+    }
+
+    /**
+     * İade — Paraşüt'te "iade faturası" GİDER tarafındadır: `purchase_bills`,
+     * `item_type = refund`, tedarikçi olarak satışın carisi. Satış tarafındaki
+     * `refund` alıştan iadedir (satıcının tedarikçisine iadesi) — o değil.
+     *
+     * e-BELGE İSTENMEZ: nihai tüketiciden iadede satıcı belge kesmez,
+     * iade muhasebeye kaydedilir; alıcı mükellefse iade faturasını ALICI
+     * keser (o satış talep aşamasında reddedilir).
+     */
+    public function recordReturn(Invoice $return, Invoice $sale, ReturnDraft $draft): void
+    {
+        if ($return->provider_invoice_id !== null) {
+            return;
+        }
+
+        $contactId = $sale->provider_contact_id
+            ?? throw new InvoiceProviderException(ErrorClass::VALIDATION, 'Satış faturasının Paraşüt carisi yok.');
+
+        $today = (new DateTimeImmutable('now', new DateTimeZone(self::TIMEZONE)))->format('Y-m-d');
+
+        $created = $this->client->post('purchase_bills', [
+            'data' => [
+                'type' => 'purchase_bills',
+                'attributes' => [
+                    'item_type' => 'refund',
+                    'description' => "{$draft->platformName} siparişi {$draft->orderNumber} iadesi",
+                    'issue_date' => $today,
+                    'due_date' => $today,
+                    'currency' => self::currency($draft->currency),
+                ],
+                'relationships' => [
+                    'supplier' => ['data' => ['type' => 'contacts', 'id' => $contactId]],
+                    'details' => [
+                        'data' => array_map(static fn (InvoiceLine $line): array => [
+                            'type' => 'purchase_bill_details',
+                            'attributes' => [
+                                'description' => $line->description,
+                                'quantity' => $line->quantity,
+                                'unit_price' => $line->netUnitPrice(),
+                                'vat_rate' => $line->vatRate,
+                            ],
+                        ], $draft->lines),
+                    ],
+                ],
+            ],
+        ]);
+
+        $id = $created['data']['id'] ?? null;
+
+        if (! is_scalar($id) || (string) $id === '') {
+            throw new RuntimeException('Paraşüt iade kaydı kimliği dönmedi.');
+        }
+
+        $return->forceFill(['provider_invoice_id' => (string) $id])->save();
     }
 
     // ─────────────────────────────────────────────────── adımlar
@@ -304,6 +410,34 @@ final class ParasutInvoiceProvider implements InvoiceProvider
         ]);
 
         return [Invoice::TYPE_E_ARCHIVE, self::jobId($job)];
+    }
+
+    /**
+     * GİB e-arşiv iptal süresi — Paraşüt belgede `cancellable_until` verir.
+     * Okunamayan tarih "iptal edilemez" sayılır: süre geçtiyse istek GİB'de
+     * reddedilir, kör gönderim yerine satıcıya yol söylenir.
+     */
+    private function assertArchiveCancellable(Invoice $sale): void
+    {
+        $until = null;
+
+        if ($sale->provider_document_id !== null) {
+            $archive = $this->client->get("e_archives/{$sale->provider_document_id}");
+            $raw = $archive['data']['attributes']['cancellable_until'] ?? null;
+
+            try {
+                $until = is_string($raw) && $raw !== '' ? new DateTimeImmutable($raw) : null;
+            } catch (Exception) {
+                $until = null;
+            }
+        }
+
+        if ($until === null || $until <= new DateTimeImmutable('now')) {
+            throw new InvoiceProviderException(
+                ErrorClass::VALIDATION,
+                'e-Arşiv faturanın iptal süresi geçti'.($until === null ? '' : ' ('.$until->setTimezone(new DateTimeZone(self::TIMEZONE))->format('d.m.Y H:i').')').'; iptal yerine iade kaydı açın.',
+            );
+        }
     }
 
     private function eInvoiceMailbox(string $taxNumber): ?string

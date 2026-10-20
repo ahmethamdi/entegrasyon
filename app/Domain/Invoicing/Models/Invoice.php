@@ -7,6 +7,7 @@ namespace App\Domain\Invoicing\Models;
 use App\Domain\Orders\Models\Order;
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -44,10 +45,20 @@ use Illuminate\Support\Carbon;
  * @property int $upload_attempts
  * @property string|null $upload_error
  * @property Carbon|null $uploaded_at
+ * @property string $kind
+ * @property string|null $parent_invoice_id
+ * @property string $ref
  *
  * KANALA YÜKLEME ayrı bir durumdur (`upload_*`): NULL = kanal dosya almıyor
  * ya da fatura henüz kesilmedi; pending → sent | failed. Yükleme
  * başarısızlığı kesilmiş faturayı "kesilemedi" yapmaz.
+ *
+ * TÜR (ADR-007): `sale` siparişin satış faturası; `return` ve `cancel`
+ * ona bağlı DÜZELTME kayıtlarıdır (`parent_invoice_id`). Düzeltmede
+ * `issued` = entegratörde işlendi (iade kaydı açıldı / fatura iptal
+ * edildi). Siparişin "faturası" sorulan her yer `sales()` ile sorar —
+ * sorulmasaydı iade kaydı satış faturası sanılır, ikinci satış faturası
+ * "zaten var" diye engellenir ya da iptal kaydının PDF'i istenirdi.
  */
 class Invoice extends Model
 {
@@ -72,6 +83,12 @@ class Invoice extends Model
 
     public const TYPE_E_INVOICE = 'e_invoice';
 
+    public const KIND_SALE = 'sale';
+
+    public const KIND_RETURN = 'return';
+
+    public const KIND_CANCEL = 'cancel';
+
     protected $fillable = [
         'tenant_id',
         'order_id',
@@ -92,6 +109,15 @@ class Invoice extends Model
         'upload_attempts',
         'upload_error',
         'uploaded_at',
+        'kind',
+        'parent_invoice_id',
+        'ref',
+    ];
+
+    /** Model varsayılanı veritabanınınkiyle aynı — yeni nesne kaydedilmeden de satış faturasıdır. */
+    protected $attributes = [
+        'kind' => self::KIND_SALE,
+        'ref' => '',
     ];
 
     protected function casts(): array
@@ -107,6 +133,23 @@ class Invoice extends Model
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    /** Düzeltmenin (iade/iptal) bağlı olduğu satış faturası. */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_invoice_id');
+    }
+
+    /** @param Builder<self> $query */
+    public function scopeSales(Builder $query): void
+    {
+        $query->where('kind', self::KIND_SALE);
+    }
+
+    public function isSale(): bool
+    {
+        return $this->kind === self::KIND_SALE;
     }
 
     public function isOpen(): bool

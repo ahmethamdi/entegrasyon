@@ -355,6 +355,13 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
     // yalnız BAŞARISIZ yüklemeyi yeniden dener, kesimi değil.
     Route::post('/orders/{order}/invoice/upload/retry', [OrderController::class, 'retryInvoiceUpload'])
         ->name('orders.invoice.upload.retry');
+    // S6 · Düzeltme: iptal edilen siparişin faturasını iptal et, kabul
+    // edilen iadeyi muhasebeye kaydet. Kanala gitmez; yalnız Paraşüt.
+    Route::post('/orders/{order}/invoice/cancel', [OrderController::class, 'cancelInvoice'])->name('orders.invoice.cancel');
+    Route::post('/orders/{order}/invoice/returns/{returnRequest}', [OrderController::class, 'recordInvoiceReturn'])
+        ->name('orders.invoice.return');
+    Route::post('/orders/{order}/invoice/corrections/{correction}/retry', [OrderController::class, 'retryInvoiceCorrection'])
+        ->name('orders.invoice.correction.retry');
 
     // e-fatura ayarları + Paraşüt OAuth (Etsy iskeleti: yönlendirme POST,
     // callback GET, `state` doğrulaması CSRF'in yerini tutar).

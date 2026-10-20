@@ -116,7 +116,9 @@ final class IssueInvoice implements ShouldQueue
     ): void {
         $invoice = Invoice::query()->with('order.connection')->find($this->invoiceId);
 
-        if ($invoice === null || ! $invoice->isOpen()) {
+        // Düzeltme satırı (iade/iptal) bu işin değildir: satış akışına
+        // girseydi siparişe İKİNCİ bir satış e-belgesi isterdi.
+        if ($invoice === null || ! $invoice->isOpen() || ! $invoice->isSale()) {
             return;
         }
 

@@ -134,6 +134,28 @@ function retryInvoiceUpload() {
     router.post(`/orders/${props.order.id}/invoice/upload/retry`, {}, { preserveScroll: true });
 }
 
+// ── fatura düzeltmeleri (S6): iptal ve iade kaydı ─────────────────────
+const correctionLabels = { cancel: k('Fatura iptali'), return: k('İade kaydı') };
+
+const correctionBadges = {
+    pending: { text: k('İşleniyor'), class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    issued: { text: k('Paraşüt\'e işlendi'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    failed: { text: k('İşlenemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
+};
+
+function cancelInvoice() {
+    if (!window.confirm(t('Fatura Paraşüt\'te iptal edilecek. Bu geri alınamaz. Devam edilsin mi?'))) return;
+    router.post(`/orders/${props.order.id}/invoice/cancel`, {}, { preserveScroll: true });
+}
+
+function recordReturn(candidate) {
+    router.post(`/orders/${props.order.id}/invoice/returns/${candidate.id}`, {}, { preserveScroll: true });
+}
+
+function retryCorrection(correction) {
+    router.post(`/orders/${props.order.id}/invoice/corrections/${correction.id}/retry`, {}, { preserveScroll: true });
+}
+
 function stamp(value) {
     if (!value) return '—';
     return new Date(value).toLocaleString(intlLocale(), {
@@ -505,6 +527,67 @@ function stamp(value) {
                     </button>
                 </div>
             </template>
+
+            <!--
+                DÜZELTMELER — iptal edilen siparişin faturası iptal edilir,
+                kabul edilen iade muhasebeye kaydedilir. İkisi birbirini
+                dışlar; düğmeler yalnız işe yarayacağı yerde görünür.
+            -->
+            <ul v-if="order.invoiceCorrections.length" class="mt-2 border-t border-stone-100 pt-2">
+                <li v-for="correction in order.invoiceCorrections" :key="correction.id" class="py-1">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <p class="text-xs text-stone-900">
+                            {{ t(correctionLabels[correction.kind] ?? correction.kind) }}
+                            <span v-if="correction.issuedAt" class="font-mono text-[11px] text-stone-500">· {{ stamp(correction.issuedAt) }}</span>
+                        </p>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="correctionBadges[correction.status]?.class">
+                                {{ t(correctionBadges[correction.status]?.text ?? correction.status) }}
+                            </span>
+                            <button
+                                v-if="correction.status === 'failed'"
+                                type="button"
+                                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                @click="retryCorrection(correction)"
+                            >
+                                {{ t('Tekrar dene') }}
+                            </button>
+                        </div>
+                    </div>
+                    <p v-if="correction.error" class="mt-1 text-[11px] text-red-700">{{ correction.error }}</p>
+                </li>
+            </ul>
+
+            <div v-if="order.canCancelInvoice" class="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-2">
+                <p class="text-xs text-stone-500">{{ t('Sipariş iptal edildi. Faturayı Paraşüt\'te iptal edebilirsiniz.') }}</p>
+                <button
+                    type="button"
+                    class="rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-800 transition hover:bg-red-50"
+                    @click="cancelInvoice"
+                >
+                    {{ t('Faturayı iptal et') }}
+                </button>
+            </div>
+
+            <div
+                v-for="candidate in order.returnInvoiceCandidates"
+                :key="candidate.id"
+                class="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-2"
+            >
+                <p class="text-xs text-stone-500">
+                    {{ t('İade talebi :claim', { claim: candidate.claim }) }}
+                    <span v-if="candidate.reason" class="block text-[11px]">{{ candidate.reason }}</span>
+                </p>
+                <button
+                    v-if="candidate.recordable"
+                    type="button"
+                    class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                    @click="recordReturn(candidate)"
+                >
+                    {{ t('İadeyi muhasebeye kaydet') }}
+                </button>
+            </div>
+
             <p v-if="invoiceError" class="mt-2 text-sm text-red-700">{{ invoiceError }}</p>
         </div>
 

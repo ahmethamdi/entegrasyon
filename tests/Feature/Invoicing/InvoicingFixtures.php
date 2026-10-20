@@ -214,8 +214,14 @@ trait InvoicingFixtures
                     ],
                     'meta' => ['total_pages' => 1],
                 ], 200])),
+                // İade kaydı (S6) — `purchaseBill`: [gövde, durum].
+                str_starts_with($url, $base.'purchase_bills') => Http::response(...($opts['purchaseBill'] ?? [['data' => ['id' => 'pb-1', 'type' => 'purchase_bills']], 201])),
+                // e-arşiv okuması (iptal süresi) — `cancellableUntil`: ISO tarih ya da null.
+                str_starts_with($url, $base.'e_archives/') && $method === 'GET' && ! str_contains($url, '/pdf') => Http::response(['data' => ['id' => 'ea-1', 'type' => 'e_archives', 'attributes' => [
+                    'cancellable_until' => array_key_exists('cancellableUntil', $opts) ? $opts['cancellableUntil'] : now()->addDays(3)->toIso8601String(),
+                ]]]),
                 str_starts_with($url, $base.'sales_invoices/') => Http::response([
-                    'data' => ['id' => 'si-1', 'type' => 'sales_invoices', 'relationships' => ['active_e_document' => ['data' => ['id' => 'ea-1', 'type' => 'e_archives']]]],
+                    'data' => ['id' => 'si-1', 'type' => 'sales_invoices', 'attributes' => ['item_type' => $opts['itemType'] ?? 'invoice'], 'relationships' => ['active_e_document' => ['data' => ['id' => 'ea-1', 'type' => 'e_archives']]]],
                     'included' => [['id' => 'ea-1', 'type' => 'e_archives', 'attributes' => ['invoice_number' => 'GIB2026000000123']]],
                 ]),
                 str_starts_with($url, $base.'sales_invoices') => Http::response(['data' => ['id' => 'si-1', 'type' => 'sales_invoices']], 201),

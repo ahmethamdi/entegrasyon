@@ -125,6 +125,10 @@ final class EnforceQuota
      * Ürün ve kanal ANLIK sayımdır ("şu an kaç tane var"). Fatura
      * DÖNEMSELDİR: bu ay açılmış ve başarısız olmamış satırlar
      * (`QuotaMetric` belgesindeki istisna gerekçesi).
+     *
+     * Yalnız SATIŞ faturası sayılır: iade ve iptal kaydı var olan bir
+     * satışın düzeltmesidir. Sayılsaydı hakkı dolan satıcı iptal edilen
+     * siparişin faturasını iptal EDEMEZ, KDV'sini boşuna öderdi.
      */
     public function currentUsage(QuotaMetric $metric): int
     {
@@ -132,6 +136,7 @@ final class EnforceQuota
             QuotaMetric::PRODUCTS => Product::query()->count(),
             QuotaMetric::CHANNELS => ChannelConnection::query()->count(),
             QuotaMetric::INVOICES => Invoice::query()
+                ->sales()
                 ->where('created_at', '>=', self::periodStart())
                 ->where('status', '!=', Invoice::STATUS_FAILED)
                 ->count(),

@@ -7,6 +7,7 @@ namespace App\Domain\Invoicing\Contracts;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\IssueOutcome;
+use App\Domain\Invoicing\Support\ReturnDraft;
 use App\Domain\Invoicing\Support\SubmitOptions;
 
 /**
@@ -38,4 +39,22 @@ interface InvoiceProvider
 
     /** Belgenin PDF adresi — süreli bağlantı; hazır değilse null. */
     public function pdfUrl(Invoice $invoice): ?string;
+
+    /**
+     * Kesilmiş satış faturasını entegratörde İPTAL eder (S6, ADR-007).
+     *
+     * `$sale` kesilmiş satış faturasıdır; `$cancellation` onun iptal satırı.
+     * Senkrondur: dönerse iptal tamamdır. Daha önce iptal edilmişse yine
+     * döner (yeniden deneme ikinci kez iptal istemez). İptal edilemiyorsa
+     * (süre geçti, e-fatura) `InvoiceProviderException` VALIDATION.
+     */
+    public function cancel(Invoice $cancellation, Invoice $sale): void;
+
+    /**
+     * Kabul edilen iadeyi satış faturasının carisine KAYDEDER (S6).
+     *
+     * `submit` gibi kimliği ANINDA satıra yazar (`provider_invoice_id`):
+     * iş ölürse yeniden deneme ikinci iade kaydı açmaz.
+     */
+    public function recordReturn(Invoice $return, Invoice $sale, ReturnDraft $draft): void;
 }

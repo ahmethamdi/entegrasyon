@@ -49,6 +49,11 @@ final class ParasutClient
         return $this->send('post', $endpoint, $body);
     }
 
+    public function delete(string $endpoint): array
+    {
+        return $this->send('delete', $endpoint, []);
+    }
+
     /**
      * Kasa ve banka hesapları — tahsilat eşlemesinin seçenekleri.
      *
@@ -109,9 +114,11 @@ final class ParasutClient
                 ->timeout(self::TIMEOUT_SECONDS)
                 ->withToken($this->accessToken());
 
-            $response = $method === 'get'
-                ? $request->get($url, $data)
-                : $request->asJson()->post($url, $data);
+            $response = match ($method) {
+                'get' => $request->get($url, $data),
+                'delete' => $request->delete($url),
+                default => $request->asJson()->post($url, $data),
+            };
         } catch (ConnectionException) {
             throw new InvoiceProviderException(ErrorClass::NETWORK, 'Paraşüt\'e ulaşılamadı.');
         }
