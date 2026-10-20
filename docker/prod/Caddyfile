@@ -22,13 +22,16 @@
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
-		Referrer-Policy "strict-origin-when-cross-origin"
 		-Server
 	}
 
-	# Fatura vekil bağlantısı (S6): adres token taşır — tıklanan entegratör
-	# bağlantısına Referer ile sızmasın. Genel kuraldan SONRA yazılır ki ezsin.
+	# Referrer-Policy yola göre: fatura vekil bağlantısı (S6) token taşır —
+	# tıklanan entegratör bağlantısına Referer ile sızmasın. İki AYRIK
+	# eşleyici: Caddy aynı adlı yönergeleri eşleyiciye göre sıralar, genel
+	# kural özel olanı EZERDİ (20 Eki canlıda ölçüldü).
 	@invoiceLink path /f/*
+	@notInvoiceLink not path /f/*
+	header @notInvoiceLink Referrer-Policy "strict-origin-when-cross-origin"
 	header @invoiceLink Referrer-Policy "no-referrer"
 
 	# Gizli dosyalar (.env, .git) asla sunulmaz — .well-known hariç (ACME).
