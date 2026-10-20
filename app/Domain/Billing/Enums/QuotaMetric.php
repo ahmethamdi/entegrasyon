@@ -24,6 +24,13 @@ namespace App\Domain\Billing\Enums;
  * `usage_records` de yazılmalıdır: anlık `COUNT` dönemsel kullanımı
  * cevaplayamaz ve §4 o tabloyu tam bunun için tanımlar ("fiyatlandırma
  * verisi geriye dönük üretilemez").
+ *
+ * TEK İSTİSNA — AYLIK FATURA (`invoices_monthly`, S6): sayım `invoices`
+ * tablosunun kendisinden yapılır, çünkü fatura satırı RESMÎ BELGENİN
+ * kaydıdır ve hiçbir akışta SİLİNMEZ (GİB'de iptal ayrı süreçtir; satır
+ * kalır). Kaybolmayan bir kayıttan dönemsel sayım geriye dönük de doğru
+ * üretilir — `usage_records`'un çözdüğü sorun burada yoktur. Sipariş veya
+ * senkron kotası eklenirse bu gerekçe GEÇERLİ DEĞİLDİR.
  */
 enum QuotaMetric: string
 {
@@ -33,6 +40,13 @@ enum QuotaMetric: string
     /** Kiracının bağladığı kanal bağlantısı sayısı. */
     case CHANNELS = 'channels';
 
+    /**
+     * Bu takvim ayında (İstanbul saati) açılan fatura sayısı — DÖNEMSEL.
+     * Başarısız (hiç kesilmemiş) fatura sayılmaz; yeniden deneme aynı
+     * satırı kullanır, yeni hak harcamaz.
+     */
+    case INVOICES = 'invoices_monthly';
+
     /** Kullanıcıya gösterilen ad — hata mesajında geçer. */
     public function label(): string
     {
@@ -40,6 +54,7 @@ enum QuotaMetric: string
         return __(match ($this) {
             self::PRODUCTS => 'ürün',
             self::CHANNELS => 'kanal bağlantısı',
+            self::INVOICES => 'aylık fatura',
         });
     }
 
@@ -54,6 +69,7 @@ enum QuotaMetric: string
         return __(match ($this) {
             self::PRODUCTS => 'Daha fazla ürün eklemek için planını yükselt.',
             self::CHANNELS => 'Daha fazla kanal bağlamak için planını yükselt.',
+            self::INVOICES => 'Bu ay daha fazla fatura kesmek için planını yükselt.',
         });
     }
 
@@ -69,6 +85,7 @@ enum QuotaMetric: string
         return __(match ($this) {
             self::PRODUCTS => 'Ürün kotan doldu (:current/:limit). Daha fazla ürün eklemek için planını yükselt.',
             self::CHANNELS => 'Kanal bağlantısı kotan doldu (:current/:limit). Daha fazla kanal bağlamak için planını yükselt.',
+            self::INVOICES => 'Bu ayki fatura kotan doldu (:current/:limit). Daha fazla fatura kesmek için planını yükselt.',
         }, ['current' => $current, 'limit' => $limit]);
     }
 }

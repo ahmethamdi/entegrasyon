@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\Invoicing\Actions;
 
+use App\Domain\Billing\Actions\EnforceQuota;
+use App\Domain\Billing\Enums\QuotaMetric;
+use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Invoicing\Jobs\IssueInvoice;
 use App\Domain\Invoicing\Jobs\UploadInvoiceToChannel;
 use App\Domain\Invoicing\Models\Invoice;
@@ -22,12 +25,29 @@ use Illuminate\Database\UniqueConstraintViolationException;
  * SİPARİŞ BAŞINA TEK FATURA veritabanı kısıtıyla korunur
  * (`invoices_order_unique`): iki sekmeden aynı anda basılan düğme ikinci
  * satırı açamaz, var olan satır döner.
+ *
+ * AYLIK FATURA KOTASI (S6) YALNIZ YENİ SATIRDA sorulur: siparişin satırı
+ * zaten varsa o döner ve hak harcanmaz; yeniden deneme (`retry`) de aynı
+ * satırı kullanır. Kota BURADA, tek yerde uygulanır — sipariş ekranı,
+ * toplu işlem ve otomatik kesim aynı kapıdan geçer ve istisnayı kendi
+ * dilinde karşılar.
  */
 final class RequestInvoice
 {
+    /**
+     * @throws QuotaExceededException bu ayın fatura hakkı dolduysa (satır açılmaz)
+     */
     public function run(Order $order, InvoiceAccount $account, ?string $actorId = null): Invoice
     {
         $tenantId = TenantContext::idOrFail();
+
+        $existing = Invoice::query()->where('order_id', $order->id)->first();
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        app(EnforceQuota::class)->check(QuotaMetric::INVOICES);
 
         try {
             $invoice = Invoice::query()->create([

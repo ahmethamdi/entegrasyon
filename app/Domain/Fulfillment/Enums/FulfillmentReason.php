@@ -58,6 +58,9 @@ enum FulfillmentReason: string
     /** "Yalnız muhasebeye işle" kipi: e-belge yok, indirilecek dosya yok. */
     case INVOICE_BOOKS_ONLY = 'INVOICE_BOOKS_ONLY';
 
+    /** Planın bu ayki fatura hakkı doldu — satır açılmadı. */
+    case INVOICE_QUOTA_EXCEEDED = 'INVOICE_QUOTA_EXCEEDED';
+
     /** Kalem katalogdaki bir varyanta eşlenmemiş — toplama belirsiz olabilir. */
     case VARIANT_UNMATCHED = 'VARIANT_UNMATCHED';
 
@@ -80,6 +83,7 @@ enum FulfillmentReason: string
             self::INVOICE_FAILED => 'Fatura kesilemedi; sipariş ekranından yeniden deneyin.',
             self::INVOICE_ACCOUNT_MISSING => 'e-fatura hesabı bağlı değil.',
             self::INVOICE_BOOKS_ONLY => 'Fatura yalnız muhasebeye işlendi; indirilecek e-belge yok.',
+            self::INVOICE_QUOTA_EXCEEDED => 'Bu ayki fatura kotan doldu; daha fazla fatura için planını yükselt.',
             self::VARIANT_UNMATCHED => 'Kalem katalogdaki bir varyanta eşlenmemiş; kanal verisi gösteriliyor.',
         });
     }

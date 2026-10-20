@@ -46,6 +46,7 @@ final class PlanLimitContractTest extends TestCase
     {
         $this->assertSame('products', QuotaMetric::PRODUCTS->value);
         $this->assertSame('channels', QuotaMetric::CHANNELS->value);
+        $this->assertSame('invoices_monthly', QuotaMetric::INVOICES->value);
     }
 
     /** Varsayılan plan kodu da sözleşmedir — aboneliksiz kiracı ona düşer. */

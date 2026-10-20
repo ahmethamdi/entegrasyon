@@ -1509,5 +1509,9 @@
     "Fark kaydedilir ve şu kanallara gönderilir: :channels": "The difference is recorded and sent to: :channels",
     ":channels için stok gönderimi kapalı; bu sayım oraya gitmez.": "Stock sync is off for :channels, so this count is not sent there.",
     "Kanallarda aç": "Turn it on in Channels",
-    "Ürün henüz bir kanala bağlı değil; sayım yalnız 34Pazar'da kaydedilir.": "This product is not on any channel yet; the count is saved in 34Pazar only."
+    "Ürün henüz bir kanala bağlı değil; sayım yalnız 34Pazar'da kaydedilir.": "This product is not on any channel yet; the count is saved in 34Pazar only.",
+    "aylık fatura": "monthly invoices",
+    "Bu ay daha fazla fatura kesmek için planını yükselt.": "Upgrade your plan to issue more invoices this month.",
+    "Bu ayki fatura kotan doldu (:current/:limit). Daha fazla fatura kesmek için planını yükselt.": "You've reached this month's invoice limit (:current/:limit). Upgrade your plan to issue more invoices.",
+    "Bu ayki fatura kotan doldu; daha fazla fatura için planını yükselt.": "This month's invoice limit is reached; upgrade your plan to issue more invoices."
 }

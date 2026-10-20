@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Invoicing\Actions\RequestInvoice;
@@ -212,7 +213,11 @@ final class OrderController extends Controller
             return back()->withErrors(['invoice' => __('Bu siparişin faturası zaten var.')]);
         }
 
-        $requestInvoice->run($order, $account, $request->user()?->id);
+        try {
+            $requestInvoice->run($order, $account, $request->user()?->id);
+        } catch (QuotaExceededException $e) {
+            return back()->withErrors(['invoice' => $e->userMessage()]);
+        }
 
         return back()->with('success', __('Fatura kesiliyor.'));
     }

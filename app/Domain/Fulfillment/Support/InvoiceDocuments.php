@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Fulfillment\Support;
 
+use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Fulfillment\Enums\FulfillmentReason;
 use App\Domain\Invoicing\Actions\RequestInvoice;
@@ -77,7 +78,11 @@ final class InvoiceDocuments
             return ItemDecision::actionRequired(FulfillmentReason::INVOICE_ACCOUNT_MISSING);
         }
 
-        $this->requestInvoice->run($order, $account, $actorId);
+        try {
+            $this->requestInvoice->run($order, $account, $actorId);
+        } catch (QuotaExceededException) {
+            return ItemDecision::actionRequired(FulfillmentReason::INVOICE_QUOTA_EXCEEDED);
+        }
 
         return ItemDecision::queued();
     }

@@ -10,7 +10,9 @@ use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Invoicing\Models\Invoice;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonInterface;
 
 /**
  * Plan kotasını uygular — yaratmayı engeller.
@@ -40,6 +42,13 @@ final class EnforceQuota
 {
     /** Aboneliği olmayan kiracının düştüğü plan. */
     public const DEFAULT_PLAN_CODE = 'free';
+
+    /**
+     * Dönemsel kotaların takvimi. Satıcılar Türkiye'de; ay başı İstanbul
+     * gece yarısıdır. Uygulama saati UTC'dir — UTC alınsaydı 1'inde
+     * 00:00–03:00 arası kesilen faturalar bir önceki aya yazılırdı.
+     */
+    public const PERIOD_TIMEZONE = 'Europe/Istanbul';
 
     /**
      * Kota doluysa istisna fırlatır.
@@ -111,17 +120,28 @@ final class EnforceQuota
     }
 
     /**
-     * Mevcut kullanım — ANLIK sayım.
+     * Mevcut kullanım.
      *
-     * Dönemsel değil: iki kota da "şu an kaç tane var" sorusudur ve
-     * `usage_records` gerektirmez.
+     * Ürün ve kanal ANLIK sayımdır ("şu an kaç tane var"). Fatura
+     * DÖNEMSELDİR: bu ay açılmış ve başarısız olmamış satırlar
+     * (`QuotaMetric` belgesindeki istisna gerekçesi).
      */
     public function currentUsage(QuotaMetric $metric): int
     {
         return match ($metric) {
             QuotaMetric::PRODUCTS => Product::query()->count(),
             QuotaMetric::CHANNELS => ChannelConnection::query()->count(),
+            QuotaMetric::INVOICES => Invoice::query()
+                ->where('created_at', '>=', self::periodStart())
+                ->where('status', '!=', Invoice::STATUS_FAILED)
+                ->count(),
         };
+    }
+
+    /** İçinde bulunulan dönemin başlangıcı (UTC olarak). */
+    public static function periodStart(): CarbonInterface
+    {
+        return now(self::PERIOD_TIMEZONE)->startOfMonth()->utc();
     }
 
     /**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Invoicing\Actions;
 
+use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
@@ -100,6 +101,14 @@ final class MaybeAutoInvoice
 
         try {
             return $this->decide($order, $stage);
+        } catch (QuotaExceededException $e) {
+            // Kota dolu: satır AÇILMAZ, sipariş akışı sürer (kota sipariş
+            // akışını durdurmaz). Hata değil plan sınırı — ayrı anahtarla
+            // yazılır ki alarm gürültüsüne karışmasın; satıcı siparişi
+            // faturasız görür ve planı yükseltince elle keser.
+            Log::info('invoicing.auto_issue_quota_exceeded', ['order' => $order->id, 'limit' => $e->limit]);
+
+            return null;
         } catch (Throwable $e) {
             Log::error('invoicing.auto_issue_failed', ['order' => $order->id, 'error' => $e->getMessage()]);
 
