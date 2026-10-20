@@ -26,6 +26,11 @@
 		-Server
 	}
 
+	# Fatura vekil bağlantısı (S6): adres token taşır — tıklanan entegratör
+	# bağlantısına Referer ile sızmasın. Genel kuraldan SONRA yazılır ki ezsin.
+	@invoiceLink path /f/*
+	header @invoiceLink Referrer-Policy "no-referrer"
+
 	# Gizli dosyalar (.env, .git) asla sunulmaz — .well-known hariç (ACME).
 	# Go regexp'i lookahead desteklemez; `not` ile yazılır.
 	@hidden {

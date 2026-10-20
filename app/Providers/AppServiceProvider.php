@@ -74,6 +74,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('register', static fn (Request $request): Limit => Limit::perHour(5)->by($request->ip()));
         RateLimiter::for('password-reset', static fn (Request $request): Limit => Limit::perMinutes(15, 5)->by($request->ip()));
 
+        // Fatura vekil bağlantısı (S6): her istek Paraşüt'e gider — token
+        // taraması ve satıcının Paraşüt kotasını tüketmeye karşı IP başına.
+        RateLimiter::for('invoice-link', static fn (Request $request): Limit => Limit::perMinute(30)->by($request->ip()));
+
         // Üretimde beklenmeyen lazy loading sessiz N+1 üretir; geliştirmede
         // erken yakalanır.
         Model::preventLazyLoading(! $this->app->isProduction());

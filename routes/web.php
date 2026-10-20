@@ -21,6 +21,7 @@ use App\Http\Controllers\EtsyOAuthController;
 use App\Http\Controllers\FulfillmentController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InvoiceLinkController;
 use App\Http\Controllers\InvoiceSettingsController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MetricsController;
@@ -51,6 +52,16 @@ use Illuminate\Support\Facades\Route;
 |   kendi üzerlerine yönlendirirdi. Bağlam yalnızca panel rotalarında kurulur
 |   ve istek bitince bırakılır.
 */
+
+// ─────────────────────────────────────────────────────────── fatura bağlantısı
+
+// S6 · Pazaryerinin alıcıya gösterdiği kalıcı fatura adresi — OTURUMSUZ.
+// PDF bizde durmaz; taze Paraşüt adresine yönlendirir. Token biçimi
+// denetleyicide sınanır (yanlış biçim de aynı açıklayıcı 404'ü alsın).
+Route::get('/f/{token}.pdf', [InvoiceLinkController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{1,128}')
+    ->middleware('throttle:invoice-link')
+    ->name('invoices.public');
 
 // ─────────────────────────────────────────────────────────── misafir
 

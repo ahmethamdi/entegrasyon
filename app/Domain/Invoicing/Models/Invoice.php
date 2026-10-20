@@ -48,6 +48,7 @@ use Illuminate\Support\Carbon;
  * @property string $kind
  * @property string|null $parent_invoice_id
  * @property string $ref
+ * @property string|null $public_token kalıcı vekil bağlantısının anahtarı (`InvoicePublicLink`)
  *
  * KANALA YÜKLEME ayrı bir durumdur (`upload_*`): NULL = kanal dosya almıyor
  * ya da fatura henüz kesilmedi; pending → sent | failed. Yükleme
@@ -112,6 +113,7 @@ class Invoice extends Model
         'kind',
         'parent_invoice_id',
         'ref',
+        'public_token',
     ];
 
     /** Model varsayılanı veritabanınınkiyle aynı — yeni nesne kaydedilmeden de satış faturasıdır. */

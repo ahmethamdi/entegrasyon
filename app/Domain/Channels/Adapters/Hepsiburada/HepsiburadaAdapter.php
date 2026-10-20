@@ -21,6 +21,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
+use App\Domain\Channels\Contracts\SupportsInvoiceLink;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsReturns;
@@ -33,6 +34,7 @@ use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
+use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceBuyer;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\InvoiceLine;
@@ -59,6 +61,7 @@ use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
@@ -135,7 +138,7 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsOrders, SupportsPricing, SupportsReturns, SupportsTaxonomy, ValidatesPublication
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceLink, SupportsOrders, SupportsPricing, SupportsReturns, SupportsTaxonomy, ValidatesPublication
 {
     use ReadsClaims;
 
@@ -1532,6 +1535,59 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
             platformName: 'Hepsiburada',
             platformUrl: 'https://www.hepsiburada.com',
         );
+    }
+
+    /**
+     * Fatura bağlantısı (S6) — `PUT packages/merchantid/{m}/packagenumber/{p}/invoice`.
+     *
+     * Resmî OpenAPI (`model.AddInvoiceOfPackageRequest`): `invoiceLink`,
+     * `serialNumber`, `rowNumber`, `arrangementDate`; başarı 204. Bağlantı
+     * PAKETE gider: siparişin iptal edilmemiş kalemlerinin paket numaraları
+     * detaydan okunur, her pakete aynı bağlantı. Paket yoksa (henüz
+     * paketlenmedi) istek atılmaz — satıcı paketleyince panelden yeniden
+     * gönderir.
+     *
+     * ⚠️ GERÇEK HESAPTA DOĞRULANACAK: seri/sıra numarasının GİB numarasının
+     * 3+13 bölünmesi mi olduğu (biçime uymazsa gönderilmez), `arrangementDate`
+     * biçimi (ISO 8601, Türkiye saati varsayıldı), aynı pakete ikinci
+     * gönderimin üzerine yazıp yazmadığı.
+     */
+    public function sendInvoiceLink(Order $order, Invoice $invoice, string $url): AdapterResult
+    {
+        $number = (string) ($order->external_number ?: $order->external_id);
+
+        $lines = $this->orderDetailLines($number);
+
+        $packages = array_values(array_unique(array_filter(array_map(
+            static fn (array $line): string => trim((string) ($line['packageNumber'] ?? '')),
+            $lines ?? [],
+        ))));
+
+        if ($packages === []) {
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Sipariş Hepsiburada\'da henüz paketlenmedi; paketledikten sonra yeniden gönderin.');
+        }
+
+        $body = ['invoiceLink' => $url];
+
+        if (preg_match('/^([A-Za-z0-9]{3})(\d{13})$/', trim((string) $invoice->invoice_number), $parts) === 1) {
+            $body['serialNumber'] = $parts[1];
+            $body['rowNumber'] = $parts[2];
+        }
+
+        if ($invoice->issued_at !== null) {
+            $body['arrangementDate'] = CarbonImmutable::instance($invoice->issued_at)->setTimezone(self::CHANNEL_TIMEZONE)->format('Y-m-d\TH:i:s');
+        }
+
+        foreach ($packages as $package) {
+            $this->client->put(
+                endpoint: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_ORDER, $this->isTest())
+                    .HepsiburadaEndpoints::path(HepsiburadaEndpoints::PACKAGE_INVOICE, ['merchantId' => $this->merchantId(), 'packageNumber' => $package]),
+                body: $body,
+                headers: $this->defaultHeaders(),
+            )->throw();
+        }
+
+        return AdapterResult::success(['packages' => count($packages)]);
     }
 
     /** KDV oranı yüzde olarak — kanal 20 ya da 0.2 gönderebilir. */

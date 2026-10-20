@@ -84,6 +84,7 @@
         <li><strong>E-posta gönderimi — Google (Google Ireland Ltd.):</strong> hesap doğrulama ve parola sıfırlama gibi hizmet e-postaları Google Workspace üzerinden gönderilir; bu kapsamda alıcı e-posta adresi ve e-posta içeriği Google tarafından işlenir. Veriler ABD'deki Google LLC'ye de aktarılabilir; aktarım AB-ABD Veri Gizliliği Çerçevesi ve/veya standart sözleşme maddeleri kapsamındadır.</li>
         <li><strong>Shopify (Shopify International Ltd., İrlanda):</strong> uygulamayı Shopify üzerinden kullandığınızda abonelik ücreti Shopify tarafından tahsil edilir; mağazanızla veri alışverişi Shopify'ın API'si üzerinden yapılır.</li>
         <li><strong>Bağladığınız satış kanalları:</strong> stok, fiyat, ürün ve kargo bilgileri, sizin talimatınızla bağladığınız kanallara (ör. Shopify, WooCommerce mağazanız veya pazaryeri hesabınız) API üzerinden gönderilir. Bu aktarımın amacı hizmetin kendisidir; kanalların veri işleme koşulları kendi politikalarına tabidir.</li>
+        <li><strong>e-Fatura bağlantısı:</strong> e-fatura modülünü kullanıyorsanız kesilen faturanın bağlantısı (ör. Hepsiburada ve n11'e) siparişin pazaryerine iletilir. Fatura belgesi bizde saklanmaz, fatura entegratörünüzde (Paraşüt) tutulur; bağlantı açıldığında belge o anda entegratörden alınarak gösterilir.</li>
         <li><strong>Yetkili kurumlar:</strong> yalnızca hukuken zorunlu olduğu durumlarda, yetkili kamu kurum ve kuruluşlarına.</li>
     </ul>
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Invoicing\Jobs;
 
+use App\Domain\Channels\Contracts\ChannelAdapter;
+use App\Domain\Channels\Contracts\SupportsInvoiceLink;
 use App\Domain\Channels\Contracts\SupportsInvoiceUpload;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
@@ -13,6 +15,7 @@ use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Invoicing\Support\InvoicePdfFetcher;
 use App\Domain\Invoicing\Support\InvoiceProviders;
+use App\Domain\Invoicing\Support\InvoicePublicLink;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Support\AdapterReportedFailure;
@@ -47,6 +50,10 @@ use Throwable;
  * sınırı KANAL isteği için, `RetryPolicy` iki taraf için, 24 saatlik
  * `retryUntil`, durum satırın kendisinde (`upload_*`). Yükleme hatası
  * faturanın kendi durumuna DOKUNMAZ — fatura kesilmiştir ve resmîdir.
+ *
+ * BAĞLANTI ALAN KANAL (HB, n11 — `SupportsInvoiceLink`): dosya indirilmez;
+ * kanala kalıcı vekil adresimiz gider (`InvoicePublicLink`). Durum
+ * alanları aynı (`upload_*`) — satıcı için ikisi de "kanala iletildi".
  */
 final class UploadInvoiceToChannel implements ShouldQueue
 {
@@ -74,7 +81,8 @@ final class UploadInvoiceToChannel implements ShouldQueue
     {
         $class = $order?->connection?->channelType?->adapter_class;
 
-        return is_string($class) && $class !== '' && is_subclass_of($class, SupportsInvoiceUpload::class);
+        return is_string($class) && $class !== ''
+            && (is_subclass_of($class, SupportsInvoiceUpload::class) || is_subclass_of($class, SupportsInvoiceLink::class));
     }
 
     public function retryUntil(): DateTimeInterface
@@ -153,6 +161,12 @@ final class UploadInvoiceToChannel implements ShouldQueue
 
         $adapter = $registry->for($connection);
 
+        if (! $adapter instanceof SupportsInvoiceUpload && $adapter instanceof SupportsInvoiceLink) {
+            $this->sendLink($adapter, $invoice, $order, $connection->id, $errorText, $breaker, $limiter);
+
+            return;
+        }
+
         if (! $adapter instanceof SupportsInvoiceUpload) {
             $this->fail($invoice, 'Bu kanal fatura dosyası almıyor; faturayı kanalın kendi panelinden ekleyin.');
 
@@ -216,6 +230,58 @@ final class UploadInvoiceToChannel implements ShouldQueue
             $breaker->recordFailure($connection->id, $class);
 
             $message = $errorText->redact($connection, $e->getMessage());
+
+            $delay = RetryPolicy::delayFor($class, $invoice->upload_attempts, AdapterReportedFailure::retryAfterOf($e));
+
+            if ($delay !== null) {
+                $invoice->forceFill(['upload_error' => $message])->save();
+                $this->release($delay);
+
+                return;
+            }
+
+            $this->fail($invoice, $this->explain($class, $message));
+        }
+    }
+
+    /**
+     * Kalıcı vekil bağlantısını kanala iletir. Entegratöre gidilmez: adres
+     * bizimdir, PDF müşteri tıkladığında taze istenir (`InvoiceLinkController`).
+     * e-belgesi olmayan (yalnız muhasebe) fatura buraya hiç gelmez.
+     */
+    private function sendLink(
+        ChannelAdapter&SupportsInvoiceLink $adapter,
+        Invoice $invoice,
+        Order $order,
+        string $connectionId,
+        ChannelErrorText $errorText,
+        CircuitBreaker $breaker,
+        ChannelRateLimiter $limiter,
+    ): void {
+        if (! $limiter->attempt($connectionId, $adapter->rateLimitProfile())) {
+            $this->release(max($limiter->secondsUntilAvailable($connectionId, $adapter->rateLimitProfile()), 1));
+
+            return;
+        }
+
+        $invoice->increment('upload_attempts');
+
+        try {
+            AdapterReportedFailure::throwIfFailed($adapter->sendInvoiceLink($order, $invoice, InvoicePublicLink::for($invoice)));
+
+            $invoice->forceFill([
+                'upload_status' => Invoice::UPLOAD_SENT,
+                'upload_error' => null,
+                'uploaded_at' => now(),
+            ])->save();
+
+            $breaker->recordSuccess($connectionId);
+        } catch (Throwable $e) {
+            $class = AdapterReportedFailure::classify($e, $adapter);
+
+            $breaker->recordFailure($connectionId, $class);
+
+            $message = $errorText->redact($order->connection, $e->getMessage());
 
             $delay = RetryPolicy::delayFor($class, $invoice->upload_attempts, AdapterReportedFailure::retryAfterOf($e));
 

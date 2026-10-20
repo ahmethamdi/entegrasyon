@@ -93,6 +93,9 @@ final class HepsiburadaEndpoints
     /** Paketler — tarih aralığı ≤24 saat, limit ≤10, sayfalama BAŞLIKTA. */
     public const PACKAGES = '/packages/merchantid/{merchantId}';
 
+    /** Paketin fatura BAĞLANTISI (S6) — gövde `invoiceLink`, başarı 204. */
+    public const PACKAGE_INVOICE = '/packages/merchantid/{merchantId}/packagenumber/{packageNumber}/invoice';
+
     /** İade talepleri. */
     public const CLAIMS = '/claims/merchantId/{merchantId}';
 

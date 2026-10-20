@@ -28,9 +28,9 @@
             <p class="eyebrow">{{ $english ? 'Legal' : 'Yasal' }}</p>
             <h1 class="h-page mt-3">{{ $legalTitle }}</h1>
             @if ($english)
-                <p class="mt-4 text-sm muted">Last updated: <time datetime="2026-10-05">5 October 2026</time></p>
+                <p class="mt-4 text-sm muted">Last updated: <time datetime="2026-10-20">20 October 2026</time></p>
             @else
-                <p class="mt-4 text-sm muted">Son güncelleme: <time datetime="2026-10-05">5 Ekim 2026</time></p>
+                <p class="mt-4 text-sm muted">Son güncelleme: <time datetime="2026-10-20">20 Ekim 2026</time></p>
             @endif
         </div>
     </header>

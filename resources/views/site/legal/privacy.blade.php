@@ -78,6 +78,7 @@
         <li><strong>Email delivery — Google (Google Ireland Ltd.):</strong> service emails such as account verification and password reset are sent via Google Workspace; the recipient's email address and the email content are processed by Google for this purpose. Data may also be transferred to Google LLC in the USA under the EU-US Data Privacy Framework and/or standard contractual clauses.</li>
         <li><strong>Shopify (Shopify International Ltd., Ireland):</strong> when you use the app through Shopify, the subscription fee is collected by Shopify and data is exchanged with your store through Shopify's API.</li>
         <li><strong>Sales channels you connect:</strong> stock, price, product and shipping information is sent via API to the channels you connect on your instructions (for example your Shopify or WooCommerce store or your marketplace account). This transfer is the service itself; the channels' data processing is subject to their own policies.</li>
+        <li><strong>e-Invoice link:</strong> if you use the e-invoice module, a link to the issued invoice is passed to the order's marketplace (e.g. Hepsiburada and n11). The invoice document is not stored by us; it is kept by your invoicing provider (Paraşüt) and fetched from it when the link is opened.</li>
         <li><strong>Authorities:</strong> only where legally required, to the competent public authorities.</li>
     </ul>
 

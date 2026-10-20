@@ -21,6 +21,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
+use App\Domain\Channels\Contracts\SupportsInvoiceLink;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
@@ -32,6 +33,7 @@ use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
+use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Support\InvoiceBuyer;
 use App\Domain\Invoicing\Support\InvoiceDraft;
 use App\Domain\Invoicing\Support\InvoiceLine;
@@ -163,7 +165,7 @@ use Throwable;
  * kalmaz). Satıcı onayı N11'e otomatiğe de bağlatabilir
  * (`sellerintegration@n11.com`).
  */
-final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
+final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceLink, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
 {
     use DeclaresRequestQuota;
     use MapsOrderStateFromTable;
@@ -1642,6 +1644,49 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, Guard
             platformName: 'n11',
             platformUrl: 'https://www.n11.com',
         );
+    }
+
+    /**
+     * Fatura bağlantısı (S6) — SOAP `SellerInvoiceService.SaveLinkSellerInvoice`.
+     *
+     * Kaynak: canlı WSDL + developer.n11.com "Fatura Linki Gönderme" (20 Eki
+     * 2026 okundu): `url` (HTTPS, `.pdf|.png|.jpeg` ile biter, ≤2048) +
+     * `orderNumber` zorunlu; sipariş başına tek AKTİF bağlantı, yeniden
+     * gönderim öncekini değiştirir (yeniden deneme zararsız). Numara ve tarih
+     * yurt içinde isteğe bağlı — biçime (`[3 alfanümerik][yıl 2020–2099][9
+     * rakam]`) uyuyorsa gönderilir (e-ihracat siparişini ayırt edemiyoruz;
+     * Trendyol kuralı). Tarih ms, GMT+3.
+     *
+     * ⚠️ GERÇEK HESAPTA DOĞRULANACAK: uzantı kuralının sorgu dizesi olmayan
+     * `/f/{token}.pdf` yolumuzu kabul etmesi; yönlendirmeli (302) bağlantıyı
+     * n11'in izlemesi; numaralı gönderimin yurt içinde reddedilmemesi.
+     */
+    public function sendInvoiceLink(Order $order, Invoice $invoice, string $url): AdapterResult
+    {
+        [$key, $secret] = $this->credentials();
+
+        $number = trim((string) $invoice->invoice_number);
+        $valid = preg_match('/^[A-Za-z0-9]{3}20[2-9]\d\d{9}$/', $number) === 1;
+
+        $response = $this->client->postRaw(
+            N11Soap::INVOICE_SERVICE_URL,
+            N11Soap::saveLinkSellerInvoice(
+                $key,
+                $secret,
+                $url,
+                (string) ($order->external_number ?: $order->external_id),
+                $valid ? $number : null,
+                $valid && $invoice->issued_at !== null ? CarbonImmutable::instance($invoice->issued_at)->getTimestampMs() : null,
+            ),
+            'text/xml; charset=utf-8',
+            ['SOAPAction' => '""', 'Accept' => 'text/xml'],
+        );
+
+        // Fault/`failure` gövdesi HTTP 200 ile de gelir — önce gövde okunur.
+        N11Soap::parseSaveLinkSellerInvoice($response->body());
+        $response->throw();
+
+        return AdapterResult::success();
     }
 
     // ------------------------------------------------------------------- iç
