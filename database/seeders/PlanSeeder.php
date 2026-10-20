@@ -38,8 +38,8 @@ final class PlanSeeder extends Seeder
     {
         $products = QuotaMetric::PRODUCTS->value;
         $channels = QuotaMetric::CHANNELS->value;
-        // Aylık fatura hakkı (S6) — plan başına sayı fiyatlandırma kararıdır
-        // ve henüz verilmedi; null = SINIRSIZ, bugünkü davranış değişmez.
+        // Aylık fatura hakkı (S6) — KULLANICI KARARI (20 Ekim 2026):
+        // free 20, starter 300, pro 2000, business sınırsız.
         $invoices = QuotaMetric::INVOICES->value;
 
         $plans = [
@@ -51,7 +51,7 @@ final class PlanSeeder extends Seeder
                 'shopify_price_usd' => null,
                 // Denemek için yeterli, üretim için değil: satıcı ürünü
                 // gerçekten kanala gönderip akışı görebilmeli.
-                'limits' => [$products => 25, $channels => 1, $invoices => null],
+                'limits' => [$products => 25, $channels => 1, $invoices => 20],
                 'is_public' => true,
             ],
             [
@@ -60,7 +60,7 @@ final class PlanSeeder extends Seeder
                 'price_monthly' => 499,
                 // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
                 'shopify_price_usd' => 9.99,
-                'limits' => [$products => 500, $channels => 2, $invoices => null],
+                'limits' => [$products => 500, $channels => 2, $invoices => 300],
                 'is_public' => true,
             ],
             [
@@ -69,7 +69,7 @@ final class PlanSeeder extends Seeder
                 'price_monthly' => 1499,
                 // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
                 'shopify_price_usd' => 29.99,
-                'limits' => [$products => 5000, $channels => 5, $invoices => null],
+                'limits' => [$products => 5000, $channels => 5, $invoices => 2000],
                 'is_public' => true,
             ],
             [

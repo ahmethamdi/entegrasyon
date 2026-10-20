@@ -79,6 +79,7 @@ final class PlanLimitContractTest extends TestCase
         $this->assertArrayHasKey('channels', $raw, 'Seed `channels` anahtarını yazmalı.');
         $this->assertSame(500, $raw['products']);
         $this->assertSame(2, $raw['channels']);
+        $this->assertSame(300, $raw['invoices_monthly']);
     }
 
     /** Varsayılan plan seed'de VARDIR — yoksa kota hiç uygulanmaz. */
@@ -92,6 +93,7 @@ final class PlanLimitContractTest extends TestCase
         $this->assertNotNull($free, 'Varsayılan plan seed edilmeli.');
         $this->assertSame(25, $free->limitFor(QuotaMetric::PRODUCTS));
         $this->assertSame(1, $free->limitFor(QuotaMetric::CHANNELS));
+        $this->assertSame(20, $free->limitFor(QuotaMetric::INVOICES));
     }
 
     /** Seed iki kez koşabilir — `updateOrCreate`, tekillik ihlali vermez. */
