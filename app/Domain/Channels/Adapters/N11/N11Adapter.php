@@ -20,6 +20,7 @@ use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
@@ -30,6 +31,10 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
+use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
+use App\Domain\Invoicing\Support\InvoiceBuyer;
+use App\Domain\Invoicing\Support\InvoiceDraft;
+use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\LineFinancials;
@@ -158,7 +163,7 @@ use Throwable;
  * kalmaz). Satıcı onayı N11'e otomatiğe de bağlatabilir
  * (`sellerintegration@n11.com`).
  */
-final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
+final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
 {
     use DeclaresRequestQuota;
     use MapsOrderStateFromTable;
@@ -1547,6 +1552,96 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, Guard
         }
 
         return AdapterResult::success(['acknowledged' => true, 'lines' => count($lineIds)]);
+    }
+
+    /**
+     * Fatura taslağı (S6) — siparişin paketleri `orderNumber` ile ANLIK okunur.
+     *
+     * Kaynak: `docs/YENI-KANALLAR-API-NOTLARI.md` §4 (developer.n11.com):
+     * kalemde `sellerInvoiceAmount` = MAĞAZANIN FATURA TUTARI (resmî formül
+     * `price × quantity − totalSellerDiscountPrice`; n11'in karşıladığı
+     * indirim düşülmez), `vatRate`; alıcı `billingAddress` (`fullName`,
+     * `address`, `city`, `district`, `tcId`) + paket `taxId`/`taxOffice`.
+     * İptal paketleri ve kalemleri, n11depom (`sender = N11`) kalemleri girmez.
+     *
+     * DOSYA YÜKLEME YOK: n11 yalnız fatura BAĞLANTISI alır (SOAP
+     * `SellerInvoiceService`); Paraşüt'ün süreli PDF bağlantısı verilemez.
+     *
+     * ⚠️ GERÇEK HESAPTA DOĞRULANACAK: `sellerInvoiceAmount` KDV dahil mi
+     * (tüketici fiyatı olduğu için dahil sayıldı), `vatRate` biçimi,
+     * `orderNumber` sorgusunun tüm paketleri dönmesi, kurumsal alıcıda
+     * `taxId`'nin pakette mi `billingAddress`'te mi geldiği (ikisi de okunur).
+     */
+    public function fetchInvoiceDraft(Order $order): InvoiceDraft
+    {
+        $number = (string) ($order->external_number ?: $order->external_id);
+
+        $packages = self::rows($this->shipmentPackages(['orderNumber' => $number, 'page' => 0, 'size' => self::ORDER_PAGE_SIZE])['content'] ?? null);
+
+        $lines = [];
+        $billing = [];
+        $buyerPackage = [];
+        $placedMs = null;
+
+        foreach ($packages as $package) {
+            if ((string) ($package['orderNumber'] ?? $number) !== $number || ! in_array(self::status($package), self::LIVE_STATUSES, true)) {
+                continue;
+            }
+
+            foreach (self::rows($package['lines'] ?? null) as $line) {
+                if (strtoupper(trim((string) ($line['sender'] ?? self::SENDER))) === 'N11'
+                    || in_array(strtolower(trim((string) ($line['orderItemLineItemStatusName'] ?? ''))), ['cancelled', 'unsupplied'], true)) {
+                    continue;
+                }
+
+                $quantity = max(1, (int) ($line['quantity'] ?? 1));
+                $amount = $line['sellerInvoiceAmount'] ?? null;
+
+                if (! is_numeric($line['vatRate'] ?? null) || ! is_numeric($amount)) {
+                    throw new InvoiceDataUnavailable('n11 kalemde KDV oranı ya da fatura tutarı göndermedi.');
+                }
+
+                $rate = (float) $line['vatRate'];
+
+                $lines[] = new InvoiceLine(
+                    description: (string) ($line['productName'] ?? $line['stockCode'] ?? 'Ürün'),
+                    quantity: $quantity,
+                    grossUnitPrice: number_format((float) $amount / $quantity, 4, '.', ''),
+                    vatRate: (int) round($rate > 0 && $rate < 1 ? $rate * 100 : $rate),
+                    sku: isset($line['stockCode']) ? (string) $line['stockCode'] : null,
+                );
+            }
+
+            $billing = $billing === [] && is_array($package['billingAddress'] ?? null) ? $package['billingAddress'] : $billing;
+            $buyerPackage = $buyerPackage === [] ? $package : $buyerPackage;
+            $placedMs ??= self::placedAtMs($package);
+        }
+
+        if ($lines === []) {
+            throw new InvoiceDataUnavailable('Sipariş n11\'de bulunamadı ya da faturalanacak kalem yok.');
+        }
+
+        $text = static fn (mixed $v): ?string => is_scalar($v) ? (string) $v : null;
+
+        return new InvoiceDraft(
+            buyer: InvoiceBuyer::fromChannel(
+                person: $text($billing['fullName'] ?? null) ?? $text($buyerPackage['customerfullName'] ?? null),
+                company: $text($billing['fullName'] ?? null),
+                vkn: $text($buyerPackage['taxId'] ?? null) ?? $text($billing['taxId'] ?? null),
+                tckn: $text($billing['tcId'] ?? null) ?? $text($buyerPackage['tcIdentityNumber'] ?? null),
+                taxOffice: $text($buyerPackage['taxOffice'] ?? null) ?? $text($billing['taxHouse'] ?? null),
+                address: $text($billing['address'] ?? null),
+                city: $text($billing['city'] ?? null),
+                district: $text($billing['district'] ?? null),
+                email: $text($buyerPackage['customerEmail'] ?? null),
+                countryCode: 'TR',
+            ),
+            lines: $lines,
+            orderNumber: $number,
+            orderedAt: self::epochMs($placedMs) ?? new DateTimeImmutable,
+            platformName: 'n11',
+            platformUrl: 'https://www.n11.com',
+        );
     }
 
     // ------------------------------------------------------------------- iç

@@ -20,6 +20,7 @@ use App\Domain\Channels\Contracts\SupportsBatchStatus;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsReturns;
@@ -31,6 +32,10 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
+use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
+use App\Domain\Invoicing\Support\InvoiceBuyer;
+use App\Domain\Invoicing\Support\InvoiceDraft;
+use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
@@ -130,7 +135,7 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsReturns, SupportsTaxonomy, ValidatesPublication
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsOrders, SupportsPricing, SupportsReturns, SupportsTaxonomy, ValidatesPublication
 {
     use ReadsClaims;
 
@@ -1434,6 +1439,107 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
         ));
 
         return $lines === [] ? null : $lines;
+    }
+
+    /**
+     * Fatura taslağı (S6) — sipariş detayı ANLIK okunur, hiçbir yere yazılmaz.
+     *
+     * Kaynak: resmî OpenAPI (`docs/hepsiburada-openapi/siparis.json`,
+     * `model.OrderRepresentation`): `invoice.{address, taxNumber, taxOffice,
+     * turkishIdentityNumber}`, kalemde `vatRate`, `totalPrice.amount`.
+     *
+     * DOSYA YÜKLEME YOK: Hepsiburada fatura DOSYASI almaz, yalnız BAĞLANTI
+     * (`PUT packages/…/invoice`). Paraşüt'ün PDF bağlantısı süreli (~1 sa)
+     * olduğu için oraya verilemez — müşteri sonra tıkladığında kırık
+     * bağlantı görürdü. Kalıcı bağlantı (kendi barındırmamız) ayrı karar.
+     *
+     * ⚠️ GERÇEK HESAPTA DOĞRULANACAK:
+     *   · `totalPrice` KDV dahil ve SATICI indirimi düşülmüş mü (HB'nin
+     *     karşıladığı indirim `hbDiscount` faturaya girmemeli varsayıldı)
+     *   · `vatRate` biçimi (20 mi 0.2 mi — ikisi de kabul edilir)
+     *   · `orderDate` saat dilimi (sipariş alımındaki not)
+     *   · sipariş düzeyi `invoice` mı kalem düzeyi mi dolu geliyor (ikisi de okunur)
+     */
+    public function fetchInvoiceDraft(Order $order): InvoiceDraft
+    {
+        $number = (string) ($order->external_number ?: $order->external_id);
+
+        $response = $this->client->get(
+            endpoint: HepsiburadaEndpoints::host(HepsiburadaEndpoints::SERVICE_ORDER, $this->isTest())
+                .HepsiburadaEndpoints::path(HepsiburadaEndpoints::ORDER_DETAIL, ['merchantId' => $this->merchantId(), 'orderNumber' => $number]),
+            headers: $this->defaultHeaders(),
+        );
+
+        if ($response->status() === 404) {
+            throw new InvoiceDataUnavailable('Sipariş Hepsiburada\'da bulunamadı.');
+        }
+
+        $response->throw();
+
+        $lines = [];
+        $invoice = is_array($response->json('invoice')) ? $response->json('invoice') : [];
+        $placedAt = self::channelDate($response->json('orderDate'));
+
+        foreach ((array) ($response->json('items') ?? []) as $item) {
+            if (! is_array($item) || str_contains(strtolower((string) ($item['status'] ?? '')), 'cancel')
+                || (string) ($item['orderNumber'] ?? $number) !== $number) {
+                continue;
+            }
+
+            $quantity = max(1, (int) ($item['quantity'] ?? 1));
+            $total = $item['totalPrice']['amount'] ?? null;
+
+            if (! is_numeric($item['vatRate'] ?? null) || ! is_numeric($total)) {
+                // Yanlış KDV'li ya da tutarsız fatura yasal hatadır — varsayılanla kesilmez.
+                throw new InvoiceDataUnavailable('Hepsiburada kalemde KDV oranı ya da tutar göndermedi.');
+            }
+
+            $invoice = $invoice === [] && is_array($item['invoice'] ?? null) ? $item['invoice'] : $invoice;
+            $placedAt ??= self::channelDate($item['orderDate'] ?? null);
+
+            $lines[] = new InvoiceLine(
+                description: (string) ($item['name'] ?? $item['merchantSKU'] ?? 'Ürün'),
+                quantity: $quantity,
+                grossUnitPrice: number_format((float) $total / $quantity, 4, '.', ''),
+                vatRate: self::vatPercent($item['vatRate']),
+                sku: isset($item['merchantSKU']) ? (string) $item['merchantSKU'] : null,
+            );
+        }
+
+        if ($lines === []) {
+            throw new InvoiceDataUnavailable('Siparişte faturalanacak kalem yok (iptal edilmiş olabilir).');
+        }
+
+        $address = is_array($invoice['address'] ?? null) ? $invoice['address'] : [];
+        $text = static fn (mixed $v): ?string => is_scalar($v) ? (string) $v : null;
+
+        return new InvoiceDraft(
+            buyer: InvoiceBuyer::fromChannel(
+                person: $text($address['name'] ?? null) ?? $text($response->json('customer.name')),
+                company: $text($address['name'] ?? null),
+                vkn: $text($invoice['taxNumber'] ?? null),
+                tckn: $text($invoice['turkishIdentityNumber'] ?? null),
+                taxOffice: $text($invoice['taxOffice'] ?? null),
+                address: $text($address['address'] ?? null),
+                city: $text($address['city'] ?? null),
+                district: $text($address['town'] ?? null) ?? $text($address['district'] ?? null),
+                email: $text($address['email'] ?? null),
+                countryCode: $text($address['countryCode'] ?? null),
+            ),
+            lines: $lines,
+            orderNumber: $number,
+            orderedAt: $placedAt ?? new DateTimeImmutable,
+            platformName: 'Hepsiburada',
+            platformUrl: 'https://www.hepsiburada.com',
+        );
+    }
+
+    /** KDV oranı yüzde olarak — kanal 20 ya da 0.2 gönderebilir. */
+    private static function vatPercent(mixed $raw): int
+    {
+        $rate = (float) $raw;
+
+        return (int) round($rate > 0 && $rate < 1 ? $rate * 100 : $rate);
     }
 
     /** Bu sipariş daha önce inbox'a "created" olarak yazıldı mı? */

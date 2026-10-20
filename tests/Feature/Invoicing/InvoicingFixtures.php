@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Feature\Invoicing;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
+use App\Domain\Channels\Adapters\N11\N11Adapter;
+use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -48,7 +51,22 @@ trait InvoicingFixtures
     /** @return array{0: Tenant, 1: User, 2: Order} */
     protected function trendyolOrder(string $channel = 'trendyol'): array
     {
-        $adapters = ['trendyol' => TrendyolAdapter::class, 'woocommerce' => WooCommerceAdapter::class];
+        $adapters = [
+            'trendyol' => TrendyolAdapter::class,
+            'woocommerce' => WooCommerceAdapter::class,
+            'hepsiburada' => HepsiburadaAdapter::class,
+            'n11' => N11Adapter::class,
+            'shopify' => ShopifyAdapter::class,
+        ];
+
+        // Kanal başına bağlantı: hesap kimliği, ayarlar, kasa sırları.
+        $setup = [
+            'trendyol' => [(string) random_int(100000, 999999), [TrendyolAdapter::SELLER_ID_KEY => '777'], ['api_key' => 'k_fatura_123456', 'api_secret' => 's_fatura_123456']],
+            'woocommerce' => [(string) random_int(100000, 999999), ['base_url' => 'https://fatura.example.com/wp-json/wc/v3/'], ['consumer_key' => 'ck_fatura_test_1234567890', 'consumer_secret' => 'cs_fatura_test_1234567890']],
+            'hepsiburada' => ['hb-merchant-1', [HepsiburadaAdapter::INTEGRATOR_KEY => 'pazar_dev'], ['service_key' => 'hb_servis_anahtari_123']],
+            'n11' => ['testMagaza', [N11Adapter::SELLER_NAME_KEY => 'testMagaza'], ['app_key' => 'ANAHTAR-1', 'app_secret' => 'SIR-GIZLI-12345']],
+            'shopify' => ['fatura-test.myshopify.com', [], ['access_token' => 'shpat_fatura_test_123']],
+        ][$channel];
 
         $this->asSystem(fn () => ChannelType::query()->updateOrCreate(
             ['code' => $channel],
@@ -64,18 +82,14 @@ trait InvoicingFixtures
         $user = User::factory()->create();
         $tenant = (new CreateTenant)->run(name: 'Fatura '.uniqid(), owner: $user);
 
-        $order = $this->asTenant($tenant, function () use ($tenant, $channel): Order {
+        $order = $this->asTenant($tenant, function () use ($tenant, $channel, $setup): Order {
             $connection = ChannelConnection::factory()->create([
                 'channel_type_code' => $channel,
-                'external_account_id' => (string) random_int(100000, 999999),
-                'settings' => $channel === 'trendyol'
-                    ? [TrendyolAdapter::SELLER_ID_KEY => '777']
-                    : ['base_url' => 'https://fatura.example.com/wp-json/wc/v3/'],
+                'external_account_id' => $setup[0],
+                'settings' => $setup[1],
             ]);
 
-            app(CredentialVault::class)->store($connection, $channel === 'trendyol'
-                ? ['api_key' => 'k_fatura_123456', 'api_secret' => 's_fatura_123456']
-                : ['consumer_key' => 'ck_fatura_test_1234567890', 'consumer_secret' => 'cs_fatura_test_1234567890']);
+            app(CredentialVault::class)->store($connection, $setup[2]);
 
             $variant = Variant::factory()->create(['sku' => 'KHV-1']);
 

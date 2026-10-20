@@ -18,6 +18,7 @@ use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
+use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsOrderReconciliation;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
@@ -28,6 +29,10 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
+use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
+use App\Domain\Invoicing\Support\InvoiceBuyer;
+use App\Domain\Invoicing\Support\InvoiceDraft;
+use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
@@ -46,6 +51,7 @@ use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProductPage;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
+use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
@@ -117,7 +123,7 @@ use Throwable;
  * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
  * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration, VerifiesWebhookSender
+final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsInvoiceData, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration, VerifiesWebhookSender
 {
     /** Sipariş mutabakatı sayfa boyu — 100 kalemli siparişte maliyet ~ sayfa × kalem. */
     private const RECOVER_PAGE_SIZE = 25;
@@ -636,6 +642,131 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
         }
 
         return hash_equals(mb_strtolower($own), mb_strtolower(trim($sender)));
+    }
+
+    // ------------------------------------------------------------- fatura
+
+    /**
+     * Fatura taslağı (S6) — sipariş GraphQL ile ANLIK okunur, yazılmaz.
+     *
+     * Kalem fiyatı `discountedUnitPriceAfterAllDiscountsSet` (mağaza
+     * parasıyla, tüm indirimler düşülmüş); `taxesIncluded` kapalıysa KDV
+     * eklenerek brüte çevrilir. Adet `currentQuantity` (iade/düzenleme
+     * sonrası kalan). KDV `taxLines` oranlarının toplamı — vergi satırı
+     * olmayan kalemle fatura KESİLMEZ (Shopify'da vergi kapalı mağaza:
+     * oranı tahmin etmek yasal hatadır).
+     *
+     * ⚠️ TCKN/VKN YOK: Shopify bu alanları taşımaz → alıcı bireysel ve
+     * anonim kimlikle (11111111111). Kurumsal fatura gereken sipariş
+     * Paraşüt'ten elle düzeltilir.
+     *
+     * ⚠️ KORUMALI MÜŞTERİ VERİSİ: ad ve adres Level 2 alanlarıdır; uygulama
+     * Partner panelinde bu alanlara erişim almadıysa Shopify ACCESS_DENIED
+     * döner → kalıcı ve satıcıya açık sebep (kör yeniden deneme yok).
+     *
+     * DOSYA YÜKLEME YOK: Shopify'da siparişe fatura dosyası ekleme ucu yok.
+     *
+     * ⚠️ GERÇEK MAĞAZADA DOĞRULANACAK: Partner panelinde ad/adres alan
+     * izni ve `read_orders` ile `billingAddress` okunabilmesi; 2026-01
+     * sürümünde alan adları.
+     */
+    public function fetchInvoiceDraft(Order $order): InvoiceDraft
+    {
+        $id = (string) $order->external_id;
+
+        try {
+            $data = $this->gql(
+                <<<'GQL'
+                query InvoiceOrder($id: ID!) {
+                  order(id: $id) {
+                    name createdAt cancelledAt currencyCode taxesIncluded email
+                    billingAddress { name company address1 address2 city province countryCodeV2 }
+                    lineItems(first: 250) {
+                      nodes {
+                        title sku currentQuantity
+                        discountedUnitPriceAfterAllDiscountsSet { shopMoney { amount } }
+                        taxLines { rate }
+                      }
+                    }
+                  }
+                }
+                GQL,
+                variables: ['id' => str_starts_with($id, 'gid://') ? $id : 'gid://shopify/Order/'.$id],
+                operation: 'invoiceOrder',
+            );
+        } catch (ShopifyGraphqlException $e) {
+            if ($e->hasCode('ACCESS_DENIED')) {
+                throw new InvoiceDataUnavailable('Shopify alıcının ad/adres bilgisini vermedi: 34Pazar uygulamasının korumalı müşteri verisi izni yok.');
+            }
+
+            throw $e;
+        }
+
+        $remote = $data['order'] ?? null;
+
+        if (! is_array($remote)) {
+            throw new InvoiceDataUnavailable('Sipariş Shopify\'da bulunamadı.');
+        }
+
+        if (($remote['cancelledAt'] ?? null) !== null) {
+            throw new InvoiceDataUnavailable('Sipariş iptal edilmiş; fatura kesilmez.');
+        }
+
+        $lines = [];
+
+        foreach ((array) ($remote['lineItems']['nodes'] ?? []) as $item) {
+            $quantity = is_array($item) ? (int) ($item['currentQuantity'] ?? 0) : 0;
+
+            if ($quantity <= 0) {
+                continue;
+            }
+
+            $rates = array_filter((array) ($item['taxLines'] ?? []), static fn (mixed $t): bool => is_array($t) && is_numeric($t['rate'] ?? null));
+            $price = $item['discountedUnitPriceAfterAllDiscountsSet']['shopMoney']['amount'] ?? null;
+
+            if ($rates === [] || ! is_numeric($price)) {
+                throw new InvoiceDataUnavailable('Shopify kalemde KDV oranı ya da fiyat göndermedi; mağazada vergi ayarını açın.');
+            }
+
+            $rate = array_sum(array_map(static fn (array $t): float => (float) $t['rate'], $rates));
+            $unit = (float) $price * (($remote['taxesIncluded'] ?? true) ? 1 : 1 + $rate);
+
+            $lines[] = new InvoiceLine(
+                description: (string) ($item['title'] ?? 'Ürün'),
+                quantity: $quantity,
+                grossUnitPrice: number_format($unit, 4, '.', ''),
+                vatRate: (int) round($rate * 100),
+                sku: isset($item['sku']) && $item['sku'] !== '' ? (string) $item['sku'] : null,
+            );
+        }
+
+        if ($lines === []) {
+            throw new InvoiceDataUnavailable('Siparişte faturalanacak kalem yok.');
+        }
+
+        $billing = is_array($remote['billingAddress'] ?? null) ? $remote['billingAddress'] : [];
+        $text = static fn (mixed $v): ?string => is_scalar($v) ? (string) $v : null;
+
+        return new InvoiceDraft(
+            buyer: InvoiceBuyer::fromChannel(
+                person: $text($billing['name'] ?? null),
+                company: $text($billing['company'] ?? null),
+                vkn: null,
+                tckn: null,
+                taxOffice: null,
+                address: trim(($text($billing['address1'] ?? null) ?? '').' '.($text($billing['address2'] ?? null) ?? '')),
+                city: $text($billing['province'] ?? null),
+                district: $text($billing['city'] ?? null),
+                email: $text($remote['email'] ?? null),
+                countryCode: $text($billing['countryCodeV2'] ?? null),
+            ),
+            lines: $lines,
+            orderNumber: (string) ($order->external_number ?? $remote['name'] ?? $id),
+            orderedAt: is_string($remote['createdAt'] ?? null) ? new DateTimeImmutable($remote['createdAt']) : new DateTimeImmutable,
+            platformName: 'Shopify',
+            platformUrl: 'https://'.$this->shopDomain(),
+            currency: (string) ($remote['currencyCode'] ?? 'TRY'),
+        );
     }
 
     // ------------------------------------------------------------- GraphQL
@@ -1410,7 +1541,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
             $quantities[(string) $node['id']] = (int) $node['inventoryQuantity'];
         }
 
-        return new RemoteInventorySnapshot($quantities, new \DateTimeImmutable);
+        return new RemoteInventorySnapshot($quantities, new DateTimeImmutable);
     }
 
     /**
@@ -1643,7 +1774,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
             $prices[(string) $node['id']] = (string) $node['price'];
         }
 
-        return new RemotePriceSnapshot($prices, new \DateTimeImmutable);
+        return new RemotePriceSnapshot($prices, new DateTimeImmutable);
     }
 
     /**
