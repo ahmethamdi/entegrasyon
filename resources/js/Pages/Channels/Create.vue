@@ -148,6 +148,9 @@ function submit() {
                         {{ type.beta ? `${type.name} (Beta)` : type.name }}
                     </option>
                 </select>
+                <div v-if="selected?.logo" class="mt-3 flex h-7 items-center">
+                    <img :src="selected.logo" :alt="t(':channel logosu', { channel: selected.name })" class="h-7 w-auto max-w-[7rem] object-contain object-left">
+                </div>
                 <p v-if="selected?.beta" class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                     <span class="font-semibold">Beta</span> · {{ t('Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.') }}
                 </p>

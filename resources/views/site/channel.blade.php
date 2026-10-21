@@ -101,6 +101,9 @@
                 @endif
             </div>
 
+            @if ($channel['logo'] ?? null)
+                <img src="{{ $channel['logo'] }}" alt="{{ $name }} logosu" class="mt-6 h-10 w-auto max-w-[12rem] object-contain object-left">
+            @endif
             <h1 id="kanal-h1" class="h-page mt-3 [overflow-wrap:anywhere]">{{ $name }} entegrasyonu</h1>
 
             @if ($isOn)

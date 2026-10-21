@@ -1546,5 +1546,6 @@
     "Amazon yetkilendirmesi tamamlanmadı.": "Amazon authorisation was not completed.",
     "Amazon kimlik bilgisi alınamadı. Lütfen yeniden deneyin.": "Amazon credentials could not be obtained. Please try again.",
     "Amazon bağlantısı yetkilendirildi.": "The Amazon connection has been authorised.",
-    "Bu kanal :channel, ürün fiyatınız :ours — kanal fiyatı girin ya da kur kuralı tanımlayın.": "This channel uses :channel, your product price is in :ours — enter a channel price or define an exchange-rate rule."
+    "Bu kanal :channel, ürün fiyatınız :ours — kanal fiyatı girin ya da kur kuralı tanımlayın.": "This channel uses :channel, your product price is in :ours — enter a channel price or define an exchange-rate rule.",
+    ":channel logosu": ":channel logo"
 }

@@ -177,7 +177,7 @@
                 <div class="flex flex-wrap items-end justify-between gap-4">
                     <div>
                         <h2 id="kanal-baslik" class="heading-3">Bağlanabilen kanallar</h2>
-                        <p class="mt-1 text-[0.9875rem] muted">"Aktif" olanları bugün bağlayabilirsin; "Yakında" olanlar üzerinde çalışıyoruz.</p>
+                        <p class="mt-1 text-[0.9875rem] muted">Hepsini bugün bağlayabilirsin. "Beta" rozetli kanallar yeni: ilk kurulumda ekibimiz seninle birlikte kontrol eder.</p>
                     </div>
                     <a href="{{ route('site.channels') }}" class="link text-[0.9875rem]">Tüm entegrasyonlar</a>
                 </div>

@@ -8,6 +8,7 @@ use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Channels\Support\ChannelLogo;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\User;
 use Database\Seeders\PlanSeeder;
@@ -124,6 +125,25 @@ final class HomePageTest extends TestCase
             ->assertSee('Yakında')
             // Rozet birebir: "Aktif kanallar" başlığı tek başına testi geçirmesin.
             ->assertSee('<span class="badge badge--active">Aktif</span>', false);
+    }
+
+    /**
+     * Kanal kartı yerel logoyu taşır (CDN yok) ve alt metni markayı adlandırır;
+     * yazı-logosunda ad ikinci kez görünmez (yalnız ekran okuyucuya).
+     */
+    #[Test]
+    public function channel_cards_show_local_brand_logos(): void
+    {
+        $this->seedChannels();
+
+        $html = $this->get('/entegrasyonlar')->assertOk()->getContent();
+
+        $this->assertStringContainsString('/images/channels/woocommerce.svg', $html);
+        $this->assertStringContainsString('alt="WooCommerce logosu"', $html);
+        $this->assertStringNotContainsString('cdn.jsdelivr', $html);
+        $this->assertTrue(ChannelLogo::isWordmark('hepsiburada'));
+        $this->assertFalse(ChannelLogo::isWordmark('woocommerce'));
+        $this->assertNull(ChannelLogo::url('../etc/passwd'));
     }
 
     /** Açık kanalın sayfası neyin çalıştığını yazar; kargo notu kanala göre. */

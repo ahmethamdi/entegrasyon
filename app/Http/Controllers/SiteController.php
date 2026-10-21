@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Channels\Support\ChannelLogo;
 use App\Support\Site\Blog;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -196,7 +197,7 @@ final class SiteController extends Controller
             ->all();
     }
 
-    /** @return list<array{code: string, name: string, available: bool, beta: bool, marketplace: bool, cargoPush: bool}> */
+    /** @return list<array{code: string, name: string, available: bool, beta: bool, logo: ?string, marketplace: bool, cargoPush: bool}> */
     private function channelList(): array
     {
         return ChannelType::query()
@@ -216,7 +217,7 @@ final class SiteController extends Controller
      * Adaptör örneklenmez (bağlantı bilgisi gerekmez); yalnız sınıfın
      * arayüzü uygulayıp uygulamadığına bakılır.
      *
-     * @return array{code: string, name: string, available: bool, beta: bool, marketplace: bool, cargoPush: bool}
+     * @return array{code: string, name: string, available: bool, beta: bool, logo: ?string, marketplace: bool, cargoPush: bool}
      */
     private function presentChannel(ChannelType $type): array
     {
@@ -226,6 +227,8 @@ final class SiteController extends Controller
             'available' => (bool) $type->is_active,
             // Beta: açık ama gerçek satıcı hesabıyla henüz doğrulanmadı (21 Eki kararı).
             'beta' => (bool) $type->is_active && (bool) $type->is_beta,
+            'logo' => ChannelLogo::url($type->code),
+            'wordmark' => ChannelLogo::isWordmark($type->code),
             'marketplace' => $type->kind === 'marketplace',
             'cargoPush' => is_string($type->adapter_class) && is_a($type->adapter_class, SupportsFulfillment::class, true),
         ];
