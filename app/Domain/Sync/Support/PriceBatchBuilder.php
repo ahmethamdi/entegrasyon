@@ -101,6 +101,7 @@ final class PriceBatchBuilder
         $included = [];
         $items = [];
         $blocked = [];
+        $channelCurrency = ChannelCurrency::of($adapter);
 
         foreach ($operations as $operation) {
             $listing = $operation->listing;
@@ -126,7 +127,8 @@ final class PriceBatchBuilder
             // ZARAR KORUMASI: maliyet tabanının altındaki fiyat GİTMEZ.
             // Yanlış fiyattan satış geri alınamaz; durdurmanın bedeli yalnız
             // kanalda eski fiyatın kalmasıdır.
-            $violation = $listing->priceFloorViolation();
+            // PARA BİRİMİ önce: kur çevirisi yok, yanlış birimde fiyat gitmez.
+            $violation = $listing->priceBlockReason($channelCurrency);
 
             if ($violation !== null) {
                 $blocked[] = [$operation, $violation];

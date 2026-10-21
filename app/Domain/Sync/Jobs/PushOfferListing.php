@@ -16,6 +16,7 @@ use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\AdapterReportedFailure;
+use App\Domain\Sync\Support\ChannelCurrency;
 use App\Domain\Sync\Support\ListingPayloadBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -152,7 +153,8 @@ final class PushOfferListing implements ShouldQueue
         }
 
         // ZARAR KORUMASI — eBay teklifi fiyat taşır (`PushListing` ile aynı kural).
-        $violation = $listing->priceFloorViolation();
+        // Para birimi farkı da durdurur (kur çevirisi yok) — fiyat taşıyan her yol.
+        $violation = $listing->priceBlockReason(ChannelCurrency::of($adapter));
 
         if ($violation !== null) {
             $recorder->markBlocked($operation, $violation);

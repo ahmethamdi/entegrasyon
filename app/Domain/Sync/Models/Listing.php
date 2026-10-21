@@ -232,6 +232,41 @@ class Listing extends Model
     }
 
     /**
+     * Fiyat GÖNDERİLMEMELİ mi — nedeni ya da null.
+     *
+     * Önce para birimi (yanlış birimde fiyat "19,90 TL" → "19,90 €" olurdu),
+     * sonra zarar koruması. Stok bu denetimden ETKİLENMEZ.
+     */
+    public function priceBlockReason(?string $channelCurrency): ?string
+    {
+        return $this->currencyMismatch($channelCurrency) ?? $this->priceFloorViolation();
+    }
+
+    /**
+     * Kanal para birimi giden fiyatın biriminden farklıysa neden.
+     *
+     * ⚠️ KUR ÇEVİRİSİ YOK (21 Eki 2026). TRY katalog fiyatı EUR kanalına
+     * olduğu gibi gitseydi 499 TL'lik ürün 499 € satılır ya da tersi; hata
+     * SESSİZDİR çünkü kanal rakamı kabul eder. Kanal fiyatı o kanalın
+     * biriminde açıkça girilmişse (`channel_price_currency`) gider.
+     * Birimlerden biri bilinmiyorsa denetim yapılmaz (eski davranış).
+     */
+    public function currencyMismatch(?string $channelCurrency): ?string
+    {
+        $channel = strtoupper(trim((string) $channelCurrency));
+        $ours = strtoupper(trim((string) $this->effectiveCurrency()));
+
+        if ($channel === '' || $ours === '' || $channel === $ours) {
+            return null;
+        }
+
+        return __('Bu kanal :channel, ürün fiyatınız :ours — kanal fiyatı girin ya da kur kuralı tanımlayın.', [
+            'channel' => $channel,
+            'ours' => $ours,
+        ]);
+    }
+
+    /**
      * Zarar koruması — giden fiyat alış maliyeti tabanının altındaysa neden.
      *
      * NULL: gönderilebilir (koruma kapalı, maliyet bilinmiyor ya da fiyat

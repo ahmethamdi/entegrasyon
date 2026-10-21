@@ -21,6 +21,7 @@ use App\Domain\Reconciliation\Support\UnrecordedSaleGuard;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
+use App\Domain\Sync\Support\ChannelCurrency;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Support\Tenancy\TenantContext;
@@ -85,6 +86,9 @@ use Throwable;
  */
 final class ReconcileConnection
 {
+    /** Bu turdaki kanalın fiyat para birimi (fiyat denetimi; null = bilinmiyor). */
+    private ?string $channelCurrency = null;
+
     public function __construct(
         private readonly CandidateSelector $candidates,
         private readonly SampledCandidates $sampled,
@@ -137,6 +141,7 @@ final class ReconcileConnection
         // Ayrım İSTİSNA TİPİYLE yapılamaz: adapter'lar da `RuntimeException`
         // fırlatır ve gerçek bir ağ hatası yetenek yokluğu sanılırdı.
         $adapter = $this->adapterFor($connection, $domain);
+        $this->channelCurrency = ChannelCurrency::of($adapter);
 
         // Uzak durum TOPLU okunur. Okuma patlarsa bu SÜRÜKLENME DEĞİLDİR:
         // fark kanıtlanmadı, altyapı sorunu var. Kalemler
@@ -405,7 +410,7 @@ final class ReconcileConnection
         // kalır ve bu bilinçli; çakışma sayılsaydı her tur aynı satır
         // "fiyat çakışması" olarak düşer, "bizimkini gönder" de yine
         // korumaya takılırdı. Neden listing'in senkron hatasında görünür.
-        if ($listing->priceFloorViolation() !== null) {
+        if ($listing->priceBlockReason($this->channelCurrency) !== null) {
             return [
                 ItemStatus::MATCHED,
                 null,

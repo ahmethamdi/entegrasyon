@@ -19,6 +19,7 @@ use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\AdapterReportedFailure;
+use App\Domain\Sync\Support\ChannelCurrency;
 use App\Domain\Sync\Support\ListingPayloadBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -160,7 +161,8 @@ final class PushListing implements ShouldQueue
         // (Shopify, Trendyol, Etsy eşleyicileri `effectivePrice()` yazar).
         // Yalnız fiyat işinde durdurulsaydı maliyet altı fiyat ilk açılışta
         // ya da bir başlık düzeltmesinde kanala yine giderdi.
-        $violation = $listing->priceFloorViolation();
+        // Para birimi farkı da durdurur (kur çevirisi yok) — fiyat taşıyan her yol.
+        $violation = $listing->priceBlockReason(ChannelCurrency::of($adapter));
 
         if ($violation !== null) {
             $recorder->markBlocked($operation, $violation);

@@ -811,6 +811,10 @@ final class EbayOfferLifecycleTest extends TestCase
                 'external_id' => $externalId,
                 'lifecycle_status' => $externalId === null ? 'draft' : 'live',
                 'channel_metadata' => $metadata,
+                // Kanal fiyatı EUR olarak AÇIKÇA girilir: TRY katalog fiyatı
+                // EUR kanalına çevrilmeden gitmez (21 Eki para birimi kapısı).
+                'channel_price' => '199.90',
+                'channel_price_currency' => 'EUR',
             ]);
 
             return [
