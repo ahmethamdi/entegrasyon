@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Models;
 
+use App\Domain\Channels\Support\BetaChannelNotifier;
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Kiracının bağladığı gerçek mağaza veya pazaryeri hesabı.
@@ -53,6 +55,22 @@ class ChannelConnection extends Model
         'last_error',
         'connected_at',
     ];
+
+    /**
+     * Beta kanal bildirimi — bağlantı İLK KEZ kurulunca (`connected_at`
+     * boştan dolar). Satır yaratılışı değil kurulma anı izlenir: OAuth
+     * akışları satırı geçici kimlikle önceden açar.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (self $connection): void {
+            if ($connection->wasChanged('connected_at')
+                && $connection->getOriginal('connected_at') === null
+                && $connection->connected_at !== null) {
+                DB::afterCommit(fn () => app(BetaChannelNotifier::class)->connected($connection));
+            }
+        });
+    }
 
     protected function casts(): array
     {

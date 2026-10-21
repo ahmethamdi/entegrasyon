@@ -268,7 +268,7 @@ function formatDate(iso) {
                         </div>
 
                         <p class="mt-1 truncate font-mono text-xs text-stone-500">
-                            {{ connection.channel }} · {{ connection.account }}
+                            {{ connection.channel }}<span v-if="connection.beta" class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900" :title="t('Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.')">Beta</span> · {{ connection.account }}
                         </p>
                         <p v-if="connection.priceRule" class="mt-1 text-xs text-stone-600">
                             {{ t('Fiyat') }}: {{ connection.priceRule }}

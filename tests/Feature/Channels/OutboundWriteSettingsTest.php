@@ -6,6 +6,7 @@ namespace Tests\Feature\Channels;
 
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Actions\ConnectChannel;
+use App\Domain\Channels\Actions\SetOutboundWrite;
 use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
 use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -51,9 +52,29 @@ final class OutboundWriteSettingsTest extends TestCase
 
     // ─────────────────────────────────────────── kilit ve açık eylem
 
+    /**
+     * 21 Eki 2026 kullanıcı kararı: beta kanallarda yazma izinleri kapalı
+     * DOĞAR ama satıcı açabilir — varsayılan kilit listesi boş.
+     */
+    #[Test]
+    public function beta_channel_writes_are_closed_by_default_but_can_be_enabled(): void
+    {
+        [$tenant] = $this->tenant();
+
+        $this->assertSame([], config('entegrasyon.outbound_write_locked_channels'));
+
+        $connection = $this->connection($tenant, 'hepsiburada', enabled: false);
+
+        $this->assertFalse((bool) $connection->fresh()->stock_sync_enabled);
+        $this->assertFalse(SetOutboundWrite::isLocked($connection));
+    }
+
     #[Test]
     public function hb_and_n11_writes_cannot_be_enabled_from_the_panel_until_verified(): void
     {
+        // Kilit mekanizması env ile hâlâ çalışır; 21 Eki 2026'dan beri varsayılan liste BOŞ (beta kararı).
+        config(['entegrasyon.outbound_write_locked_channels' => ['hepsiburada', 'n11']]);
+
         [$tenant, $user] = $this->tenant();
 
         foreach (['hepsiburada', 'n11'] as $code) {
@@ -129,6 +150,9 @@ final class OutboundWriteSettingsTest extends TestCase
     #[Test]
     public function the_channels_screen_shows_connected_separately_from_write_permissions(): void
     {
+        // Kilit mekanizması env ile hâlâ çalışır; 21 Eki 2026'dan beri varsayılan liste BOŞ (beta kararı).
+        config(['entegrasyon.outbound_write_locked_channels' => ['hepsiburada', 'n11']]);
+
         [$tenant, $user] = $this->tenant();
         $this->connection($tenant, 'hepsiburada', enabled: false);
 

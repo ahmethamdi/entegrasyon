@@ -8,6 +8,7 @@ use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Support\BetaChannelNotifier;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
@@ -206,6 +207,14 @@ final class SyncResultRecorder
                 $this->markSyncStateFailed($operation, $class, $message, $reasonCode);
             }
         });
+
+        if ($class->isPermanent() || $class === ErrorClass::AUTHENTICATION) {
+            $connection = $this->connectionFor($operations, $attempt);
+
+            if ($connection !== null) {
+                app(BetaChannelNotifier::class)->failed($connection, $class->value, $message);
+            }
+        }
     }
 
     /**

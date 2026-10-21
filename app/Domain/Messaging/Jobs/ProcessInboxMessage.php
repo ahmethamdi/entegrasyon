@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Messaging\Jobs;
 
 use App\Domain\Billing\Routing\ShopifyBillingRouter;
+use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Routing\ChannelLifecycleRouter;
+use App\Domain\Channels\Support\BetaChannelNotifier;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Messaging\Support\DeferUntilOrderArrives;
 use App\Domain\Messaging\Support\InboxRetrySchedule;
@@ -147,6 +149,14 @@ final class ProcessInboxMessage extends TenantAwareJob
                 // 15 dk. Önceden beş deneme saniyeler içinde biterdi.
                 'next_attempt_at' => $exhausted ? null : InboxRetrySchedule::afterError($message->attempt_count),
             ])->save();
+
+            if ($exhausted) {
+                $connection = ChannelConnection::query()->find($message->channel_connection_id);
+
+                if ($connection !== null) {
+                    app(BetaChannelNotifier::class)->failed($connection, 'sipariş işlenemedi', (string) $message->last_error);
+                }
+            }
 
             Log::error($exhausted ? 'inbox.process_failed' : 'inbox.process_retrying', [
                 'message' => $message->id,

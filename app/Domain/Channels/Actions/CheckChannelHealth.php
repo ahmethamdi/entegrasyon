@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Actions;
 
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\BetaChannelNotifier;
 use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Sync\Support\ChannelErrorText;
 use Throwable;
@@ -81,6 +82,8 @@ final class CheckChannelHealth
             // olduğu gibi gider — maskelenmezse sır tarayıcıda görünür.
             'last_error' => $this->errorText->redact($connection, $message),
         ])->save();
+
+        app(BetaChannelNotifier::class)->failed($connection, 'sağlık kontrolü', (string) $connection->last_error);
 
         return $connection;
     }

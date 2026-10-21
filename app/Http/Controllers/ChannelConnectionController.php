@@ -66,7 +66,7 @@ final class ChannelConnectionController extends Controller
                 // adapter_class DA yüklenir: AdapterRegistry onu okuyarak
                 // yetenekleri çözer. Yalnızca code,name seçilirse registry
                 // "adapter sınıfı tanımlı değil" der ve yetenekler boş kalır.
-                ->with('channelType:code,name,adapter_class')
+                ->with('channelType:code,name,adapter_class,is_beta')
                 // §25 · token rozeti. AKTİF kimlik bilgisi eager-load
                 // edilir; N+1 olmasın diye ilişki üzerinden okunur ve
                 // YALNIZCA `expires_at` seçilir — şifreli gövde panele
@@ -482,6 +482,7 @@ final class ChannelConnectionController extends Controller
             'label' => $connection->label,
             'channel' => $connection->channelType?->name ?? $connection->channel_type_code,
             'channelTypeCode' => $connection->channel_type_code,
+            'beta' => $connection->channelType?->is_beta === true,
             // Mağaza kimliği alan adıdır; sır değil ve kullanıcı onu tanır.
             'account' => $connection->external_account_id,
             'status' => $connection->status,
@@ -638,11 +639,12 @@ final class ChannelConnectionController extends Controller
         return ChannelType::query()
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['code', 'name', 'kind'])
+            ->get(['code', 'name', 'kind', 'is_beta'])
             ->map(fn (ChannelType $type): array => [
                 'code' => $type->code,
                 'name' => $type->name,
                 'kind' => $type->kind,
+                'beta' => $type->is_beta,
                 // ⚠️ ALAN TANIMI EKRANA GİDER — Vue'da `if (code ===
                 // '...')` YAZILMAZ. Yazılsaydı o blok sunucudaki
                 // doğrulamadan AYRI yaşar ve biri değiştiğinde form

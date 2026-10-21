@@ -69,7 +69,7 @@ final class SiteController extends Controller
      */
     public function channel(Request $request, string $channel): View
     {
-        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active']);
+        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active', 'is_beta']);
 
         abort_if($type === null, 404);
 
@@ -196,13 +196,13 @@ final class SiteController extends Controller
             ->all();
     }
 
-    /** @return list<array{code: string, name: string, available: bool, marketplace: bool, cargoPush: bool}> */
+    /** @return list<array{code: string, name: string, available: bool, beta: bool, marketplace: bool, cargoPush: bool}> */
     private function channelList(): array
     {
         return ChannelType::query()
             ->orderByDesc('is_active')
             ->orderBy('name')
-            ->get(['code', 'name', 'kind', 'adapter_class', 'is_active'])
+            ->get(['code', 'name', 'kind', 'adapter_class', 'is_active', 'is_beta'])
             ->map(fn (ChannelType $type): array => $this->presentChannel($type))
             ->all();
     }
@@ -216,7 +216,7 @@ final class SiteController extends Controller
      * Adaptör örneklenmez (bağlantı bilgisi gerekmez); yalnız sınıfın
      * arayüzü uygulayıp uygulamadığına bakılır.
      *
-     * @return array{code: string, name: string, available: bool, marketplace: bool, cargoPush: bool}
+     * @return array{code: string, name: string, available: bool, beta: bool, marketplace: bool, cargoPush: bool}
      */
     private function presentChannel(ChannelType $type): array
     {
@@ -224,6 +224,8 @@ final class SiteController extends Controller
             'code' => $type->code,
             'name' => $type->name,
             'available' => (bool) $type->is_active,
+            // Beta: açık ama gerçek satıcı hesabıyla henüz doğrulanmadı (21 Eki kararı).
+            'beta' => (bool) $type->is_active && (bool) $type->is_beta,
             'marketplace' => $type->kind === 'marketplace',
             'cargoPush' => is_string($type->adapter_class) && is_a($type->adapter_class, SupportsFulfillment::class, true),
         ];

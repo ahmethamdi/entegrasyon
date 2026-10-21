@@ -66,6 +66,18 @@ return [
     ],
 
     /*
+    | Beta kanal bildirimleri (kullanıcı kararı 21 Eki 2026) — 34Devs'e.
+    | Beta kanala yeni bağlantı kurulunca ve o bağlantıda kalıcı/kimlik
+    | hatası olunca: ntfy konusu (boşsa atlanır) + posta. Hata bildirimi
+    | bağlantı başına saatte en çok bir kez.
+    */
+    'beta' => [
+        'ntfy_topic' => env('BETA_NTFY_TOPIC'),
+        'ntfy_base_url' => env('BETA_NTFY_BASE_URL', 'https://ntfy.sh'),
+        'notify_email' => env('BETA_NOTIFY_EMAIL', 'info@34devs.com'),
+    ],
+
+    /*
     | Ödeme sağlayıcısı — §13 · Faz 4.
     |
     | KULLANICI KARARI: Stripe (doküman "iyzico" diyor; sapma onaylı).
@@ -92,10 +104,14 @@ return [
     | bağlantılarında yazma izinleri (ürün yayını, fiyat, stok) panelden
     | AÇILAMAZ. Bir kanal listeden yalnız canlı doğrulama tamamlanıp açık
     | onay verildiğinde çıkarılır.
+    |
+    | 21 Eki 2026 kullanıcı kararı: varsayılan liste BOŞ — doğrulanmamış
+    | kanallar "beta" olarak açık; yazma izinleri yine kapalı doğar ama
+    | satıcı açabilir. Acil durumda env ile kanal yeniden kilitlenebilir.
     */
     'outbound_write_locked_channels' => array_values(array_filter(array_map(
         'trim',
-        explode(',', (string) env('OUTBOUND_WRITE_LOCKED_CHANNELS', 'hepsiburada,n11')),
+        explode(',', (string) env('OUTBOUND_WRITE_LOCKED_CHANNELS', '')),
     ))),
 
     /*

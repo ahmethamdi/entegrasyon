@@ -90,7 +90,9 @@
 
             <div class="mt-8 flex flex-wrap items-center gap-3">
                 <span class="text-sm font-semibold muted">{{ $kind }}</span>
-                @if ($isOn)
+                @if ($isOn && ($channel['beta'] ?? false))
+                    <span class="badge badge--brand">Beta</span>
+                @elseif ($isOn)
                     <span class="badge badge--active">Aktif</span>
                 @else
                     <span class="badge badge--soon">Yakında</span>
@@ -103,6 +105,9 @@
                 <p class="lead mt-4 max-w-[56ch]">
                     {{ $name }} mağazanı 34Pazar'a bağla. {{ $loc }} satılan ürünün stoğu diğer kanallarında da düşer; siparişlerin tek listede durur.
                 </p>
+                @if ($channel['beta'] ?? false)
+                    <p class="mt-3 max-w-[56ch] text-sm muted">Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.</p>
+                @endif
             @else
                 <p class="lead mt-4 max-w-[56ch]">
                     <strong class="font-semibold text-ink">Bu entegrasyon hazırlanıyor.</strong>

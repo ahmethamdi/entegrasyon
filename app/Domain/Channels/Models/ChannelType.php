@@ -20,10 +20,23 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $kind
  * @property array<string, bool> $capabilities
  * @property array<string, mixed> $rate_limit_profile
+ * @property bool $is_beta
  */
 class ChannelType extends Model
 {
     public $incrementing = false;
+
+    /**
+     * BETA KANALLAR (kullanıcı kararı 21 Eki 2026): gerçek satıcı hesabıyla
+     * uçtan uca doğrulanmamış ama satışa AÇIK kanallar. Panelde ve sitede
+     * "Beta" rozeti taşır; yeni bağlantıda yazma izinleri ADR-010 gereği
+     * kapalı doğar, bağlantı ve ilk hata 34Devs'e bildirilir
+     * (`BetaChannelNotifier`). Trendyol, Shopify ve Etsy gerçek hesapta
+     * doğrulandığı için listede YOK. Kanal doğrulanınca buradan çıkarılır.
+     */
+    public const BETA_CODES = [
+        'woocommerce', 'hepsiburada', 'n11', 'ikas', 'ticimax', 'pazarama', 'ciceksepeti', 'ebay',
+    ];
 
     protected $primaryKey = 'code';
 
@@ -38,6 +51,7 @@ class ChannelType extends Model
         'rate_limit_profile',
         'supports_webhooks',
         'is_active',
+        'is_beta',
     ];
 
     protected function casts(): array
@@ -47,6 +61,7 @@ class ChannelType extends Model
             'rate_limit_profile' => 'array',
             'supports_webhooks' => 'boolean',
             'is_active' => 'boolean',
+            'is_beta' => 'boolean',
         ];
     }
 

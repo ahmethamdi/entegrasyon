@@ -664,8 +664,15 @@ class ChannelTypeSeeder extends Seeder
 
         // Yalnızca YENİ satırda tohum değerini uygula; mevcut satırda
         // operatörün kararı korunur.
+        // Beta bayrağı TANIMDIR ve her koşuşta yazılır (21 Eki kararı).
+        $attributes['is_beta'] = in_array($key['code'], ChannelType::BETA_CODES, true);
+
         if ($type->exists) {
             unset($attributes['is_active']);
+        } elseif ($attributes['is_beta']) {
+            // Beta kanal AÇIK doğar: doğrulama ilk müşteriyle birlikte yapılır
+            // (kullanıcı kararı 21 Eki 2026, §05 "kapalı doğar" kuralının yerine).
+            $attributes['is_active'] = true;
         }
 
         $type->fill([...$key, ...$attributes])->save();

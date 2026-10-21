@@ -1536,5 +1536,6 @@
     "Sipariş iptal edildi. Faturayı Paraşüt'te iptal edebilirsiniz.": "The order was cancelled. You can cancel its invoice in Paraşüt.",
     "Faturayı iptal et": "Cancel invoice",
     "İade talebi :claim": "Return request :claim",
-    "İadeyi muhasebeye kaydet": "Record return in books"
+    "İadeyi muhasebeye kaydet": "Record return in books",
+    "Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.": "This channel is new; our team checks the first setup together with you."
 }

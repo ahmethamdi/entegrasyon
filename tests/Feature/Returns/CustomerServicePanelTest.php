@@ -126,6 +126,9 @@ final class CustomerServicePanelTest extends TestCase
     #[Test]
     public function customer_service_writes_stay_closed_and_locked_for_unverified_channels(): void
     {
+        // Kilit mekanizması env ile hâlâ çalışır; 21 Eki 2026'dan beri varsayılan liste BOŞ (beta kararı).
+        config(['entegrasyon.outbound_write_locked_channels' => ['hepsiburada', 'n11']]);
+
         [$tenant, $connection] = $this->trendyolTenant();
 
         $this->assertFalse($connection->fresh()->return_decision_enabled, 'Yeni bağlantıda kapalı başlar.');
