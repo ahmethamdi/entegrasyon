@@ -1432,4 +1432,45 @@
             display: block;
         }
     }
+
+    /* Adım görseli: kırpılmış panel ekranı + tek turuncu numara işareti. */
+    .step-shot {
+        position: relative;
+        margin: 0;
+        border: 1px solid var(--color-line);
+        border-radius: 0.625rem;
+        overflow: hidden;
+        background: #fafaf9;
+    }
+
+    .step-shot img {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+
+    .step-shot__mark {
+        position: absolute;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.75rem;
+        height: 1.75rem;
+        transform: translate(-50%, -50%);
+        border: 2px solid #fff;
+        border-radius: 999px;
+        background: var(--color-brand);
+        color: #fff;
+        font-family: var(--font-display);
+        font-size: 0.875rem;
+        font-weight: 800;
+        line-height: 1;
+        outline: 2px solid var(--color-brand);
+        outline-offset: 3px;
+    }
+
+    .step-card {
+        display: flex;
+        flex-direction: column;
+    }
 }

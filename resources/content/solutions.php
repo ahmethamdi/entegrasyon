@@ -10,6 +10,8 @@ declare(strict_types=1);
 | `channels`: kanal listesi adaptör yeteneğinden hesaplanır (arayüz adı) ya da
 | sabit kod listesidir — elle tutulan kanal listesi eskir.
 | `shot`: panelden gerçek ekran görüntüsü (yerel demo hesabı, 21 Eki 2026).
+| `how_shots`: "Nasıl çalışır" adımlarının görselleri (step-shots.php); null =
+| o adımın gösterilecek gerçek ekranı yok → satırda görsel gösterilmez.
 */
 
 return [
@@ -18,6 +20,7 @@ return [
         'icon' => 'stock',
         'channels' => 'SupportsInventory',
         'shot' => 'images/site/cozum/stok.jpg',
+        'how_shots' => ['ice-aktar', 'siparis-stok', 'urun-kanallar'],
         'tr' => [
             'menu' => 'Stok senkronu',
             'menu_hint' => 'Tek stok, fazla satışa karşı koruma',
@@ -71,6 +74,7 @@ return [
         'icon' => 'orders',
         'channels' => 'SupportsOrders',
         'shot' => 'images/site/cozum/siparis.jpg',
+        'how_shots' => ['kanal-bagla', 'siparis-liste', 'siparis-kalemler'],
         'tr' => [
             'menu' => 'Sipariş yönetimi',
             'menu_hint' => 'Bütün kanalların siparişi tek listede',
@@ -124,6 +128,7 @@ return [
         'icon' => 'scale',
         'channels' => 'SupportsInvoiceData',
         'shot' => 'images/site/cozum/e-fatura.jpg',
+        'how_shots' => ['parasut-bagla', 'fatura-kes', null],
         'tr' => [
             'menu' => 'E-fatura (Paraşüt)',
             'menu_hint' => 'Siparişin faturası Paraşüt\'ten',
@@ -177,6 +182,7 @@ return [
         'icon' => 'price',
         'channels' => 'SupportsPricing',
         'shot' => 'images/site/cozum/fiyat-kurali.jpg',
+        'how_shots' => ['fiyat-kurali', 'kampanya', 'zarar-korumasi'],
         'tr' => [
             'menu' => 'Fiyat kuralları ve kampanya',
             'menu_hint' => 'Kanal farkı, süreli indirim, zarar koruması',
@@ -230,6 +236,7 @@ return [
         'icon' => 'link',
         'channels' => null,
         'shot' => 'images/site/cozum/tedarikci.jpg',
+        'how_shots' => ['tedarikci-ekle', null, null],
         'tr' => [
             'menu' => 'Tedarikçi XML',
             'menu_hint' => 'Toptancı listesinden ürün, stok, fiyat',
@@ -283,6 +290,7 @@ return [
         'icon' => 'upload',
         'channels' => null,
         'shot' => 'images/site/cozum/excel.jpg',
+        'how_shots' => ['excel-indir', 'excel-yukle'],
         'tr' => [
             'menu' => 'Excel ile toplu düzenleme',
             'menu_hint' => 'Stok ve fiyatı tabloda güncelle',
@@ -336,6 +344,7 @@ return [
         'icon' => 'truck',
         'channels' => 'SupportsFulfillment',
         'shot' => 'images/site/cozum/siparis-detay.jpg',
+        'how_shots' => ['siparis-ac', 'kargo-gir', 'siparis-gecmis'],
         'tr' => [
             'menu' => 'Kargo bildirimi',
             'menu_hint' => 'Takip numarası kanala gider',
@@ -389,6 +398,7 @@ return [
         'icon' => 'map',
         'channels' => ['amazon', 'ebay', 'etsy', 'kaufland', 'otto'],
         'shot' => 'images/site/cozum/kanallar.jpg',
+        'how_shots' => ['kanal-bagla-yurtdisi', 'fiyat-kurali', 'siparis-liste'],
         'tr' => [
             'menu' => 'Yurtdışı pazaryerleri',
             'menu_hint' => 'Amazon, eBay, Etsy, OTTO, Kaufland',

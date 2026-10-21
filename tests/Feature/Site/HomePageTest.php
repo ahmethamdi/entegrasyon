@@ -114,6 +114,30 @@ final class HomePageTest extends TestCase
         $this->assertStringNotContainsString('tel:', explode('<header', $html, 2)[0]);
     }
 
+    /**
+     * "Üç adımda kurulur" ve çözüm sayfalarının adımları panelden gerçek
+     * görsel taşır: webp, genişlik/yükseklik öznitelikli (CLS 0), lazy.
+     * Bir adımın ekranı yoksa satırda hiç görsel yoktur (ya hep ya hiç).
+     */
+    #[Test]
+    public function step_rows_show_real_panel_shots_all_or_nothing(): void
+    {
+        $this->seedChannels();
+
+        foreach (require resource_path('content/step-shots.php') as $name => $shot) {
+            $this->assertFileExists(public_path("images/site/adim/{$name}.webp"));
+        }
+
+        $home = $this->get('/')->assertOk()->getContent();
+        $this->assertSame(3, substr_count($home, 'class="step-shot"'));
+        $this->assertMatchesRegularExpression('#<img src="[^"]+/images/site/adim/kanal-bagla\.webp" alt="[^"]+" width="\d+" height="\d+" loading="lazy"#', $home);
+        $this->assertStringContainsString('/images/site/adim/ice-aktar-en.webp', $this->get('/en')->getContent());
+
+        $this->assertSame(3, substr_count($this->get('/cozumler/kargo-bildirimi')->getContent(), 'class="step-shot"'));
+        // Tedarikçi XML'in 2. ve 3. adımının gösterilecek gerçek ekranı yok.
+        $this->assertStringNotContainsString('class="step-shot"', $this->get('/cozumler/tedarikci-xml')->getContent());
+    }
+
     /** /en ana sayfası İngilizce, hreflang ile TR'ye bağlı ve site haritasında. */
     #[Test]
     public function english_home_renders_and_links_back(): void

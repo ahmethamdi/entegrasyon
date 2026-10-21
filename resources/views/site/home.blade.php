@@ -71,6 +71,14 @@
         [$t('Tek yerden yönet', 'Manage from one place'), $t('Siparişler tek listeye düşer, stok her satışta bütün kanallarda birlikte güncellenir, fiyatı tek yerden değiştirirsin.', 'Orders land in one list, stock updates on every channel with each sale, and you change prices in one place.')],
     ];
 
+    // Adım görselleri: panelden gerçek ekran (StepShots; EN sayfada İngilizce panel).
+    $stepShots = \App\Support\Site\StepShots::row(['kanal-bagla', 'ice-aktar', 'yapman-gerekenler'], count($steps), $en ? 'en' : 'tr');
+    $stepAlts = [
+        $t('Panelde kanal bağlama ekranı: kanal seçimi ve bağlantı bilgileri formu', 'Panel screen for connecting a channel: channel picker and credentials form'),
+        $t('Panelde toplu içe aktarma ekranı: CSV yükleme ve geçmiş içe aktarmada yeni, güncellenen ve hatalı ürün sayıları', 'Panel import screen: CSV upload and the new, updated and failed counts of a past import'),
+        $t('Panel ana sayfası: Yapman gerekenler listesi ve kanalların durumu', 'Panel home: the to-do list and the state of your channels'),
+    ];
+
     /*
      * SSS cevapları YALNIZ doğrulanmış şeyleri söyler. "Kart bilgisi
      * gerekmez" kayıt formuna bakılarak yazıldı (ödeme sormuyor) ve yalnız
@@ -279,10 +287,13 @@
                 <h2 id="nasil-baslik" class="heading-2">{{ $t('Üç adımda kurulur.', 'Set up in three steps.') }}</h2>
                 <p class="lead">{{ $t('Kod yazmazsın; kanalın satıcı panelinden birkaç bilgiyi bağlantı formuna yapıştırırsın.', 'No code: you paste a few details from the channel\'s seller panel into the connection form.') }}</p>
             </div>
-            <ol class="home-grid mt-10 md:grid-cols-3">
+            <ol class="mt-10 grid gap-6 md:grid-cols-3">
                 @foreach ($steps as [$title, $body])
-                    <li>
-                        <span class="home-step" aria-hidden="true">0{{ $loop->iteration }}</span>
+                    <li class="step-card">
+                        @if ($stepShots)
+                            @include('site.partials.step-shot', ['shot' => $stepShots[$loop->index], 'n' => $loop->iteration, 'alt' => $stepAlts[$loop->index]])
+                        @endif
+                        <span class="home-step mt-5 block" aria-hidden="true">0{{ $loop->iteration }}</span>
                         <h3 class="heading-3 mt-4"><span class="sr-only">{{ $loop->iteration }}. {{ $t('adım', 'step') }}: </span>{{ $title }}</h3>
                         <p class="mt-2 muted">{{ $body }}</p>
                     </li>

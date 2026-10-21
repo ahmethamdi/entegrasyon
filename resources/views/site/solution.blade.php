@@ -81,9 +81,15 @@
     <section class="section bg-soft" aria-labelledby="nasil-h2">
         <div class="wrap">
             <h2 id="nasil-h2" class="heading-2">{{ $t('Nasıl çalışır?', 'How it works') }}</h2>
+            @php $howShots = \App\Support\Site\StepShots::row($solution['how_shots'] ?? [], count($copy['how']), $lang); @endphp
             <ol class="mt-10 grid gap-5 md:grid-cols-3">
                 @foreach ($copy['how'] as $i => [$title, $body])
                     <li class="card">
+                        @if ($howShots)
+                            <div class="mb-5">
+                                @include('site.partials.step-shot', ['shot' => $howShots[$i], 'n' => $i + 1, 'alt' => $t('Panelden ekran: ', 'Panel screen: ').$title])
+                            </div>
+                        @endif
                         <span class="inline-flex size-9 items-center justify-center rounded-full bg-ink font-bold text-white">{{ $i + 1 }}</span>
                         <h3 class="heading-3 mt-4">{{ $title }}</h3>
                         <p class="mt-2 muted">{{ $body }}</p>
