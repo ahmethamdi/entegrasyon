@@ -631,6 +631,38 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // OTTO Market — pazaryeri (DE), Service Partner uygulaması (21 Eki 2026).
+        // BETA: gerçek hesapla SINANMADI. Kargo bildirimi YOK (shipments iade
+        // takip numarası + gönderim adresi ister); ürün açma YOK.
+        $this->upsert(
+            ['code' => 'otto'],
+            [
+                'name' => 'OTTO Market',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Otto\\OttoAdapter',
+                'capabilities' => [
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    // Availability uçları resmî 10/sn; temkinli 5.
+                    'requests_per_second' => 5,
+                    'burst_capacity' => 5,
+                    'max_concurrent' => 2,
+                    'max_inventory_batch' => 200,
+                    'max_price_batch' => 200,
+                ],
+                'supports_webhooks' => false,
+                'is_active' => true,
+            ],
+        );
+
         // Kaufland — pazaryeri (DE/AT/CZ/SK/PL/FR/IT/ES/NL), Seller API v2,
         // HMAC imzalı (21 Eki 2026). BETA: gerçek satıcı hesabıyla SINANMADI.
         // Ürün AÇMA yok (katalogda EAN ile var olan ürüne teklif); mevcut

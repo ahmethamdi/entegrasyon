@@ -11,6 +11,7 @@ use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
 use App\Domain\Channels\Adapters\Kaufland\KauflandAdapter;
 use App\Domain\Channels\Adapters\N11\N11Adapter;
+use App\Domain\Channels\Adapters\Otto\OttoApp;
 use App\Domain\Channels\Adapters\Pazarama\PazaramaAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Ticimax\TicimaxAdapter;
@@ -402,6 +403,19 @@ final class ChannelConnectForm
             'token_exchange' => true,
             'help' => 'Pazarama satıcı panelinde (isortagim.pazarama.com) Hesabım → Hesap Bilgileri → '
                 .'Entegrasyon Bilgileri → "Yeni API Key Üret" ile Client ID ve Client Secret üret ve buraya gir.',
+        ],
+
+        'otto' => [
+            // 34Pazar OTTO uygulaması (Service Partner). Satıcı uygulamayı OTTO
+            // Partner Connect'te KURAR; anahtar girmez. Kurulum kimliği OAuth
+            // dönüşünde gelir (`OttoOAuthController`).
+            'secrets' => [],
+            'identity' => [],
+            'oauth' => true,
+            'account_from_oauth' => true,
+            'app_configured' => [OttoApp::class, 'configured'],
+            'help' => 'Önce OTTO Partner Connect\'te (portal.otto.market) 34Pazar uygulamasını kur. '
+                .'Sonra burada kaydedip "Yetkilendir"e bas; OTTO hesabınla giriş yaptığında bağlantı tamamlanır.',
         ],
 
         'kaufland' => [

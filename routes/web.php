@@ -26,6 +26,7 @@ use App\Http\Controllers\InvoiceSettingsController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\OrderController;
+use App\Http\Controllers\OttoOAuthController;
 use App\Http\Controllers\PriceCampaignController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
@@ -223,6 +224,16 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
 
     Route::get('/channels/ebay/callback', [EbayOAuthController::class, 'callback'])
         ->name('channels.ebay.callback');
+
+    // OTTO Market — 34Pazar Service Partner uygulaması. Satıcı uygulamayı
+    // OTTO'da kurar; bu akış yalnız kurulum kimliğini (installationId) bulur.
+    // Dönüş adresi uygulamada İZİNLİ yönlendirme olarak kayıtlı olmalı:
+    // https://APP_DOMAIN/channels/otto/callback
+    Route::post('/channels/{connection}/otto/authorize', [OttoOAuthController::class, 'redirect'])
+        ->name('channels.otto.authorize');
+
+    Route::get('/channels/otto/callback', [OttoOAuthController::class, 'callback'])
+        ->name('channels.otto.callback');
 
     // Shopify — 34Pazar uygulaması (OAuth, authorization code grant).
     // Etsy ile aynı iskelet ve aynı gerekçeler (POST başlatma, GET dönüş,

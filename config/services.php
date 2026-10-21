@@ -59,6 +59,16 @@ return [
         'shared_secret' => env('ETSY_SHARED_SECRET'),
     ],
 
+    // 34Pazar OTTO Market uygulaması (Service Partner, OTTO Partner Connect).
+    // Satıcı uygulamayı kurar; biz kurulum kimliğiyle (installationId) 30
+    // dakikalık erişim anahtarı üretiriz. Satıcının şifresi bize gelmez.
+    'otto' => [
+        'client_id' => env('OTTO_CLIENT_ID'),
+        'client_secret' => env('OTTO_CLIENT_SECRET'),
+        'app_id' => env('OTTO_APP_ID'),
+        'sandbox' => (bool) env('OTTO_SANDBOX', false),
+    ],
+
     // 34Pazar Paraşüt uygulaması (e-fatura) — Paraşüt destekten istenir;
     // satıcılar OAuth ile bununla bağlanır, şifreleri bize gelmez.
     // Redirect: https://34pazar.com/settings/invoicing/parasut/callback

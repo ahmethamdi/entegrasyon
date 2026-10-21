@@ -1537,5 +1537,9 @@
     "Faturayı iptal et": "Cancel invoice",
     "İade talebi :claim": "Return request :claim",
     "İadeyi muhasebeye kaydet": "Record return in books",
-    "Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.": "This channel is new; our team checks the first setup together with you."
+    "Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.": "This channel is new; our team checks the first setup together with you.",
+    "OTTO bağlantısı doğrulanamadı. Lütfen yeniden deneyin.": "The OTTO connection could not be verified. Please try again.",
+    "OTTO yetkilendirmesi tamamlanmadı.": "OTTO authorisation was not completed.",
+    "OTTO kurulumu bulunamadı. Önce 34Pazar uygulamasını OTTO Partner Connect'te kur, sonra yeniden yetkilendir.": "No OTTO installation found. Install the 34Pazar app in OTTO Partner Connect first, then authorise again.",
+    "OTTO bağlantısı yetkilendirildi.": "The OTTO connection has been authorised."
 }
