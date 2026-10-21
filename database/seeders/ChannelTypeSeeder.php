@@ -631,6 +631,37 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // Amazon — pazaryeri (DE + TR), SP-API (21 Eki 2026). BETA: geliştirici
+        // kaydı yok, gerçek hesapla SINANMADI. Ürün açma YOK (mevcut SKU'lar).
+        $this->upsert(
+            ['code' => 'amazon'],
+            [
+                'name' => 'Amazon',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Amazon\\AmazonAdapter',
+                'capabilities' => [
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => true,
+                ],
+                'rate_limit_profile' => [
+                    // getOrders 0,0167/sn (patlama 20), Listings 5/sn — temkinli 1/sn.
+                    'requests_per_second' => 1,
+                    'burst_capacity' => 5,
+                    'max_concurrent' => 1,
+                    'max_inventory_batch' => 20,
+                    'max_price_batch' => 20,
+                ],
+                'supports_webhooks' => false,
+                'is_active' => true,
+            ],
+        );
+
         // OTTO Market — pazaryeri (DE), Service Partner uygulaması (21 Eki 2026).
         // BETA: gerçek hesapla SINANMADI. Kargo bildirimi YOK (shipments iade
         // takip numarası + gönderim adresi ister); ürün açma YOK.

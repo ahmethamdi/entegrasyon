@@ -62,6 +62,16 @@ return [
     // 34Pazar OTTO Market uygulaması (Service Partner, OTTO Partner Connect).
     // Satıcı uygulamayı kurar; biz kurulum kimliğiyle (installationId) 30
     // dakikalık erişim anahtarı üretiriz. Satıcının şifresi bize gelmez.
+    // 34Pazar Amazon SP-API uygulaması (Solution Provider Portal). LWA istemci
+    // kimliği + gizli anahtar; satıcı Seller Central'dan yetki verir.
+    'amazon' => [
+        'client_id' => env('AMAZON_LWA_CLIENT_ID'),
+        'client_secret' => env('AMAZON_LWA_CLIENT_SECRET'),
+        'application_id' => env('AMAZON_APPLICATION_ID'),
+        // Taslak (Draft) uygulamada yetki adresine `version=beta` eklenir.
+        'draft' => (bool) env('AMAZON_APP_DRAFT', true),
+    ],
+
     'otto' => [
         'client_id' => env('OTTO_CLIENT_ID'),
         'client_secret' => env('OTTO_CLIENT_SECRET'),

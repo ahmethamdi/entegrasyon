@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Support;
 
+use App\Domain\Channels\Adapters\Amazon\AmazonAdapter;
+use App\Domain\Channels\Adapters\Amazon\AmazonApp;
 use App\Domain\Channels\Adapters\Ciceksepeti\CiceksepetiAdapter;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyApp;
@@ -403,6 +405,26 @@ final class ChannelConnectForm
             'token_exchange' => true,
             'help' => 'Pazarama satıcı panelinde (isortagim.pazarama.com) Hesabım → Hesap Bilgileri → '
                 .'Entegrasyon Bilgileri → "Yeni API Key Üret" ile Client ID ve Client Secret üret ve buraya gir.',
+        ],
+
+        'amazon' => [
+            // 34Pazar SP-API uygulaması; satıcı Seller Central'dan yetki verir.
+            // Hesap kimliği (`selling_partner_id`) yetki dönüşünde gelir.
+            'secrets' => [],
+            'identity' => [
+                [
+                    'name' => AmazonAdapter::MARKETPLACE_KEY,
+                    'label' => 'Pazar (de / tr)',
+                    'placeholder' => 'de',
+                    'rules' => ['in:de,tr'],
+                    'hint' => 'Amazon.de için de, Amazon.com.tr için tr. Her pazar ayrı bağlantıdır.',
+                ],
+            ],
+            'oauth' => true,
+            'account_from_oauth' => true,
+            'app_configured' => [AmazonApp::class, 'configured'],
+            'help' => 'Kaydettikten sonra Seller Central\'ın izin ekranına yönlendirileceksin. '
+                .'Şifre ya da anahtar girmezsin; izni Amazon üzerinden verirsin.',
         ],
 
         'otto' => [

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\AmazonOAuthController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\PasswordResetController;
@@ -224,6 +225,15 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
 
     Route::get('/channels/ebay/callback', [EbayOAuthController::class, 'callback'])
         ->name('channels.ebay.callback');
+
+    // Amazon SP-API — website authorization workflow. Dönüş adresi
+    // uygulamada kayıtlı OAuth yönlendirme adresi olmalı:
+    // https://APP_DOMAIN/channels/amazon/callback
+    Route::post('/channels/{connection}/amazon/authorize', [AmazonOAuthController::class, 'redirect'])
+        ->name('channels.amazon.authorize');
+
+    Route::get('/channels/amazon/callback', [AmazonOAuthController::class, 'callback'])
+        ->name('channels.amazon.callback');
 
     // OTTO Market — 34Pazar Service Partner uygulaması. Satıcı uygulamayı
     // OTTO'da kurar; bu akış yalnız kurulum kimliğini (installationId) bulur.

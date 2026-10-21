@@ -1541,5 +1541,9 @@
     "OTTO bağlantısı doğrulanamadı. Lütfen yeniden deneyin.": "The OTTO connection could not be verified. Please try again.",
     "OTTO yetkilendirmesi tamamlanmadı.": "OTTO authorisation was not completed.",
     "OTTO kurulumu bulunamadı. Önce 34Pazar uygulamasını OTTO Partner Connect'te kur, sonra yeniden yetkilendir.": "No OTTO installation found. Install the 34Pazar app in OTTO Partner Connect first, then authorise again.",
-    "OTTO bağlantısı yetkilendirildi.": "The OTTO connection has been authorised."
+    "OTTO bağlantısı yetkilendirildi.": "The OTTO connection has been authorised.",
+    "Amazon bağlantısı doğrulanamadı. Lütfen yeniden deneyin.": "The Amazon connection could not be verified. Please try again.",
+    "Amazon yetkilendirmesi tamamlanmadı.": "Amazon authorisation was not completed.",
+    "Amazon kimlik bilgisi alınamadı. Lütfen yeniden deneyin.": "Amazon credentials could not be obtained. Please try again.",
+    "Amazon bağlantısı yetkilendirildi.": "The Amazon connection has been authorised."
 }
