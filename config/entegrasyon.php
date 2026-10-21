@@ -93,6 +93,9 @@ return [
         'key' => env('STRIPE_KEY'),
         'secret' => env('STRIPE_SECRET'),
         'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        // Her 34Pazar faturasının altbilgisi (müşteri `invoice_settings.footer`).
+        // Stripe hesabı 34Devs'in (DE); Kleinunternehmer notu zorunlu.
+        'invoice_footer' => env('STRIPE_INVOICE_FOOTER', '34Devs Shopify Agency · Inh. Ahmet Hamdi Kilic · Hedwigstraße 27, 41352 Korschenbroich, Deutschland · USt-IdNr. DE450498414 · info@34devs.com · Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.'),
     ],
 
     /*

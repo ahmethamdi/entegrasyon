@@ -26,8 +26,18 @@ final class StripePaymentGateway implements PaymentGateway
 
     public function startCheckout(Plan $plan, string $tenantId, string $successUrl, string $cancelUrl): string
     {
+        // MÜŞTERİ ÖNCE AÇILIR: faturanın altbilgisi (34Devs künyesi + § 19
+        // UStG notu) müşterinin `invoice_settings.footer`'ından gelir. Checkout
+        // abonelik kipinde altbilgi alanı yok; müşteriyi Stripe açsaydı ilk
+        // fatura notsuz kesilirdi.
+        $customer = $this->client()->customers->create([
+            'metadata' => ['tenant_id' => $tenantId],
+            'invoice_settings' => ['footer' => (string) config('entegrasyon.stripe.invoice_footer')],
+        ]);
+
         $session = $this->client()->checkout->sessions->create([
             'mode' => 'subscription',
+            'customer' => $customer->id,
             'line_items' => [[
                 'quantity' => 1,
                 'price_data' => $this->priceData($plan) + [
