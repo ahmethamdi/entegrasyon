@@ -12,28 +12,36 @@ use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
 use App\Domain\Channels\Contracts\DeclaresImageLimit;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\HealthResult;
+use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
+use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Messaging\Models\InboxMessage;
+use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Fulfillment;
+use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
 use App\Domain\Sync\Support\ListingPayload;
+use App\Domain\Sync\Support\NormalizedOrderEvent;
+use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonInterface;
 use DateTimeImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -107,7 +115,7 @@ use Throwable;
  * okur; `true` olsaydı yoklama turu bu kanalı ATLAR ve siparişler HİÇ
  * GELMEZDİ.
  */
-final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, SupportsFulfillment, SupportsInventory, SupportsOfferLifecycle, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
+final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresImageLimit, MapsOrderState, SupportsFulfillment, SupportsInventory, SupportsOfferLifecycle, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh
 {
     use DeclaresRequestQuota;
 
@@ -130,6 +138,9 @@ final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, Decl
 
     /** eBay listesinde olmayan firma için resmî kod (`ShippingCarrierCodeType`). */
     private const OTHER_CARRIER = 'Other';
+
+    /** `getOrders` sayfa üst sınırı (resmî belge: limit en çok 200). */
+    private const ORDER_PAGE_SIZE = 200;
 
     /** `createShippingFulfillment` · "Invalid shipment tracking number or carrier" (OAS). */
     private const INVALID_TRACKING_OR_CARRIER = 32300;
@@ -1087,6 +1098,232 @@ final class EbayAdapter implements ChannelAdapter, DeclaresChannelCurrency, Decl
         return is_array($settings)
             ? (string) ($settings[self::MARKETPLACE_ID_KEY] ?? '')
             : '';
+    }
+
+    // -------------------------------------------------- sipariş (4.7)
+
+    /**
+     * Siparişleri YOKLAR — `getOrders` (Fulfillment API v1).
+     *
+     * ⚠️ PENCERE `lastmodifieddate`'TİR, `creationdate` DEĞİL. Oluşturma
+     * tarihiyle sipariş yalnız oluştuğu turda görülür; sonradan gelen
+     * iptal pencere dışında kalır ve satılmış stok HİÇ geri eklenmezdi
+     * (Etsy'deki `min_last_modified` kararının aynısı). Aynı durumun
+     * yeniden okunması zararsızdır: olay kimliği durumu taşır.
+     *
+     * ⚠️ BAŞARISIZ YANIT YÜKSELTİLİR — 500 gövdesi boş sayfa diye
+     * okunsaydı imleç ilerler ve o penceredeki siparişler kaybolurdu.
+     *
+     * ⚠️ eBay `getOrders` YALNIZ SON 90 GÜNÜ döndürür (resmî belge).
+     * Daha eski pencere istenmez; istenseydi eBay 400 verirdi.
+     */
+    public function fetchOrders(CarbonInterface $since, ?string $cursor = null): OrderPage
+    {
+        $offset = $cursor === null ? 0 : max(0, (int) $cursor);
+        $floor = now()->subDays(89);
+        $from = $since->lessThan($floor) ? $floor : $since;
+
+        $response = $this->client->get(
+            EbayEndpoints::url(EbayEndpoints::ORDER, sandbox: $this->useSandbox()),
+            query: [
+                // Biçim resmî belgeden: `lastmodifieddate:[2016-03-21T08:25:43.511Z..]`
+                'filter' => 'lastmodifieddate:['.$from->copy()->utc()->format('Y-m-d\TH:i:s.v\Z').'..]',
+                'limit' => self::ORDER_PAGE_SIZE,
+                'offset' => $offset,
+            ],
+        );
+
+        $response->throw();
+
+        $orders = array_values(array_filter((array) $response->json('orders'), 'is_array'));
+        $total = (int) ($response->json('total') ?? count($orders));
+        $hasMore = $orders !== [] && $offset + count($orders) < $total;
+
+        return new OrderPage(
+            orders: $orders,
+            nextCursor: $hasMore ? (string) ($offset + count($orders)) : null,
+            hasMore: $hasMore,
+        );
+    }
+
+    /**
+     * Olay kimliği `{orderId}:{durum}` — durum = iptal / ödeme / kargo.
+     *
+     * ⚠️ KİMLİK DURUMU TAŞIR (Karar 24): yalnız `orderId` olsaydı aynı
+     * siparişin sonraki iptali tekillik indeksine takılıp YUTULURDU.
+     *
+     * @param  array<string, mixed>  $order
+     */
+    public function pollingEventIdFor(array $order): ?string
+    {
+        $orderId = (string) ($order['orderId'] ?? '');
+
+        return $orderId === '' ? null : $orderId.':'.self::orderStatusKey($order);
+    }
+
+    /**
+     * Ham eBay siparişini kanonik olaya çevirir.
+     *
+     * ⚠️ İADE `returned` ÜRETMEZ (Etsy'deki dürüst sınır): iade ayrı
+     * Post-Order API'sindedir ve bu dilimde okunmaz. Tam geri ödeme
+     * `updated` + `financial_status=refunded` olur; satılmış stok
+     * kendiliğinden geri EKLENMEZ — eklenseydi ürünü geri gelmeyen
+     * iadede bakiye bozulurdu. Gerçek iade panelden girilir.
+     */
+    public function parseOrderEvent(InboxMessage $message): ?NormalizedOrderEvent
+    {
+        /** @var array<string, mixed> $payload */
+        $payload = is_array($message->payload) ? $message->payload : [];
+        $orderId = (string) ($payload['orderId'] ?? '');
+
+        if ($orderId === '') {
+            return null;
+        }
+
+        $status = self::orderStatusKey($payload);
+        $type = match (true) {
+            str_starts_with($status, 'cancelled') => 'cancelled',
+            str_starts_with($status, 'paid:not_started') => 'created',
+            default => 'updated',
+        };
+
+        return new NormalizedOrderEvent(
+            type: $type,
+            externalOrderId: $orderId,
+            externalRef: $message->external_event_id ?? "{$orderId}:{$status}",
+            payload: $this->toCanonicalOrderPayload($payload, $type, $orderId, $status),
+            occurredAt: self::ebayDate($payload['creationDate'] ?? null),
+        );
+    }
+
+    public function orderStateFor(NormalizedOrderEvent $event): ?OrderState
+    {
+        $status = (string) ($event->payload['status'] ?? '');
+
+        return match (true) {
+            str_starts_with($status, 'cancelled') => OrderState::CANCELLED,
+            str_starts_with($status, 'refunded') => null,
+            str_starts_with($status, 'pending') => OrderState::AWAITING_PAYMENT,
+            str_ends_with($status, ':fulfilled') => OrderState::SHIPPED,
+            str_starts_with($status, 'paid') => OrderState::AWAITING_SHIPMENT,
+            default => null,
+        };
+    }
+
+    /** eBay'de siparişi "üstlenme" adımı yoktur (Etsy ile aynı) — no-op. */
+    public function acknowledgeOrder(Order $order): AdapterResult
+    {
+        return AdapterResult::success(['acknowledged' => true]);
+    }
+
+    /**
+     * Sipariş durumunu tek anahtara indirger.
+     *
+     * İptal (`cancelStatus.cancelState = CANCELED`) önce gelir; sonra ödeme
+     * (`FULLY_REFUNDED` → refunded, `PAID`/`PARTIALLY_REFUNDED` → paid,
+     * diğerleri pending), sonra kargo (`NOT_STARTED|IN_PROGRESS|FULFILLED`).
+     *
+     * @param  array<string, mixed>  $order
+     */
+    private static function orderStatusKey(array $order): string
+    {
+        if (($order['cancelStatus']['cancelState'] ?? null) === 'CANCELED') {
+            return 'cancelled';
+        }
+
+        $payment = match ((string) ($order['orderPaymentStatus'] ?? '')) {
+            'FULLY_REFUNDED' => 'refunded',
+            'PAID', 'PARTIALLY_REFUNDED' => 'paid',
+            default => 'pending',
+        };
+
+        return $payment.':'.strtolower((string) ($order['orderFulfillmentStatus'] ?? 'not_started'));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function toCanonicalOrderPayload(array $payload, string $type, string $orderId, string $status): array
+    {
+        $summary = is_array($payload['pricingSummary'] ?? null) ? $payload['pricingSummary'] : [];
+        $total = self::amount($summary['total'] ?? null) ?? '0';
+
+        return [
+            'type' => $type,
+            'external_number' => $orderId,
+            'status' => $status,
+            'financial_status' => str_starts_with($status, 'refunded') ? 'refunded' : null,
+            'currency' => (string) ($summary['total']['currency'] ?? $this->channelCurrency() ?? 'EUR'),
+            'subtotal' => self::amount($summary['priceSubtotal'] ?? null) ?? '0',
+            'shipping_total' => self::amount($summary['deliveryCost'] ?? null) ?? '0',
+            'tax_total' => self::amount($summary['tax'] ?? null) ?? '0',
+            'grand_total' => $total,
+            'lines' => $this->ebayOrderLines($payload),
+            // Kişisel veri taşınmaz; yalnız eBay kullanıcı adı referans olarak.
+            'customer_ref' => array_filter([
+                'external_customer_id' => isset($payload['buyer']['username']) ? (string) $payload['buyer']['username'] : null,
+            ]),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<array<string, mixed>>
+     */
+    private function ebayOrderLines(array $payload): array
+    {
+        $lines = [];
+
+        foreach ((array) ($payload['lineItems'] ?? []) as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $quantity = (int) ($item['quantity'] ?? 0);
+            $lineTotal = self::amount($item['lineItemCost'] ?? null) ?? '0';
+
+            $lines[] = [
+                'external_line_id' => (string) ($item['lineItemId'] ?? ''),
+                'sku' => (string) ($item['sku'] ?? ''),
+                // SKU yedeği: `legacyItemId` bizim `listings.external_id`'mizdir
+                // (yayın yanıtındaki `listingId`).
+                'external_variant_id' => isset($item['legacyItemId']) ? (string) $item['legacyItemId'] : null,
+                'title' => (string) ($item['title'] ?? $item['sku'] ?? ''),
+                'quantity' => $quantity,
+                // ⚠️ `lineItemCost` KALEM TOPLAMIDIR (adet × birim), birim
+                // fiyat değil — birim fiyat kuruşta tam sayıyla bölünür.
+                'unit_price' => $quantity > 0
+                    ? number_format(intdiv((int) round(((float) $lineTotal) * 100), $quantity) / 100, 2, '.', '')
+                    : $lineTotal,
+                'line_total' => $lineTotal,
+            ];
+        }
+
+        return $lines;
+    }
+
+    /** eBay tutar nesnesi `{value: "19.99", currency: "EUR"}` → "19.99". */
+    private static function amount(mixed $money): ?string
+    {
+        if (! is_array($money) || ! isset($money['value']) || ! is_numeric($money['value'])) {
+            return null;
+        }
+
+        return number_format((float) $money['value'], 2, '.', '');
+    }
+
+    private static function ebayDate(mixed $raw): ?DateTimeImmutable
+    {
+        if (! is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        try {
+            return new DateTimeImmutable($raw);
+        } catch (Throwable) {
+            return null;
+        }
     }
 
     // ------------------------------------------------------ kargo (4.8)

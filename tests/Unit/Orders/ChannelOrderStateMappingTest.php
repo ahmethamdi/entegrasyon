@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Orders;
 
 use App\Domain\Channels\Adapters\Ciceksepeti\CiceksepetiAdapter;
+use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
@@ -104,6 +105,14 @@ final class ChannelOrderStateMappingTest extends TestCase
         yield 'ikas CREATED' => [IkasAdapter::class, ['status' => 'CREATED', 'financial_status' => 'paid'], 'awaiting_shipment'];
         yield 'ikas CANCELLED' => [IkasAdapter::class, ['status' => 'CANCELLED'], 'cancelled'];
         yield 'ikas PARTIALLY_CANCELLED → sayaçtan' => [IkasAdapter::class, ['status' => 'PARTIALLY_CANCELLED'], null];
+
+        // eBay (`orderStatusKey` biçimi: iptal | ödeme:kargo)
+        yield 'ebay pending' => [EbayAdapter::class, ['status' => 'pending:not_started'], 'awaiting_payment'];
+        yield 'ebay paid' => [EbayAdapter::class, ['status' => 'paid:not_started'], 'awaiting_shipment'];
+        yield 'ebay in progress' => [EbayAdapter::class, ['status' => 'paid:in_progress'], 'awaiting_shipment'];
+        yield 'ebay fulfilled' => [EbayAdapter::class, ['status' => 'paid:fulfilled'], 'shipped'];
+        yield 'ebay cancelled' => [EbayAdapter::class, ['status' => 'cancelled'], 'cancelled'];
+        yield 'ebay refunded → değişmez' => [EbayAdapter::class, ['status' => 'refunded:fulfilled'], null];
 
         // Etsy (`statusKey` biçimi)
         yield 'etsy Payment Processing' => [EtsyAdapter::class, ['status' => 'Payment Processing'], 'awaiting_payment'];

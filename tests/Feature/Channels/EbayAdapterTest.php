@@ -12,7 +12,6 @@ use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOfferLifecycle;
-use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
@@ -587,7 +586,6 @@ final class EbayAdapterTest extends TestCase
             // `SupportsOfferLifecycle` aldı.
             SupportsCatalog::class,
             SupportsCatalogImport::class,
-            SupportsOrders::class,
             SupportsApprovalWorkflow::class,
         ] as $capability) {
             $this->assertNotInstanceOf(

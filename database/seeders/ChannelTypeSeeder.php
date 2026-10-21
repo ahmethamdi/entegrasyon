@@ -583,7 +583,7 @@ class ChannelTypeSeeder extends Seeder
                     // iki yetenek).
                     'inventory' => true,         // slice 4.6 ✓
                     'pricing' => true,           // slice 4.6 ✓
-                    'orders' => false,           // slice 4.7
+                    'orders' => true,            // slice 4.7 ✓ (yoklama, getOrders)
                     // ⚠️ ASPECT'LER TRENDYOL'UN ZORUNLU ÖZNİTELİKLERİNİN
                     // KARŞILIĞIDIR ve `PrerequisiteGate` DEĞİŞMEDEN
                     // çalışır (§13.5). Ağaç MARKETPLACE başınadır.
