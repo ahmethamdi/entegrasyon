@@ -630,6 +630,39 @@ class ChannelTypeSeeder extends Seeder
                 'is_active' => false,
             ],
         );
+
+        // Kaufland — pazaryeri (DE/AT/CZ/SK/PL/FR/IT/ES/NL), Seller API v2,
+        // HMAC imzalı (21 Eki 2026). BETA: gerçek satıcı hesabıyla SINANMADI.
+        // Ürün AÇMA yok (katalogda EAN ile var olan ürüne teklif); mevcut
+        // tekliflerin içe aktarımı, stok/fiyat, sipariş yoklaması ve kargo var.
+        $this->upsert(
+            ['code' => 'kaufland'],
+            [
+                'name' => 'Kaufland',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Kaufland\\KauflandAdapter',
+                'capabilities' => [
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => true,
+                ],
+                'rate_limit_profile' => [
+                    // Belgede sayı yok — temkinli 2/sn (DOĞRULANMADI).
+                    'requests_per_second' => 2,
+                    'burst_capacity' => 2,
+                    'max_concurrent' => 1,
+                    'max_inventory_batch' => 20,
+                    'max_price_batch' => 20,
+                ],
+                'supports_webhooks' => false,
+                'is_active' => true,
+            ],
+        );
     }
 
     /**

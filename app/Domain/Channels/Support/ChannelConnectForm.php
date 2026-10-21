@@ -9,6 +9,7 @@ use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
+use App\Domain\Channels\Adapters\Kaufland\KauflandAdapter;
 use App\Domain\Channels\Adapters\N11\N11Adapter;
 use App\Domain\Channels\Adapters\Pazarama\PazaramaAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
@@ -401,6 +402,49 @@ final class ChannelConnectForm
             'token_exchange' => true,
             'help' => 'Pazarama satıcı panelinde (isortagim.pazarama.com) Hesabım → Hesap Bilgileri → '
                 .'Entegrasyon Bilgileri → "Yeni API Key Üret" ile Client ID ve Client Secret üret ve buraya gir.',
+        ],
+
+        'kaufland' => [
+            // Kaufland Seller API v2: Client Key + Secret Key, her istek HMAC
+            // imzalı (21 Eki 2026, resmî belge). Adlar `api_key`/`api_secret`
+            // DEĞİL: o çift `ChannelHttpClient`'ta Basic auth'a çevrilirdi.
+            'secrets' => [
+                [
+                    'name' => KauflandAdapter::CLIENT_KEY_SECRET,
+                    'label' => 'Client Key',
+                    'placeholder' => '',
+                    'hint' => 'Kaufland Seller Portal → Einstellungen → API-Konfiguration (Shop-Client-Key).',
+                ],
+                [
+                    'name' => KauflandAdapter::SECRET_KEY_SECRET,
+                    'label' => 'Secret Key',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'Aynı sayfadaki gizli anahtar. İstekleri imzalamak için kullanılır, Kaufland\'a hiç gönderilmez.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => KauflandAdapter::SELLER_NAME_KEY,
+                    'label' => 'Kaufland mağaza adı',
+                    'placeholder' => 'magazam',
+                    // Yalnız hesap kimliği; istek adresine ya da başlığa GİRMEZ.
+                    'rules' => ['regex:/^[\pL\pN][\pL\pN ._\-]{1,63}$/u'],
+                    'hint' => 'Kaufland\'daki mağaza adın. Bağlantıyı ayırt etmek için kullanılır.',
+                ],
+                [
+                    'name' => KauflandAdapter::STOREFRONT_KEY,
+                    'label' => 'Ülke (storefront)',
+                    'placeholder' => 'de',
+                    // Değer istek sorgusuna girer — yalnız resmî liste.
+                    'rules' => ['in:de,cz,sk,pl,at,fr,it,es,nl'],
+                    'hint' => 'Satış yaptığın Kaufland ülkesi: de, at, cz, sk, pl, fr, it, es, nl. Her ülke ayrı bağlantıdır.',
+                ],
+            ],
+            'account' => KauflandAdapter::SELLER_NAME_KEY,
+            'oauth' => false,
+            'help' => 'Kaufland Seller Portal\'da API anahtarlarını oluştur (Client Key + Secret Key) ve buraya gir. '
+                .'Ürünler Kaufland kataloğunda EAN ile var olmalı; bu sürüm mevcut tekliflerinin stok ve fiyatını yönetir, siparişleri alır.',
         ],
 
         'ciceksepeti' => [

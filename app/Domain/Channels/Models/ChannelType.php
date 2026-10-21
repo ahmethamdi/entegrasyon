@@ -35,7 +35,7 @@ class ChannelType extends Model
      * doğrulandığı için listede YOK. Kanal doğrulanınca buradan çıkarılır.
      */
     public const BETA_CODES = [
-        'woocommerce', 'hepsiburada', 'n11', 'ikas', 'ticimax', 'pazarama', 'ciceksepeti', 'ebay',
+        'woocommerce', 'hepsiburada', 'n11', 'ikas', 'ticimax', 'pazarama', 'ciceksepeti', 'ebay', 'kaufland',
     ];
 
     protected $primaryKey = 'code';

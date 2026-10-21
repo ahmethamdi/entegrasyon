@@ -23,6 +23,7 @@
     $locative = [
         'trendyol' => "Trendyol'da", 'shopify' => "Shopify'da", 'woocommerce' => "WooCommerce'te",
         'etsy' => "Etsy'de", 'ebay' => "eBay'de", 'hepsiburada' => "Hepsiburada'da",
+        'kaufland' => "Kaufland'da",
     ];
     $loc = $locative[$code] ?? "{$name} mağazanda";
 
@@ -33,6 +34,7 @@
         'etsy' => "Etsy uygulama anahtarı (keystring) ve mağaza kimliğin (shop ID). Ardından Etsy hesabınla giriş yapıp 34Pazar'a erişim izni verirsin.",
         'ebay' => 'eBay geliştirici hesabındaki uygulama bilgileri; ardından eBay hesabınla giriş yapıp erişim izni verirsin.',
         'hepsiburada' => 'Hepsiburada entegrasyon kullanıcı adın ve parolan.',
+        'kaufland' => "Kaufland Seller Portal'daki Client Key ve Secret Key; satış yaptığın ülkeyi (de, at, cz…) seçersin.",
     ];
     $connectText = $connect[$code] ?? null;
     $kind = $channel['marketplace'] ? 'Pazaryeri' : 'E-ticaret sitesi';
