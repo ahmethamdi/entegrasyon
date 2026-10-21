@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
@@ -45,6 +46,12 @@ final class SiteController extends Controller
     public function home(Request $request): View
     {
         return $this->page('site.home', $request);
+    }
+
+    /** Ana sayfanın İngilizcesi — aynı şablon, `lang` = en. */
+    public function homeEn(Request $request): View
+    {
+        return $this->page('site.home', $request, ['lang' => 'en']);
     }
 
     public function features(Request $request): View
@@ -171,6 +178,7 @@ final class SiteController extends Controller
     {
         $urls = [
             ['loc' => route('home'), 'lastmod' => null],
+            ['loc' => route('site.en.home'), 'lastmod' => null],
             ['loc' => route('site.features'), 'lastmod' => null],
             ['loc' => route('site.pricing'), 'lastmod' => null],
             ['loc' => route('site.channels'), 'lastmod' => null],
@@ -217,7 +225,7 @@ final class SiteController extends Controller
         ]);
     }
 
-    /** @return list<array{code: string, name: string, priceMonthly: string, currency: string, productLimit: int|null, channelLimit: int|null}> */
+    /** @return list<array{code: string, name: string, priceMonthly: string, currency: string, productLimit: int|null, channelLimit: int|null, hasInvoiceLimit: bool, invoiceLimit: int|null}> */
     private function planList(): array
     {
         return Plan::query()
@@ -231,6 +239,9 @@ final class SiteController extends Controller
                 'currency' => $plan->currency ?? 'TRY',
                 'productLimit' => $plan->limits['products'] ?? null,
                 'channelLimit' => $plan->limits['channels'] ?? null,
+                // Anahtar yoksa satır hiç basılmaz: eksik veri "Sınırsız" okunmasın.
+                'hasInvoiceLimit' => array_key_exists(QuotaMetric::INVOICES->value, $plan->limits ?? []),
+                'invoiceLimit' => $plan->limits[QuotaMetric::INVOICES->value] ?? null,
             ])
             ->all();
     }

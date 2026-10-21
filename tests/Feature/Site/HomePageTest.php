@@ -94,6 +94,44 @@ final class HomePageTest extends TestCase
             ->assertDontSee('77 ₺');
     }
 
+    /**
+     * Ana sayfa girişi: stok diyagramı erişilebilir adla ve "örnek ürün"
+     * notuyla gelir (12 → 11 uydurma veri sanılmasın); hareketsiz son kare
+     * şablonda durur. Üst çubukta telefon YOK (kullanıcı kararı).
+     */
+    #[Test]
+    public function home_hero_diagram_is_labelled_as_an_example(): void
+    {
+        $this->seedChannels();
+
+        $html = $this->get('/')->assertOk()->getContent();
+
+        $this->assertStringContainsString('aria-labelledby="dg-title dg-desc"', $html);
+        $this->assertStringContainsString('Örnek ürün ile stok akışı', $html);
+        $this->assertStringContainsString('örnek ürün', $html);
+        $this->assertStringContainsString('class="dg-final"', $html);
+        $this->assertStringContainsString('class="topbar"', $html);
+        $this->assertStringNotContainsString('tel:', explode('<header', $html, 2)[0]);
+    }
+
+    /** /en ana sayfası İngilizce, hreflang ile TR'ye bağlı ve site haritasında. */
+    #[Test]
+    public function english_home_renders_and_links_back(): void
+    {
+        $this->seedChannels();
+        (new PlanSeeder)->run();
+
+        $this->get('/en')
+            ->assertOk()
+            ->assertSee('<html lang="en">', false)
+            ->assertSee('Sold on Trendyol, stock dropped on every channel.')
+            ->assertSee('E-invoices / month')
+            ->assertSee('hreflang="tr"', false);
+
+        $this->get('/')->assertSee('E-fatura / ay')->assertSee('hreflang="en"', false);
+        $this->assertStringContainsString('/en</loc>', $this->get('/sitemap.xml')->getContent());
+    }
+
     /** Fiyat sayfası da aynı tabloyu okur ve aylık olduğunu söyler. */
     #[Test]
     public function pricing_page_lists_plans_from_the_database(): void

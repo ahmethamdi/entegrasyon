@@ -39,6 +39,7 @@
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:bg-ink focus:px-4 focus:py-3 focus:font-semibold focus:text-white">
         İçeriğe geç
     </a>
+    @include('site.partials.topbar')
     @include('site.partials.header')
     <main id="main">
         @yield('content')
