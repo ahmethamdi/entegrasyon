@@ -101,15 +101,11 @@
                 <ul class="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
                     @foreach ($solutionChannels as $ch)
                         <li>
-                            <a href="{{ route('site.channel', $ch['code']) }}" class="channel-tile">
-                                <span class="flex h-7 w-full items-center gap-2.5">
-                                    @if ($ch['logo'])
-                                        <img src="{{ $ch['logo'] }}" alt="{{ $ch['name'] }} {{ $t('logosu', 'logo') }}" class="h-7 w-auto {{ $ch['wordmark'] ? 'max-w-full' : 'max-w-[5rem]' }} min-w-0 shrink object-contain object-left" loading="lazy">
-                                    @endif
-                                    <span class="min-w-0 truncate text-ink {{ $ch['logo'] && $ch['wordmark'] ? 'sr-only' : '' }}">{{ $ch['name'] }}</span>
-                                </span>
+                            <a href="{{ route('site.channel', $ch['code']) }}" class="channel-card">
+                                @include('site.partials.channel-icon', ['ch' => $ch])
+                                <span class="mt-3 block font-semibold text-ink [overflow-wrap:anywhere]">{{ $ch['name'] }}</span>
                                 @if ($ch['beta'])
-                                    <span class="badge badge--brand">Beta</span>
+                                    <span class="badge badge--brand mt-1">Beta</span>
                                 @endif
                             </a>
                         </li>

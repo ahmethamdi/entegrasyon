@@ -484,7 +484,7 @@ final class ChannelConnectionController extends Controller
             'channel' => $connection->channelType?->name ?? $connection->channel_type_code,
             'channelTypeCode' => $connection->channel_type_code,
             'beta' => $connection->channelType?->is_beta === true,
-            'logo' => ChannelLogo::url($connection->channel_type_code),
+            'logo' => ChannelLogo::icon($connection->channel_type_code),
             // Mağaza kimliği alan adıdır; sır değil ve kullanıcı onu tanır.
             'account' => $connection->external_account_id,
             'status' => $connection->status,
@@ -647,7 +647,7 @@ final class ChannelConnectionController extends Controller
                 'name' => $type->name,
                 'kind' => $type->kind,
                 'beta' => $type->is_beta,
-                'logo' => ChannelLogo::url($type->code),
+                'logo' => ChannelLogo::icon($type->code),
                 // ⚠️ ALAN TANIMI EKRANA GİDER — Vue'da `if (code ===
                 // '...')` YAZILMAZ. Yazılsaydı o blok sunucudaki
                 // doğrulamadan AYRI yaşar ve biri değiştiğinde form

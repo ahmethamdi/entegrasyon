@@ -140,8 +140,10 @@ final class HomePageTest extends TestCase
 
         $html = $this->get('/entegrasyonlar')->assertOk()->getContent();
 
-        $this->assertStringContainsString('/images/channels/woocommerce.svg', $html);
-        $this->assertStringContainsString('alt="WooCommerce logosu"', $html);
+        // Kartlarda AYNI boyutlu kare ikon kutusu; ad her zaman yazı.
+        $this->assertStringContainsString('/images/channels/icon/woocommerce.svg', $html);
+        $this->assertStringContainsString('channel-icon size-10', $html);
+        $this->assertStringNotContainsString('logo-strip', $this->get('/')->getContent());
         $this->assertStringNotContainsString('cdn.jsdelivr', $html);
         $this->assertTrue(ChannelLogo::isWordmark('hepsiburada'));
         $this->assertFalse(ChannelLogo::isWordmark('woocommerce'));

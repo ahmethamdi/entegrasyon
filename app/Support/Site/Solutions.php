@@ -91,6 +91,7 @@ final class Solutions
                 'name' => $type->name,
                 'logo' => ChannelLogo::url($type->code),
                 'wordmark' => ChannelLogo::isWordmark($type->code),
+                'icon' => ChannelLogo::icon($type->code),
                 'beta' => (bool) $type->is_beta,
             ])
             ->values()

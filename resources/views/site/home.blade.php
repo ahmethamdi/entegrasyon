@@ -157,20 +157,6 @@
         </div>
     </section>
 
-    {{-- Kanal logoları — STATİK şerit (kayan değil; kurumsal tasarım kararı). --}}
-    @php $logoChannels = array_values(array_filter($channels, fn ($c) => ($c['logo'] ?? null) && $c['available'])); @endphp
-    @if (count($logoChannels))
-        <section aria-label="Bağlanabilen kanalların logoları" class="border-t border-line">
-            <div class="wrap py-8">
-                <ul class="logo-strip flex flex-wrap items-center justify-center gap-x-10 gap-y-6">
-                    @foreach ($logoChannels as $ch)
-                        <li><a href="{{ route('site.channel', $ch['code']) }}"><img src="{{ $ch['logo'] }}" alt="{{ $ch['name'] }} logosu" loading="lazy"></a></li>
-                    @endforeach
-                </ul>
-            </div>
-        </section>
-    @endif
-
     {{-- ═══════════════════════════════════════ KANALLAR --}}
     @if (count($channels))
         <section id="kanallar" aria-labelledby="kanal-baslik" class="border-y border-line">

@@ -267,6 +267,7 @@ final class SiteController extends Controller
             'beta' => (bool) $type->is_active && (bool) $type->is_beta,
             'logo' => ChannelLogo::url($type->code),
             'wordmark' => ChannelLogo::isWordmark($type->code),
+            'icon' => ChannelLogo::icon($type->code),
             'marketplace' => $type->kind === 'marketplace',
             'cargoPush' => is_string($type->adapter_class) && is_a($type->adapter_class, SupportsFulfillment::class, true),
         ];

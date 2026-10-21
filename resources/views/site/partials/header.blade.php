@@ -87,12 +87,8 @@
                                                     @foreach ($items as $ch)
                                                         <li>
                                                             <a href="{{ route('site.channel', $ch['code']) }}" class="mega-link">
-                                                                <span class="mega-logo">
-                                                                    @if ($ch['logo'] ?? null)
-                                                                        <img src="{{ $ch['logo'] }}" alt="" class="h-6 w-auto max-w-[5.5rem] object-contain" loading="lazy">
-                                                                    @endif
-                                                                </span>
-                                                                <span class="font-semibold text-ink {{ ($ch['logo'] ?? null) && ($ch['wordmark'] ?? false) ? 'sr-only' : '' }}">{{ $ch['name'] }}</span>
+                                                                @include('site.partials.channel-icon', ['ch' => $ch, 'size' => 'sm'])
+                                                                <span class="font-semibold text-ink">{{ $ch['name'] }}</span>
                                                                 @if ($ch['beta'] ?? false)
                                                                     <span class="badge badge--brand ml-auto text-[0.6875rem]">Beta</span>
                                                                 @endif
@@ -171,8 +167,8 @@
                                 @foreach ($items as $ch)
                                     <li>
                                         <a href="{{ route('site.channel', $ch['code']) }}" class="mobile-sub">
-                                            <span class="mega-logo">@if ($ch['logo'] ?? null)<img src="{{ $ch['logo'] }}" alt="" class="h-5 w-auto max-w-[4.5rem] object-contain" loading="lazy">@endif</span>
-                                            <span class="{{ ($ch['logo'] ?? null) && ($ch['wordmark'] ?? false) ? 'sr-only' : '' }}">{{ $ch['name'] }}</span>
+                                            @include('site.partials.channel-icon', ['ch' => $ch, 'size' => 'sm'])
+                                            <span>{{ $ch['name'] }}</span>
                                             @if ($ch['beta'] ?? false)<span class="badge badge--brand ml-auto text-[0.6875rem]">Beta</span>@endif
                                         </a>
                                     </li>

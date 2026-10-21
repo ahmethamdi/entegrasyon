@@ -28,6 +28,25 @@ final class ChannelLogo
     }
 
     /**
+     * KARE ikon — kartlar ve menü için (`images/channels/icon/`). Yoksa null;
+     * görünüm harf rozeti gösterir (logo uydurulmaz).
+     */
+    public static function icon(string $code): ?string
+    {
+        if (preg_match('/^[a-z0-9_]+$/', $code) !== 1) {
+            return null;
+        }
+
+        foreach (['svg', 'png'] as $ext) {
+            if (is_file(public_path("images/channels/icon/{$code}.{$ext}"))) {
+                return asset("images/channels/icon/{$code}.{$ext}");
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Logo yazı-logosu mu (en/boy ≥ 2)? Öyleyse markanın adını zaten
      * taşır; kart adı ikinci kez yazmaz (dar ekranda ad sıkışıp taşıyordu).
      */
