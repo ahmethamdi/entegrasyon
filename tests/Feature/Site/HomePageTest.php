@@ -7,10 +7,12 @@ namespace Tests\Feature\Site;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
+use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelLogo;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\User;
+use App\Support\Site\Solutions;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -144,6 +146,63 @@ final class HomePageTest extends TestCase
         $this->assertTrue(ChannelLogo::isWordmark('hepsiburada'));
         $this->assertFalse(ChannelLogo::isWordmark('woocommerce'));
         $this->assertNull(ChannelLogo::url('../etc/passwd'));
+    }
+
+    /**
+     * Çözüm sayfaları TR ve EN açılır, birbirine hreflang ile bağlanır, SSS
+     * JSON-LD taşır ve site haritasında durur; bilinmeyen çözüm 404.
+     */
+    #[Test]
+    public function solution_pages_render_in_both_languages_and_are_in_the_sitemap(): void
+    {
+        $this->seedChannels();
+
+        foreach (Solutions::all() as $slug => $solution) {
+            $this->get("/cozumler/{$slug}")
+                ->assertOk()
+                ->assertSee($solution['tr']['h1'])
+                ->assertSee('hreflang="en"', false)
+                ->assertSee('"@type":"FAQPage"', false);
+
+            $this->get("/en/solutions/{$solution['en_slug']}")
+                ->assertOk()
+                ->assertSee('<html lang="en">', false)
+                ->assertSee($solution['en']['title']);
+        }
+
+        $this->get('/cozumler/muhasebe')->assertNotFound();
+
+        $sitemap = $this->get('/sitemap.xml')->assertOk()->getContent();
+        $this->assertStringContainsString('/cozumler/stok-senkronu', $sitemap);
+        $this->assertStringContainsString('/en/solutions/inventory-sync', $sitemap);
+    }
+
+    /** Kanal listesi yetenekten gelir: kargo çözümü yalnız SupportsFulfillment kanallarını sayar. */
+    #[Test]
+    public function solution_channels_come_from_adapter_capabilities(): void
+    {
+        $this->seedChannels();
+
+        $codes = array_column(Solutions::channels(Solutions::find('kargo-bildirimi', 'tr')), 'code');
+
+        foreach ($codes as $code) {
+            $class = ChannelType::query()->whereKey($code)->value('adapter_class');
+            $this->assertTrue(is_a($class, SupportsFulfillment::class, true), $code);
+        }
+    }
+
+    /** Menü ve sayfalar olmayan özelliği vaat etmez. */
+    #[Test]
+    public function no_unbuilt_feature_is_promised(): void
+    {
+        $this->seedChannels();
+
+        foreach (['/', '/ozellikler', '/cozumler/kargo-bildirimi'] as $url) {
+            $html = $this->get($url)->assertOk()->getContent();
+            $this->assertStringNotContainsString('Muhasebe modülü', $html, $url);
+            $this->assertStringNotContainsString('Yurtiçi', $html, $url);
+            $this->assertStringNotContainsString('Aras', $html, $url);
+        }
     }
 
     /** Açık kanalın sayfası neyin çalıştığını yazar; kargo notu kanala göre. */

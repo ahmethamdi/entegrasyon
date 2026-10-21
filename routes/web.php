@@ -124,6 +124,8 @@ Route::controller(SiteController::class)->withoutMiddleware(SetLocale::class)->g
     Route::get('/blog/{slug}', 'blogShow')->where('slug', '[a-z0-9-]+')->name('site.blog.show');
     Route::get('/yasal/{page}', 'legal')->where('page', '[a-z0-9-]+')->name('site.legal');
     // İngilizce yardım sayfaları — Shopify App Store listelemesi bunlara bağlanır.
+    Route::get('/cozumler/{slug}', 'solution')->where('slug', '[a-z0-9-]+')->name('site.solution');
+    Route::get('/en/solutions/{slug}', 'solutionEn')->where('slug', '[a-z0-9-]+')->name('site.en.solution');
     Route::get('/en/{page}', 'english')->where('page', '[a-z0-9-]+')->name('site.en');
     Route::get('/sitemap.xml', 'sitemap')->name('site.sitemap');
 });

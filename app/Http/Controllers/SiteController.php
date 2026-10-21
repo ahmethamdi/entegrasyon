@@ -9,6 +9,7 @@ use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelLogo;
 use App\Support\Site\Blog;
+use App\Support\Site\Solutions;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -115,6 +116,36 @@ final class SiteController extends Controller
         'changelog' => 'Changelog',
     ];
 
+    /** Çözüm sayfası (TR) — yalnız `resources/content/solutions.php`'deki çözümler. */
+    public function solution(Request $request, string $slug): View
+    {
+        return $this->solutionPage($request, $slug, 'tr');
+    }
+
+    /** Çözüm sayfası (EN). */
+    public function solutionEn(Request $request, string $slug): View
+    {
+        return $this->solutionPage($request, $slug, 'en');
+    }
+
+    private function solutionPage(Request $request, string $slug, string $lang): View
+    {
+        $solution = Solutions::find($slug, $lang);
+
+        abort_if($solution === null, 404);
+
+        return $this->page('site.solution', $request, [
+            'lang' => $lang,
+            'solution' => $solution,
+            'copy' => $solution[$lang],
+            'solutionChannels' => Solutions::channels($solution),
+            'alternate' => [
+                'tr' => route('site.solution', $solution['slug']),
+                'en' => route('site.en.solution', $solution['en_slug']),
+            ],
+        ]);
+    }
+
     public function english(Request $request, string $page): View
     {
         abort_unless(array_key_exists($page, self::ENGLISH_PAGES), 404);
@@ -152,6 +183,11 @@ final class SiteController extends Controller
             $urls[] = ['loc' => route('site.channel', $channel['code']), 'lastmod' => null];
         }
 
+        foreach (Solutions::all() as $slug => $solution) {
+            $urls[] = ['loc' => route('site.solution', $slug), 'lastmod' => null];
+            $urls[] = ['loc' => route('site.en.solution', $solution['en_slug']), 'lastmod' => null];
+        }
+
         foreach ($blog->all() as $post) {
             $urls[] = ['loc' => route('site.blog.show', $post->slug), 'lastmod' => $post->updatedAt ?? $post->publishedAt];
         }
@@ -175,6 +211,8 @@ final class SiteController extends Controller
             'channels' => $this->channelList(),
             'isLoggedIn' => $request->user() !== null,
             'legalPages' => self::LEGAL_PAGES,
+            'lang' => 'tr',
+            'solutionMenu' => Solutions::menu(($data['lang'] ?? 'tr') === 'en' ? 'en' : 'tr'),
             ...$data,
         ]);
     }

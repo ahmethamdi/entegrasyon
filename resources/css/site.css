@@ -522,6 +522,114 @@
         color: var(--color-brand-700);
     }
 
+    /* ── mega menü (21 Eki 2026). Gölge yok: tek ince çizgi ve beyaz zemin
+       (kurumsal, gölgesiz tasarım kararı). Hover + odak + tıklama açar. */
+    .mega-panel {
+        display: none;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        background: #fff;
+        border-top: 1px solid var(--color-line);
+        border-bottom: 1px solid var(--color-line);
+    }
+
+    .mega-item:hover > .mega-panel,
+    .mega-item:focus-within > .mega-panel,
+    .mega-item[data-open='true'] > .mega-panel {
+        display: block;
+    }
+
+    .mega-item[data-closed='true'] > .mega-panel {
+        display: none;
+    }
+
+    .mega-heading {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-muted-dark);
+    }
+
+    .mega-link {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-height: 2.75rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.5rem;
+        border: 1px solid transparent;
+    }
+
+    .mega-link:hover,
+    .mega-link:focus-visible {
+        background: var(--color-soft);
+        border-color: var(--color-line);
+    }
+
+    .mega-logo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        min-width: 1.5rem;
+        max-width: 6rem;
+        height: 1.5rem;
+        flex-shrink: 0;
+    }
+
+    .icon-box--sm {
+        width: 2.25rem;
+        height: 2.25rem;
+        flex-shrink: 0;
+    }
+
+    .mobile-group > summary {
+        list-style: none;
+        cursor: pointer;
+        justify-content: space-between;
+    }
+
+    .mobile-group > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .mobile-group > summary::after {
+        content: '+';
+        font-weight: 500;
+        color: var(--color-muted-dark);
+    }
+
+    .mobile-group[open] > summary::after {
+        content: '−';
+    }
+
+    .mobile-menu .menu-item {
+        display: flex;
+        align-items: center;
+        min-height: 3rem;
+        border-bottom: 1px solid var(--color-line);
+        font-size: 1.0625rem;
+        font-weight: 600;
+    }
+
+    .mobile-sub {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        min-height: 2.75rem;
+        padding-left: 0.25rem;
+        font-weight: 500;
+    }
+
+    .logo-strip img {
+        height: 1.75rem;
+        width: auto;
+        max-width: 7rem;
+        object-fit: contain;
+    }
+
     /* ── alt bilgi */
     .footer-link {
         color: var(--color-muted-dark);

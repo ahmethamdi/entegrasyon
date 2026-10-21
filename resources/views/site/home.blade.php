@@ -84,15 +84,6 @@
         ],
     ];
 
-    // Ekranı ana sayfada gösterilmeyen özellikler: kısa kartlar.
-    $extras = [
-        ['calendar', 'Süreli kampanyalar', 'Seçtiğin ürünlere, seçtiğin kanallarda tarih aralıklı indirim. Kampanya bitince fiyat kendiliğinden eski hâline döner.'],
-        ['upload', 'Toplu ürün aktarımı', 'Ürünlerini bağlı kanalından ya da CSV dosyasıyla içe aktar; yüzlerce ürünü tek tek girmezsin.'],
-        ['image', 'Görsel yönetimi', 'Kanaldan gelen görseller ürünle birlikte durur. Hangi görselin hangi kanala gideceğini sen seçersin.'],
-        ['scale', 'Sormadan üzerine yazmayız', 'Fiyatı bir kanalın kendi panelinde değiştirdiysen farkı gösteririz; hangisinin geçerli olacağına sen karar verirsin.'],
-        ['dashboard', 'Rapor değil, iş listesi', 'Paneli açınca önce yapman gerekenleri görürsün: kargolanmayı bekleyen sipariş, fazla satılan ürün, kanalın reddettiği ürün.'],
-        ['phone', 'Telefonda da çalışır', 'Uygulama indirmen gerekmez; panel telefonunun tarayıcısında açılır.'],
-    ];
 
     /*
      * SSS cevapları YALNIZ doğrulanmış şeyleri söyler. "Kart bilgisi
@@ -115,7 +106,7 @@
     $faqs[] = ['q' => 'Her kanalda farklı fiyat kullanabilir miyim?', 'a' => 'Evet. Kanal başına yüzde ya da tutar farkı ve yuvarlama tanımlayabilir, istersen bir ürüne kanal için elle fiyat girebilirsin. Alış maliyetini girdiysen maliyetin altına düşen fiyat kanala gönderilmez.'];
     $faqs[] = ['q' => 'Kanalın kendi panelinde fiyat değiştirirsem ne olur?', 'a' => 'Değişikliğini sessizce ezmeyiz. Farkı gördüğümüzde sana gösteririz; hangi fiyatın geçerli olacağına sen karar verirsin.'];
     $faqs[] = ['q' => 'Teknik bilgi gerekiyor mu?', 'a' => 'Kod yazman gerekmez. Bir kanalı bağlamak için o kanalın satıcı panelinden API anahtarı gibi birkaç bilgiyi alıp bağlantı formuna yapıştırırsın; form hangi bilgiyi istediğini tek tek gösterir.'];
-    $faqs[] = ['q' => 'Muhasebe ya da e-fatura var mı?', 'a' => 'Henüz yok. Muhasebe modülü yakında geliyor. Şu an 34Pazar stok, ürün, fiyat, sipariş ve kargo takibine odaklanıyor.'];
+    $faqs[] = ['q' => 'E-fatura kesebiliyor muyum?', 'a' => 'Evet, kendi Paraşüt hesabından: alıcı e-fatura mükellefiyse e-fatura, değilse e-arşiv. Trendyol, Hepsiburada, n11 ve Shopify siparişlerinde fatura bilgisi kanaldan okunur.'];
 
     $description = $availableNames
         ? "{$availableNames} mağazalarını tek panelden yönet. Bir kanalda satılan ürünün stoğu diğerlerinde de düşer; siparişler tek listede."
@@ -138,11 +129,7 @@
                 <p class="eyebrow">Pazaryeri ve e-ticaret entegrasyonu</p>
                 <h1 id="hero-baslik" class="h-hero mt-3">Tüm mağazalarını tek panelden yönet: stok, sipariş, fiyat.</h1>
                 <p class="lead mt-5 max-w-[46ch]">
-                    @if ($availableNames)
-                        {{ $availableNames }} mağazalarını 34Pazar'a bağla. Bir kanalda satılan ürünün stoğu diğerlerinden de düşer, siparişler tek listede toplanır.
-                    @else
-                        Satış kanallarını 34Pazar'a bağla. Bir kanalda satılan ürünün stoğu diğerlerinden de düşer, siparişler tek listede toplanır.
-                    @endif
+                    Türkiye ve yurtdışı pazaryerlerini, e-ticaret siteni tek stoğa bağla. Bir kanalda satılan ürünün stoğu diğerlerinden de düşer, siparişler tek listede toplanır, faturası Paraşüt'ten kesilir.
                 </p>
                 <div class="mt-8 flex flex-wrap gap-3">
                     @if ($isLoggedIn)
@@ -169,6 +156,20 @@
             </div>
         </div>
     </section>
+
+    {{-- Kanal logoları — STATİK şerit (kayan değil; kurumsal tasarım kararı). --}}
+    @php $logoChannels = array_values(array_filter($channels, fn ($c) => ($c['logo'] ?? null) && $c['available'])); @endphp
+    @if (count($logoChannels))
+        <section aria-label="Bağlanabilen kanalların logoları" class="border-t border-line">
+            <div class="wrap py-8">
+                <ul class="logo-strip flex flex-wrap items-center justify-center gap-x-10 gap-y-6">
+                    @foreach ($logoChannels as $ch)
+                        <li><a href="{{ route('site.channel', $ch['code']) }}"><img src="{{ $ch['logo'] }}" alt="{{ $ch['name'] }} logosu" loading="lazy"></a></li>
+                    @endforeach
+                </ul>
+            </div>
+        </section>
+    @endif
 
     {{-- ═══════════════════════════════════════ KANALLAR --}}
     @if (count($channels))
@@ -253,23 +254,21 @@
         <div class="wrap">
             <div class="flex flex-wrap items-end justify-between gap-6">
                 <div class="section-head">
-                    <h2 id="diger-baslik" class="heading-2">Bunlar da hazır.</h2>
+                    <h2 id="diger-baslik" class="heading-2">Çözümler</h2>
                     <p class="lead">Bütün paketlerde aynı özellikler var; paketler yalnız ürün ve kanal sayısıyla ayrılır.</p>
                 </div>
                 <a href="{{ route('site.features') }}" class="btn btn-secondary">Bütün özellikler</a>
             </div>
-            <ul class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                @foreach ($extras as [$icon, $title, $body])
-                    <li class="card">
-                        <span class="icon-box">@include('site.partials.icon', ['name' => $icon])</span>
-                        <h3 class="heading-3 mt-4">{{ $title }}</h3>
-                        <p class="mt-2 muted">{{ $body }}</p>
+            <ul class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                @foreach ($solutionMenu as $item)
+                    <li>
+                        <a href="{{ $item['url'] }}" class="card card-link block h-full">
+                            <span class="icon-box">@include('site.partials.icon', ['name' => $item['icon']])</span>
+                            <h3 class="heading-3 mt-4">{{ $item['label'] }}</h3>
+                            <p class="mt-2 muted">{{ $item['hint'] }}</p>
+                        </a>
                     </li>
                 @endforeach
-                <li class="card border-dashed bg-soft">
-                    <h3 class="heading-3 muted">Muhasebe modülü</h3>
-                    <p class="mt-2"><span class="badge badge--soon">Yakında</span></p>
-                </li>
             </ul>
         </div>
     </section>

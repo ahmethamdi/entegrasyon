@@ -239,10 +239,6 @@
                                 <p class="mt-2 muted">{{ $body }}</p>
                             </article>
                         @endforeach
-                        <div class="card border-dashed">
-                            <h3 class="heading-3 muted">Muhasebe modülü</h3>
-                            <p class="mt-2"><span class="badge badge--soon">Yakında</span></p>
-                        </div>
                     </div>
                 </div>
                 <div class="flex items-start justify-center lg:col-span-4 lg:pt-16">
