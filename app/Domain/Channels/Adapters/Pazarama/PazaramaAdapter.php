@@ -4,36 +4,53 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Pazarama;
 
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\Pazarama\Catalog\PazaramaCatalog;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
+use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
+use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
 use App\Domain\Channels\Contracts\RefreshedCredentials;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
+use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
+use App\Domain\Channels\Contracts\ValidatesPublication;
+use App\Domain\Channels\Exceptions\ListingNotPublishable;
+use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
+use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\ApprovalStatusBatch;
 use App\Domain\Sync\Support\BatchItemFailure;
 use App\Domain\Sync\Support\BatchStatus;
+use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
+use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
+use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
@@ -56,7 +73,8 @@ use Throwable;
  *
  * Araştırma: `docs/YENI-KANALLAR-API-NOTLARI.md` §6 (53 resmi sayfanın
  * CMS kopyası okundu). Gerçek mağazayla HENÜZ SINANMADI → kanal
- * `is_active = false`. Ürün açma (`product/create`) bu sürümde YOK.
+ * `is_active = false`. Ürün açma (`product/create`) S10'da eklendi
+ * (`PazaramaCatalog`); içerik güncelleme ucu belgede yok.
  *
  * ─────────────────────────────────────────────────────────────────────
  * KİMLİK: clientId + clientSecret → 1 SAATLİK ERİŞİM ANAHTARI
@@ -176,7 +194,7 @@ use Throwable;
  *   - satıcı siparişi panelden ya da başka araçtan yönetiyorsa otomatik
  *     onay onun akışını BOZAR.
  */
-final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTokenRefresh
+final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, SupportsTokenRefresh, ValidatesPublication
 {
     use DeclaresRequestQuota;
     use MapsOrderStateFromTable;
@@ -230,6 +248,9 @@ final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
 
     /** Stok-fiyat isteği başına en çok 3000 ürün. */
     private const MAX_ITEMS_PER_REQUEST = 3000;
+
+    /** Bulunan marka kimliği bir gün önbellekte (Trendyol kuralı). */
+    private const BRAND_CACHE_SECONDS = 86_400;
 
     /** Satıcı başına iki stok-fiyat isteği arası (resmi). */
     public const STOCK_PRICE_INTERVAL_SECONDS = 10;
@@ -822,7 +843,12 @@ final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
      */
     private function claimStockPriceSlot(): ?int
     {
-        $key = 'pazarama:stock-price-gate:'.$this->connection->id;
+        return $this->claimSlot('pazarama:stock-price-gate:'.$this->connection->id);
+    }
+
+    /** 10 sn kapısı — stok-fiyat ve ürün ekleme için AYRI anahtarlarla (iki ayrı resmî sınır). */
+    private function claimSlot(string $key): ?int
+    {
         $now = now()->getTimestamp();
         $until = $now + self::STOCK_PRICE_INTERVAL_SECONDS;
 
@@ -924,6 +950,361 @@ final class PazaramaAdapter implements ChannelAdapter, DeclaresChannelCurrency, 
         }
 
         return $data;
+    }
+
+    // ------------------------------------------------------- katalog (S10)
+
+    private function catalog(): PazaramaCatalog
+    {
+        return new PazaramaCatalog((array) ($this->connection->settings ?? []));
+    }
+
+    /** `GET /category/getCategoryTree` — düz liste, yalnız `leaf` kategoriye ürün açılır. */
+    public function fetchCategoryTree(): CategoryTreeSnapshot
+    {
+        return PazaramaCatalog::tree(self::jsonBody($this->api('GET', '/category/getCategoryTree')));
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function fetchCategoryAttributes(string $categoryId): array
+    {
+        return PazaramaCatalog::attributes(self::jsonBody($this->api('GET', '/category/getCategoryWithAttributes', ['Id' => $categoryId])));
+    }
+
+    public function taxonomyVersion(): string
+    {
+        return $this->fetchCategoryTree()->version;
+    }
+
+    /** @return list<string> */
+    public function autoFilledAttributes(): array
+    {
+        return [];
+    }
+
+    public function validateForPublication(Product $product, ChannelCategory $category): array
+    {
+        return $this->catalog()->validate($product, $category);
+    }
+
+    /**
+     * Satıcının yayın ayarları — KDV ve desi (`product/create` zorunlu
+     * alanları). Kanaldan okunacak liste yok; seçenekler sabit.
+     *
+     * @return list<ConnectionSettingField>
+     */
+    public function connectionSettingFields(): array
+    {
+        $settings = (array) ($this->connection->settings ?? []);
+
+        return [
+            new ConnectionSettingField(
+                key: PazaramaCatalog::SETTING_VAT_RATE,
+                label: __('KDV oranı'),
+                options: array_map(static fn (int $rate): array => ['value' => (string) $rate, 'label' => '%'.$rate, 'usable' => true], PazaramaCatalog::VAT_RATES),
+                value: isset($settings[PazaramaCatalog::SETTING_VAT_RATE]) ? (string) $settings[PazaramaCatalog::SETTING_VAT_RATE] : null,
+                hint: __('Pazarama\'ya açılan yeni ürünler bu KDV oranıyla gönderilir.'),
+            ),
+            new ConnectionSettingField(
+                key: PazaramaCatalog::SETTING_DESI,
+                label: __('Desi'),
+                options: array_map(static fn (int $desi): array => ['value' => (string) $desi, 'label' => (string) $desi, 'usable' => true], range(1, 50)),
+                value: isset($settings[PazaramaCatalog::SETTING_DESI]) ? (string) $settings[PazaramaCatalog::SETTING_DESI] : null,
+                hint: __('Paket hacmi (en × boy × yükseklik / 3000). Pazarama tam sayı ister; kargo ücretini belirler.'),
+            ),
+        ];
+    }
+
+    /** @return list<string> */
+    public function missingConnectionSettings(): array
+    {
+        $catalog = $this->catalog();
+
+        return array_values(array_filter([
+            in_array($catalog->vatRate(), PazaramaCatalog::VAT_RATES, true) ? null : PazaramaCatalog::SETTING_VAT_RATE,
+            ($catalog->desi() ?? 0) >= 1 ? null : PazaramaCatalog::SETTING_DESI,
+        ]));
+    }
+
+    /**
+     * `POST /product/create` — ürün onaya girer. Kimlik BARKOD hemen yazılır.
+     *
+     * Yanıtta `data.batchRequestId` (belge, Tem 2026). Tek ürünlük istekte
+     * sıfır GUID dönebilir (eski not) — o zaman toplu iş kaydı tutulmaz ve
+     * sonuç onay yoklamasından okunur. `success: false` kesin red.
+     */
+    public function createListing(ListingPayload $payload): AdapterResult
+    {
+        $product = $payload->listing->loadMissing('variant.product')->variant?->product;
+        $item = $this->catalog()->createItem($payload, $this->brandId(trim((string) $product?->brand)));
+
+        $wait = $this->claimSlot('pazarama:product-create-gate:'.$this->connection->id);
+
+        if ($wait !== null) {
+            return AdapterResult::failure(
+                ErrorClass::RATE_LIMITED,
+                "Pazarama iki ürün ekleme isteği arasında 10 sn ister; {$wait} sn sonra yeniden denenecek.",
+                $wait,
+            );
+        }
+
+        $body = self::jsonBody($this->api('POST', '/product/create', body: ['products' => [$item]], requireSuccess: false));
+
+        if (($body['success'] ?? null) !== true) {
+            // Kesin red DÖNÜLÜR (istisna değil): istisna "istek gitti mi?"
+            // belirsizliğine düşer ve ürün yeniden gönderilmeden bekletilirdi.
+            return AdapterResult::failure(ErrorClass::VALIDATION, 'Pazarama ürünü reddetti: '.self::creationErrors($body));
+        }
+
+        $batchId = trim((string) ($body['data']['batchRequestId'] ?? ''));
+        $metadata = ['vat_rate' => $item['VatRate'], 'stock_code' => $item['StockCode']];
+
+        if ($batchId !== '' && trim($batchId, '0-') !== '') {
+            $metadata['pazarama_product_batch_ids'] = array_slice([
+                ...array_filter((array) ($payload->listing->channel_metadata['pazarama_product_batch_ids'] ?? []), 'is_string'),
+                $batchId,
+            ], -5);
+        }
+
+        return AdapterResult::success([
+            'external_id' => (string) $item['Code'],
+            'external_parent_id' => (string) $item['GroupCode'],
+            'channel_metadata' => $metadata,
+        ]);
+    }
+
+    /** Belgede içerik güncelleme ucu yok — onaylı üründe stok/fiyat yürür. */
+    public function updateListing(ListingPayload $payload): AdapterResult
+    {
+        throw ListingNotPublishable::because(PublishReason::LISTING_UPDATE_UNSUPPORTED, (string) $payload->listing->external_id);
+    }
+
+    public function delist(Listing $listing): AdapterResult
+    {
+        throw new RuntimeException('Pazarama listeden çıkarma bu sürümde KAPSAM DIŞI.');
+    }
+
+    /** "Önce ara, sonra yarat": barkod Pazarama'da onaylı ya da onay sürecinde VAR mı. */
+    public function findExistingListing(Variant $variant): ?RemoteListing
+    {
+        $code = trim((string) $variant->barcode);
+
+        return $code === '' ? null : $this->remoteByCode($code);
+    }
+
+    public function fetchListing(Listing $listing): ?RemoteListing
+    {
+        $code = trim((string) $listing->external_id);
+
+        return $code === '' ? null : $this->remoteByCode($code);
+    }
+
+    /**
+     * Onay — barkod önce onaylı listede (`approved?Code=`), yoksa onaysız
+     * listede (`unapproved?code=`), yoksa son ürün işinin hata satırında.
+     *
+     *   onaylı listede → approved
+     *   onaysız + `waitingApproveExp` "red" içeriyor → rejected (DOĞRULANMADI:
+     *     `state`/`productStatus` kodlarının listesi belgede yok; ret metne
+     *     bakılarak ayrılıyor)
+     *   onaysız, başka hâl → bekliyor (kayıt yok)
+     *   hiçbir listede yok + iş satırı hata → rejected (`errorReason`)
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchApprovalStatus(array $listings): ApprovalStatusBatch
+    {
+        $out = [];
+
+        foreach ($listings as $listing) {
+            $code = trim((string) $listing->external_id);
+
+            if ($code === '') {
+                continue;
+            }
+
+            if ($this->approvedRow($code) !== null) {
+                $out[$code] = ['status' => 'approved'];
+
+                continue;
+            }
+
+            $row = $this->unapprovedRow($code);
+
+            if ($row !== null) {
+                $reason = trim((string) ($row['waitingApproveExp'] ?? ''));
+
+                if (preg_match('/red|ret|onaylanmad/iu', $reason.' '.(string) ($row['status'] ?? '')) === 1) {
+                    $out[$code] = ['status' => 'rejected', 'reason' => mb_substr($reason !== '' ? $reason : 'Pazarama ürünü reddetti.', 0, 1000)];
+                }
+
+                continue;
+            }
+
+            $failure = $this->productBatchFailure($listing, $code);
+
+            if ($failure !== null) {
+                $out[$code] = ['status' => 'rejected', 'reason' => $failure];
+            }
+        }
+
+        return new ApprovalStatusBatch($out, new DateTimeImmutable);
+    }
+
+    /**
+     * Marka ADINDAN Pazarama marka kimliği (`brand/getBrands?name=`).
+     *
+     * TAM EŞLEŞME (harf duyarsız, baş/son boşluk yok). Yakın ad seçilseydi
+     * ürün YANLIŞ markayla açılırdı. Yalnız BULUNAN kimlik önbelleğe alınır
+     * (Trendyol kuralı).
+     */
+    private function brandId(string $name): string
+    {
+        if ($name === '') {
+            throw ListingNotPublishable::because(PublishReason::BRAND_REQUIRED);
+        }
+
+        $cacheKey = 'pazarama:brand:'.sha1(mb_strtolower($name));
+        $cached = Cache::get($cacheKey);
+
+        if (is_string($cached) && $cached !== '') {
+            return $cached;
+        }
+
+        $body = self::jsonBody($this->api('GET', '/brand/getBrands', ['Page' => 1, 'Size' => 100, 'name' => $name]));
+        $candidates = [];
+
+        foreach (self::rows($body['data'] ?? null) as $brand) {
+            $brandName = trim((string) ($brand['name'] ?? ''));
+
+            if (isset($brand['id']) && mb_strtolower($brandName) === mb_strtolower($name)) {
+                Cache::put($cacheKey, (string) $brand['id'], self::BRAND_CACHE_SECONDS);
+
+                return (string) $brand['id'];
+            }
+
+            $candidates[] = $brandName;
+        }
+
+        throw new ListingNotPublishable($candidates === []
+            ? "\"{$name}\" markası Pazarama'da yok; markayı Pazarama satıcı panelinden açtırmanız gerekir."
+            : "\"{$name}\" markası Pazarama'da birebir bulunamadı. Benzerleri: ".implode(', ', array_slice($candidates, 0, 5)).'. Üründeki marka adını bunlardan biriyle aynı yazın.', PublishReason::BRAND_MAPPING_REQUIRED);
+    }
+
+    private function remoteByCode(string $code): ?RemoteListing
+    {
+        $row = $this->approvedRow($code);
+        $status = 'approved';
+
+        if ($row === null) {
+            $row = $this->unapprovedRow($code);
+            $status = 'pending';
+        }
+
+        if ($row === null) {
+            return null;
+        }
+
+        return new RemoteListing(
+            externalId: $code,
+            title: isset($row['displayName']) ? (string) $row['displayName'] : null,
+            status: $status,
+            raw: $row,
+            parentExternalId: isset($row['groupCode']) && trim((string) $row['groupCode']) !== '' ? (string) $row['groupCode'] : null,
+        );
+    }
+
+    /** @return array<string, mixed>|null */
+    private function approvedRow(string $code): ?array
+    {
+        $data = self::jsonBody($this->api('GET', '/product/products/approved', ['Size' => 10, 'Code' => $code]))['data'] ?? null;
+        $rows = self::rows(is_array($data) ? ($data['sellerProducts'] ?? $data) : null);
+
+        foreach ($rows as $row) {
+            if (trim((string) ($row['code'] ?? '')) === $code) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Onaysız liste — belge örneği hem `data[]` hem `data.sellerProducts[]`
+     * gösteriyor; ikisi de okunur. Parametre adı metinde `code` (DOĞRULANMADI).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function unapprovedRow(string $code): ?array
+    {
+        $data = self::jsonBody($this->api('GET', '/product/products/unapproved', ['Size' => 10, 'code' => $code]))['data'] ?? null;
+        $rows = self::rows(is_array($data) && ! array_is_list($data) ? ($data['sellerProducts'] ?? []) : $data);
+
+        foreach ($rows as $row) {
+            if (trim((string) ($row['code'] ?? '')) === $code) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Son ürün işinin bu barkoda ait hatası — `getProductBatchResult`
+     * (`status` 1 İşleniyor · 2 Bitti · 3 Hata, `failedProducts[{productCode,
+     * errorReason}]`). İş 4 saat sorgulanabilir; süresi geçmişse null.
+     */
+    private function productBatchFailure(Listing $listing, string $code): ?string
+    {
+        $batchId = collect((array) ($listing->channel_metadata['pazarama_product_batch_ids'] ?? []))->last();
+
+        if (! is_string($batchId) || $batchId === '') {
+            return null;
+        }
+
+        try {
+            $body = self::jsonBody($this->api('GET', '/product/getProductBatchResult', ['BatchRequestId' => $batchId], requireSuccess: false));
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        $data = is_array($body['data'] ?? null) ? $body['data'] : [];
+
+        if ((int) ($data['status'] ?? 0) === 1) {
+            return null;
+        }
+
+        $reasons = [];
+
+        foreach (self::rows($data['failedProducts'] ?? null) as $row) {
+            if (trim((string) ($row['productCode'] ?? '')) === $code && trim((string) ($row['errorReason'] ?? '')) !== '') {
+                $reasons[] = trim((string) $row['errorReason']);
+            }
+        }
+
+        return $reasons === [] ? null : mb_substr(implode(' · ', array_unique($reasons)), 0, 1000);
+    }
+
+    /** `success: false` gövdesinin okunur hali (`data.error.errors[]` + mesaj). */
+    private static function creationErrors(array $body): string
+    {
+        $errors = [];
+
+        foreach ((array) ($body['data']['error']['errors'] ?? []) as $error) {
+            $text = is_array($error) ? trim((string) ($error['message'] ?? $error['errorMessage'] ?? json_encode($error))) : trim((string) $error);
+
+            if ($text !== '') {
+                $errors[] = $text;
+            }
+        }
+
+        $message = self::message($body);
+
+        return $errors === [] ? $message : implode(' · ', $errors);
     }
 
     // ------------------------------------------------------------- siparişler

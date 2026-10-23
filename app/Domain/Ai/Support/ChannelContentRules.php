@@ -92,6 +92,20 @@ final class ChannelContentRules
             'verified' => ['title' => false, 'description' => false],
             'source' => 'Belge okunmadı; ihtiyatlı değer',
         ],
+        'pazarama' => [
+            'title_max' => 250,
+            'description_max' => 30000,
+            'language' => 'tr',
+            'verified' => ['title' => true, 'description' => false],
+            'source' => 'isortagim.pazarama.com · Ürün Ekleme: DisplayName nvarchar(250) (Name 100 iç ad); açıklama sınırı belgede yok',
+        ],
+        'ciceksepeti' => [
+            'title_max' => 255,
+            'description_max' => 7750,
+            'language' => 'tr',
+            'verified' => ['title' => true, 'description' => true],
+            'source' => 'ciceksepeti.dev · Ürün yükleme: productName en çok 255; açıklama belgede 20.000 ve 7.750 diye çelişkili, küçük değer',
+        ],
         'kaufland' => [
             'title_max' => 150,
             'description_max' => 20000,
@@ -101,7 +115,7 @@ final class ChannelContentRules
         ],
     ];
 
-    /** Listede olmayan kanal (Woo, ikas, Ticimax, Pazarama, Çiçeksepeti). */
+    /** Listede olmayan kanal (Woo, ikas, Ticimax, İdefix — İdefix belgesinde sınır yok). */
     private const FALLBACK = [
         'title_max' => 150,
         'description_max' => 20000,

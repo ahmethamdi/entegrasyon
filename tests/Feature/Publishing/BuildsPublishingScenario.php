@@ -11,8 +11,11 @@ use App\Domain\Catalog\Models\ProductChannelAttributeValue;
 use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Models\VariantOption;
+use App\Domain\Channels\Adapters\Ciceksepeti\CiceksepetiAdapter;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
 use App\Domain\Channels\Adapters\N11\N11Adapter;
+use App\Domain\Channels\Adapters\Pazarama\Catalog\PazaramaCatalog;
+use App\Domain\Channels\Adapters\Pazarama\PazaramaAdapter;
 use App\Domain\Channels\Models\AttributeMapping;
 use App\Domain\Channels\Models\AttributeValueMapping;
 use App\Domain\Channels\Models\CategoryMapping;
@@ -112,6 +115,48 @@ trait BuildsPublishingScenario
                 'settings' => ['vat_rate' => 20, 'shipment_template' => 'STANDART', 'preparing_day' => 3, ...$settings],
             ]);
             app(CredentialVault::class)->store($c, [N11Adapter::APP_KEY_SECRET => 'k', N11Adapter::APP_SECRET_SECRET => 's']);
+
+            return $c->fresh(['channelType']);
+        });
+    }
+
+    protected function pazaramaConnection(Tenant $tenant, array $settings = []): ChannelConnection
+    {
+        TenantContext::runAsSystem(fn () => ChannelType::query()->updateOrCreate(['code' => 'pazarama'], [
+            'name' => 'Pazarama', 'kind' => 'marketplace', 'adapter_class' => PazaramaAdapter::class,
+            'supports_webhooks' => false, 'is_active' => true,
+        ]));
+
+        return TenantContext::runFor($tenant->id, function () use ($settings): ChannelConnection {
+            $c = ChannelConnection::factory()->create([
+                'channel_type_code' => 'pazarama',
+                'external_account_id' => 'pzr-'.uniqid(),
+                'status' => 'active',
+                'settings' => [PazaramaCatalog::SETTING_VAT_RATE => '20', PazaramaCatalog::SETTING_DESI => '2', ...$settings],
+            ]);
+            app(CredentialVault::class)->store($c, [
+                PazaramaAdapter::CLIENT_ID_SECRET => 'id', PazaramaAdapter::CLIENT_SECRET_SECRET => 's', 'access_token' => 'tok',
+            ]);
+
+            return $c->fresh(['channelType']);
+        });
+    }
+
+    protected function ciceksepetiConnection(Tenant $tenant, array $settings = []): ChannelConnection
+    {
+        TenantContext::runAsSystem(fn () => ChannelType::query()->updateOrCreate(['code' => 'ciceksepeti'], [
+            'name' => 'Çiçeksepeti', 'kind' => 'marketplace', 'adapter_class' => CiceksepetiAdapter::class,
+            'supports_webhooks' => false, 'is_active' => true,
+        ]));
+
+        return TenantContext::runFor($tenant->id, function () use ($settings): ChannelConnection {
+            $c = ChannelConnection::factory()->create([
+                'channel_type_code' => 'ciceksepeti',
+                'external_account_id' => '7'.random_int(10000, 99999),
+                'status' => 'active',
+                'settings' => [CiceksepetiAdapter::SELLER_ID_KEY => '123456', 'ciceksepeti_delivery_type' => '2', 'ciceksepeti_delivery_message_type' => '5', ...$settings],
+            ]);
+            app(CredentialVault::class)->store($c, [CiceksepetiAdapter::API_KEY_SECRET => 'key']);
 
             return $c->fresh(['channelType']);
         });
