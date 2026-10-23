@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\Catalog\Console\FetchExchangeRatesCommand;
 use App\Domain\Catalog\Console\TickPriceCampaignsCommand;
 use App\Domain\Channels\Console\CheckChannelsHealthCommand;
 use App\Domain\Channels\Console\PruneApiCallsCommand;
@@ -97,6 +98,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // A12 · eşleşmemiş sipariş satırları. Zamanlaması routes/console.php.
         ResolveUnmatchedOrderLinesCommand::class,
         TickPriceCampaignsCommand::class,
+        // S9 · TCMB kur çekimi (zamanlaması routes/console.php).
+        FetchExchangeRatesCommand::class,
         // §13 · Faz 3 · api_calls saklama. Zamanlaması routes/console.php.
         PruneApiCallsCommand::class,
         // V3.0 · §03 · Delta 3 · token yenileme. Zamanlaması routes/console.php.

@@ -65,6 +65,9 @@ final class RequestResync
     /** Bağlantının stok/fiyat gönderim izni açıldı (ADR-010). */
     public const REASON_OUTBOUND_WRITE_ENABLED = 'outbound_write_enabled';
 
+    /** Fiyatlama kuru eşikten fazla değişti ya da bayat kur yenilendi (S9). */
+    public const REASON_EXCHANGE_RATE_CHANGED = 'exchange_rate_changed';
+
     /**
      * @param  string  $reason  Neden resync istendi — yükte taşınır
      */

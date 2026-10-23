@@ -104,6 +104,23 @@ return [
     ],
 
     /*
+    | S9 · otomatik kur çevirisi (TCMB).
+    |
+    | `max_age_days`: en son bülten bundan eskiyse kur KULLANILMAZ ve çevrilmiş
+    | fiyat gönderilmez (hafta sonu 2–3 gün normaldir; uzun bayramda TCMB
+    | bülten yayımlamaz — o zaman değeri büyüt ya da kanal fiyatı gir).
+    | `anchor_threshold_percent`: yeni bülten fiyatlama kurundan bu kadar
+    | saparsa kur güncellenir ve fiyatlar yeniden gönderilir; altında kalırsa
+    | kanala istek gitmez.
+    */
+    'fx' => [
+        'source_url' => env('FX_TCMB_URL', 'https://www.tcmb.gov.tr/kurlar/today.xml'),
+        'max_age_days' => (int) env('FX_MAX_AGE_DAYS', 4),
+        'anchor_threshold_percent' => (float) env('FX_ANCHOR_THRESHOLD_PERCENT', 0.5),
+        'timeout_seconds' => (int) env('FX_TIMEOUT_SECONDS', 15),
+    ],
+
+    /*
     | S8 · AI ile listeleme (Claude).
     |
     | ANAHTAR YOKSA ÖZELLİK YOKTUR: panelde düğme çizilmez, rota 404 döner.

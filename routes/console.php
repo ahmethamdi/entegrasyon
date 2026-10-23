@@ -245,6 +245,25 @@ Schedule::command('campaigns:tick')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S9 · TCMB KUR ÇEKİMİ. TCMB gösterge kurlarını iş günü ~15:30'da (İstanbul)
+// yayımlar; 15:45'ten 18:45'e saat başı denenir (gecikme, geçici ağ hatası).
+// Sabah 09:15 turu sunucu kapalıyken kaçan bülteni yakalar. Aynı bülten
+// ikinci kez gelirse hiçbir şey değişmez (idempotent). Hafta sonu ve
+// tatilde bülten yoktur; son geçerli kur `fx.max_age_days` boyunca kullanılır.
+Schedule::command('fx:fetch')
+    ->weekdays()
+    ->hourlyAt(45)
+    ->between('15:00', '19:00')
+    ->timezone('Europe/Istanbul')
+    ->onOneServer()
+    ->withoutOverlapping();
+
+Schedule::command('fx:fetch')
+    ->dailyAt('09:15')
+    ->timezone('Europe/Istanbul')
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // §13 · Faz 3 · api_calls SAKLAMA — GÜNLÜK, gece 04:00.
 //
 // api_calls en çok yazılan tablodur ve `expires_at` ilk günden beri

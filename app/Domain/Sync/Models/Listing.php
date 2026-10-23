@@ -9,6 +9,8 @@ use App\Domain\Catalog\Models\PriceCampaign;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Support\ActiveCampaigns;
 use App\Domain\Catalog\Support\ChannelPriceRules;
+use App\Domain\Catalog\Support\Fx\FxConverter;
+use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Catalog\Support\PriceRuleCalculator;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Support\Tenancy\BelongsToTenant;
@@ -94,7 +96,23 @@ class Listing extends Model
      */
     public function effectivePrice(): ?string
     {
-        $normal = $this->normalPrice();
+        $source = $this->sourceEffectivePrice();
+
+        return $source === null ? null : $this->toChannelCurrency($source);
+    }
+
+    /**
+     * Kur çevirisinden ÖNCEKİ fiyat (kaynak birimde): kanal fiyatı ya da
+     * kurallı varyant fiyatı, varsa kampanya indirimiyle.
+     *
+     * S9 · SIRA TEK YERDE: TL fiyat kuralları (kanal farkı, yuvarlama,
+     * kampanya) → kur → kur yüzdesi → kur yuvarlaması. Kampanyanın "50 TL
+     * indirim"i TL'de uygulanır, sonra çevrilir; çeviriden sonra uygulansaydı
+     * 50 TL'yi 50 € sanardı.
+     */
+    public function sourceEffectivePrice(): ?string
+    {
+        $normal = $this->sourceNormalPrice();
 
         if ($normal === null) {
             return null;
@@ -117,14 +135,37 @@ class Listing extends Model
      */
     public function effectiveCompareAtPrice(): ?string
     {
+        $compareAt = $this->sourceCompareAtPrice();
+
+        if ($compareAt === null) {
+            return null;
+        }
+
+        // Kur çevirisi varsa üstü çizili fiyat da AYNI kurla, aynı yuvarlamayla
+        // çevrilir; yukarı yuvarlama ikisini eşitleyebilir — eşitse gitmez.
+        $compareAt = $this->toChannelCurrency($compareAt);
+        $price = $this->effectivePrice();
+
+        if ($compareAt === null) {
+            return null;
+        }
+
+        return $price !== null && PriceRuleCalculator::toMinor($compareAt) <= PriceRuleCalculator::toMinor($price)
+            ? null
+            : $compareAt;
+    }
+
+    /** Üstü çizili fiyatın kaynak birimdeki hâli (kur çevirisinden önce). */
+    private function sourceCompareAtPrice(): ?string
+    {
         $compareAt = null;
 
         if ($this->channel_price === null && $this->variant?->compare_at_price !== null) {
             $compareAt = $this->withRule((string) $this->variant->compare_at_price);
         }
 
-        $price = $this->effectivePrice();
-        $normal = $this->normalPrice();
+        $price = $this->sourceEffectivePrice();
+        $normal = $this->sourceNormalPrice();
 
         if ($normal !== null && $price !== $normal && ($this->activeCampaign()?->show_compare_at ?? false)
             && ($compareAt === null || PriceRuleCalculator::toMinor($normal) > PriceRuleCalculator::toMinor($compareAt))) {
@@ -148,6 +189,14 @@ class Listing extends Model
      */
     public function normalPrice(): ?string
     {
+        $source = $this->sourceNormalPrice();
+
+        return $source === null ? null : $this->toChannelCurrency($source);
+    }
+
+    /** Kampanyasız fiyat, kur çevirisinden önce (kaynak birimde). */
+    private function sourceNormalPrice(): ?string
+    {
         if ($this->channel_price !== null) {
             return (string) $this->channel_price;
         }
@@ -164,7 +213,7 @@ class Listing extends Model
      */
     public function activeCampaign(): ?PriceCampaign
     {
-        $normal = $this->normalPrice();
+        $normal = $this->sourceNormalPrice();
 
         if ($normal === null) {
             return null;
@@ -223,8 +272,16 @@ class Listing extends Model
         return $this->channel_price !== null ? $this->channel_price_currency : $this->variant?->currency;
     }
 
-    /** Giden fiyatın para birimi. */
+    /** Giden fiyatın para birimi (kur çevirisi açıksa hedef birim). */
     public function effectiveCurrency(): ?string
+    {
+        return $this->convertsCurrency()
+            ? $this->priceRule()?->fx_currency
+            : $this->sourceCurrency();
+    }
+
+    /** Kur çevirisinden önceki birim: kanal fiyatının ya da varyantın birimi. */
+    public function sourceCurrency(): ?string
     {
         return $this->channel_price !== null
             ? $this->channel_price_currency
@@ -232,24 +289,108 @@ class Listing extends Model
     }
 
     /**
+     * Bu listing'in fiyatı kurla çevrilecek mi: bağlantıda çeviri açık ve
+     * kaynak birim hedeften farklı. Kanal fiyatı zaten hedef birimde
+     * girilmişse çevrilmez (satıcının bilinçli rakamı).
+     */
+    public function convertsCurrency(): bool
+    {
+        $rule = $this->priceRule();
+        $source = strtoupper(trim((string) $this->sourceCurrency()));
+
+        return $rule !== null && $rule->convertsCurrency() && $source !== '' && $source !== strtoupper((string) $rule->fx_currency);
+    }
+
+    /**
+     * Ekran için çeviri dökümü ("1.299,90 TRY → 39,99 EUR · kur 35,12 · +%8 · ,99");
+     * çeviri yoksa ya da kur kullanılamıyorsa null.
+     *
+     * @return array{sourcePrice: string, sourceCurrency: string, rate: string, rateDate: string, markupPercent: string, rounding: string, price: string, currency: string}|null
+     */
+    public function fxBreakdown(): ?array
+    {
+        if (! $this->convertsCurrency()) {
+            return null;
+        }
+
+        $rule = $this->priceRule();
+        $quote = app(FxRates::class)->quote((string) $rule?->fx_currency);
+        $source = $this->sourceEffectivePrice();
+        $price = $this->effectivePrice();
+
+        if ($rule === null || $quote === null || $source === null || $price === null) {
+            return null;
+        }
+
+        return [
+            'sourcePrice' => $source,
+            'sourceCurrency' => strtoupper((string) $this->sourceCurrency()),
+            'rate' => $quote->rate,
+            'rateDate' => $quote->anchorDate->format('Y-m-d'),
+            'markupPercent' => (string) $rule->fx_markup_percent,
+            'rounding' => $rule->fx_rounding,
+            'price' => $price,
+            'currency' => (string) $rule->fx_currency,
+        ];
+    }
+
+    /**
      * Fiyat GÖNDERİLMEMELİ mi — nedeni ya da null.
      *
-     * Önce para birimi (yanlış birimde fiyat "19,90 TL" → "19,90 €" olurdu),
+     * Önce kur (çeviri açık ama kur yok/bayat ya da en düşük fiyatın altında),
+     * sonra para birimi (yanlış birimde fiyat "19,90 TL" → "19,90 €" olurdu),
      * sonra zarar koruması. Stok bu denetimden ETKİLENMEZ.
      */
     public function priceBlockReason(?string $channelCurrency): ?string
     {
-        return $this->currencyMismatch($channelCurrency) ?? $this->priceFloorViolation();
+        return $this->fxBlockReason()
+            ?? $this->currencyMismatch($channelCurrency)
+            ?? $this->priceFloorViolation();
+    }
+
+    /**
+     * Kur çevirisi açık ama çevrilmiş fiyat gönderilemez — neden.
+     *
+     * Kur yoksa ya da bayatsa `effectivePrice()` null döner; o hâlde fiyat
+     * taşıyan hiçbir yol gönderim yapmamalı ve satıcı nedeni görmeli. En
+     * düşük fiyat koruması kanal biriminde, yuvarlamadan SONRAKİ fiyata bakar.
+     */
+    public function fxBlockReason(): ?string
+    {
+        if (! $this->convertsCurrency()) {
+            return null;
+        }
+
+        $rule = $this->priceRule();
+        $currency = (string) $rule?->fx_currency;
+
+        if (($reason = app(FxRates::class)->unavailableReason($currency)) !== null) {
+            return $reason;
+        }
+
+        $min = $rule?->fx_min_price;
+        $price = $this->effectivePrice();
+
+        if ($min !== null && $price !== null && PriceRuleCalculator::toMinor($price) < PriceRuleCalculator::toMinor((string) $min)) {
+            return __('Çevrilmiş fiyat :price :currency, en düşük fiyat :min :currency altında; kanala gönderilmedi.', [
+                'price' => $price,
+                'min' => (string) $min,
+                'currency' => $currency,
+            ]);
+        }
+
+        return null;
     }
 
     /**
      * Kanal para birimi giden fiyatın biriminden farklıysa neden.
      *
-     * ⚠️ KUR ÇEVİRİSİ YOK (21 Eki 2026). TRY katalog fiyatı EUR kanalına
-     * olduğu gibi gitseydi 499 TL'lik ürün 499 € satılır ya da tersi; hata
-     * SESSİZDİR çünkü kanal rakamı kabul eder. Kanal fiyatı o kanalın
-     * biriminde açıkça girilmişse (`channel_price_currency`) gider.
-     * Birimlerden biri bilinmiyorsa denetim yapılmaz (eski davranış).
+     * 21 Eki 2026: TRY katalog fiyatı EUR kanalına olduğu gibi gitseydi
+     * 499 TL'lik ürün 499 € satılır ya da tersi; hata SESSİZDİR çünkü kanal
+     * rakamı kabul eder. Kanal fiyatı o kanalın biriminde girilmişse ya da
+     * bağlantıda kur çevirisi açıksa (S9, `effectiveCurrency()` hedef birimi
+     * döner) gider. Kur çevirisi YANLIŞ birime ayarlandıysa (kanal EUR, ayar
+     * USD) yine burada durur. Birimlerden biri bilinmiyorsa denetim yapılmaz.
      */
     public function currencyMismatch(?string $channelCurrency): ?string
     {
@@ -276,8 +417,9 @@ class Listing extends Model
      * 1999 yerine 199 yazılan rakamdır.
      *
      * ⚠️ PARA BİRİMİ FARKLIYSA DENETLENMEZ. Maliyet varyantın birimindedir;
-     * USD Etsy fiyatını TL maliyetle kıyaslamak ya her ilanı durdurur ya da
-     * hiçbirini durdurmazdı. Kur dönüşümü bilinçli olarak yok.
+     * elle girilmiş USD Etsy fiyatını TL maliyetle kıyaslamak ya her ilanı
+     * durdurur ya da hiçbirini durdurmazdı. Kur çevirisi (S9) açıksa kıyas
+     * çeviriden ÖNCEKİ TL fiyatla yapılır.
      */
     public function priceFloorViolation(): ?string
     {
@@ -287,7 +429,9 @@ class Listing extends Model
             return null;
         }
 
-        $price = $this->effectivePrice();
+        // Kur çevirisinden ÖNCEKİ fiyatla kıyaslanır: maliyet TL'dedir ve
+        // çeviri (kur yüzdesi ≥ 0, yuvarlama yukarı) fiyatı düşürmez.
+        $price = $this->sourceEffectivePrice();
 
         if ($price === null) {
             return null;
@@ -299,7 +443,7 @@ class Listing extends Model
 
         $cost = $this->variant?->cost_price;
 
-        if ($cost === null || $this->effectiveCurrency() !== $this->variant?->currency) {
+        if ($cost === null || $this->sourceCurrency() !== $this->variant?->currency) {
             return null;
         }
 
@@ -315,6 +459,32 @@ class Listing extends Model
             'margin' => (string) $rule->min_margin_percent,
             'floor' => $floor,
         ]);
+    }
+
+    /**
+     * Kaynak birimdeki fiyatı kanal birimine çevirir; çeviri yoksa aynen.
+     * Kur kullanılamıyorsa NULL: fiyat bilinmiyor, gönderilmez
+     * (`fxBlockReason` nedeni söyler).
+     */
+    private function toChannelCurrency(string $price): ?string
+    {
+        if (! $this->convertsCurrency()) {
+            return $price;
+        }
+
+        $rule = $this->priceRule();
+        $quote = app(FxRates::class)->quote((string) $rule?->fx_currency);
+
+        if ($rule === null || $quote === null) {
+            return null;
+        }
+
+        return FxConverter::convert($price, $quote->rate, (string) $rule->fx_markup_percent, $rule->fx_rounding);
+    }
+
+    private function priceRule(): ?ChannelPriceRule
+    {
+        return app(ChannelPriceRules::class)->forConnection($this->channel_connection_id);
     }
 
     /** Bağlantının fiyat kuralı varsa uygulanmış fiyat. */

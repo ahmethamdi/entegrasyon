@@ -10,6 +10,7 @@ use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Support\StripePaymentGateway;
 use App\Domain\Catalog\Support\ActiveCampaigns;
 use App\Domain\Catalog\Support\ChannelPriceRules;
+use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Models\User;
 use App\Domain\Identity\Support\SuperAdmin;
@@ -35,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
         // scoped: her iş/istekte sıfırlanır — kural değişince eski fiyat gitmesin.
         $this->app->scoped(ChannelPriceRules::class);
         $this->app->scoped(ActiveCampaigns::class);
+        $this->app->scoped(FxRates::class);
 
         $this->app->bind(PaymentGateway::class, StripePaymentGateway::class);
         // S8 · Claude; testler `FakeLanguageModel` bağlar (SDK kendi HTTP istemcisiyle çıkar).

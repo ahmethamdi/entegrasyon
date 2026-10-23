@@ -6,10 +6,12 @@ namespace App\Http\Controllers;
 
 use App\Domain\Catalog\Actions\SetChannelPriceRule;
 use App\Domain\Catalog\Models\ChannelPriceRule;
+use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Catalog\Support\PriceRuleCalculator;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Sync\Support\ChannelCurrency;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -26,10 +28,21 @@ final class ChannelPricingController extends Controller
 {
     public function __construct(private readonly AdapterRegistry $registry) {}
 
-    public function edit(string $connection): InertiaResponse
+    public function edit(string $connection, FxRates $rates): InertiaResponse
     {
         $model = $this->resolve($connection);
         $rule = ChannelPriceRule::query()->where('channel_connection_id', $model->id)->first();
+
+        // Kanalın bildirdiği birim (Etsy mağaza birimi, eBay pazarı…); Shopify
+        // ve Woo bildirmez, satıcı seçer. Okuma hatası ekranı düşürmez.
+        $channelCurrency = ChannelCurrency::of($this->registry->for($model));
+        $fxCurrency = $rule?->fx_currency ?? ($channelCurrency !== null && $channelCurrency !== 'TRY' ? $channelCurrency : null);
+
+        $quotes = [];
+        foreach (ChannelPriceRule::FX_CURRENCIES as $code) {
+            $quote = $rates->quote($code);
+            $quotes[$code] = $quote === null ? null : ['rate' => $quote->rate, 'date' => $quote->anchorDate->format('Y-m-d')];
+        }
 
         return Inertia::render('Channels/Pricing', [
             'connection' => [
@@ -42,10 +55,20 @@ final class ChannelPricingController extends Controller
                 'markupAmount' => $rule === null ? '0' : self::trim((string) $rule->markup_amount),
                 'rounding' => $rule?->rounding ?? ChannelPriceRule::ROUNDING_NONE,
                 'minMarginPercent' => $rule?->min_margin_percent === null ? null : self::trim((string) $rule->min_margin_percent),
+                'fxEnabled' => (bool) ($rule?->fx_enabled ?? false),
+                'fxCurrency' => $fxCurrency,
+                'fxMarkupPercent' => $rule === null ? '0' : self::trim((string) $rule->fx_markup_percent),
+                'fxRounding' => $rule?->fx_rounding ?? ChannelPriceRule::ROUNDING_NONE,
+                'fxMinPrice' => $rule?->fx_min_price === null ? null : self::trim((string) $rule->fx_min_price),
             ],
             // Örnek hesap ekranda canlı yapılır; sunucuyla aynı sonucu
             // vermesi için yuvarlama seçenekleri buradan gider.
             'roundings' => ChannelPriceRule::ROUNDINGS,
+            'fxRoundings' => ChannelPriceRule::FX_ROUNDINGS,
+            'fxCurrencies' => ChannelPriceRule::FX_CURRENCIES,
+            'channelCurrency' => $channelCurrency,
+            // Birim başına fiyatlama kuru; null = kur yok ya da bayat (fiyat gitmez).
+            'fxQuotes' => $quotes,
         ]);
     }
 
@@ -58,14 +81,33 @@ final class ChannelPricingController extends Controller
             'markup_amount' => ['required', 'numeric', 'min:-100000', 'max:100000'],
             'rounding' => ['required', Rule::in(ChannelPriceRule::ROUNDINGS)],
             'min_margin_percent' => ['nullable', 'numeric', 'min:-100', 'max:1000'],
+            'fx_enabled' => ['sometimes', 'boolean'],
+            'fx_currency' => ['nullable', 'required_if_accepted:fx_enabled', Rule::in(ChannelPriceRule::FX_CURRENCIES)],
+            // Kur payı negatif olamaz: zarar koruması çeviriden önceki TL
+            // fiyatına bakar ve çevirinin fiyatı düşürmediğine güvenir.
+            'fx_markup_percent' => ['sometimes', 'numeric', 'min:0', 'max:500'],
+            'fx_rounding' => ['sometimes', Rule::in(ChannelPriceRule::FX_ROUNDINGS)],
+            'fx_min_price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
         ]);
 
-        $count = $setRule->run($model, [
+        $values = [
             'markup_percent' => (string) $validated['markup_percent'],
             'markup_amount' => (string) $validated['markup_amount'],
             'rounding' => $validated['rounding'],
             'min_margin_percent' => $validated['min_margin_percent'] === null ? null : (string) $validated['min_margin_percent'],
-        ], $request->user()?->id);
+        ];
+
+        if (array_key_exists('fx_enabled', $validated)) {
+            $values += [
+                'fx_enabled' => (bool) $validated['fx_enabled'],
+                'fx_currency' => $validated['fx_currency'] ?? null,
+                'fx_markup_percent' => (string) ($validated['fx_markup_percent'] ?? '0'),
+                'fx_rounding' => $validated['fx_rounding'] ?? ChannelPriceRule::ROUNDING_NONE,
+                'fx_min_price' => isset($validated['fx_min_price']) ? (string) $validated['fx_min_price'] : null,
+            ];
+        }
+
+        $count = $setRule->run($model, $values, $request->user()?->id);
 
         return redirect()->route('channels.index')->with(
             'success',
@@ -104,6 +146,12 @@ final class ChannelPricingController extends Controller
 
         if ($rule->min_margin_percent !== null) {
             $parts[] = __('zarar koruması %:margin', ['margin' => self::trim((string) $rule->min_margin_percent)]);
+        }
+
+        if ($rule->convertsCurrency()) {
+            $parts[] = (float) $rule->fx_markup_percent !== 0.0
+                ? __(':currency kuru +%:percent', ['currency' => (string) $rule->fx_currency, 'percent' => self::trim((string) $rule->fx_markup_percent)])
+                : __(':currency kuru', ['currency' => (string) $rule->fx_currency]);
         }
 
         $parts = array_values(array_filter($parts));

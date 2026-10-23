@@ -73,10 +73,16 @@ final class PriceRuleCalculator
         return self::fromMinor(self::roundMinor(max($minor, 0), $rounding));
     }
 
-    private static function roundMinor(int $minor, string $rounding): int
+    /**
+     * Kuruşu kurala göre YUKARI yuvarlar. `half` ve `x49` yalnız kur
+     * yuvarlamasında seçilebilir (TL kuralı formu onları kabul etmez).
+     */
+    public static function roundMinor(int $minor, string $rounding): int
     {
         return match ($rounding) {
             ChannelPriceRule::ROUNDING_WHOLE => self::ceilTo($minor, 0),
+            ChannelPriceRule::ROUNDING_HALF => intdiv($minor + 49, 50) * 50,
+            ChannelPriceRule::ROUNDING_X49 => self::ceilTo($minor, 49),
             ChannelPriceRule::ROUNDING_X90 => self::ceilTo($minor, 90),
             ChannelPriceRule::ROUNDING_X99 => self::ceilTo($minor, 99),
             default => $minor,

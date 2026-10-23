@@ -435,6 +435,9 @@ final class ProductChannelController extends Controller
                 'outgoingPrice' => $outgoing,
                 'outgoingCurrency' => $listing->effectiveCurrency(),
                 'floorViolation' => $listing->priceFloorViolation(),
+                // S9 · kur çevirisi dökümü (TL → kanal birimi) ve durdurma nedeni.
+                'fx' => $listing->fxBreakdown(),
+                'fxBlock' => $listing->fxBlockReason(),
                 'sku' => $variant?->sku,
                 'variantPrice' => $variant?->price !== null ? (string) $variant->price : null,
                 'variantCurrency' => $variantCurrency,
@@ -443,7 +446,8 @@ final class ProductChannelController extends Controller
                 'needsChannelPrice' => $currency !== null
                     && $variantCurrency !== null
                     && strtoupper($variantCurrency) !== $currency
-                    && $listing->channel_price === null,
+                    && $listing->channel_price === null
+                    && ! $listing->convertsCurrency(),
             ];
         })->values()->all();
 

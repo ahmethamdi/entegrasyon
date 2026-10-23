@@ -175,6 +175,16 @@ const priceInputs = ref(Object.fromEntries(
 const savingPrice = ref(null);
 const priceErrors = computed(() => page.props.errors ?? {});
 
+const fxRoundingShort = { whole: 'tam sayı', half: ',00/,50', x49: ',49', x90: ',90', x99: ',99' };
+
+// "kur 35,1234 · +%8 · ,99" — sunucudaki `Listing::fxBreakdown()` dökümü.
+function fxDetail(fx) {
+    const parts = [t('kur :rate', { rate: Number(fx.rate).toFixed(4).replace('.', ',') })];
+    if (Number(fx.markupPercent) !== 0) parts.push(`+%${String(Number(fx.markupPercent)).replace('.', ',')}`);
+    if (fxRoundingShort[fx.rounding]) parts.push(t(fxRoundingShort[fx.rounding]));
+    return parts.join(' · ');
+}
+
 function money(amount, currency) {
     if (amount === null || amount === undefined || amount === '') return '—';
     if (!currency) return String(amount);
@@ -526,8 +536,12 @@ function send(connectionId) {
                                         <p class="text-xs text-stone-700">
                                             {{ t('Ürün fiyatı') }}: {{ money(row.variantPrice, row.variantCurrency) }}
                                         </p>
+                                        <p v-if="row.fx" class="text-xs text-stone-900">
+                                            {{ t('Kanala giden') }}: {{ money(row.fx.sourcePrice, row.fx.sourceCurrency) }} → <strong>{{ money(row.fx.price, row.fx.currency) }}</strong>
+                                            <span class="ml-1 text-stone-500">({{ fxDetail(row.fx) }})</span>
+                                        </p>
                                         <p
-                                            v-if="row.channelPrice === null && row.outgoingPrice !== null && row.outgoingPrice !== row.variantPrice"
+                                            v-else-if="row.channelPrice === null && row.outgoingPrice !== null && row.outgoingPrice !== row.variantPrice"
                                             class="text-xs text-stone-900"
                                         >
                                             {{ t('Fiyat kuralıyla kanala giden') }}: {{ money(row.outgoingPrice, row.outgoingCurrency) }}
@@ -571,6 +585,9 @@ function send(connectionId) {
                                     </button>
                                 </div>
 
+                                <p v-if="row.fxBlock" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
+                                    {{ t(row.fxBlock) }}
+                                </p>
                                 <p v-if="row.floorViolation" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
                                     {{ t(row.floorViolation) }}
                                 </p>

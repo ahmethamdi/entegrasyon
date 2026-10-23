@@ -23,6 +23,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $markup_amount
  * @property string $rounding
  * @property string|null $min_margin_percent
+ * @property bool $fx_enabled
+ * @property string|null $fx_currency
+ * @property string $fx_markup_percent
+ * @property string $fx_rounding
+ * @property string|null $fx_min_price
  */
 class ChannelPriceRule extends Model
 {
@@ -39,6 +44,28 @@ class ChannelPriceRule extends Model
 
     public const ROUNDINGS = [self::ROUNDING_NONE, self::ROUNDING_WHOLE, self::ROUNDING_X90, self::ROUNDING_X99];
 
+    /** Bir üst ,00 ya da ,50 (12,31 → 12,50 · 12,61 → 13,00). Yalnız kur yuvarlamasında. */
+    public const ROUNDING_HALF = 'half';
+
+    /** ,49 ile bitir. Yalnız kur yuvarlamasında. */
+    public const ROUNDING_X49 = 'x49';
+
+    /** Kur çevirisinden SONRA uygulanan yuvarlamalar (kanal biriminde). */
+    public const FX_ROUNDINGS = [
+        self::ROUNDING_NONE,
+        self::ROUNDING_WHOLE,
+        self::ROUNDING_HALF,
+        self::ROUNDING_X49,
+        self::ROUNDING_X90,
+        self::ROUNDING_X99,
+    ];
+
+    /**
+     * TCMB'nin yayımladığı ve çevrilebilen birimler (24 Eki 2026 bülteni).
+     * PLN, CZK, HUF bültende YOK — o kanallarda kanal fiyatı elle girilir.
+     */
+    public const FX_CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'CAD', 'AUD', 'JPY', 'RON', 'AED', 'SAR', 'QAR', 'KWD', 'AZN', 'CNY'];
+
     protected $fillable = [
         'tenant_id',
         'channel_connection_id',
@@ -46,6 +73,11 @@ class ChannelPriceRule extends Model
         'markup_amount',
         'rounding',
         'min_margin_percent',
+        'fx_enabled',
+        'fx_currency',
+        'fx_markup_percent',
+        'fx_rounding',
+        'fx_min_price',
     ];
 
     protected function casts(): array
@@ -54,6 +86,9 @@ class ChannelPriceRule extends Model
             'markup_percent' => 'decimal:2',
             'markup_amount' => 'decimal:2',
             'min_margin_percent' => 'decimal:2',
+            'fx_enabled' => 'boolean',
+            'fx_markup_percent' => 'decimal:2',
+            'fx_min_price' => 'decimal:2',
         ];
     }
 
@@ -63,6 +98,12 @@ class ChannelPriceRule extends Model
         return (float) $this->markup_percent !== 0.0
             || (float) $this->markup_amount !== 0.0
             || $this->rounding !== self::ROUNDING_NONE;
+    }
+
+    /** Kur çevirisi açık ve hedef birim seçilmiş mi. */
+    public function convertsCurrency(): bool
+    {
+        return $this->fx_enabled && $this->fx_currency !== null && $this->fx_currency !== '';
     }
 
     public function connection(): BelongsTo

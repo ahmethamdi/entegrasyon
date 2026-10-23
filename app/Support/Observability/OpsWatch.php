@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Observability;
 
+use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Channels\Support\CircuitBreaker;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,7 @@ use Throwable;
  *   devre kesici    açık devreli aktif bağlantı (kanal başına)
  *   hız sınırı      son 15 dk 429 (kanal başına)
  *   ölü işlem       son 1 saatte `dead`e düşen senkron (sistem)
+ *   kur             çevirisi açık bir birimin kuru yok ya da bayat (S9)
  *
  * Her sinyal kendi anahtarıyla saatte en çok bir kez gider (`OpsNotifier`).
  * Ölçümlerden biri hata verirse (Redis yok, Horizon yok) diğerleri yine
@@ -45,6 +47,7 @@ final class OpsWatch
             ...$this->guard('rate_limit', fn () => $this->rateLimits()),
             ...$this->guard('dead', fn () => $this->deadOperations()),
             ...$this->guard('ai', fn () => $this->aiErrors()),
+            ...$this->guard('fx', fn () => $this->staleExchangeRates()),
         ]);
     }
 
@@ -171,6 +174,40 @@ final class OpsWatch
             'title' => 'AI öneri hataları arttı',
             'body' => sprintf('Son 1 saatte %d AI çağrısının %d tanesi yapılamadı (eşik %%%d). Anahtarı ve Anthropic durumunu kontrol edin; ai_usage.error sütununa bakın.', $total, $errors, $limit),
         ]];
+    }
+
+    /**
+     * S9 · kur çevirisi açık bir bağlantının hedef birimi için kur yok ya da
+     * bayat: o bağlantıların fiyatı gönderilmiyor. Birim başına tek alarm.
+     *
+     * @return list<array{key: string, title: string, body: string}>
+     */
+    private function staleExchangeRates(): array
+    {
+        $rows = DB::table('channel_price_rules')
+            ->where('fx_enabled', true)
+            ->whereNotNull('fx_currency')
+            ->selectRaw('upper(fx_currency) AS currency, count(*) AS connections')
+            ->groupByRaw('upper(fx_currency)')
+            ->get();
+
+        $rates = app(FxRates::class);
+        $rates->forget();
+        $out = [];
+
+        foreach ($rows as $row) {
+            $reason = $rates->unavailableReason((string) $row->currency);
+
+            if ($reason !== null) {
+                $out[] = [
+                    'key' => "fx:{$row->currency}",
+                    'title' => "Kur bayat: {$row->currency}",
+                    'body' => sprintf('%s Etkilenen bağlantı: %d. `php artisan fx:fetch` çıktısına ve TCMB erişimine bakın.', $reason, (int) $row->connections),
+                ];
+            }
+        }
+
+        return $out;
     }
 
     /**
