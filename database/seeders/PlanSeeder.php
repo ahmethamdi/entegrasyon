@@ -41,6 +41,9 @@ final class PlanSeeder extends Seeder
         // Aylık fatura hakkı (S6) — KULLANICI KARARI (20 Ekim 2026):
         // free 20, starter 300, pro 2000, business sınırsız.
         $invoices = QuotaMetric::INVOICES->value;
+        // Kullanıcı sayısı (S7 · 23 Ekim 2026) — sahip dahil, bekleyen davet
+        // koltuk tutar. Varsayılan: free 1, starter 3, pro 10, business sınırsız.
+        $users = QuotaMetric::USERS->value;
 
         $plans = [
             [
@@ -51,7 +54,7 @@ final class PlanSeeder extends Seeder
                 'shopify_price_usd' => null,
                 // Denemek için yeterli, üretim için değil: satıcı ürünü
                 // gerçekten kanala gönderip akışı görebilmeli.
-                'limits' => [$products => 25, $channels => 1, $invoices => 20],
+                'limits' => [$products => 25, $channels => 1, $invoices => 20, $users => 1],
                 'is_public' => true,
             ],
             [
@@ -60,7 +63,7 @@ final class PlanSeeder extends Seeder
                 'price_monthly' => 499,
                 // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
                 'shopify_price_usd' => 9.99,
-                'limits' => [$products => 500, $channels => 2, $invoices => 300],
+                'limits' => [$products => 500, $channels => 2, $invoices => 300, $users => 3],
                 'is_public' => true,
             ],
             [
@@ -69,7 +72,7 @@ final class PlanSeeder extends Seeder
                 'price_monthly' => 1499,
                 // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
                 'shopify_price_usd' => 29.99,
-                'limits' => [$products => 5000, $channels => 5, $invoices => 2000],
+                'limits' => [$products => 5000, $channels => 5, $invoices => 2000, $users => 10],
                 'is_public' => true,
             ],
             [
@@ -81,7 +84,7 @@ final class PlanSeeder extends Seeder
                 // Limit YOK = SINIRSIZ. `null` yerine anahtarı hiç
                 // yazmamak da aynı anlama gelir; burada NİYET açık
                 // olsun diye açıkça null yazılıyor.
-                'limits' => [$products => null, $channels => null, $invoices => null],
+                'limits' => [$products => null, $channels => null, $invoices => null, $users => null],
                 'is_public' => true,
             ],
         ];

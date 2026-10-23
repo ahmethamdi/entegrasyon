@@ -47,6 +47,7 @@ final class PlanLimitContractTest extends TestCase
         $this->assertSame('products', QuotaMetric::PRODUCTS->value);
         $this->assertSame('channels', QuotaMetric::CHANNELS->value);
         $this->assertSame('invoices_monthly', QuotaMetric::INVOICES->value);
+        $this->assertSame('users', QuotaMetric::USERS->value);
     }
 
     /** Varsayılan plan kodu da sözleşmedir — aboneliksiz kiracı ona düşer. */
@@ -80,6 +81,7 @@ final class PlanLimitContractTest extends TestCase
         $this->assertSame(500, $raw['products']);
         $this->assertSame(2, $raw['channels']);
         $this->assertSame(300, $raw['invoices_monthly']);
+        $this->assertSame(3, $raw['users']);
     }
 
     /** Varsayılan plan seed'de VARDIR — yoksa kota hiç uygulanmaz. */
@@ -94,6 +96,7 @@ final class PlanLimitContractTest extends TestCase
         $this->assertSame(25, $free->limitFor(QuotaMetric::PRODUCTS));
         $this->assertSame(1, $free->limitFor(QuotaMetric::CHANNELS));
         $this->assertSame(20, $free->limitFor(QuotaMetric::INVOICES));
+        $this->assertSame(1, $free->limitFor(QuotaMetric::USERS));
     }
 
     /** Seed iki kez koşabilir — `updateOrCreate`, tekillik ihlali vermez. */

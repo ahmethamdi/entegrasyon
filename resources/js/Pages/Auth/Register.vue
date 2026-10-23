@@ -5,11 +5,13 @@ import { Link, useForm } from '@inertiajs/vue3';
 const props = defineProps({
     // Shopify'dan kuruluyorsa mağaza adı ve sahibinin e-postası (anahtar yok).
     shopifyInstall: { type: Object, default: null },
+    // Ekip daveti: { email, tenant } — firma sorulmaz, e-posta sabit.
+    invitation: { type: Object, default: null },
 });
 
 const form = useForm({
     name: '',
-    email: props.shopifyInstall?.email ?? '',
+    email: props.invitation?.email ?? props.shopifyInstall?.email ?? '',
     company: props.shopifyInstall?.name ?? '',
     password: '',
     password_confirmation: '',
@@ -45,6 +47,11 @@ function submit() {
                 <p class="mt-1">{{ $t('34Pazar hesabını aç, Shopify mağazan otomatik bağlansın. Hesabın varsa giriş yap.') }}</p>
             </div>
 
+            <div v-if="invitation" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                <p class="font-medium">{{ $t(':tenant ekibine davet edildin.', { tenant: invitation.tenant }) }}</p>
+                <p class="mt-1">{{ $t('Hesabını aç, ekibe kendiliğinden katılırsın.') }}</p>
+            </div>
+
             <form class="mt-8 space-y-4" @submit.prevent="submit">
                 <div>
                     <label for="name" class="block text-sm font-medium text-stone-700">
@@ -63,7 +70,7 @@ function submit() {
                     </p>
                 </div>
 
-                <div>
+                <div v-if="!invitation">
                     <label for="company" class="block text-sm font-medium text-stone-700">
                         {{ $t('Şirket adı') }}
                     </label>
@@ -89,6 +96,7 @@ function submit() {
                         type="email"
                         autocomplete="email"
                         required
+                        :readonly="!!invitation"
                         class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.email" class="mt-1 text-sm text-red-700">

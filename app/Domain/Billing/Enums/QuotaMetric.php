@@ -47,6 +47,9 @@ enum QuotaMetric: string
      */
     case INVOICES = 'invoices_monthly';
 
+    /** S7 · ekip üyesi + bekleyen davet (sahip dahil). */
+    case USERS = 'users';
+
     /** Kullanıcıya gösterilen ad — hata mesajında geçer. */
     public function label(): string
     {
@@ -55,6 +58,7 @@ enum QuotaMetric: string
             self::PRODUCTS => 'ürün',
             self::CHANNELS => 'kanal bağlantısı',
             self::INVOICES => 'aylık fatura',
+            self::USERS => 'kullanıcı',
         });
     }
 
@@ -70,6 +74,7 @@ enum QuotaMetric: string
             self::PRODUCTS => 'Daha fazla ürün eklemek için planını yükselt.',
             self::CHANNELS => 'Daha fazla kanal bağlamak için planını yükselt.',
             self::INVOICES => 'Bu ay daha fazla fatura kesmek için planını yükselt.',
+            self::USERS => 'Daha fazla kişi davet etmek için planını yükselt.',
         });
     }
 
@@ -86,6 +91,7 @@ enum QuotaMetric: string
             self::PRODUCTS => 'Ürün kotan doldu (:current/:limit). Daha fazla ürün eklemek için planını yükselt.',
             self::CHANNELS => 'Kanal bağlantısı kotan doldu (:current/:limit). Daha fazla kanal bağlamak için planını yükselt.',
             self::INVOICES => 'Bu ayki fatura kotan doldu (:current/:limit). Daha fazla fatura kesmek için planını yükselt.',
+            self::USERS => 'Kullanıcı kotan doldu (:current/:limit). Daha fazla kişi davet etmek için planını yükselt.',
         }, ['current' => $current, 'limit' => $limit]);
     }
 }

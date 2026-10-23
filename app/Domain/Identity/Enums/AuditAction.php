@@ -18,17 +18,8 @@ namespace App\Domain\Identity\Enums;
  * kaldırılsa bile eski kayıtlar okunabilir kalmalıdır. Denetim izi kod
  * refactor'ıyla ÖLMEZ.
  *
- * ─────────────────────────────────────────────────────────────────────
- * BUGÜN YAZILMAYAN TEK OLAY — DÜRÜST SINIR
- * ─────────────────────────────────────────────────────────────────────
- * §11'in listesinde altı olay var; bu enum beşini tanımlar. Eksik olan:
- *
- *   - "kullanıcı davet ve rol değişimi" — davet akışı YAZILMADI;
- *     `tenant_users.role` yalnızca `CreateTenant` tarafından yazılıyor.
- *
- * O yol açıldığında buraya bir değer eklenir. Şimdi tanımlamak, hiçbir
- * yerden yazılmayan ölü bir enum değeri bırakırdı ve denetim ekranı
- * olmayan bir olayı varmış gibi gösterirdi.
+ * "Kullanıcı davet ve rol değişimi" S7'de (23 Ekim 2026) açıldı: davet,
+ * katılma, rol değişimi, çıkarma ve davet iptali aşağıda kendi değerleriyle.
  *
  * "Fiyat çakışması kararı" ARTIK YAZILIYOR (§9 · PRICE politikası) ve
  * aşağıda kendi değerini taşıyor.
@@ -102,6 +93,17 @@ enum AuditAction: string
 
     case INVOICE_ACCOUNT_DISCONNECTED = 'invoicing.account_disconnected';
 
+    /** S7 · ekip. Yükte e-posta ve rol (eski/yeni) — belirteç ASLA. */
+    case MEMBER_INVITED = 'team.member_invited';
+
+    case MEMBER_JOINED = 'team.member_joined';
+
+    case MEMBER_ROLE_CHANGED = 'team.member_role_changed';
+
+    case MEMBER_REMOVED = 'team.member_removed';
+
+    case INVITATION_CANCELLED = 'team.invitation_cancelled';
+
     /** Panelde gösterilecek Türkçe ad. */
     public function label(): string
     {
@@ -119,6 +121,11 @@ enum AuditAction: string
             self::PLAN_ASSIGNED_BY_ADMIN => 'Plan yönetici tarafından atandı',
             self::INVOICE_ACCOUNT_CONNECTED => 'e-fatura hesabı bağlandı',
             self::INVOICE_ACCOUNT_DISCONNECTED => 'e-fatura hesabı kaldırıldı',
+            self::MEMBER_INVITED => 'Ekibe davet gönderildi',
+            self::MEMBER_JOINED => 'Ekibe katıldı',
+            self::MEMBER_ROLE_CHANGED => 'Ekip üyesinin rolü değişti',
+            self::MEMBER_REMOVED => 'Ekipten çıkarıldı',
+            self::INVITATION_CANCELLED => 'Davet iptal edildi',
         });
     }
 }

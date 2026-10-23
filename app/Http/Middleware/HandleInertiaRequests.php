@@ -2,9 +2,12 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Identity\Enums\Permission;
+use App\Domain\Identity\Enums\TenantRole;
 use App\Domain\Identity\Support\OnboardingProgress;
 use App\Domain\Identity\Support\SuperAdmin;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -61,6 +64,36 @@ class HandleInertiaRequests extends Middleware
                     'name' => $tenant->name,
                 ];
             },
+            // S7 · rolün yetkileri — menü ve düğmeler yalnız GÖRÜNÜM için
+            // okur; yetkinin kendisi `AuthorizeTenantRoute`'tadır. Kapanış
+            // gerekçesi `tenant` ile aynı (rol de rota seviyesinde kurulur).
+            'permissions' => function () use ($request): array {
+                $role = $request->attributes->get('tenant_role');
+
+                return $role instanceof TenantRole
+                    ? array_map(static fn (Permission $p): string => $p->value, $role->permissions())
+                    : [];
+            },
+            'tenantRole' => function () use ($request): ?array {
+                $role = $request->attributes->get('tenant_role');
+
+                return $role instanceof TenantRole ? ['value' => $role->value, 'label' => $role->label()] : null;
+            },
+            // Birden çok firmanın üyesi olan kullanıcıya firma seçici.
+            'memberships' => function () use ($request): array {
+                if ($request->user() === null || $request->attributes->get('tenant') === null) {
+                    return [];
+                }
+
+                return DB::table('tenant_users')
+                    ->join('tenants', 'tenants.id', '=', 'tenant_users.tenant_id')
+                    ->where('tenant_users.user_id', $request->user()->id)
+                    ->where('tenants.status', 'active')
+                    ->orderBy('tenants.name')
+                    ->get(['tenants.id', 'tenants.name'])
+                    ->map(fn (object $t): array => ['id' => $t->id, 'name' => $t->name])
+                    ->all();
+            },
             'auth' => [
                 'user' => $request->user() === null ? null : [
                     'id' => $request->user()->id,
@@ -112,7 +145,12 @@ class HandleInertiaRequests extends Middleware
             // Yan fayda: Inertia kısmi yenilemede (partial reload)
             // çağrılmayan prop'u atlar ve üç `exists()` sorgusu boşuna
             // koşmaz.
+            //
+            // S7 · kurulum adımlarını (kanal bağla, ürün gönder) yalnız
+            // yapabilecek olan görür: depo/salt okunur üyeye tıklayınca 403
+            // veren bir şerit gösterilmez.
             'onboarding' => fn (): ?array => $request->attributes->get('tenant') === null
+                || ! ($request->attributes->get('tenant_role')?->allows(Permission::CHANNELS_MANAGE) ?? false)
                 ? null
                 : (new OnboardingProgress)->forCurrentTenant(),
         ];

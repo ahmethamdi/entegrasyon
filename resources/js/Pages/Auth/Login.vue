@@ -12,6 +12,7 @@ defineProps({
 
 const page = usePage();
 const success = computed(() => page.props.flash?.success);
+const warning = computed(() => page.props.flash?.warning);
 
 const form = useForm({
     email: '',
@@ -46,6 +47,9 @@ function submit() {
                 <p class="mt-1">{{ $t('Giriş yap, Shopify mağazan otomatik bağlansın. Hesabın yoksa kayıt ol.') }}</p>
             </div>
 
+            <p v-if="warning" class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                {{ warning }}
+            </p>
             <p v-if="success" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 {{ success }}
             </p>

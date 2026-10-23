@@ -23,6 +23,7 @@ use App\Http\Controllers\EtsyOAuthController;
 use App\Http\Controllers\FulfillmentController;
 use App\Http\Controllers\HelpController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\InvoiceLinkController;
 use App\Http\Controllers\InvoiceSettingsController;
 use App\Http\Controllers\LocaleController;
@@ -42,6 +43,8 @@ use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SupplierSourceController;
 use App\Http\Controllers\SyncFailureController;
+use App\Http\Controllers\TeamController;
+use App\Http\Controllers\TenantSwitchController;
 use App\Http\Controllers\WooAuthController;
 use App\Http\Middleware\EnsureCarrierShippingEnabled;
 use App\Http\Middleware\SetLocale;
@@ -147,6 +150,13 @@ Route::get('/shopify/auth/callback', [ShopifyInstallController::class, 'callback
 
 // `verified`: doğrulanmamış hesap panele giremez (B4) — gerekçe
 // EmailVerificationController'da.
+// S7 · ekip daveti bağlantısı. Kiracı grubunun DIŞINDA: davet edilen henüz
+// üye değil, çoğu zaman hesabı bile yok. İmzalı + süreli; içindeki belirteç
+// ayrıca veritabanındaki özetle doğrulanır (`AcceptInvitation`).
+Route::get('/invitations/{token}', [InvitationController::class, 'show'])
+    ->middleware(['signed:relative', 'throttle:30,1'])
+    ->name('invitations.show');
+
 // SÜPER ADMIN — platformu işleten. `tenant` ara katmanı YOK (yönetici tüm
 // kiracıların üstünde); yetki `can:superAdmin` (sunucu ayarındaki e-posta
 // listesi, `SuperAdmin`). Yetkisiz kullanıcı 403 alır.
@@ -159,7 +169,9 @@ Route::middleware(['auth', 'verified', 'can:superAdmin'])->prefix('admin')->grou
     Route::post('/plans', [AdminController::class, 'storePlan'])->name('admin.plans.store');
 });
 
-Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
+// S7 · `tenant.can` — her rota `RoutePermissions` tablosundaki yetkiyi
+// ister; tabloda olmayan rota 403 (varsayılan kapalı).
+Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function (): void {
     // Panel `/panel`'de; `/` herkese açık tanıtım sitesidir (SiteController).
     Route::get('/panel', DashboardController::class)->name('dashboard');
 
@@ -495,6 +507,16 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
         ->name('failures.index');
     Route::post('/failures/retry', [SyncFailureController::class, 'retry'])
         ->name('failures.retry');
+
+    // S7 · Ekip (yalnız sahip) ve firma değiştirme (birden çok firmanın
+    // üyesi olan kullanıcı). Yetkiler `RoutePermissions`'ta.
+    Route::get('/settings/team', [TeamController::class, 'index'])->name('team.index');
+    Route::post('/settings/team/invitations', [TeamController::class, 'invite'])->name('team.invite');
+    Route::post('/settings/team/invitations/{invitation}/resend', [TeamController::class, 'resend'])->name('team.invitations.resend');
+    Route::delete('/settings/team/invitations/{invitation}', [TeamController::class, 'cancel'])->name('team.invitations.cancel');
+    Route::put('/settings/team/members/{user}/role', [TeamController::class, 'updateRole'])->name('team.members.role');
+    Route::delete('/settings/team/members/{user}', [TeamController::class, 'remove'])->name('team.members.remove');
+    Route::post('/tenants/switch', TenantSwitchController::class)->name('tenants.switch');
 
     // Yardım (§13 · Faz 4). Kiracı verisi OKUMAZ ama panelin parçasıdır
     // ve gezinme şeridiyle birlikte görünmesi için grubun içindedir.

@@ -28,6 +28,7 @@ use App\Domain\Suppliers\Console\SyncSuppliersCommand;
 use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\PollChannelBatchesCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
+use App\Http\Middleware\AuthorizeTenantRoute;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SetLocale;
@@ -124,6 +125,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // çalışmak onları kendi üzerine yönlendirirdi.
         $middleware->alias([
             'tenant' => EstablishTenantContext::class,
+            // S7 · rol kapısı — HER ZAMAN `tenant`'tan SONRA (rolü o kurar).
+            'tenant.can' => AuthorizeTenantRoute::class,
         ]);
 
         // VEKİL SUNUCUYA GÜVEN. Üretimde istek Plesk (nginx) → Caddy →

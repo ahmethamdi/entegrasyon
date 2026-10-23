@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Middleware;
 
+use App\Domain\Identity\Enums\TenantRole;
 use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -45,10 +48,18 @@ final class EstablishTenantContext
 
         if ($tenant === null) {
             // Kiracısı yok veya oturumdaki kimlik doğrulanamadı.
-            // Oturum kapatılmaz — kullanıcı geçerli, kiracısı yok.
-            $request->session()->forget('tenant_id');
+            //
+            // S7 · OTURUM KAPATILIR. Önceden açık bırakılıyordu; ama giriş
+            // ekranı `guest`tir ve oturumu açık kullanıcıyı panele geri
+            // yollar → panel yine buraya → sonsuz yönlendirme. Ekipten
+            // çıkarılan üye bu duruma düşer. Bekleyen bir davet bağlantısı
+            // varsa kullanıcı onu yeniden açıp giriş yapabilir.
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
 
-            return redirect()->guest(route('login'));
+            return redirect()->route('login')
+                ->with('warning', __('Bu hesabın erişebildiği bir firma yok. Ekipten çıkarılmış olabilirsin; hesap sahibiyle görüş.'));
         }
 
         $request->session()->put('tenant_id', $tenant->id);
@@ -57,6 +68,17 @@ final class EstablishTenantContext
 
         // Görünümlerin ve Inertia'nın okuyabilmesi için istekte taşınır.
         $request->attributes->set('tenant', $tenant);
+
+        // S7 · rol de ÜYELİKTEN okunur, oturumdan değil: sahip bir üyenin
+        // rolünü düşürdüğünde değişiklik o üyenin SONRAKİ isteğinde geçerli
+        // olur — oturumda saklansaydı çıkış yapana kadar eski yetkiyle
+        // çalışmaya devam ederdi.
+        $request->attributes->set('tenant_role', TenantRole::fromStored(
+            TenantContext::runAsSystem(fn () => DB::table('tenant_users')
+                ->where('tenant_id', $tenant->id)
+                ->where('user_id', $user->id)
+                ->value('role')),
+        ));
 
         try {
             return $next($request);

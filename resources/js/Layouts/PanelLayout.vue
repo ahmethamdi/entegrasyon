@@ -10,6 +10,20 @@ const { t, locale } = useI18n();
 const tenantName = computed(() => page.props.tenant?.name ?? '');
 
 /*
+ * S7 · rol yetkileri. Menü YALNIZ GÖRÜNÜM: göremediği bölümün bağlantısını
+ * elle yazan üye `AuthorizeTenantRoute`'tan 403 alır. `perm` taşımayan öğe
+ * herkese görünür.
+ */
+const permissions = computed(() => page.props.permissions ?? []);
+const allowed = (item) => !item.perm || permissions.value.includes(item.perm);
+
+/* Birden çok firmanın üyesi olan kullanıcı firma değiştirir. */
+const memberships = computed(() => page.props.memberships ?? []);
+function switchTenant(event) {
+    router.post('/tenants/switch', { tenant_id: event.target.value });
+}
+
+/*
  * Sol sidebar gezinmesi (kullanıcı kararı, 21 Ağustos 2026).
  *
  * ÜST ŞERİTTEN SOL SIDEBAR'A GEÇİLDİ. Menü `/help` ile ON BİR öğeye
@@ -32,25 +46,25 @@ const navGroups = [
     {
         heading: null,
         items: [
-            { href: '/panel', label: k('Ana sayfa') },
-            { href: '/orders', label: k('Siparişler') },
-            { href: '/returns', label: k('İadeler') },
-            { href: '/questions', label: k('Müşteri soruları') },
-            { href: '/products', label: k('Ürünler') },
-            { href: '/suppliers', label: k('Tedarikçi XML') },
+            { href: '/panel', label: k('Ana sayfa'), perm: 'panel' },
+            { href: '/orders', label: k('Siparişler'), perm: 'orders.view' },
+            { href: '/returns', label: k('İadeler'), perm: 'orders.view' },
+            { href: '/questions', label: k('Müşteri soruları'), perm: 'orders.view' },
+            { href: '/products', label: k('Ürünler'), perm: 'stock.view' },
+            { href: '/suppliers', label: k('Tedarikçi XML'), perm: 'catalog.view' },
         ],
     },
     {
         heading: k('Mağazam'),
         items: [
-            { href: '/channels', label: k('Kanallar') },
+            { href: '/channels', label: k('Kanallar'), perm: 'channels.view' },
             /*
              * Onaylar GÜNLÜK işe yakındır (Trendyol reddettiği ürünün
              * sebebini burada gösteriyoruz), bu yüzden "Gelişmiş"e
              * gömülmedi. Hata grubuna da konmaz: onay kanalın NORMAL
              * süreci, arıza değil.
              */
-            { href: '/approvals', label: k('Kanal onayları') },
+            { href: '/approvals', label: k('Kanal onayları'), perm: 'catalog.view' },
         ],
     },
     {
@@ -66,23 +80,23 @@ const navGroups = [
              * Kampanyalar — süreli indirim (9 Ekim). Kalıcı kanal farkı
              * Kanallar → "Fiyat kuralı"ndadır.
              */
-            { href: '/campaigns', label: k('Kampanyalar') },
+            { href: '/campaigns', label: k('Kampanyalar'), perm: 'catalog.view' },
             /*
              * Fatura ve muhasebe — Paraşüt (10 Ekim). e-Fatura ile muhasebe
              * aktarımı AYNI bağlantı ve AYNI ekrandır; iki kalem olsaydı
              * satıcı Paraşüt'ü iki kez bağlaması gerektiğini sanırdı.
              */
-            { href: '/settings/invoicing', label: k('Fatura ve muhasebe') },
+            { href: '/settings/invoicing', label: k('Fatura ve muhasebe'), perm: 'settings.view' },
             /*
              * Kargo — satıcının kendi Yurtiçi/Aras sözleşmesi (S6).
              * Acil kapatma anahtarı kapalıysa (`shipping.enabled`) gizlenir.
              */
-            { href: '/settings/shipping', label: k('Kargo'), feature: 'carrierShipping' },
+            { href: '/settings/shipping', label: k('Kargo'), feature: 'carrierShipping', perm: 'settings.view' },
             /*
              * Katkı raporu (S1) — sipariş başına KDV dahil katkı, beklenen ve
              * gerçekleşen ayrı; her rakam ayrıntıda kaynağına iner.
              */
-            { href: '/reports/contribution', label: k('Katkı raporu') },
+            { href: '/reports/contribution', label: k('Katkı raporu'), perm: 'finance.view' },
         ],
     },
     {
@@ -97,10 +111,10 @@ const navGroups = [
         heading: k('Gelişmiş'),
         collapsible: true,
         items: [
-            { href: '/mappings', label: k('Kategori eşleştirme') },
-            { href: '/reconciliation', label: k('Fiyat ve stok kontrolü') },
-            { href: '/failures', label: k('Gönderilemeyenler') },
-            { href: '/metrics', label: k('Sistem durumu') },
+            { href: '/mappings', label: k('Kategori eşleştirme'), perm: 'catalog.view' },
+            { href: '/reconciliation', label: k('Fiyat ve stok kontrolü'), perm: 'catalog.view' },
+            { href: '/failures', label: k('Gönderilemeyenler'), perm: 'catalog.view' },
+            { href: '/metrics', label: k('Sistem durumu'), perm: 'catalog.view' },
         ],
     },
 ];
@@ -112,9 +126,10 @@ const accountNav = computed(() => [
      * rotadaki `can:superAdmin`'dedir, bağlantıyı elle yazan 403 alır.
      */
     ...(page.props.auth?.user?.isSuperAdmin ? [{ href: '/admin', label: k('Yönetim') }] : []),
-    { href: '/billing', label: k('Abonelik') },
+    { href: '/settings/team', label: k('Ekip'), perm: 'team.manage' },
+    { href: '/billing', label: k('Abonelik'), perm: 'billing.manage' },
     { href: '/help', label: k('Yardım') },
-]);
+].filter(allowed));
 
 /* Dil seçenekleri — her biri KENDİ dilinde yazılır. */
 const languages = [
@@ -124,10 +139,10 @@ const languages = [
 
 /* Telefon alt menüsü — sıklık sırası; ikonlar 20×20 çizgi. */
 const tabItems = [
-    { href: '/panel', label: k('Ana sayfa'), icon: 'M3 9l7-6 7 6v8H3z M8 17v-5h4v5' },
-    { href: '/orders', label: k('Siparişler'), icon: 'M4 4h12l-1 12H5z M7 4a3 3 0 016 0' },
-    { href: '/products', label: k('Ürünler'), icon: 'M3 6l7-3 7 3-7 3z M3 6v8l7 3 7-3V6 M10 9v8' },
-    { href: '/channels', label: k('Kanallar'), icon: 'M8 12l4-4 M6.5 9.5l-2 2a3 3 0 004 4l2-2 M13.5 10.5l2-2a3 3 0 00-4-4l-2 2' },
+    { href: '/panel', label: k('Ana sayfa'), perm: 'panel', icon: 'M3 9l7-6 7 6v8H3z M8 17v-5h4v5' },
+    { href: '/orders', label: k('Siparişler'), perm: 'orders.view', icon: 'M4 4h12l-1 12H5z M7 4a3 3 0 016 0' },
+    { href: '/products', label: k('Ürünler'), perm: 'stock.view', icon: 'M3 6l7-3 7 3-7 3z M3 6v8l7 3 7-3V6 M10 9v8' },
+    { href: '/channels', label: k('Kanallar'), perm: 'channels.view', icon: 'M8 12l4-4 M6.5 9.5l-2 2a3 3 0 004 4l2-2 M13.5 10.5l2-2a3 3 0 00-4-4l-2 2' },
 ];
 
 const currentPath = computed(() => page.url.split('?')[0]);
@@ -299,7 +314,16 @@ function logout() {
                     <p>
                         <BrandMark size="md" />
                     </p>
-                    <p class="mt-0.5 truncate text-xs font-medium text-stone-500">
+                    <select
+                        v-if="memberships.length > 1"
+                        :value="page.props.tenant?.id"
+                        :aria-label="t('Firma')"
+                        class="mt-1 w-full truncate rounded border border-stone-200 bg-white px-1.5 py-0.5 text-xs font-medium text-stone-600"
+                        @change="switchTenant"
+                    >
+                        <option v-for="m in memberships" :key="m.id" :value="m.id">{{ m.name }}</option>
+                    </select>
+                    <p v-else class="mt-0.5 truncate text-xs font-medium text-stone-500">
                         {{ tenantName }}
                     </p>
                 </div>
@@ -322,7 +346,7 @@ function logout() {
             </div>
 
             <nav class="flex-1 overflow-y-auto px-2 py-2" :aria-label="t('Ana menü')">
-                <div v-for="(group, groupIndex) in navGroups" :key="group.heading ?? 'ana'">
+                <div v-for="(group, groupIndex) in navGroups.filter((g) => g.items.some(allowed))" :key="group.heading ?? 'ana'">
                     <button
                         v-if="group.collapsible"
                         type="button"
@@ -342,7 +366,7 @@ function logout() {
                     </p>
 
                     <ul v-show="!group.collapsible || advancedOpen" :class="groupIndex === 0 ? 'pt-1' : ''">
-                        <li v-for="item in group.items.filter((i) => !i.feature || page.props.features?.[i.feature])" :key="item.href ?? item.label">
+                        <li v-for="item in group.items.filter((i) => (!i.feature || page.props.features?.[i.feature]) && allowed(i))" :key="item.href ?? item.label">
                             <span
                                 v-if="item.soon"
                                 class="flex items-center justify-between rounded px-3 py-2 text-sm text-stone-400"
@@ -553,7 +577,7 @@ function logout() {
                 :aria-label="t('Hızlı menü')"
             >
                 <Link
-                    v-for="item in tabItems"
+                    v-for="item in tabItems.filter(allowed)"
                     :key="item.href"
                     :href="item.href"
                     :aria-current="isActive(item.href) ? 'page' : undefined"

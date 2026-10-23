@@ -10,9 +10,11 @@ use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Identity\Models\TenantInvitation;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Support\Tenancy\TenantContext;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Plan kotasını uygular — yaratmayı engeller.
@@ -140,6 +142,13 @@ final class EnforceQuota
                 ->where('created_at', '>=', self::periodStart())
                 ->where('status', '!=', Invoice::STATUS_FAILED)
                 ->count(),
+            // Bekleyen (süresi dolmamış) davet de koltuk tutar: saymasaydı
+            // sınırdaki hesap aynı anda on davet gönderip hepsini kabul
+            // ettirebilirdi.
+            QuotaMetric::USERS => DB::table('tenant_users')
+                ->where('tenant_id', TenantContext::idOrFail())
+                ->count()
+                + TenantInvitation::query()->pending()->where('expires_at', '>', now())->count(),
         };
     }
 

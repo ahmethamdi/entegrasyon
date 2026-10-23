@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Auth;
 
+use App\Domain\Identity\Actions\AcceptInvitation;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\User;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\ShopifyInstallController;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -34,8 +36,15 @@ final class RegisteredUserController extends Controller
 {
     public function create(Request $request): InertiaResponse
     {
+        $invitation = InvitationController::pending($request);
+
         return Inertia::render('Auth/Register', [
             'shopifyInstall' => self::shopifyPrefill($request),
+            // S7 · davetle gelen: e-posta sabit, firma SORULMAZ.
+            'invitation' => $invitation === null ? null : [
+                'email' => $invitation['email'],
+                'tenant' => $invitation['tenant'],
+            ],
         ]);
     }
 
@@ -56,22 +65,40 @@ final class RegisteredUserController extends Controller
         ];
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, AcceptInvitation $accept): RedirectResponse
     {
+        // S7 · DAVETLE KAYIT: oturumda geçerli davet varsa ve adres onunla
+        // aynıysa yeni firma AÇILMAZ, kullanıcı davet eden ekibe katılır.
+        // Firma açılsaydı her davetli boş bir "kendi firmasıyla" doğar ve
+        // panel ona önce o boş firmayı gösterirdi.
+        $invitation = InvitationController::pending($request);
+        $joining = $invitation !== null
+            && strcasecmp($invitation['email'], trim((string) $request->input('email'))) === 0;
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'company' => ['required', 'string', 'max:255'],
+            'company' => [$joining ? 'nullable' : 'required', 'string', 'max:255'],
         ]);
 
         // Doğrulama YARATMADAN ÖNCE biter: yarım kiracı bırakılmaz.
-        $user = DB::transaction(function () use ($validated, $request): User {
+        $user = DB::transaction(function () use ($validated, $request, $joining, $invitation, $accept): User {
             $user = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => $validated['password'],   // model 'hashed' cast eder
             ]);
+
+            if ($joining) {
+                // Kabul adresi doğrulanmış sayar (davet o adrese gitti).
+                $accept->run($invitation['token'], $user);
+                $request->session()->forget(InvitationController::SESSION_KEY);
+                $request->session()->forget('url.intended');
+                $request->session()->put('tenant_id', $invitation['tenantId']);
+
+                return $user;
+            }
 
             (new CreateTenant)->run(
                 name: $validated['company'],
