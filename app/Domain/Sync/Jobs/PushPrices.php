@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Jobs;
 
+use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Registry\AdapterRegistry;
@@ -17,6 +18,7 @@ use App\Domain\Sync\Jobs\Concerns\DeadLettersWhenAbandoned;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Domain\Sync\Support\AdapterReportedFailure;
 use App\Domain\Sync\Support\ChannelBatchRecorder;
+use App\Domain\Sync\Support\ConnectionPushLock;
 use App\Domain\Sync\Support\PriceBatchBuilder;
 use App\Domain\Sync\Support\RetryPolicy;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -64,6 +66,9 @@ final class PushPrices implements ShouldQueue
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
+
+    /** Bağlantıda başka paket giderken iş bu kadar sonra yeniden denenir. */
+    public const LOCKED_RETRY_SECONDS = 1;
 
     public function __construct(
         public readonly string $operationId,
@@ -143,6 +148,34 @@ final class PushPrices implements ShouldQueue
             return;
         }
 
+        // TEK GÖNDERİCİ — bağlantıya aynı anda tek fiyat paketi gider
+        // (`ConnectionPushLock`; stok tarafında yük testinde bulunan
+        // deadlock ve eski değerin yeniyi ezmesi aynı desendir).
+        $lock = app(ConnectionPushLock::class);
+
+        if (! $lock->acquire($connectionId, SyncDomain::PRICE)) {
+            $this->release(self::LOCKED_RETRY_SECONDS);
+
+            return;
+        }
+
+        try {
+            $this->sendBatch($operation, $adapter, $connectionId, $builder, $recorder, $breaker, $limiter, $batches);
+        } finally {
+            $lock->release($connectionId, SyncDomain::PRICE);
+        }
+    }
+
+    private function sendBatch(
+        SyncOperation $operation,
+        SupportsPricing&ChannelAdapter $adapter,
+        string $connectionId,
+        PriceBatchBuilder $builder,
+        SyncResultRecorder $recorder,
+        CircuitBreaker $breaker,
+        ChannelRateLimiter $limiter,
+        ChannelBatchRecorder $batches,
+    ): void {
         // HIZ SINIRI — kota tükendiyse kanalı hiç dövme. 429 almak da kotayı
         // harcar ve bazı kanallarda ceza süresi başlatır.
         if (! $limiter->attempt($connectionId, $adapter->rateLimitProfile())) {

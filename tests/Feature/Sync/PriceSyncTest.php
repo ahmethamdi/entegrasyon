@@ -24,6 +24,7 @@ use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Jobs\PushPrices;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\ConnectionPushLock;
 use App\Domain\Sync\Support\DetectStuckSyncOperations;
 use App\Domain\Sync\Support\PriceBatchBuilder;
 use App\Domain\Sync\Support\SyncResultRecorder;
@@ -552,6 +553,52 @@ final class PriceSyncTest extends TestCase
             2,
             (int) $state->synced_version,
             'synced_version ilerlemedi — satır sonsuza kadar kirli görünür ve her turda yeniden gönderilir.',
+        );
+    }
+
+    /**
+     * BAĞLANTIDA BAŞKA FİYAT PAKETİ GİDERKEN İKİNCİSİ GÖNDERİLMEZ.
+     *
+     * Stok tarafında yük testinde bulunan desen (S7): builder'ın
+     * `lockForUpdate`'i transaction dışında olduğu için iki iş aynı
+     * operasyonları toplayıp ikisi de gönderiyordu. Kilit BAŞKA bir
+     * oturumda tutulur — aynı oturumda advisory kilit yeniden girilebilir.
+     */
+    #[Test]
+    public function a_second_price_sender_on_the_same_connection_waits_instead_of_pushing(): void
+    {
+        [$tenant, $product, $variant] = $this->makeProduct(price: 100.00, withVariant: true);
+
+        Http::fake(['*' => Http::response(['update' => [['id' => 11]]], 200)]);
+
+        [$operationId, $connectionId] = $this->asTenant($tenant, function () use ($tenant, $variant): array {
+            $this->listingFor($variant, externalId: '11');
+            $listing = Listing::query()->firstOrFail();
+
+            return [$this->openPriceOperation($tenant, $listing)->id, $listing->channel_connection_id];
+        });
+
+        config(['database.connections.push_lock_probe' => config('database.connections.'.config('database.default'))]);
+        $other = DB::connection('push_lock_probe');
+        $key = ConnectionPushLock::key($connectionId, SyncDomain::PRICE);
+        $other->select('SELECT pg_advisory_lock(hashtextextended(?, 0))', [$key]);
+
+        try {
+            $job = (new PushPrices($operationId, $tenant->id))->withFakeQueueInteractions();
+            $job->handle(app(PriceBatchBuilder::class), app(SyncResultRecorder::class), app(AdapterRegistry::class));
+
+            $job->assertReleased(delay: PushPrices::LOCKED_RETRY_SECONDS);
+            Http::assertNothingSent();
+        } finally {
+            $other->select('SELECT pg_advisory_unlock(hashtextextended(?, 0))', [$key]);
+        }
+
+        $this->runPriceJob($tenant, $operationId);
+
+        $this->assertSame(
+            SyncOperationStatus::COMPLETED,
+            $this->asTenant($tenant, fn () => SyncOperation::query()->findOrFail($operationId))->status,
+            'Kilit bırakılınca fiyat gitmeli.',
         );
     }
 
