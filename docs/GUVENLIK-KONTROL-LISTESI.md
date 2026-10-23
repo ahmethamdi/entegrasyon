@@ -279,6 +279,10 @@ ekosisteminde sürekli akar ve her biri CI'ı kırsaydı ekip taramayı
 
 ## Yük testi
 
+**Uçtan uca Black Friday senaryosu (webhook → işçiler → 5 sahte kanal):**
+`tests/Load/black-friday.php` · sonuçlar ve bulgular `docs/YUK-TESTI-2026-10.md`
+(23 Ekim 2026: bağlantı başına tek gönderici kilidi bu testte bulundu).
+
 §11'in "yük testi" maddesi `loadtest:sync` komutuyla karşılanıyor.
 Ölçülen şey HTTP değil **senkron hattıdır** — gerekçe ve son ölçüm için
 `app/Support/LoadTest/SyncPipelineLoadTest.php` sınıf başlığına bakın.
