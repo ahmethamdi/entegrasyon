@@ -12,8 +12,8 @@ declare(strict_types=1);
 */
 
 return [
-    // Acil kapatma anahtarı. Açıkken özellik panelde Beta rozetiyle görünür
-    // (21 Eki kararı: doğrulanmamış entegrasyonlar Beta olarak açık).
+    // Acil kapatma anahtarı. Açıkken özellik panelde normal görünür
+    // (23 Eki kararı: Beta rozeti kaldırıldı).
     // Kapalıyken kargo ekranı/rotaları 404, sipariş ekranında bölüm yok ve
     // yoklama turu firmaya istek GÖNDERMEZ. Firmaya istek zaten yalnız
     // satıcı kendi web servis bilgisini girince gider — varsayılan durumda

@@ -33,7 +33,8 @@ final class ShippingSettingsController extends Controller
             'carriers' => array_map(fn (string $provider): array => [
                 'code' => $provider,
                 'name' => CarrierAccount::displayName($provider),
-                'beta' => true,
+                // 23 Eki kullanıcı kararı: Beta değil, normal özellik.
+                'beta' => false,
                 // Durum sorgusu: Yurtiçi kargoya verileni kendisi bildirir;
                 // Aras'ta satıcı "kargoya verdim" der.
                 'autoTracking' => $provider === CarrierAccount::PROVIDER_YURTICI,

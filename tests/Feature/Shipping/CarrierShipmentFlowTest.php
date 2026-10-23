@@ -77,7 +77,7 @@ final class CarrierShipmentFlowTest extends TestCase
         $response->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/Shipping')
             ->where('carriers.0.code', 'yurtici')
-            ->where('carriers.0.beta', true)
+            ->where('carriers.0.beta', false)
             ->where('carriers.0.account.status', 'connected')
             ->where('carriers.0.account.username', '•••-ws')
             ->where('carriers.1.account', null));

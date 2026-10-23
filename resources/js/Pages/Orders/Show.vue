@@ -104,7 +104,7 @@ const invoiceBadges = {
     failed: { text: k('Fatura kesilemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
 };
 
-// S6 · Kargo II (Beta) — satıcının kendi Yurtiçi/Aras sözleşmesi.
+// S6 · Kargo II — satıcının kendi Yurtiçi/Aras sözleşmesi.
 const carrierBadges = {
     pending: { text: k('Açılıyor'), class: 'bg-stone-50 text-stone-700 border-stone-200' },
     creating: { text: k('Açılıyor'), class: 'bg-stone-50 text-stone-700 border-stone-200' },
@@ -467,14 +467,13 @@ function stamp(value) {
         </datalist>
 
         <!--
-            KARGO GÖNDERİSİ (S6, Beta) — satıcının kendi Yurtiçi/Aras
+            KARGO GÖNDERİSİ (S6) — satıcının kendi Yurtiçi/Aras
             sözleşmesi. Alıcı kanaldan anlık okunur; etiket hazır olması
             kargoya verildi demek değildir.
         -->
         <template v-if="order.carrierChannelSupported || order.carrierShipment">
             <h2 class="mt-10 flex items-center gap-2 text-sm font-semibold text-stone-900">
                 {{ t('Kargo gönderisi') }}
-                <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">Beta</span>
             </h2>
 
             <div class="mt-3 rounded-lg border border-stone-200 bg-white px-4 py-3">
