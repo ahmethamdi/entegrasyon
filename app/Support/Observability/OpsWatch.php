@@ -44,6 +44,7 @@ final class OpsWatch
             ...$this->guard('circuit', fn () => $this->openCircuits()),
             ...$this->guard('rate_limit', fn () => $this->rateLimits()),
             ...$this->guard('dead', fn () => $this->deadOperations()),
+            ...$this->guard('ai', fn () => $this->aiErrors()),
         ]);
     }
 
@@ -142,6 +143,34 @@ final class OpsWatch
             'title' => 'Ölü senkron işlemleri arttı',
             'body' => sprintf('Son 1 saatte %d senkron işlemi gönderilemedi (eşik %d). Gönderilemeyenler ekranında hata sınıflarına bakın.', $count, $limit),
         ]] : [];
+    }
+
+    /**
+     * S8 · AI öneri çağrılarının son 1 saatteki hata oranı (tüm sistem).
+     * Az çağrıda oran yanıltır (1/1 = %100); en az çağrı eşiği aşılmalı.
+     *
+     * @return list<array{key: string, title: string, body: string}>
+     */
+    private function aiErrors(): array
+    {
+        $row = DB::table('ai_usage')
+            ->where('created_at', '>', now()->subHour())
+            ->selectRaw("count(*) AS total, count(*) FILTER (WHERE status = 'error') AS errors")
+            ->first();
+
+        $total = (int) ($row->total ?? 0);
+        $errors = (int) ($row->errors ?? 0);
+        $limit = (int) config('entegrasyon.ops.ai_error_rate_percent');
+
+        if ($total < (int) config('entegrasyon.ops.ai_error_min_calls') || $errors * 100 <= $total * $limit) {
+            return [];
+        }
+
+        return [[
+            'key' => 'ai:errors',
+            'title' => 'AI öneri hataları arttı',
+            'body' => sprintf('Son 1 saatte %d AI çağrısının %d tanesi yapılamadı (eşik %%%d). Anahtarı ve Anthropic durumunu kontrol edin; ai_usage.error sütununa bakın.', $total, $errors, $limit),
+        ]];
     }
 
     /**

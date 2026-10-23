@@ -98,6 +98,33 @@ return [
         // Son 1 saatte ölen (dead) senkron işlemi, tüm sistem.
         'dead_operations_1h' => (int) env('OPS_DEAD_OPERATIONS_1H', 20),
         'throttle_seconds' => (int) env('OPS_ALERT_THROTTLE_SECONDS', 3600),
+        // Son 1 saatte AI öneri çağrısı hata oranı (yüzde) ve en az çağrı sayısı.
+        'ai_error_rate_percent' => (int) env('OPS_AI_ERROR_RATE_PERCENT', 30),
+        'ai_error_min_calls' => (int) env('OPS_AI_ERROR_MIN_CALLS', 5),
+    ],
+
+    /*
+    | S8 · AI ile listeleme (Claude).
+    |
+    | ANAHTAR YOKSA ÖZELLİK YOKTUR: panelde düğme çizilmez, rota 404 döner.
+    | Yarım bir ekran (düğme var, her tıklamada hata) satıcıya bozuk ürün
+    | gibi görünürdü. `AI_LISTING_ENABLED=false` anahtar varken de kapatır.
+    |
+    | Model seçimi: başlık/açıklama hızlı ve ucuz modelle; öznitelik ve
+    | kategori (görsel + uzun değer listesi) kaliteli modelle.
+    */
+    'ai' => [
+        'enabled' => (bool) env('AI_LISTING_ENABLED', true),
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model_fast' => env('AI_MODEL_FAST', 'claude-haiku-5-5'),
+        'model_quality' => env('AI_MODEL_QUALITY', 'claude-sonnet-5-5'),
+        'timeout_seconds' => (int) env('AI_TIMEOUT_SECONDS', 60),
+        // Kategori önerisinde modele giden aday sayısı (bizim ağacımızdan).
+        'category_candidates' => (int) env('AI_CATEGORY_CANDIDATES', 40),
+        // Bu güvenin altındaki kategori önerisi panelde işaretlenir.
+        'low_confidence' => (int) env('AI_LOW_CONFIDENCE', 60),
+        // Öznitelik başına modele gösterilen en çok değer.
+        'max_values_per_attribute' => (int) env('AI_MAX_VALUES_PER_ATTRIBUTE', 300),
     ],
 
     /*

@@ -44,6 +44,10 @@ final class PlanSeeder extends Seeder
         // Kullanıcı sayısı (S7 · 23 Ekim 2026) — sahip dahil, bekleyen davet
         // koltuk tutar. Varsayılan: free 1, starter 3, pro 10, business sınırsız.
         $users = QuotaMetric::USERS->value;
+        // Aylık AI öneri hakkı (S8 · 23 Ekim 2026): free 20, starter 300,
+        // pro 2000, business 10000. Kurumsalda da SINIR VAR: her öneri
+        // jeton harcar; sınırsız hak tek bir döngüyle faturayı patlatırdı.
+        $ai = QuotaMetric::AI_SUGGESTIONS->value;
 
         $plans = [
             [
@@ -54,7 +58,7 @@ final class PlanSeeder extends Seeder
                 'shopify_price_usd' => null,
                 // Denemek için yeterli, üretim için değil: satıcı ürünü
                 // gerçekten kanala gönderip akışı görebilmeli.
-                'limits' => [$products => 25, $channels => 1, $invoices => 20, $users => 1],
+                'limits' => [$products => 25, $channels => 1, $invoices => 20, $users => 1, $ai => 20],
                 'is_public' => true,
             ],
             [
@@ -63,7 +67,7 @@ final class PlanSeeder extends Seeder
                 'price_monthly' => 499,
                 // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
                 'shopify_price_usd' => 9.99,
-                'limits' => [$products => 500, $channels => 2, $invoices => 300, $users => 3],
+                'limits' => [$products => 500, $channels => 2, $invoices => 300, $users => 3, $ai => 300],
                 'is_public' => true,
             ],
             [
@@ -72,7 +76,7 @@ final class PlanSeeder extends Seeder
                 'price_monthly' => 1499,
                 // Shopify Billing USD (TL desteklenmiyor) — kullanıcı kararı 5 Eki.
                 'shopify_price_usd' => 29.99,
-                'limits' => [$products => 5000, $channels => 5, $invoices => 2000, $users => 10],
+                'limits' => [$products => 5000, $channels => 5, $invoices => 2000, $users => 10, $ai => 2000],
                 'is_public' => true,
             ],
             [
@@ -84,7 +88,7 @@ final class PlanSeeder extends Seeder
                 // Limit YOK = SINIRSIZ. `null` yerine anahtarı hiç
                 // yazmamak da aynı anlama gelir; burada NİYET açık
                 // olsun diye açıkça null yazılıyor.
-                'limits' => [$products => null, $channels => null, $invoices => null, $users => null],
+                'limits' => [$products => null, $channels => null, $invoices => null, $users => null, $ai => 10000],
                 'is_public' => true,
             ],
         ];

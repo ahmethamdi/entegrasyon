@@ -50,6 +50,13 @@ enum QuotaMetric: string
     /** S7 · ekip üyesi + bekleyen davet (sahip dahil). */
     case USERS = 'users';
 
+    /**
+     * S8 · bu takvim ayında yapılan AI öneri çağrısı — DÖNEMSEL. Yapılamayan
+     * çağrı (ağ/sağlayıcı hatası) sayılmaz; kurallardan geçmeyen yanıt
+     * sayılır (jeton harcandı).
+     */
+    case AI_SUGGESTIONS = 'ai_suggestions_monthly';
+
     /** Kullanıcıya gösterilen ad — hata mesajında geçer. */
     public function label(): string
     {
@@ -59,6 +66,7 @@ enum QuotaMetric: string
             self::CHANNELS => 'kanal bağlantısı',
             self::INVOICES => 'aylık fatura',
             self::USERS => 'kullanıcı',
+            self::AI_SUGGESTIONS => 'aylık AI önerisi',
         });
     }
 
@@ -75,6 +83,7 @@ enum QuotaMetric: string
             self::CHANNELS => 'Daha fazla kanal bağlamak için planını yükselt.',
             self::INVOICES => 'Bu ay daha fazla fatura kesmek için planını yükselt.',
             self::USERS => 'Daha fazla kişi davet etmek için planını yükselt.',
+            self::AI_SUGGESTIONS => 'Bu ay daha fazla AI önerisi almak için planını yükselt.',
         });
     }
 
@@ -92,6 +101,7 @@ enum QuotaMetric: string
             self::CHANNELS => 'Kanal bağlantısı kotan doldu (:current/:limit). Daha fazla kanal bağlamak için planını yükselt.',
             self::INVOICES => 'Bu ayki fatura kotan doldu (:current/:limit). Daha fazla fatura kesmek için planını yükselt.',
             self::USERS => 'Kullanıcı kotan doldu (:current/:limit). Daha fazla kişi davet etmek için planını yükselt.',
+            self::AI_SUGGESTIONS => 'Bu ayki AI öneri hakkın doldu (:current/:limit). Daha fazla öneri için planını yükselt.',
         }, ['current' => $current, 'limit' => $limit]);
     }
 }

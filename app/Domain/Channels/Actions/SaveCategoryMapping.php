@@ -71,8 +71,9 @@ final class SaveCategoryMapping
                 // Elle yapılan eşleştirme DOĞRULANMIŞ doğar: satıcı bizzat
                 // seçti ve ayrıca onaylatmak gereksiz iş yüküdür. Otomatik
                 // öneri (`mapped_by = 'auto'`) doğrulanmamış kalır ve
-                // panelde ayrı gösterilir.
-                'verified_at' => $mappedBy === 'user' ? now() : null,
+                // panelde ayrı gösterilir. AI önerisi (`ai`, S8) satıcı
+                // ONAYLAYINCA yazılır; onay doğrulamadır.
+                'verified_at' => in_array($mappedBy, ['user', 'ai'], true) ? now() : null,
             ],
         );
     }

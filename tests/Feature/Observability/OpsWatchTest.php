@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Observability;
 
+use App\Domain\Ai\Models\AiUsage;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
@@ -135,6 +136,32 @@ final class OpsWatchTest extends TestCase
         $this->dead(3);
 
         $this->assertSame(['dead:system'], array_column(app(OpsWatch::class)->findings(), 'key'));
+    }
+
+    /** S8 · AI hata oranı: az çağrıda susar, eşik altında susar, üstünde öter. */
+    #[Test]
+    public function ai_call_failures_raise_an_alert_only_above_the_rate_and_volume(): void
+    {
+        config(['entegrasyon.ops.ai_error_rate_percent' => 30, 'entegrasyon.ops.ai_error_min_calls' => 5]);
+
+        $calls = function (int $ok, int $errors): void {
+            DB::table('ai_usage')->delete();
+
+            $this->asTenant($this->tenant, function () use ($ok, $errors): void {
+                foreach ([...array_fill(0, $ok, 'ok'), ...array_fill(0, $errors, 'error')] as $status) {
+                    AiUsage::query()->create(['kind' => 'content', 'model' => 'claude-haiku-5-5', 'status' => $status]);
+                }
+            });
+        };
+
+        $calls(0, 4);   // 4 çağrı < en az 5
+        $this->assertNotContains('ai:errors', array_column(app(OpsWatch::class)->findings(), 'key'));
+
+        $calls(7, 3);   // %30 — eşiği aşmıyor
+        $this->assertNotContains('ai:errors', array_column(app(OpsWatch::class)->findings(), 'key'));
+
+        $calls(6, 4);   // %40
+        $this->assertContains('ai:errors', array_column(app(OpsWatch::class)->findings(), 'key'));
     }
 
     #[Test]

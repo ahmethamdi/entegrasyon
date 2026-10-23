@@ -48,6 +48,7 @@ final class PlanLimitContractTest extends TestCase
         $this->assertSame('channels', QuotaMetric::CHANNELS->value);
         $this->assertSame('invoices_monthly', QuotaMetric::INVOICES->value);
         $this->assertSame('users', QuotaMetric::USERS->value);
+        $this->assertSame('ai_suggestions_monthly', QuotaMetric::AI_SUGGESTIONS->value);
     }
 
     /** Varsayılan plan kodu da sözleşmedir — aboneliksiz kiracı ona düşer. */
@@ -82,6 +83,7 @@ final class PlanLimitContractTest extends TestCase
         $this->assertSame(2, $raw['channels']);
         $this->assertSame(300, $raw['invoices_monthly']);
         $this->assertSame(3, $raw['users']);
+        $this->assertSame(300, $raw['ai_suggestions_monthly']);
     }
 
     /** Varsayılan plan seed'de VARDIR — yoksa kota hiç uygulanmaz. */
@@ -119,5 +121,7 @@ final class PlanLimitContractTest extends TestCase
 
         $this->assertNull($business->limitFor(QuotaMetric::PRODUCTS));
         $this->assertNull($business->limitFor(QuotaMetric::CHANNELS));
+        // AI önerisi kurumsalda da sınırlıdır (her çağrı jeton harcar).
+        $this->assertSame(10000, $business->limitFor(QuotaMetric::AI_SUGGESTIONS));
     }
 }

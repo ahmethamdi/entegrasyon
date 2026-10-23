@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Ai\Clients\AnthropicLanguageModel;
+use App\Domain\Ai\Contracts\LanguageModel;
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Support\StripePaymentGateway;
 use App\Domain\Catalog\Support\ActiveCampaigns;
@@ -35,6 +37,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(ActiveCampaigns::class);
 
         $this->app->bind(PaymentGateway::class, StripePaymentGateway::class);
+        // S8 · Claude; testler `FakeLanguageModel` bağlar (SDK kendi HTTP istemcisiyle çıkar).
+        $this->app->bind(LanguageModel::class, AnthropicLanguageModel::class);
     }
 
     public function boot(): void

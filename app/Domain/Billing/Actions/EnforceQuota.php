@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Billing\Actions;
 
+use App\Domain\Ai\Models\AiUsage;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Billing\Models\Plan;
@@ -149,6 +150,10 @@ final class EnforceQuota
                 ->where('tenant_id', TenantContext::idOrFail())
                 ->count()
                 + TenantInvitation::query()->pending()->where('expires_at', '>', now())->count(),
+            QuotaMetric::AI_SUGGESTIONS => AiUsage::query()
+                ->where('created_at', '>=', self::periodStart())
+                ->where('status', '!=', AiUsage::STATUS_ERROR)
+                ->count(),
         };
     }
 

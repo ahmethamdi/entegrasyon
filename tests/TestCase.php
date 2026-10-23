@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests;
 
+use App\Domain\Ai\Contracts\LanguageModel;
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Channels\Support\OutboundUrlGuard;
 use App\Domain\Identity\Models\Tenant;
@@ -15,11 +16,14 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\Ai\FakeLanguageModel;
 use Tests\Support\Billing\FakePaymentGateway;
 
 abstract class TestCase extends BaseTestCase
 {
     protected FakePaymentGateway $payments;
+
+    protected FakeLanguageModel $ai;
 
     /**
      * RefreshDatabase SİLMEDEN önce: veritabanı adı `_test` ile bitmiyorsa DUR.
@@ -72,6 +76,11 @@ abstract class TestCase extends BaseTestCase
         // Aynı gerekçe, ödeme tarafı: Stripe SDK'sı curl kullanır ve
         // yukarıdaki kural onu YAKALAMAZ. Test ödeme sağlayıcısına çıkmaz.
         $this->app->instance(PaymentGateway::class, $this->payments = new FakePaymentGateway);
+
+        // Aynı gerekçe, AI tarafı (S8): Anthropic SDK'sı kendi HTTP
+        // istemcisiyle çıkar. Anahtar testte YOKTUR; AI testi kendisi açar.
+        $this->app->instance(LanguageModel::class, $this->ai = new FakeLanguageModel);
+        config(['entegrasyon.ai.api_key' => null]);
 
         // SSRF koruması istek anında DNS çözer; test ağa ÇIKMAZ. Her ad
         // genel bir adrese çözülür — iç ağ senaryosunu sınayan test kendi
