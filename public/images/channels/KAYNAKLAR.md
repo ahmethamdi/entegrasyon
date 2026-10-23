@@ -18,6 +18,7 @@ Dosyalar yerelde durur (CDN'den yüklenmez).
 | Trendyol | trendyol.png | https://cdn.dsmcdn.com/sfweb/images/apple-icon-180.png | Resmî apple-touch-icon (180×180) |
 | n11 | n11.png | https://n11scdn.akamaized.net/a1/org/26/06/22/46/33/24/20/13/92/26/12/52/988359710264570852.png | Resmî apple-touch-icon (1000→256) |
 | Amazon | amazon.png | https://www.amazon.com.tr/favicon.ico | Resmî favicon (48×48); simple-icons'ta yok |
+| İdefix | idefix.png | https://asset.idefix.com/images/app-icons/180x180.png | Resmî apple-touch-icon (180×180), 24 Eki 2026 |
 | Ticimax | — | ticimax.com Cloudflare doğrulaması arkasında, logo alınamadı | Kartta yalnız ad gösterilir |
 
 ## Kare ikonlar (`icon/`) — kartlar ve menü için (21 Eki 2026)
@@ -35,4 +36,5 @@ Kartlarda aynı boyutlu kare kutu kullanılır; yazı-logosu yerine markanın ka
 | ikas | icon/ikas.png | https://ikas.com/favicon.ico (256→128) |
 | Çiçeksepeti | icon/ciceksepeti.png | https://cdn.ciceksepeti.com/Themes/Ciceksepeti/Assets/images/apple/apple-touch-icon-152x152.png (128'e küçültüldü) |
 | eBay | icon/ebay.png | https://pages.ebay.com/favicon.ico (64×64) |
+| İdefix | icon/idefix.png | https://asset.idefix.com/images/app-icons/180x180.png (128'e küçültüldü) |
 | Ticimax | — | Logo alınamadı; kartta gri kare içinde "T" harf rozeti (logo değil) |

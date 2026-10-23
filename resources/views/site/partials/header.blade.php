@@ -14,7 +14,7 @@
     $loggedIn = $isLoggedIn ?? false;
     $t = fn (string $tr, string $enText): string => $en ? $enText : $tr;
 
-    $turkey = ['trendyol', 'hepsiburada', 'n11', 'pazarama', 'ciceksepeti'];
+    $turkey = ['trendyol', 'hepsiburada', 'n11', 'pazarama', 'ciceksepeti', 'idefix'];
     $abroad = ['amazon', 'ebay', 'etsy', 'otto', 'kaufland'];
     $byCode = collect($channels ?? [])->keyBy('code');
     $pick = fn (array $codes) => collect($codes)->map(fn ($c) => $byCode->get($c))->filter()->values()->all();

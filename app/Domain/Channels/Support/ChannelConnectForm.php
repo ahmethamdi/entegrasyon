@@ -10,6 +10,7 @@ use App\Domain\Channels\Adapters\Ciceksepeti\CiceksepetiAdapter;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyApp;
 use App\Domain\Channels\Adapters\Hepsiburada\HepsiburadaAdapter;
+use App\Domain\Channels\Adapters\Idefix\IdefixAdapter;
 use App\Domain\Channels\Adapters\Ikas\IkasAdapter;
 use App\Domain\Channels\Adapters\Kaufland\KauflandAdapter;
 use App\Domain\Channels\Adapters\N11\N11Adapter;
@@ -438,6 +439,41 @@ final class ChannelConnectForm
             'app_configured' => [OttoApp::class, 'configured'],
             'help' => 'Önce OTTO Partner Connect\'te (portal.otto.market) 34Pazar uygulamasını kur. '
                 .'Sonra burada kaydedip "Yetkilendir"e bas; OTTO hesabınla giriş yaptığında bağlantı tamamlanır.',
+        ],
+
+        'idefix' => [
+            // API Key + API Secret → `X-API-KEY: base64(key:secret)` (24 Eki
+            // 2026, developer.idefix.com "Authorization"). Adlar `api_key`/
+            // `api_secret` DEĞİL: o çift `ChannelHttpClient`'ta Basic auth'a
+            // çevrilirdi.
+            'secrets' => [
+                [
+                    'name' => IdefixAdapter::API_KEY_SECRET,
+                    'label' => 'API Key',
+                    'placeholder' => '',
+                ],
+                [
+                    'name' => IdefixAdapter::API_SECRET_SECRET,
+                    'label' => 'API Secret Key',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'İdefix bu iki bilgiyi satıcı hesabındaki e-posta adresine gönderir. Canlı ve test ortamının bilgileri farklıdır; canlı bilgileri gir.',
+                ],
+            ],
+            'identity' => [
+                [
+                    'name' => IdefixAdapter::VENDOR_ID_KEY,
+                    'label' => 'İdefix Satıcı ID',
+                    'placeholder' => '12345',
+                    // ⚠️ YALNIZCA RAKAM: değer istek ADRESİNE girer (`/oms/{vendorId}/list`).
+                    'rules' => ['regex:/^[0-9]{1,20}$/'],
+                    'hint' => 'Satıcı paneli → Hesap Bilgilerim → Entegrasyon Bilgileri sayfasındaki Satıcı ID.',
+                ],
+            ],
+            'account' => IdefixAdapter::VENDOR_ID_KEY,
+            'oauth' => false,
+            'help' => 'İdefix satıcı panelinde Hesap Bilgilerim → Entegrasyon Bilgileri → "Yeni API Oluştur" ile API bilgilerini al ve buraya gir. '
+                .'Bu sürüm İdefix\'teki onaylı ürünlerinin stok ve fiyatını yönetir, siparişleri ve iadeleri alır; kargo İdefix anlaşmasıyla İdefix panelinden yürür.',
         ],
 
         'kaufland' => [

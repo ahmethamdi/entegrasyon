@@ -43,7 +43,7 @@
     $limit = fn (?int $v, string $unit): string => $v === null ? $t('sınırsız', 'unlimited')." {$unit}" : number_format($v, 0, ',', '.')." {$unit}";
 
     // Kanal tablosu grupları — yalnız AÇIK kanallar; başlıktaki mega menüyle aynı ayrım.
-    $turkeyCodes = ['trendyol', 'hepsiburada', 'n11', 'pazarama', 'ciceksepeti'];
+    $turkeyCodes = ['trendyol', 'hepsiburada', 'n11', 'pazarama', 'ciceksepeti', 'idefix'];
     $channelGroups = array_filter([
         $t('Türkiye pazaryerleri', 'Turkish marketplaces') => array_values(array_filter($available, fn ($c) => $c['marketplace'] && in_array($c['code'], $turkeyCodes, true))),
         $t('Yurtdışı pazaryerleri', 'International marketplaces') => array_values(array_filter($available, fn ($c) => $c['marketplace'] && ! in_array($c['code'], $turkeyCodes, true))),

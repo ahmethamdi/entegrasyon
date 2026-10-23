@@ -694,6 +694,40 @@ class ChannelTypeSeeder extends Seeder
             ],
         );
 
+        // İdefix — pazaryeri (D&R ailesi), REST + `X-API-KEY` (24 Eki 2026,
+        // developer.idefix.com). BETA: gerçek satıcı hesabıyla SINANMADI.
+        // Ürün AÇMA ve kargo bildirimi YOK (sınıf notu); onaylı ürünlerin içe
+        // aktarımı, stok/fiyat (asenkron, sonuç yoklanır), sipariş ve iade var.
+        $this->upsert(
+            ['code' => 'idefix'],
+            [
+                'name' => 'İdefix',
+                'kind' => 'marketplace',
+                'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Idefix\\IdefixAdapter',
+                'capabilities' => [
+                    'catalog' => false,
+                    'catalog_import' => true,
+                    'inventory' => true,
+                    'pricing' => true,
+                    'orders' => true,
+                    'taxonomy' => false,
+                    'approval' => false,
+                    'fulfillment' => false,
+                ],
+                'rate_limit_profile' => [
+                    // Belgede sayı yok (429 + Retry-After, `X-Api-Call-Limit`) —
+                    // temkinli 2/sn (DOĞRULANMADI). İstekte en çok 200 kalem (SSS).
+                    'requests_per_second' => 2,
+                    'burst_capacity' => 2,
+                    'max_concurrent' => 1,
+                    'max_inventory_batch' => 200,
+                    'max_price_batch' => 200,
+                ],
+                'supports_webhooks' => false,
+                'is_active' => true,
+            ],
+        );
+
         // Kaufland — pazaryeri (DE/AT/CZ/SK/PL/FR/IT/ES/NL), Seller API v2,
         // HMAC imzalı (21 Eki 2026). BETA: gerçek satıcı hesabıyla SINANMADI.
         // Ürün AÇMA yok (katalogda EAN ile var olan ürüne teklif); mevcut
