@@ -99,6 +99,29 @@ içe aktarma — hepsi kaynağa da gönderim doğurur, o zaman kaynak da hedef o
 gittiği için tekrar zararsız; paket birleştirme ek isteği emer: kalem +%24, **istek +%2**.
 Olay başına tek indeksli sorgu (`movements_variant_idx`). `0` eski davranıştır.
 
+## 4. tur (24 Ekim, S9): kur değişimi patlama dakikasında
+
+`--price-variants=500 --fx-channels=2`: 5 kanalın 2'sinde TL→USD kur çevirisi açık
+(kur 40,0000). Patlama dakikasının ilk siparişiyle USD kuru %1 oynar (40,4000) →
+çapa taşınır, iki kanalın **bütün** ilanları (4.000) yeniden fiyatlanır; aynı dakikada
+300 sipariş ve 500 varyantın fiyat değişimi de akar. Sahte kanal 150 ms, 5 istek/sn.
+
+| Ölçülen | Sonuç |
+|---|---|
+| Kur tetiği (`FetchExchangeRates::ingest`, 4.000 resync talebi) | 5,3 sn |
+| Yeni USD fiyatı tüm çevrili ilanlarda (p50 / p95 / en kötü) | 14,6 / 19,4 / 21,4 sn |
+| Sonda yanlış fiyat (çevrili 3.000 ilan + değişen 500 varyant × 5) | 0 / 0 |
+| Sipariş → stok tüm kanallarda p95 | 7,0 sn (3. turda 7,4) |
+| Deadlock / başarısız deneme / ölü işlem | 0 / 0 / 0 |
+| `price:high` tepe derinliği | 4.298 |
+| Yük bitince kuyruğun boşalması | 10 sn |
+
+Stok hattı kur dalgasından etkilenmedi (ayrı kuyruk, ayrı kilit). Not: Horizon'un
+`price:high` için TAHMİNİ bekleme süresi tepe anında 324 sn gösterdi (derinlik ×
+ortalama süre / işçi); ölçülen gerçek gecikme en kötü 21 sn. `ops:watch` kuyruk alarmı bu
+tahmine bakar — gerçek bir kur dalgasında `price:high` için bir kez yanlış alarm
+verebilir.
+
 ## Kalan riskler
 
 1. **Mutabakatın onarma süresi ölçülmedi** (sahte kanal `fetchInventory` boş döner). Yankı

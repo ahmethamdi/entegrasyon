@@ -10,6 +10,12 @@ declare(strict_types=1);
  *   docker compose exec app php tests/Load/black-friday.php [--minutes=5] [--per-minute=100]
  *       [--burst-per-minute=300] [--variants=2000] [--channels=5] [--latency-ms=150]
  *       [--price-variants=0]   (patlama dakikasında bu kadar varyantın fiyatı değişir)
+ *       [--fx-channels=0]      (S9: ilk N kanalda TL→USD kur çevirisi açık; patlama
+ *                               dakikasının başında USD kuru %1 oynar → o kanalların
+ *                               BÜTÜN ilanları yeniden fiyatlanır)
+ *
+ * --fx-channels yerel `fx_pricing_rates`/`exchange_rates` USD satırlarını geçici
+ * olarak değiştirir; tur bitince eski hâline döner.
  *
  * `loadtest:sync` hattı KUYRUĞA KADAR ölçer. Bu betik UÇTAN UCA ölçer:
  * gerçek webhook ucu → inbox → Horizon işçileri → stok düşüşü → outbox →
@@ -23,9 +29,13 @@ declare(strict_types=1);
  * zaten yoktur (`autoload-dev`).
  */
 
+use App\Domain\Catalog\Actions\FetchExchangeRates;
 use App\Domain\Catalog\Actions\SetVariantPrice;
+use App\Domain\Catalog\Models\ChannelPriceRule;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Catalog\Support\Fx\FxRates;
+use App\Domain\Catalog\Support\Fx\TcmbBulletin;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\User;
@@ -54,7 +64,7 @@ if (! app()->environment('local')) {
     exit(1);
 }
 
-$opt = getopt('', ['minutes::', 'per-minute::', 'burst-per-minute::', 'variants::', 'channels::', 'latency-ms::', 'webhook-base::', 'price-variants::', 'keep']);
+$opt = getopt('', ['minutes::', 'per-minute::', 'burst-per-minute::', 'variants::', 'channels::', 'latency-ms::', 'webhook-base::', 'price-variants::', 'fx-channels::', 'keep']);
 $minutes = (int) ($opt['minutes'] ?? 5);
 $perMinute = (int) ($opt['per-minute'] ?? 100);
 $burstPerMinute = (int) ($opt['burst-per-minute'] ?? 300);
@@ -62,11 +72,24 @@ $variantCount = (int) ($opt['variants'] ?? 2000);
 $channelCount = (int) ($opt['channels'] ?? 5);
 $latencyMs = (int) ($opt['latency-ms'] ?? 150);
 $priceVariants = (int) ($opt['price-variants'] ?? 0);
+$fxChannels = (int) ($opt['fx-channels'] ?? 0);
 $webhookBase = rtrim((string) ($opt['webhook-base'] ?? 'http://nginx'), '/');
 
 const OPENING_STOCK = 100_000;
 const HOT_SKUS = 20;        // kampanya ürünleri: siparişlerin ~%30'u bunlara düşer
 const DRAIN_TIMEOUT_S = 900;
+const FX_RATE = '40.0000';        // yük öncesi USD kuru (sentetik)
+const FX_RATE_MOVED = '40.4000';  // patlama dakikasında %1 oynamış kur
+
+function fxBulletin(string $date, string $rate): TcmbBulletin
+{
+    return TcmbBulletin::parse(<<<XML
+        <?xml version="1.0" encoding="UTF-8"?>
+        <Tarih_Date Tarih="x" Date="{$date}" Bulten_No="yuk-testi">
+          <Currency CrossOrder="0" Kod="USD" CurrencyCode="USD"><Unit>1</Unit><ForexBuying>{$rate}</ForexBuying><ForexSelling>{$rate}</ForexSelling></Currency>
+        </Tarih_Date>
+        XML);
+}
 
 $say = static fn (string $m) => fwrite(STDOUT, '['.date('H:i:s')."] {$m}\n");
 
@@ -117,6 +140,11 @@ Redis::del(LoadTestChannelAdapter::PUSHES_KEY, LoadTestChannelAdapter::REMOTE_KE
 $tenantId = null;
 $ownerId = null;
 $result = [];
+// Kur senaryosu global tabloları değiştirir: önceki USD satırları saklanır, sonda geri yazılır.
+$fxBackup = $fxChannels > 0 ? [
+    'anchor' => DB::table('fx_pricing_rates')->where('currency', 'USD')->get()->map(fn ($r) => (array) $r)->all(),
+    'rates' => DB::table('exchange_rates')->where('currency', 'USD')->get()->map(fn ($r) => (array) $r)->all(),
+] : null;
 
 try {
     // ── hazırlık ─────────────────────────────────────────────────────────
@@ -168,6 +196,23 @@ try {
 
         return [$warehouseId, $connections, $skus];
     });
+
+    if ($fxChannels > 0) {
+        // Kur dünkü bültenle kurulur; açılış gönderimi çevrilmiş fiyatla gider.
+        DB::table('fx_pricing_rates')->where('currency', 'USD')->delete();
+        DB::table('exchange_rates')->where('currency', 'USD')->delete();
+        app(FetchExchangeRates::class)->ingest(fxBulletin(now('Europe/Istanbul')->subDay()->format('m/d/Y'), FX_RATE));
+        TenantContext::runFor($tenantId, function () use ($tenantId, $connections, $fxChannels): void {
+            foreach (array_slice($connections, 0, $fxChannels) as $connectionId) {
+                ChannelPriceRule::query()->create([
+                    'tenant_id' => $tenantId, 'channel_connection_id' => $connectionId,
+                    'markup_percent' => '0', 'markup_amount' => '0', 'rounding' => 'none',
+                    'fx_enabled' => true, 'fx_currency' => 'USD', 'fx_markup_percent' => '0', 'fx_rounding' => 'none',
+                ]);
+            }
+        });
+        $say("Kur: ilk {$fxChannels} kanalda TL→USD çevirisi açık (kur ".FX_RATE.')');
+    }
 
     // Açılış stoğunun kanallara ilk gönderimi ölçüme karışmasın.
     $say('Açılış stoğu kanallara gidiyor, kuyruk boşalana kadar bekleniyor…');
@@ -223,6 +268,9 @@ try {
     $priceQueue = array_slice($skus, 0, min($priceVariants, count($skus)));
     $pricePerOrder = $priceQueue === [] ? 0 : (int) ceil(count($priceQueue) / max(1, $plan[$burstMinute]));
     $priceSetAt = [];   // sku => [t, fiyat]
+    $fxMovedAt = null;
+    $fxIngestSeconds = null;
+    $fxResynced = 0;
 
     foreach ($plan as $minute => $count) {
         $interval = 60.0 / max(1, $count);
@@ -241,6 +289,14 @@ try {
                     $nextSample = $now + 2.0;
                 }
                 usleep((int) min(50_000, max(1000, ($due - $now) * 1_000_000)));
+            }
+
+            // S9: patlama dakikasının ilk siparişiyle birlikte kur %1 oynar.
+            if ($fxChannels > 0 && $minute === $burstMinute && $fxMovedAt === null) {
+                $fxMovedAt = microtime(true);
+                $fxResynced = app(FetchExchangeRates::class)->ingest(fxBulletin(now('Europe/Istanbul')->format('m/d/Y'), FX_RATE_MOVED))['resynced'];
+                $fxIngestSeconds = microtime(true) - $fxMovedAt;
+                $say("  kur oynadı: {$fxResynced} ilan yeniden fiyatlanıyor (tetik ".round($fxIngestSeconds, 1).' sn)');
             }
 
             if ($minute === $burstMinute && $priceQueue !== []) {
@@ -392,11 +448,15 @@ try {
     $priceWrongAtEnd = 0;
     $priceNeverArrived = 0;
     if ($priceSetAt !== []) {
-        $listingsBySku = TenantContext::runAsSystem(fn () => DB::table('listings as l')
-            ->join('variants as v', 'v.id', '=', 'l.variant_id')
-            ->where('l.tenant_id', $tenantId)
-            ->whereIn('v.sku', array_keys($priceSetAt))
-            ->get(['l.id', 'v.sku', 'v.price']));
+        // Beklenen = kanala GİTMESİ gereken fiyat (kur çevirisi açık kanalda USD).
+        $listingsBySku = TenantContext::runFor($tenantId, function () use ($priceSetAt) {
+            app(FxRates::class)->forget();
+
+            return Listing::query()->with('variant')
+                ->whereHas('variant', fn ($q) => $q->whereIn('sku', array_keys($priceSetAt)))
+                ->get()
+                ->map(fn (Listing $l) => (object) ['id' => $l->id, 'sku' => $l->variant->sku, 'price' => $l->effectivePrice()]);
+        });
         $pricePushes = [];
         foreach (Redis::lrange(LoadTestChannelAdapter::PRICE_PUSHES_KEY, 0, -1) as $row) {
             [$listingId, $price, $ts] = explode('|', $row);
@@ -405,7 +465,8 @@ try {
         $remotePrice = Redis::hgetall(LoadTestChannelAdapter::REMOTE_PRICE_KEY);
         $worstBySku = [];
         foreach ($listingsBySku as $row) {
-            [$t0, $price] = $priceSetAt[$row->sku];
+            [$t0] = $priceSetAt[$row->sku];
+            $price = number_format((float) $row->price, 2, '.', '');
             if (number_format((float) ($remotePrice[$row->id] ?? -1), 2, '.', '') !== number_format((float) $row->price, 2, '.', '')) {
                 $priceWrongAtEnd++;
             }
@@ -425,6 +486,43 @@ try {
             $worstBySku[$row->sku] = max($worstBySku[$row->sku] ?? 0.0, $hit - $t0);
         }
         $priceLatency = array_values(array_filter($worstBySku, 'is_finite'));
+    }
+
+    // KUR: oynayan kurdan sonra çevrili kanallardaki her ilan yeni USD fiyatına
+    // ne kadar sürede ulaştı, sonda yanlış kalan var mı? Fiyatı ayrıca
+    // değişen varyantlar burada sayılmaz (yukarıda ölçülür).
+    $fxLatency = [];
+    $fxWrongAtEnd = 0;
+    $fxNeverArrived = 0;
+    if ($fxMovedAt !== null) {
+        $fxListings = TenantContext::runFor($tenantId, function () use ($connections, $fxChannels, $priceSetAt) {
+            app(FxRates::class)->forget();
+
+            return Listing::query()->with('variant')
+                ->whereIn('channel_connection_id', array_slice($connections, 0, $fxChannels))
+                ->whereHas('variant', fn ($q) => $q->whereNotIn('sku', array_keys($priceSetAt) ?: ['-']))
+                ->get()
+                ->map(fn (Listing $l) => [$l->id, $l->effectivePrice()]);
+        });
+        $pushesByListing = [];
+        foreach (Redis::lrange(LoadTestChannelAdapter::PRICE_PUSHES_KEY, 0, -1) as $row) {
+            [$listingId, $p, $ts] = explode('|', $row);
+            $pushesByListing[$listingId][] = [(float) $ts, number_format((float) $p, 2, '.', '')];
+        }
+        $remotePrice ??= Redis::hgetall(LoadTestChannelAdapter::REMOTE_PRICE_KEY);
+        foreach ($fxListings as [$listingId, $expected]) {
+            if (number_format((float) ($remotePrice[$listingId] ?? -1), 2, '.', '') !== $expected) {
+                $fxWrongAtEnd++;
+            }
+            $hit = null;
+            foreach ($pushesByListing[$listingId] ?? [] as [$ts, $p]) {
+                if ($ts >= $fxMovedAt && $p === $expected) {
+                    $hit = $ts;
+                    break;
+                }
+            }
+            $hit === null ? $fxNeverArrived++ : $fxLatency[] = $hit - $fxMovedAt;
+        }
     }
 
     $orders = TenantContext::runAsSystem(fn () => DB::table('orders')->where('tenant_id', $tenantId)->count());
@@ -500,6 +598,13 @@ try {
             'sonda_kanalda_yanlis_fiyat' => $priceWrongAtEnd,
             'kanala_giden_fiyat_kalemi' => (int) Redis::llen(LoadTestChannelAdapter::PRICE_PUSHES_KEY),
         ],
+        'kur' => $fxMovedAt === null ? null : [
+            'cevrili_kanal' => $fxChannels, 'kur' => FX_RATE.' → '.FX_RATE_MOVED,
+            'yeniden_fiyatlanan_ilan' => $fxResynced, 'tetik_suresi_s' => round((float) $fxIngestSeconds, 2),
+            'yeni_fiyat_tum_ilanlarda_s' => ['p50' => pct($fxLatency, 50), 'p95' => pct($fxLatency, 95), 'max' => pct($fxLatency, 100)],
+            'hic_ulasmayan_ilan' => $fxNeverArrived,
+            'sonda_yanlis_fiyat' => $fxWrongAtEnd,
+        ],
         'ops_watch_bulgu' => app(OpsWatch::class)->findings(),
     ];
 } finally {
@@ -514,6 +619,12 @@ try {
     }
     if ($ownerId !== null) {
         DB::table('users')->where('id', $ownerId)->delete();
+    }
+    if ($fxBackup !== null) {
+        DB::table('fx_pricing_rates')->where('currency', 'USD')->delete();
+        DB::table('exchange_rates')->where('currency', 'USD')->delete();
+        DB::table('fx_pricing_rates')->insert($fxBackup['anchor']);
+        DB::table('exchange_rates')->insert($fxBackup['rates']);
     }
     DB::table('channel_types')->where('code', 'loadtest')->whereNotExists(
         fn ($q) => $q->from('channel_connections')->whereColumn('channel_connections.channel_type_code', 'channel_types.code')
