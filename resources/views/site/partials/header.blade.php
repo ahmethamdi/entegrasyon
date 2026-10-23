@@ -68,10 +68,10 @@
             <img src="{{ asset('images/34pazar-logo.png') }}" alt="34Pazar" width="600" height="137" class="h-6 w-auto sm:h-[1.625rem]">
         </a>
 
-        <nav aria-label="{{ $t('Ana gezinme', 'Main navigation') }}" class="hidden xl:block">
-            <ul class="flex items-center gap-6">
+        <nav aria-label="{{ $t('Ana gezinme', 'Main navigation') }}" class="hidden self-stretch xl:flex">
+            <ul class="flex items-stretch gap-6">
                 @foreach ($groups as $key => $group)
-                    <li class="mega-item" data-mega>
+                    <li class="mega-item flex items-center" data-mega>
                         <button type="button" class="nav-link gap-1" aria-expanded="false" aria-controls="mega-{{ $key }}" data-mega-button @if ($group['match'] && request()->routeIs(...$group['match'])) aria-current="page" @endif>
                             {{ $group['label'] }}
                             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
@@ -134,7 +134,7 @@
                         </div>
                     </li>
                     @if ($key === 'cozumler')
-                        <li><a href="{{ route('site.pricing') }}" class="nav-link" @if (request()->routeIs('site.pricing')) aria-current="page" @endif>{{ $t('Fiyatlar', 'Pricing') }}</a></li>
+                        <li class="flex items-center"><a href="{{ route('site.pricing') }}" class="nav-link" @if (request()->routeIs('site.pricing')) aria-current="page" @endif>{{ $t('Fiyatlar', 'Pricing') }}</a></li>
                     @endif
                 @endforeach
             </ul>

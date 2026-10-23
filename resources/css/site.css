@@ -531,7 +531,10 @@
     }
 
     /* ── mega menü (21 Eki 2026). Gölge yok: tek ince çizgi ve beyaz zemin
-       (kurumsal, gölgesiz tasarım kararı). Hover + odak + tıklama açar. */
+       (kurumsal, gölgesiz tasarım kararı). Hover + odak + tıklama açar.
+       Öğe başlığın tam yüksekliğini kaplar (header'da self-stretch): düğme ile
+       panel arasında boşluk kalırsa fare panele inerken hover kopar, menü
+       kapanır (23 Eki 2026'da ölçülen hata: 10 px boşluk). */
     .mega-panel {
         display: none;
         position: absolute;
