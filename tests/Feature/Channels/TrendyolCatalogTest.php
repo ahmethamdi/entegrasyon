@@ -7,6 +7,7 @@ namespace Tests\Feature\Channels;
 use App\Domain\Catalog\Models\OptionDefinition;
 use App\Domain\Catalog\Models\OptionValue;
 use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\ProductChannelAttributeValue;
 use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Models\VariantOption;
@@ -14,6 +15,7 @@ use App\Domain\Channels\Actions\SaveAttributeMapping;
 use App\Domain\Channels\Actions\SaveAttributeValueMapping;
 use App\Domain\Channels\Actions\SaveCategoryMapping;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
+use App\Domain\Channels\Models\AttributeMapping;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelCategoryAttribute;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -137,6 +139,53 @@ final class TrendyolCatalogTest extends TestCase
             $this->assertSame([
                 ['attributeId' => 293, 'attributeValueId' => 4602],
             ], $attributes, 'Öznitelik ve değer KANAL kimlikleriyle gitmeli.');
+
+            return true;
+        });
+    }
+
+    /**
+     * S8 · ÜRÜN DÜZEYİ ÖZNİTELİKLER DE GİDER — varyant eşlemesi önceliklidir.
+     *
+     * Satıcının (ya da onayladığı AI önerisinin) girdiği betimleyici değer
+     * eklenir; aynı kimlik varyant seçeneğinden de geliyorsa İKİ KEZ
+     * gönderilmez. Serbest metin `customAttributeValue` ile gider.
+     */
+    #[Test]
+    public function product_level_attribute_values_are_sent_after_variant_ones(): void
+    {
+        Http::fake([
+            '*/brands/by-name*' => Http::response([['id' => 77, 'name' => 'Marka-A']], 200),
+            '*' => Http::response(['batchRequestId' => 'b-1'], 200),
+        ]);
+
+        [$tenant, $connection, $listing] = $this->scenario(withAttributes: true);
+
+        $this->asTenant($tenant, function () use ($listing): void {
+            $variant = $listing->variant()->firstOrFail();
+            $categoryId = (string) AttributeMapping::query()->value('channel_category_id');
+
+            foreach ([['293', '9999', null], ['47', '1201', null], ['58', null, 'Pamuk']] as [$attr, $value, $custom]) {
+                ProductChannelAttributeValue::query()->create([
+                    'product_id' => $variant->product_id, 'channel_category_id' => $categoryId,
+                    'external_attribute_id' => $attr, 'external_value_id' => $value, 'custom_value' => $custom,
+                ]);
+            }
+        });
+
+        $payload = $this->asTenant($tenant, fn () => app(ListingPayloadBuilder::class)->build($listing, 1));
+        $this->asTenant($tenant, fn () => $this->adapter($connection)->createListing($payload));
+
+        Http::assertSent(function ($request): bool {
+            if (! str_contains($request->url(), '/v2/products')) {
+                return false;
+            }
+
+            $this->assertSame([
+                ['attributeId' => 293, 'attributeValueId' => 4602],
+                ['attributeId' => 47, 'attributeValueId' => 1201],
+                ['attributeId' => 58, 'customAttributeValue' => 'Pamuk'],
+            ], $request->data()['items'][0]['attributes'] ?? null);
 
             return true;
         });

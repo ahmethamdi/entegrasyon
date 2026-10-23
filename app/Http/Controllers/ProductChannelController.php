@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Ai\Support\AiPanelData;
 use App\Domain\Catalog\Actions\SaveProductChannelAttributeValue;
 use App\Domain\Catalog\Actions\SetChannelPrice;
 use App\Domain\Catalog\Actions\SetImageChannelExclusion;
@@ -81,7 +82,9 @@ final class ProductChannelController extends Controller
                 // Kanal kartındaki "bu kanal başka birimle satar" notu için.
                 'currency' => $model->variants->first()?->currency,
             ],
-            'channels' => $this->channelsFor($model),
+            'channels' => $channels = $this->channelsFor($model),
+            // S8 · AI önerileri — anahtar yoksa null, bölüm çizilmez.
+            'ai' => app(AiPanelData::class)->for($model, array_column($channels, 'channelCode')),
             'images' => $this->imagesFor($model),
             'imageChannels' => $this->imageChannels(),
         ]);
@@ -371,6 +374,7 @@ final class ProductChannelController extends Controller
 
             $rows[] = [
                 'connectionId' => $connection->id,
+                'channelCode' => $connection->channel_type_code,
                 'label' => $connection->label,
                 'channel' => $connection->channelType?->name ?? $connection->channel_type_code,
                 'account' => $connection->external_account_id,
@@ -541,9 +545,15 @@ final class ProductChannelController extends Controller
             return null;
         }
 
-        if (! $adapter instanceof ValidatesPublication || $product->internal_category_id === null) {
+        // Trendyol yayın doğrulaması taşımaz ama ürün düzeyi öznitelikleri
+        // V2 gövdesine girer (S8) — satıcı burada doldurabilmeli.
+        $productLevel = $adapter instanceof ValidatesPublication || $connection->channel_type_code === 'trendyol';
+
+        if (! $productLevel || $product->internal_category_id === null) {
             return null;
         }
+
+        $autoFilled = $adapter instanceof ValidatesPublication ? $adapter->autoFilledAttributes() : [];
 
         $mapping = CategoryMapping::query()
             ->where('internal_category_id', $product->internal_category_id)
@@ -565,7 +575,7 @@ final class ProductChannelController extends Controller
         $attributes = ChannelCategoryAttribute::query()
             ->where('channel_category_id', $category->id)
             ->where('is_variant_defining', false)
-            ->whereNotIn('external_attribute_id', $adapter->autoFilledAttributes())
+            ->whereNotIn('external_attribute_id', $autoFilled)
             ->orderByDesc('is_required')
             ->orderBy('name')
             ->get()
@@ -580,7 +590,7 @@ final class ProductChannelController extends Controller
             ])
             ->all();
 
-        return ['categoryId' => $category->id, 'categoryPath' => $category->path, 'attributes' => $attributes];
+        return ['categoryId' => $category->id, 'categoryPath' => $category->path, 'attributes' => $attributes, 'autoFilled' => $autoFilled];
     }
 
     /** Betimleyici öznitelik değeri (S3) — ürün ve kategori kiracı scope'unda. */

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Support;
 
+use App\Domain\Catalog\Models\ProductChannelContent;
 use App\Domain\Sync\Models\Listing;
 use RuntimeException;
 
@@ -22,6 +23,10 @@ use RuntimeException;
  *   Başlık, açıklama ve kategori ürün satırından okunur; kanal formatına
  *   çeviriyi ADAPTER'ın Mapper'ı yapar. Bu sınıf "şunu gönder" der, "şu
  *   JSON'u gönder" demez.
+ *
+ * KANALA ÖZGÜ METİN (S8): satıcı bir kanal türü için başlık/açıklama
+ * onayladıysa (`product_channel_contents`) o kanalın yükü onu taşır; yoksa
+ * kanonik metin gider. Kategori her zaman kanoniktir.
  */
 final class ListingPayloadBuilder
 {
@@ -44,10 +49,17 @@ final class ListingPayloadBuilder
             );
         }
 
+        $channelCode = $listing->connection?->channel_type_code;
+
+        $override = $channelCode === null ? null : ProductChannelContent::query()
+            ->where('product_id', $product->id)
+            ->where('channel_type_code', $channelCode)
+            ->first();
+
         return new ListingPayload(
             listing: $listing,
-            title: $product->title,
-            description: $product->description,
+            title: $override !== null ? $override->title : $product->title,
+            description: $override !== null ? $override->description : $product->description,
             categoryId: $product->internal_category_id,
             version: $version,
         );

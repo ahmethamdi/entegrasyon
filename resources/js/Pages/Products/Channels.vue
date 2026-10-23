@@ -2,6 +2,7 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
+import AiSuggestions from '../../Components/AiSuggestions.vue';
 import WriteGuard from '../../Components/WriteGuard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
@@ -11,6 +12,8 @@ const props = defineProps({
     channels: { type: Array, default: () => [] },
     images: { type: Array, default: () => [] },
     imageChannels: { type: Array, default: () => [] },
+    // S8 · AI önerileri — anahtar yoksa null ve bölüm çizilmez.
+    ai: { type: Object, default: null },
 });
 
 /** Görsel–kanal seçimi kaydedilirken o kutu kilitlenir. */
@@ -502,6 +505,8 @@ function send(connectionId) {
                             <p v-if="!channel.requirements.attributes.length" class="mt-1 text-xs text-stone-500">{{ t('Bu kategoride ürün düzeyinde girilecek öznitelik yok.') }}</p>
                         </template>
                     </section>
+
+                    <AiSuggestions v-if="ai" :product-id="product.id" :channel="channel" :ai="ai" />
 
                     <!-- KANAL FİYATI: varyant başına; boşsa ürün fiyatı gider. -->
                     <section

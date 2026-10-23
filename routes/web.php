@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\AiSuggestionController;
 use App\Http\Controllers\AmazonOAuthController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\Auth\EmailVerificationController;
@@ -342,6 +343,13 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
         ->name('products.channel-attributes.store');
     Route::post('/products/{product}/images/{image}/channels', [ProductChannelController::class, 'updateImageChannel'])
         ->name('products.images.channels');
+    // S8 · AI ile listeleme — öneri iste / onayla / vazgeç. Anahtar yoksa 404.
+    Route::post('/products/{product}/ai-suggestions', [AiSuggestionController::class, 'store'])
+        ->name('products.ai.store');
+    Route::post('/products/{product}/ai-suggestions/{suggestion}/apply', [AiSuggestionController::class, 'apply'])
+        ->name('products.ai.apply');
+    Route::post('/products/{product}/ai-suggestions/{suggestion}/dismiss', [AiSuggestionController::class, 'dismiss'])
+        ->name('products.ai.dismiss');
 
     // Kategori ve öznitelik eşleştirme (§13 · Faz 2). Katalog aktarımının
     // ön koşulu: §14'ün `PrerequisiteGate`'i buradaki kararları okur.

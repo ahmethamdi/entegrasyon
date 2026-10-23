@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Trendyol\Catalog;
 
+use App\Domain\Catalog\Models\ProductChannelAttributeValue;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Models\VariantOption;
 use App\Domain\Catalog\Support\ChannelImages;
@@ -83,7 +84,7 @@ final class ListingMapper
             'shipmentAddressId' => $context->shipmentAddressId,
             'returningAddressId' => $context->returningAddressId,
             'images' => array_map(static fn (string $url): array => ['url' => $url], $this->imageUrls($variant)),
-            'attributes' => $this->attributes($variant->id, $category->id),
+            'attributes' => $this->attributes($variant, $category->id),
         ], static fn (mixed $value): bool => $value !== null);
     }
 
@@ -106,7 +107,7 @@ final class ListingMapper
             'title' => $payload->title,
             'description' => $payload->description ?? $payload->title,
             'images' => array_map(static fn (string $url): array => ['url' => $url], $this->imageUrls($variant)),
-            'attributes' => $this->attributes($variant->id, $category->id),
+            'attributes' => $this->attributes($variant, $category->id),
         ];
     }
 
@@ -254,9 +255,41 @@ final class ListingMapper
      * "Kumaş" özniteliğini eşleştirmediği için tüm kataloğunun
      * gitmemesi orantısız olurdu.
      *
+     * ÜRÜN DÜZEYİ ÖZNİTELİKLER (S8): satıcının (ya da onayladığı AI
+     * önerisinin) ürün sayfasında girdiği betimleyici değerler de eklenir.
+     * Varyant seçeneğinden gelen öznitelik önceliklidir — aynı kimlik iki
+     * kez gönderilmez.
+     *
+     * @return list<array<string, int|string>>
+     */
+    private function attributes(Variant $variant, string $channelCategoryId): array
+    {
+        $out = $this->variantAttributes($variant->id, $channelCategoryId);
+        $sent = array_map(static fn (array $a): string => (string) $a['attributeId'], $out);
+
+        $productValues = ProductChannelAttributeValue::query()
+            ->where('product_id', $variant->product_id)
+            ->where('channel_category_id', $channelCategoryId)
+            ->orderBy('external_attribute_id')
+            ->get();
+
+        foreach ($productValues as $value) {
+            if (in_array((string) $value->external_attribute_id, $sent, true)) {
+                continue;
+            }
+
+            $out[] = $value->external_value_id !== null
+                ? ['attributeId' => self::numericId($value->external_attribute_id), 'attributeValueId' => self::numericId($value->external_value_id)]
+                : ['attributeId' => self::numericId($value->external_attribute_id), 'customAttributeValue' => (string) $value->custom_value];
+        }
+
+        return $out;
+    }
+
+    /**
      * @return list<array{attributeId: int|string, attributeValueId: int|string}>
      */
-    private function attributes(string $variantId, string $channelCategoryId): array
+    private function variantAttributes(string $variantId, string $channelCategoryId): array
     {
         // Varyantın seçenekleri: option_definition_id → option_value_id.
         $variantOptions = VariantOption::query()
