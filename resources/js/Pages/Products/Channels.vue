@@ -2,6 +2,7 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
+import WriteGuard from '../../Components/WriteGuard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
 
@@ -241,379 +242,381 @@ function send(connectionId) {
                 </p>
             </template>
         </PageHeader>
+        <WriteGuard permission="catalog.manage">
 
-        <div
-            v-if="flashSuccess"
-            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-        >
-            {{ flashSuccess }}
-        </div>
-
-        <div
-            v-if="flashWarning"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-            {{ flashWarning }}
-        </div>
-
-        <div
-            v-if="connectionError"
-            class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
-        >
-            {{ connectionError }}
-        </div>
-
-        <!--
-            GÖRSELLER (A15): her görsel varsayılan olarak her kanala gider;
-            satıcı bir görseli belirli bir kanaldan çıkarabilir.
-        -->
-        <section v-if="imageChannels.length" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
-            <h2 class="text-sm font-medium text-stone-900">{{ t('Görseller') }}</h2>
-
-            <p v-if="!images.length" class="mt-2 text-sm text-amber-900">
-                {{ t('Bu üründe görsel yok. Görselsiz ürünü çoğu pazaryeri kabul etmez; ürünü kanaldan içe aktararak görsellerini getirebilirsin.') }}
-            </p>
-
-            <template v-else>
-                <ul class="mt-3 space-y-1 text-xs">
-                    <li v-for="channel in imageSummary" :key="channel.code">
-                        <span class="font-medium text-stone-900">{{ channel.name }}:</span>
-                        <span v-if="channel.count === 0" class="text-red-800">
-                            {{ t('hiç görsel gitmeyecek — ürün reddedilebilir.') }}
-                        </span>
-                        <span v-else-if="channel.overflow > 0" class="text-amber-900">
-                            {{ t('ilk :max görsel gider, :overflow görsel dışarıda kalır.', { max: channel.maxImages, overflow: channel.overflow }) }}
-                        </span>
-                        <span v-else class="text-stone-600">{{ t(':count görsel gider.', { count: channel.count }) }}</span>
-                    </li>
-                    <li v-if="insecureCount" class="text-amber-900">
-                        {{ t(':count görselin adresi HTTPS değil; hiçbir kanala gitmez.', { count: insecureCount }) }}
-                    </li>
-                </ul>
-
-                <ul class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <li
-                        v-for="(image, index) in images"
-                        :key="image.id"
-                        class="rounded-md border border-stone-200 p-2"
-                    >
-                        <img
-                            v-if="image.url"
-                            :src="image.url"
-                            :alt="t('Görsel :number', { number: index + 1 })"
-                            loading="lazy"
-                            class="aspect-square w-full rounded object-cover"
-                        >
-                        <div
-                            v-else
-                            class="flex aspect-square w-full items-center justify-center rounded bg-stone-100 p-2 text-center text-[10px] text-stone-500"
-                        >
-                            {{ t('HTTPS değil') }}
-                        </div>
-
-                        <p class="mt-1 font-mono text-[10px] text-stone-500">
-                            {{ t(':number. görsel', { number: index + 1 }) }}{{ image.imported ? ` · ${t('içe aktarıldı')}` : '' }}
-                        </p>
-
-                        <fieldset class="mt-2 space-y-1">
-                            <legend class="sr-only">{{ t(':number. görselin gideceği kanallar', { number: index + 1 }) }}</legend>
-                            <label
-                                v-for="channel in imageChannels"
-                                :key="channel.code"
-                                class="flex items-center gap-2 text-xs text-stone-700"
-                            >
-                                <input
-                                    type="checkbox"
-                                    :checked="goesTo(image, channel.code)"
-                                    :disabled="image.url === null || savingImage === `${image.id}:${channel.code}`"
-                                    class="rounded border-stone-300"
-                                    @change="toggleImage(image, channel.code)"
-                                >
-                                {{ channel.name }}
-                            </label>
-                        </fieldset>
-                    </li>
-                </ul>
-            </template>
-        </section>
-
-        <!--
-            Gönderilebilir kanal yoksa kullanıcıyı kanal bağlamaya yönlendir:
-            "hiç kanal yok" mesajı tek başına ne yapacağını söylemiyor.
-        -->
-        <div
-            v-if="!sorted.length"
-            class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center"
-        >
-            <p class="text-sm text-stone-600">
-                {{ t('Ürün gönderilebilecek aktif kanal yok. Kanalın sağlık kontrolünü geçmiş olması gerekiyor.') }}
-            </p>
-            <Link href="/channels" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
-                {{ t('Kanallara git') }}
-            </Link>
-        </div>
-
-        <div v-else class="mt-6 space-y-4">
-            <article
-                v-for="channel in sorted"
-                :key="channel.connectionId"
-                class="rounded-lg border border-stone-200 bg-white p-5"
+            <div
+                v-if="flashSuccess"
+                class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
             >
-                <div class="flex items-start justify-between gap-4">
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                            <h2 class="truncate text-sm font-medium text-stone-900">
-                                {{ channel.label }}
-                            </h2>
-                            <span
-                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
-                                :class="badgeClass(channel)"
-                            >
-                                {{ t(statusLabel(channel)) }}
+                {{ flashSuccess }}
+            </div>
+
+            <div
+                v-if="flashWarning"
+                class="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            >
+                {{ flashWarning }}
+            </div>
+
+            <div
+                v-if="connectionError"
+                class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+            >
+                {{ connectionError }}
+            </div>
+
+            <!--
+                GÖRSELLER (A15): her görsel varsayılan olarak her kanala gider;
+                satıcı bir görseli belirli bir kanaldan çıkarabilir.
+            -->
+            <section v-if="imageChannels.length" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+                <h2 class="text-sm font-medium text-stone-900">{{ t('Görseller') }}</h2>
+
+                <p v-if="!images.length" class="mt-2 text-sm text-amber-900">
+                    {{ t('Bu üründe görsel yok. Görselsiz ürünü çoğu pazaryeri kabul etmez; ürünü kanaldan içe aktararak görsellerini getirebilirsin.') }}
+                </p>
+
+                <template v-else>
+                    <ul class="mt-3 space-y-1 text-xs">
+                        <li v-for="channel in imageSummary" :key="channel.code">
+                            <span class="font-medium text-stone-900">{{ channel.name }}:</span>
+                            <span v-if="channel.count === 0" class="text-red-800">
+                                {{ t('hiç görsel gitmeyecek — ürün reddedilebilir.') }}
                             </span>
-                            <span
-                                v-if="channel.published && channel.pendingWork"
-                                class="whitespace-nowrap rounded-full border border-stone-300 bg-white px-2.5 py-0.5 text-xs font-medium text-stone-600"
-                            >
-                                {{ t('Bekleyen iş') }}
+                            <span v-else-if="channel.overflow > 0" class="text-amber-900">
+                                {{ t('ilk :max görsel gider, :overflow görsel dışarıda kalır.', { max: channel.maxImages, overflow: channel.overflow }) }}
                             </span>
-                        </div>
-
-                        <p class="mt-1 truncate font-mono text-xs text-stone-500">
-                            {{ channel.channel }} · {{ channel.account }}
-                        </p>
-                    </div>
-
-                    <button
-                        v-if="channel.publishEnabled"
-                        type="button"
-                        :disabled="sending === channel.connectionId"
-                        class="shrink-0 rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        @click="send(channel.connectionId)"
-                    >
-                        {{ channel.published ? t('Yeniden gönder') : t('Kanala gönder') }}
-                    </button>
-                    <span
-                        v-else
-                        class="shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600"
-                    >
-                        {{ t('Yayın kapalı') }}
-                    </span>
-                </div>
-
-                <!--
-                    Hata gerekçesi GİZLENMEZ: kullanıcı ancak bu metni görerek
-                    başlığı mı düzeltmesi gerektiğini anlayabilir.
-                -->
-                <p
-                    v-if="channel.lastError"
-                    class="mt-3 rounded bg-red-50 px-3 py-2 font-mono text-xs text-red-900"
-                >
-                    {{ t(channel.lastError) }}
-                </p>
-
-                <!--
-                    Stok/fiyat: kanal toplu işte bu satırı REDDETTİ (sonuç
-                    sonradan okunur). Gönderim hatasından ayrı: ürün kanalda,
-                    ama stoğu ya da fiyatı uygulanmadı.
-                -->
-                <p
-                    v-if="channel.stockPriceError"
-                    class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
-                >
-                    <span class="font-semibold">{{ t('Stok/fiyat kanalda uygulanmadı:') }}</span>
-                    <span class="font-mono">{{ channel.stockPriceError }}</span>
-                </p>
-
-                <!--
-                    RED SEBEBİ AYRI GÖSTERİLİR: senkron hatası "gönderemedik"
-                    demektir, red ise "gönderdik ama kanal beğenmedi". İkisi
-                    aynı kutuda birleştirilseydi satıcı hangisini
-                    düzelteceğini bilemezdi.
-                -->
-                <p
-                    v-if="channel.rejectionReason"
-                    class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
-                >
-                    {{ t('Kanal reddetti: :reason', { reason: channel.rejectionReason }) }}
-                </p>
-
-                <!--
-                    VARYANT BAŞINA SONUÇ (S3): çok varyantlı üründe her kardeş
-                    kendi durumu ve sebebiyle görünür; biri reddedildiyse
-                    kanal özetinde kaybolmaz.
-                -->
-                <section
-                    v-if="channel.published && channel.variants?.length > 1"
-                    class="mt-4 border-t border-stone-100 pt-4"
-                >
-                    <h3 class="text-xs font-medium text-stone-900">{{ t('Varyantlar') }}</h3>
-                    <ul class="mt-2 space-y-1 text-xs">
-                        <li v-for="v in channel.variants" :key="v.variantId" class="flex flex-wrap gap-x-3">
-                            <span class="font-mono text-stone-700">{{ v.sku }}</span>
-                            <span class="text-stone-500">{{ v.lifecycle ? t(lifecycleTexts[v.lifecycle] ?? lifecycleLabels[v.lifecycle] ?? v.lifecycle) : '—' }}</span>
-                            <span v-if="v.reason" class="text-amber-800">{{ v.reason }}</span>
-                            <span v-if="v.rejectionReason" class="text-amber-800">{{ t('Kanal reddetti: :reason', { reason: v.rejectionReason }) }}</span>
+                            <span v-else class="text-stone-600">{{ t(':count görsel gider.', { count: channel.count }) }}</span>
+                        </li>
+                        <li v-if="insecureCount" class="text-amber-900">
+                            {{ t(':count görselin adresi HTTPS değil; hiçbir kanala gitmez.', { count: insecureCount }) }}
                         </li>
                     </ul>
-                </section>
 
-                <!--
-                    KANAL ÖZNİTELİKLERİ (S3): kanalın zorunlu betimleyici
-                    öznitelikleri ürün düzeyinde girilir; varyant belirleyiciler
-                    (beden, renk) eşleştirme ekranından gelir.
-                -->
-                <section
-                    v-if="channel.requirements"
-                    class="mt-4 border-t border-stone-100 pt-4"
-                >
-                    <h3 class="text-xs font-medium text-stone-900">{{ t('Kanal öznitelikleri') }}</h3>
-                    <p v-if="!channel.requirements.categoryId" class="mt-1 text-xs text-amber-800">
-                        {{ t('Ürünün kategorisi bu kanalda eşleştirilmemiş; önce eşleştirme ekranından kategori seçin.') }}
-                    </p>
-                    <template v-else>
-                        <p class="mt-0.5 text-xs text-stone-500">{{ channel.requirements.categoryPath }}</p>
-                        <ul class="mt-3 space-y-2">
-                            <li v-for="attr in channel.requirements.attributes" :key="attr.id" class="flex flex-wrap items-center gap-2 text-xs">
-                                <span class="w-40 shrink-0 text-stone-700">
-                                    {{ attr.name }}<span v-if="attr.required" class="text-red-700"> *</span>
-                                </span>
-                                <select
-                                    v-if="attr.values.length"
-                                    class="min-w-0 flex-1 rounded border-stone-300 text-xs"
-                                    :value="attr.valueId ?? ''"
-                                    @change="saveAttribute(channel, attr, { value_id: $event.target.value || null, custom_value: null })"
-                                >
-                                    <option value="">{{ attr.customValue ? t('Serbest: :v', { v: attr.customValue }) : t('— seçilmedi —') }}</option>
-                                    <option v-for="v in attr.values" :key="v.id" :value="v.id">{{ v.label }}</option>
-                                </select>
-                                <input
-                                    v-if="attr.freeText"
-                                    type="text"
-                                    class="min-w-0 flex-1 rounded border-stone-300 text-xs"
-                                    :placeholder="t('Serbest değer')"
-                                    :value="attr.customValue ?? ''"
-                                    @change="saveAttribute(channel, attr, { value_id: null, custom_value: $event.target.value || null })"
-                                >
-                            </li>
-                        </ul>
-                        <p v-if="!channel.requirements.attributes.length" class="mt-1 text-xs text-stone-500">{{ t('Bu kategoride ürün düzeyinde girilecek öznitelik yok.') }}</p>
-                    </template>
-                </section>
-
-                <!-- KANAL FİYATI: varyant başına; boşsa ürün fiyatı gider. -->
-                <section
-                    v-if="channel.prices?.length"
-                    class="mt-4 border-t border-stone-100 pt-4"
-                >
-                    <h3 class="text-xs font-medium text-stone-900">{{ t('Bu kanaldaki fiyat') }}</h3>
-                    <p class="mt-0.5 text-xs text-stone-500">
-                        {{ t('Boş bırakırsan ürünün fiyatı gider. Kanala özel fiyat girersen yalnız bu kanalda o fiyat kullanılır.') }}
-                    </p>
-
-                    <ul class="mt-3 space-y-3">
-                        <li v-for="row in channel.prices" :key="row.listingId">
-                            <div class="flex flex-wrap items-end gap-3">
-                                <div class="min-w-0 flex-1">
-                                    <p class="truncate font-mono text-xs text-stone-500">{{ row.sku }}</p>
-                                    <p class="text-xs text-stone-700">
-                                        {{ t('Ürün fiyatı') }}: {{ money(row.variantPrice, row.variantCurrency) }}
-                                    </p>
-                                    <p
-                                        v-if="row.channelPrice === null && row.outgoingPrice !== null && row.outgoingPrice !== row.variantPrice"
-                                        class="text-xs text-stone-900"
-                                    >
-                                        {{ t('Fiyat kuralıyla kanala giden') }}: {{ money(row.outgoingPrice, row.outgoingCurrency) }}
-                                    </p>
-                                </div>
-
-                                <label class="block">
-                                    <span class="sr-only">{{ t(':sku için kanal fiyatı', { sku: row.sku ?? '' }) }}</span>
-                                    <span class="flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
-                                        <input
-                                            v-model="priceInputs[row.listingId]"
-                                            type="number"
-                                            min="0.01"
-                                            step="0.01"
-                                            inputmode="decimal"
-                                            :placeholder="t('Kanal fiyatı')"
-                                            class="w-32 rounded-l-md border-0 px-3 py-1.5 text-sm focus:outline-none"
-                                        >
-                                        <span class="px-2 font-mono text-xs text-stone-500">
-                                            {{ row.channelPriceCurrency ?? channel.currency ?? row.variantCurrency ?? '' }}
-                                        </span>
-                                    </span>
-                                </label>
-
-                                <button
-                                    type="button"
-                                    :disabled="savingPrice !== null"
-                                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                    @click="savePrice(row)"
-                                >
-                                    {{ savingPrice === row.listingId ? t('Kaydediliyor…') : t('Kaydet') }}
-                                </button>
-                                <button
-                                    v-if="row.channelPrice !== null"
-                                    type="button"
-                                    :disabled="savingPrice !== null"
-                                    class="text-sm text-stone-600 underline disabled:opacity-50"
-                                    @click="savePrice(row, true)"
-                                >
-                                    {{ t('Kaldır') }}
-                                </button>
+                    <ul class="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <li
+                            v-for="(image, index) in images"
+                            :key="image.id"
+                            class="rounded-md border border-stone-200 p-2"
+                        >
+                            <img
+                                v-if="image.url"
+                                :src="image.url"
+                                :alt="t('Görsel :number', { number: index + 1 })"
+                                loading="lazy"
+                                class="aspect-square w-full rounded object-cover"
+                            >
+                            <div
+                                v-else
+                                class="flex aspect-square w-full items-center justify-center rounded bg-stone-100 p-2 text-center text-[10px] text-stone-500"
+                            >
+                                {{ t('HTTPS değil') }}
                             </div>
 
-                            <p v-if="row.floorViolation" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
-                                {{ t(row.floorViolation) }}
+                            <p class="mt-1 font-mono text-[10px] text-stone-500">
+                                {{ t(':number. görsel', { number: index + 1 }) }}{{ image.imported ? ` · ${t('içe aktarıldı')}` : '' }}
                             </p>
-                            <p v-if="row.needsChannelPrice" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
-                                {{ t('Bu kanal :currency ile satıyor, ürünün fiyatı :product. Kanal fiyatı girilmeden fiyat gönderilmez.', { currency: channel.currency, product: row.variantCurrency }) }}
-                            </p>
-                            <p v-else-if="row.channelPrice !== null" class="mt-1 text-xs text-emerald-800">
-                                {{ t('Bu kanalda :price kullanılıyor.', { price: money(row.channelPrice, row.channelPriceCurrency) }) }}
-                            </p>
+
+                            <fieldset class="mt-2 space-y-1">
+                                <legend class="sr-only">{{ t(':number. görselin gideceği kanallar', { number: index + 1 }) }}</legend>
+                                <label
+                                    v-for="channel in imageChannels"
+                                    :key="channel.code"
+                                    class="flex items-center gap-2 text-xs text-stone-700"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        :checked="goesTo(image, channel.code)"
+                                        :disabled="image.url === null || savingImage === `${image.id}:${channel.code}`"
+                                        class="rounded border-stone-300"
+                                        @change="toggleImage(image, channel.code)"
+                                    >
+                                    {{ channel.name }}
+                                </label>
+                            </fieldset>
                         </li>
                     </ul>
+                </template>
+            </section>
 
-                    <p v-if="priceErrors.price" class="mt-2 text-sm text-red-700">{{ priceErrors.price }}</p>
-                </section>
-
-                <p
-                    v-else-if="!channel.published && currencyDiffers(channel)"
-                    class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
-                >
-                    {{ t('Bu kanal :currency ile satıyor, ürünün fiyatı :product. Önce kanala gönder (ilan fiyatsız açılmaz ve hata verir), sonra burada çıkan alana :currency fiyat gir ve Yeniden gönder düğmesine bas.', { currency: channel.currency, product: product.currency }) }}
+            <!--
+                Gönderilebilir kanal yoksa kullanıcıyı kanal bağlamaya yönlendir:
+                "hiç kanal yok" mesajı tek başına ne yapacağını söylemiyor.
+            -->
+            <div
+                v-if="!sorted.length"
+                class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center"
+            >
+                <p class="text-sm text-stone-600">
+                    {{ t('Ürün gönderilebilecek aktif kanal yok. Kanalın sağlık kontrolünü geçmiş olması gerekiyor.') }}
                 </p>
+                <Link href="/channels" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
+                    {{ t('Kanallara git') }}
+                </Link>
+            </div>
 
-                <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
-                    <div>
-                        <dt class="text-stone-500">{{ t('Kanaldaki kimlik') }}</dt>
-                        <dd class="mt-0.5 font-mono text-stone-900">
-                            {{ channel.externalId ?? '—' }}
-                        </dd>
+            <div v-else class="mt-6 space-y-4">
+                <article
+                    v-for="channel in sorted"
+                    :key="channel.connectionId"
+                    class="rounded-lg border border-stone-200 bg-white p-5"
+                >
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h2 class="truncate text-sm font-medium text-stone-900">
+                                    {{ channel.label }}
+                                </h2>
+                                <span
+                                    class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                                    :class="badgeClass(channel)"
+                                >
+                                    {{ t(statusLabel(channel)) }}
+                                </span>
+                                <span
+                                    v-if="channel.published && channel.pendingWork"
+                                    class="whitespace-nowrap rounded-full border border-stone-300 bg-white px-2.5 py-0.5 text-xs font-medium text-stone-600"
+                                >
+                                    {{ t('Bekleyen iş') }}
+                                </span>
+                            </div>
+
+                            <p class="mt-1 truncate font-mono text-xs text-stone-500">
+                                {{ channel.channel }} · {{ channel.account }}
+                            </p>
+                        </div>
+
+                        <button
+                            v-if="channel.publishEnabled"
+                            type="button"
+                            :disabled="sending === channel.connectionId"
+                            class="shrink-0 rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            @click="send(channel.connectionId)"
+                        >
+                            {{ channel.published ? t('Yeniden gönder') : t('Kanala gönder') }}
+                        </button>
+                        <span
+                            v-else
+                            class="shrink-0 whitespace-nowrap rounded-full border border-stone-300 bg-stone-50 px-2.5 py-1 text-xs font-medium text-stone-600"
+                        >
+                            {{ t('Yayın kapalı') }}
+                        </span>
                     </div>
-                    <div>
-                        <dt class="text-stone-500">{{ t('Yaşam döngüsü') }}</dt>
-                        <dd class="mt-0.5 text-stone-700">{{ channel.lifecycle ? t(lifecycleTexts[channel.lifecycle] ?? channel.lifecycle) : '—' }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-stone-500">{{ t('Kanalda görüntüle') }}</dt>
-                        <dd class="mt-0.5">
-                            <a
-                                v-if="channel.externalUrl"
-                                :href="channel.externalUrl"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="text-stone-900 underline"
-                            >
-                                {{ t('Aç') }}
-                            </a>
-                            <span v-else class="text-stone-700">—</span>
-                        </dd>
-                    </div>
-                </dl>
-            </article>
-        </div>
+
+                    <!--
+                        Hata gerekçesi GİZLENMEZ: kullanıcı ancak bu metni görerek
+                        başlığı mı düzeltmesi gerektiğini anlayabilir.
+                    -->
+                    <p
+                        v-if="channel.lastError"
+                        class="mt-3 rounded bg-red-50 px-3 py-2 font-mono text-xs text-red-900"
+                    >
+                        {{ t(channel.lastError) }}
+                    </p>
+
+                    <!--
+                        Stok/fiyat: kanal toplu işte bu satırı REDDETTİ (sonuç
+                        sonradan okunur). Gönderim hatasından ayrı: ürün kanalda,
+                        ama stoğu ya da fiyatı uygulanmadı.
+                    -->
+                    <p
+                        v-if="channel.stockPriceError"
+                        class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                    >
+                        <span class="font-semibold">{{ t('Stok/fiyat kanalda uygulanmadı:') }}</span>
+                        <span class="font-mono">{{ channel.stockPriceError }}</span>
+                    </p>
+
+                    <!--
+                        RED SEBEBİ AYRI GÖSTERİLİR: senkron hatası "gönderemedik"
+                        demektir, red ise "gönderdik ama kanal beğenmedi". İkisi
+                        aynı kutuda birleştirilseydi satıcı hangisini
+                        düzelteceğini bilemezdi.
+                    -->
+                    <p
+                        v-if="channel.rejectionReason"
+                        class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                    >
+                        {{ t('Kanal reddetti: :reason', { reason: channel.rejectionReason }) }}
+                    </p>
+
+                    <!--
+                        VARYANT BAŞINA SONUÇ (S3): çok varyantlı üründe her kardeş
+                        kendi durumu ve sebebiyle görünür; biri reddedildiyse
+                        kanal özetinde kaybolmaz.
+                    -->
+                    <section
+                        v-if="channel.published && channel.variants?.length > 1"
+                        class="mt-4 border-t border-stone-100 pt-4"
+                    >
+                        <h3 class="text-xs font-medium text-stone-900">{{ t('Varyantlar') }}</h3>
+                        <ul class="mt-2 space-y-1 text-xs">
+                            <li v-for="v in channel.variants" :key="v.variantId" class="flex flex-wrap gap-x-3">
+                                <span class="font-mono text-stone-700">{{ v.sku }}</span>
+                                <span class="text-stone-500">{{ v.lifecycle ? t(lifecycleTexts[v.lifecycle] ?? lifecycleLabels[v.lifecycle] ?? v.lifecycle) : '—' }}</span>
+                                <span v-if="v.reason" class="text-amber-800">{{ v.reason }}</span>
+                                <span v-if="v.rejectionReason" class="text-amber-800">{{ t('Kanal reddetti: :reason', { reason: v.rejectionReason }) }}</span>
+                            </li>
+                        </ul>
+                    </section>
+
+                    <!--
+                        KANAL ÖZNİTELİKLERİ (S3): kanalın zorunlu betimleyici
+                        öznitelikleri ürün düzeyinde girilir; varyant belirleyiciler
+                        (beden, renk) eşleştirme ekranından gelir.
+                    -->
+                    <section
+                        v-if="channel.requirements"
+                        class="mt-4 border-t border-stone-100 pt-4"
+                    >
+                        <h3 class="text-xs font-medium text-stone-900">{{ t('Kanal öznitelikleri') }}</h3>
+                        <p v-if="!channel.requirements.categoryId" class="mt-1 text-xs text-amber-800">
+                            {{ t('Ürünün kategorisi bu kanalda eşleştirilmemiş; önce eşleştirme ekranından kategori seçin.') }}
+                        </p>
+                        <template v-else>
+                            <p class="mt-0.5 text-xs text-stone-500">{{ channel.requirements.categoryPath }}</p>
+                            <ul class="mt-3 space-y-2">
+                                <li v-for="attr in channel.requirements.attributes" :key="attr.id" class="flex flex-wrap items-center gap-2 text-xs">
+                                    <span class="w-40 shrink-0 text-stone-700">
+                                        {{ attr.name }}<span v-if="attr.required" class="text-red-700"> *</span>
+                                    </span>
+                                    <select
+                                        v-if="attr.values.length"
+                                        class="min-w-0 flex-1 rounded border-stone-300 text-xs"
+                                        :value="attr.valueId ?? ''"
+                                        @change="saveAttribute(channel, attr, { value_id: $event.target.value || null, custom_value: null })"
+                                    >
+                                        <option value="">{{ attr.customValue ? t('Serbest: :v', { v: attr.customValue }) : t('— seçilmedi —') }}</option>
+                                        <option v-for="v in attr.values" :key="v.id" :value="v.id">{{ v.label }}</option>
+                                    </select>
+                                    <input
+                                        v-if="attr.freeText"
+                                        type="text"
+                                        class="min-w-0 flex-1 rounded border-stone-300 text-xs"
+                                        :placeholder="t('Serbest değer')"
+                                        :value="attr.customValue ?? ''"
+                                        @change="saveAttribute(channel, attr, { value_id: null, custom_value: $event.target.value || null })"
+                                    >
+                                </li>
+                            </ul>
+                            <p v-if="!channel.requirements.attributes.length" class="mt-1 text-xs text-stone-500">{{ t('Bu kategoride ürün düzeyinde girilecek öznitelik yok.') }}</p>
+                        </template>
+                    </section>
+
+                    <!-- KANAL FİYATI: varyant başına; boşsa ürün fiyatı gider. -->
+                    <section
+                        v-if="channel.prices?.length"
+                        class="mt-4 border-t border-stone-100 pt-4"
+                    >
+                        <h3 class="text-xs font-medium text-stone-900">{{ t('Bu kanaldaki fiyat') }}</h3>
+                        <p class="mt-0.5 text-xs text-stone-500">
+                            {{ t('Boş bırakırsan ürünün fiyatı gider. Kanala özel fiyat girersen yalnız bu kanalda o fiyat kullanılır.') }}
+                        </p>
+
+                        <ul class="mt-3 space-y-3">
+                            <li v-for="row in channel.prices" :key="row.listingId">
+                                <div class="flex flex-wrap items-end gap-3">
+                                    <div class="min-w-0 flex-1">
+                                        <p class="truncate font-mono text-xs text-stone-500">{{ row.sku }}</p>
+                                        <p class="text-xs text-stone-700">
+                                            {{ t('Ürün fiyatı') }}: {{ money(row.variantPrice, row.variantCurrency) }}
+                                        </p>
+                                        <p
+                                            v-if="row.channelPrice === null && row.outgoingPrice !== null && row.outgoingPrice !== row.variantPrice"
+                                            class="text-xs text-stone-900"
+                                        >
+                                            {{ t('Fiyat kuralıyla kanala giden') }}: {{ money(row.outgoingPrice, row.outgoingCurrency) }}
+                                        </p>
+                                    </div>
+
+                                    <label class="block">
+                                        <span class="sr-only">{{ t(':sku için kanal fiyatı', { sku: row.sku ?? '' }) }}</span>
+                                        <span class="flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                                            <input
+                                                v-model="priceInputs[row.listingId]"
+                                                type="number"
+                                                min="0.01"
+                                                step="0.01"
+                                                inputmode="decimal"
+                                                :placeholder="t('Kanal fiyatı')"
+                                                class="w-32 rounded-l-md border-0 px-3 py-1.5 text-sm focus:outline-none"
+                                            >
+                                            <span class="px-2 font-mono text-xs text-stone-500">
+                                                {{ row.channelPriceCurrency ?? channel.currency ?? row.variantCurrency ?? '' }}
+                                            </span>
+                                        </span>
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        :disabled="savingPrice !== null"
+                                        class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                        @click="savePrice(row)"
+                                    >
+                                        {{ savingPrice === row.listingId ? t('Kaydediliyor…') : t('Kaydet') }}
+                                    </button>
+                                    <button
+                                        v-if="row.channelPrice !== null"
+                                        type="button"
+                                        :disabled="savingPrice !== null"
+                                        class="text-sm text-stone-600 underline disabled:opacity-50"
+                                        @click="savePrice(row, true)"
+                                    >
+                                        {{ t('Kaldır') }}
+                                    </button>
+                                </div>
+
+                                <p v-if="row.floorViolation" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
+                                    {{ t(row.floorViolation) }}
+                                </p>
+                                <p v-if="row.needsChannelPrice" class="mt-1 rounded bg-red-50 px-2 py-1 text-xs text-red-900">
+                                    {{ t('Bu kanal :currency ile satıyor, ürünün fiyatı :product. Kanal fiyatı girilmeden fiyat gönderilmez.', { currency: channel.currency, product: row.variantCurrency }) }}
+                                </p>
+                                <p v-else-if="row.channelPrice !== null" class="mt-1 text-xs text-emerald-800">
+                                    {{ t('Bu kanalda :price kullanılıyor.', { price: money(row.channelPrice, row.channelPriceCurrency) }) }}
+                                </p>
+                            </li>
+                        </ul>
+
+                        <p v-if="priceErrors.price" class="mt-2 text-sm text-red-700">{{ priceErrors.price }}</p>
+                    </section>
+
+                    <p
+                        v-else-if="!channel.published && currencyDiffers(channel)"
+                        class="mt-3 rounded bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                    >
+                        {{ t('Bu kanal :currency ile satıyor, ürünün fiyatı :product. Önce kanala gönder (ilan fiyatsız açılmaz ve hata verir), sonra burada çıkan alana :currency fiyat gir ve Yeniden gönder düğmesine bas.', { currency: channel.currency, product: product.currency }) }}
+                    </p>
+
+                    <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
+                        <div>
+                            <dt class="text-stone-500">{{ t('Kanaldaki kimlik') }}</dt>
+                            <dd class="mt-0.5 font-mono text-stone-900">
+                                {{ channel.externalId ?? '—' }}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt class="text-stone-500">{{ t('Yaşam döngüsü') }}</dt>
+                            <dd class="mt-0.5 text-stone-700">{{ channel.lifecycle ? t(lifecycleTexts[channel.lifecycle] ?? channel.lifecycle) : '—' }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-stone-500">{{ t('Kanalda görüntüle') }}</dt>
+                            <dd class="mt-0.5">
+                                <a
+                                    v-if="channel.externalUrl"
+                                    :href="channel.externalUrl"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="text-stone-900 underline"
+                                >
+                                    {{ t('Aç') }}
+                                </a>
+                                <span v-else class="text-stone-700">—</span>
+                            </dd>
+                        </div>
+                    </dl>
+                </article>
+            </div>
+        </WriteGuard>
     </PanelLayout>
 </template>

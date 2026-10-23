@@ -4,12 +4,15 @@ import { ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 defineProps({
     campaigns: { type: Array, default: () => [] },
 });
 
 const { t } = useI18n();
+// S7 · kampanya iptali ve yenisi yazma işidir.
+const { can } = usePermissions();
 
 // Yürürlükte olan yeşil, planlanan sakin mavi; bitmiş/iptal gri.
 const badges = {
@@ -45,7 +48,7 @@ function cancel(campaign) {
             :title="t('Kampanyalar')"
             :description="t('Seçtiğin ürünlere, seçtiğin kanallarda belirli tarihler arasında indirim. Bitince fiyatlar kendiliğinden geri döner.')"
         >
-            <template #actions>
+            <template v-if="can('catalog.manage')" #actions>
                 <Link
                     href="/campaigns/create"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
@@ -81,7 +84,7 @@ function cancel(campaign) {
                 </div>
 
                 <button
-                    v-if="campaign.status === 'active' || campaign.status === 'scheduled'"
+                    v-if="(campaign.status === 'active' || campaign.status === 'scheduled') && can('catalog.manage')"
                     type="button"
                     :disabled="cancelling !== null"
                     class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"

@@ -6,6 +6,7 @@ import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { channelName, money, orderState, toneClass } from '../../lib/format.js';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
@@ -14,6 +15,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// Toplu işlem (kargo, etiket, fatura) depo işidir; salt okunur üye seçim kutusu görmez.
+const { can } = usePermissions();
 
 const search = ref(props.filters.search ?? '');
 
@@ -177,7 +180,7 @@ function placedAt(row) {
         </div>
 
         <div
-            v-if="selected.length"
+            v-if="selected.length && can('orders.work')"
             class="mt-6 flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-stone-50 px-4 py-3"
             role="region"
             :aria-label="t('Toplu işlem')"
@@ -208,7 +211,7 @@ function placedAt(row) {
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
-                        <th class="w-10 px-4 py-2.5">
+                        <th v-if="can('orders.work')" class="w-10 px-4 py-2.5">
                             <input type="checkbox" :checked="allSelected" :aria-label="t('Tümünü seç')" @change="toggleAll">
                         </th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Sipariş') }}</th>
@@ -228,7 +231,7 @@ function placedAt(row) {
                         class="border-b border-stone-100"
                         :class="row.hasOversold ? 'bg-red-50/60 hover:bg-red-100/60' : (row.hasUnmatched ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-stone-50')"
                     >
-                        <td class="px-4 py-3">
+                        <td v-if="can('orders.work')" class="px-4 py-3">
                             <input v-model="selected" type="checkbox" :value="row.id" :aria-label="t('Siparişi seç')">
                         </td>
 

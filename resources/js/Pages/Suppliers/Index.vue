@@ -4,12 +4,15 @@ import { computed } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 defineProps({
     sources: { type: Array, default: () => [] },
 });
 
 const { t } = useI18n();
+// S7 · tedarikçi ekleme yazma işidir.
+const { can } = usePermissions();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success);
 
@@ -43,7 +46,7 @@ function when(iso) {
         <p v-if="flashSuccess" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
 
         <div class="mt-6">
-            <Link href="/suppliers/create" class="inline-flex rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700">
+            <Link v-if="can('catalog.manage')" href="/suppliers/create" class="inline-flex rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700">
                 {{ t('Tedarikçi ekle') }}
             </Link>
         </div>

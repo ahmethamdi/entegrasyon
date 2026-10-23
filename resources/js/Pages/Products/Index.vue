@@ -5,6 +5,7 @@ import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { money } from '../../lib/format.js';
 import { k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 /*
  * ÜRÜNLER + STOK — tek ekran (5 Ekim panel yenilemesi, kullanıcı kararı).
@@ -22,6 +23,13 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+/*
+ * S7 · depo üyesi stoğu yalnız GÖRÜR: sayım, ekleme, içe aktarma ve ürün
+ * ayrıntısı (katalog ekranları) ona kapalı. Bağlantı yerine düz metin
+ * basılır — tıklanıp 403 görülmesin.
+ */
+const { can } = usePermissions();
+const productLink = computed(() => (can('catalog.view') ? Link : 'span'));
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success);
 
@@ -177,7 +185,7 @@ function submitCount() {
 <template>
     <PanelLayout>
         <PageHeader :section="t('Mağazam')" :title="t('Ürünler')">
-            <template #actions>
+            <template v-if="can('catalog.manage')" #actions>
                 <!--
                     Toplu içe aktarma ürün ekleme AKIŞININ YANINDA durur:
                     satıcı 500 ürünü tek tek giremeyeceğini tam burada görür.
@@ -260,7 +268,7 @@ function submitCount() {
         <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
             <template v-if="tabCounts.all === 0 && !filters.search">
                 <p class="text-sm text-stone-600">{{ t('Henüz ürün yok. Mağazandan çekebilir ya da elle ekleyebilirsin.') }}</p>
-                <Link href="/products/import" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
+                <Link v-if="can('catalog.manage')" href="/products/import" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
                     {{ t('Ürünleri içe aktar') }}
                 </Link>
             </template>
@@ -321,7 +329,7 @@ function submitCount() {
                                 </div>
                                 <div class="shrink-0 text-right">
                                     <button
-                                        v-if="row.countVariantId"
+                                        v-if="row.countVariantId && can('catalog.manage')"
                                         type="button"
                                         class="rounded-md border border-transparent px-2 py-1 font-mono text-sm font-semibold tabular-nums transition hover:border-stone-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-ring"
                                         :class="stockTone(row.available)"
@@ -334,6 +342,7 @@ function submitCount() {
                                     <p v-if="row.shortfall" class="text-[11px] text-red-700">{{ t(':count adet eksik', { count: row.shortfall }) }}</p>
                                 </div>
                                 <Link
+                                    v-if="can('catalog.view')"
                                     :href="`/products/${row.id}/edit`"
                                     class="shrink-0 text-xs text-stone-600 underline-offset-2 hover:underline"
                                 >
@@ -376,18 +385,19 @@ function submitCount() {
                 <!-- ── tek ürün ──────────────────────────────────── -->
                 <li v-else :class="item.row.shortfall ? 'bg-red-50/50' : ''">
                     <div class="flex items-center gap-3 px-4 py-3">
-                        <Link :href="`/products/${item.row.id}/edit`" class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-stone-100" tabindex="-1" aria-hidden="true">
+                        <component :is="productLink" :href="`/products/${item.row.id}/edit`" class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-stone-100" tabindex="-1" aria-hidden="true">
                             <img v-if="item.row.imageUrl" :src="item.row.imageUrl" alt="" class="h-full w-full object-cover" loading="lazy">
                             <svg v-else class="m-auto mt-3.5 h-5 w-5 text-stone-300" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 6l7-3 7 3-7 3z M3 6v8l7 3 7-3V6 M10 9v8" stroke-linecap="round" stroke-linejoin="round" /></svg>
-                        </Link>
+                        </component>
 
                         <div class="min-w-0 flex-1">
-                            <Link
+                            <component
+                                :is="productLink"
                                 :href="`/products/${item.row.id}/edit`"
                                 class="block truncate text-sm font-medium text-stone-900 underline-offset-2 hover:underline"
                             >
                                 {{ item.row.title }}
-                            </Link>
+                            </component>
                             <p class="mt-0.5 text-xs text-stone-500">
                                 <span class="font-mono whitespace-nowrap">{{ item.row.sku }}</span>
                                 · {{ priceText(item.row.price, item.row.maxPrice, item.row.currency) }}
@@ -396,7 +406,8 @@ function submitCount() {
                                 </span>
                             </p>
                             <div class="mt-1.5 flex flex-wrap gap-1">
-                                <Link
+                                <component
+                                    :is="productLink"
                                     v-for="c in item.row.channels"
                                     :key="c.id"
                                     :href="`/products/${item.row.id}/channels`"
@@ -407,9 +418,9 @@ function submitCount() {
                                     <span aria-hidden="true">{{ chipStates[c.state].mark }}</span>
                                     {{ c.label }}
                                     <span class="sr-only">— {{ t(chipStates[c.state].text) }}</span>
-                                </Link>
+                                </component>
                                 <Link
-                                    v-if="!item.row.channels.length"
+                                    v-if="!item.row.channels.length && can('catalog.manage')"
                                     :href="`/products/${item.row.id}/channels`"
                                     class="rounded-full border border-dashed border-stone-300 px-2 py-0.5 text-[11px] text-stone-600 transition hover:bg-stone-100"
                                 >
@@ -420,7 +431,7 @@ function submitCount() {
 
                         <div class="shrink-0 text-right">
                             <button
-                                v-if="item.row.countVariantId"
+                                v-if="item.row.countVariantId && can('catalog.manage')"
                                 type="button"
                                 class="rounded-md border border-stone-200 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums transition hover:border-stone-400 hover:bg-white focus-visible:outline-2 focus-visible:outline-ring"
                                 :class="stockTone(item.row.available)"

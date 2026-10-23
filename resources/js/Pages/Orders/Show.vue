@@ -5,12 +5,14 @@ import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { channelName, money, orderState, toneClass } from '../../lib/format.js';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     order: { type: Object, required: true },
 });
 
 const { t } = useI18n();
+const { can } = usePermissions();
 const page = usePage();
 const flashSuccess = computed(() => page.props.flash?.success);
 
@@ -356,7 +358,7 @@ function stamp(value) {
                                 {{ t(pushBadges[fulfillment.pushStatus].text) }}
                             </span>
                             <button
-                                v-if="fulfillment.pushStatus === 'failed' && retrying !== fulfillment.id"
+                                v-if="fulfillment.pushStatus === 'failed' && retrying !== fulfillment.id && can('orders.work')"
                                 type="button"
                                 class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                 @click="openRetry(fulfillment)"
@@ -418,7 +420,7 @@ function stamp(value) {
         </p>
 
         <form
-            v-else-if="!hasActiveShipment"
+            v-else-if="!hasActiveShipment && can('orders.work')"
             class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4"
             @submit.prevent="submitShipment"
         >
@@ -503,7 +505,7 @@ function stamp(value) {
                         {{ order.carrierShipment.reason }}<template v-if="order.carrierShipment.error"> — {{ order.carrierShipment.error }}</template>
                     </p>
 
-                    <div class="mt-3 flex flex-wrap gap-2">
+                    <div v-if="can('orders.work')" class="mt-3 flex flex-wrap gap-2">
                         <a v-if="order.carrierShipment.hasZpl" :href="`/orders/${order.id}/carrier-shipment/label.zpl`" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">
                             {{ t('Etiket (ZPL)') }}
                         </a>
@@ -541,11 +543,11 @@ function stamp(value) {
                 </template>
 
                 <template v-else>
-                    <p v-if="!order.carrierAccounts.length" class="text-xs text-stone-500">
+                    <p v-if="!order.carrierAccounts.length && can('settings.manage')" class="text-xs text-stone-500">
                         {{ t('Kendi kargo sözleşmenizle gönderi açmak için') }}
                         <Link href="/settings/shipping" class="underline">{{ t('kargo ayarlarından hesabınızı bağlayın') }}</Link>.
                     </p>
-                    <div v-else class="flex flex-wrap items-center justify-between gap-3">
+                    <div v-else-if="order.carrierAccounts.length && can('orders.work')" class="flex flex-wrap items-center justify-between gap-3">
                         <p class="text-xs text-stone-500">
                             {{ t('Teslimat adresi :channel\'dan okunur, gönderi kargo firmasında açılır.', { channel: channelName(order.channel.type) }) }}
                         </p>
@@ -562,6 +564,7 @@ function stamp(value) {
                             </button>
                         </div>
                     </div>
+                    <p v-else class="text-xs text-stone-500">{{ t('Henüz kargo gönderisi açılmadı.') }}</p>
                 </template>
             </div>
         </template>
@@ -601,7 +604,7 @@ function stamp(value) {
                         {{ t('PDF') }}
                     </a>
                     <button
-                        v-if="order.invoice.status === 'failed'"
+                        v-if="order.invoice.status === 'failed' && can('orders.work')"
                         type="button"
                         class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                         @click="retryInvoice"
@@ -627,7 +630,7 @@ function stamp(value) {
                     <span v-if="order.invoice.uploadedAt" class="font-mono text-[11px] text-stone-500">{{ stamp(order.invoice.uploadedAt) }}</span>
                 </div>
                 <button
-                    v-if="order.invoice.uploadStatus === 'failed'"
+                    v-if="order.invoice.uploadStatus === 'failed' && can('orders.work')"
                     type="button"
                     class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                     @click="retryInvoiceUpload"
@@ -641,11 +644,11 @@ function stamp(value) {
                 <p v-if="!order.invoiceChannelSupported" class="text-xs text-stone-500">
                     {{ t('Bu kanalın siparişine henüz fatura kesilemiyor.') }}
                 </p>
-                <p v-else-if="!order.invoiceAccountReady" class="text-xs text-stone-500">
+                <p v-else-if="!order.invoiceAccountReady && can('settings.manage')" class="text-xs text-stone-500">
                     {{ t('Fatura kesmek için önce') }}
                     <Link href="/settings/invoicing" class="underline">{{ t('e-fatura ayarlarından Paraşüt hesabınızı bağlayın') }}</Link>.
                 </p>
-                <div v-else class="flex flex-wrap items-center justify-between gap-3">
+                <div v-else-if="order.invoiceAccountReady && can('orders.work')" class="flex flex-wrap items-center justify-between gap-3">
                     <p class="text-xs text-stone-500">
                         {{ t('Alıcı bilgisi :channel\'dan okunur, fatura Paraşüt\'ten kesilir.', { channel: channelName(order.channel.type) }) }}
                     </p>
@@ -658,6 +661,11 @@ function stamp(value) {
                         {{ t('Fatura kes') }}
                     </button>
                 </div>
+                <!-- Yetkisi olmayan üyede kutu boş kalmasın: durum yazılır. -->
+                <p v-else-if="!order.invoiceAccountReady" class="text-xs text-stone-500">
+                    {{ t('E-fatura hesabı bağlı değil; ekip yöneticisi bağlayabilir.') }}
+                </p>
+                <p v-else class="text-xs text-stone-500">{{ t('Henüz fatura kesilmedi.') }}</p>
             </template>
 
             <!--
@@ -677,7 +685,7 @@ function stamp(value) {
                                 {{ t(correctionBadges[correction.status]?.text ?? correction.status) }}
                             </span>
                             <button
-                                v-if="correction.status === 'failed'"
+                                v-if="correction.status === 'failed' && can('finance.manage')"
                                 type="button"
                                 class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                 @click="retryCorrection(correction)"
@@ -690,7 +698,7 @@ function stamp(value) {
                 </li>
             </ul>
 
-            <div v-if="order.canCancelInvoice" class="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-2">
+            <div v-if="order.canCancelInvoice && can('finance.manage')" class="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-2">
                 <p class="text-xs text-stone-500">{{ t('Sipariş iptal edildi. Faturayı Paraşüt\'te iptal edebilirsiniz.') }}</p>
                 <button
                     type="button"
@@ -702,7 +710,7 @@ function stamp(value) {
             </div>
 
             <div
-                v-for="candidate in order.returnInvoiceCandidates"
+                v-for="candidate in (can('finance.manage') ? order.returnInvoiceCandidates : [])"
                 :key="candidate.id"
                 class="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-2"
             >

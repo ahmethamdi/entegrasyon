@@ -106,6 +106,32 @@ final class RoleAccessTest extends TestCase
             ->where('onboarding', null));
     }
 
+    /**
+     * Düğmeler (`can()`) sipariş ve ürün ekranında da AYNI listeyi okur.
+     * Liste yalnız menünün açıldığı özet ekranında ölçülseydi, rotası
+     * kendi `permissions` prop'unu gönderen bir ekran paylaşılanı ezer ve
+     * düğmeler sahibe bile sessizce gizlenirdi (`tenant` prop'unun
+     * yaşadığı hata).
+     */
+    #[Test]
+    public function the_order_and_product_screens_receive_the_role_permissions_for_their_buttons(): void
+    {
+        $viewer = ['panel', 'orders.view', 'stock.view', 'catalog.view', 'channels.view', 'finance.view', 'settings.view'];
+        $warehouse = ['panel', 'orders.view', 'orders.work', 'stock.view'];
+
+        foreach (['/orders', '/products'] as $url) {
+            $this->actingAs($this->member('viewer'))->get($url)->assertOk()
+                ->assertInertia(fn ($page) => $page->where('permissions', $viewer));
+            $this->actingAs($this->member('warehouse'))->get($url)->assertOk()
+                ->assertInertia(fn ($page) => $page->where('permissions', $warehouse));
+        }
+
+        // Sahip her düğmeyi görür: yazma yetkileri listede.
+        $this->actingAs($this->owner)->get('/orders')->assertInertia(fn ($page) => $page
+            ->where('permissions', fn ($granted) => collect(['orders.work', 'catalog.manage', 'finance.manage', 'channels.manage', 'settings.manage'])
+                ->every(fn (string $p): bool => collect($granted)->contains($p))));
+    }
+
     #[Test]
     public function a_role_change_applies_on_the_next_request_without_logging_out(): void
     {

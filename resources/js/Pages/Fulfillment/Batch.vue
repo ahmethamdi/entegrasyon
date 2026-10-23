@@ -4,6 +4,7 @@ import { onBeforeUnmount, onMounted } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     batch: { type: Object, required: true },
@@ -13,6 +14,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// S7 · etiket ve toplama listesi depo işidir (rota ORDERS_WORK).
+const { can } = usePermissions();
 
 const titles = {
     labels: k('Kargo etiketleri'),
@@ -52,14 +55,14 @@ onBeforeUnmount(() => clearInterval(timer));
 
         <div class="mt-4 flex flex-wrap gap-2">
             <a
-                v-if="batch.action === 'labels' && readyLabels > 0"
+                v-if="batch.action === 'labels' && readyLabels > 0 && can('orders.work')"
                 :href="`/fulfillment/batches/${batch.id}/labels.zpl`"
                 class="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white"
             >
                 {{ t('Hazır etiketleri indir (ZPL, :count)', { count: readyLabels }) }}
             </a>
             <Link
-                v-if="batch.action === 'picking' || batch.action === 'labels'"
+                v-if="(batch.action === 'picking' || batch.action === 'labels') && can('orders.work')"
                 :href="`/fulfillment/batches/${batch.id}/picking`"
                 class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-100"
             >

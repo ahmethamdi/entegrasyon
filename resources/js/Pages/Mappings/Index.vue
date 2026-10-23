@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     channelTypes: { type: Array, default: () => [] },
@@ -15,6 +16,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// S7 · eşleştirme yazma işidir; salt okunur üye durumu görür.
+const { can } = usePermissions();
 const page = usePage();
 
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -221,6 +224,7 @@ function toggle(id) {
                         </div>
 
                         <button
+                            v-if="can('catalog.manage')"
                             type="button"
                             class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                             @click="toggle(row.id)"

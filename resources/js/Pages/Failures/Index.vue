@@ -5,6 +5,7 @@ import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
@@ -12,6 +13,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// S7 · yeniden deneme yazma işidir; salt okunur üye listeyi görür.
+const { can } = usePermissions();
 const page = usePage();
 const flash = computed(() => page.props.flash?.success ?? null);
 
@@ -131,7 +134,7 @@ function domainFor(domain) {
         >
             <template #actions>
                 <button
-                    v-if="rows.length > 0"
+                    v-if="rows.length > 0 && can('catalog.manage')"
                     type="button"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="busy !== null"
@@ -258,6 +261,7 @@ function domainFor(domain) {
 
                         <td class="px-4 py-3 text-right">
                             <button
+                                v-if="can('catalog.manage')"
                                 type="button"
                                 class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="busy !== null"

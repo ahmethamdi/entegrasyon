@@ -2,8 +2,10 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
+import WriteGuard from '../../Components/WriteGuard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     connections: { type: Array, default: () => [] },
@@ -11,6 +13,8 @@ const props = defineProps({
 
 const page = usePage();
 const { t } = useI18n();
+// S7 · kanal bağlama yazma işidir.
+const { can } = usePermissions();
 
 const flashSuccess = computed(() => page.props.flash?.success);
 const flashWarning = computed(() => page.props.flash?.warning);
@@ -193,7 +197,7 @@ function formatDate(iso) {
 <template>
     <PanelLayout>
         <PageHeader :section="t('Mağazam')" :title="t('Kanallarım')">
-            <template #actions>
+            <template v-if="can('channels.manage')" #actions>
                 <Link
                     href="/channels/create"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
@@ -202,228 +206,230 @@ function formatDate(iso) {
                 </Link>
             </template>
         </PageHeader>
+        <WriteGuard permission="channels.manage">
 
-        <div
-            v-if="flashSuccess"
-            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
-        >
-            {{ flashSuccess }}
-        </div>
-
-        <div
-            v-if="flashWarning"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-        >
-            {{ flashWarning }}
-        </div>
-
-        <div v-if="!sorted.length" class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center">
-            <p class="text-sm text-stone-600">
-                {{ t('Henüz bağlı mağaza yok. Senkron için en az bir kanal gerekiyor.') }}
-            </p>
-            <Link href="/channels/create" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
-                {{ t('İlk mağazayı bağla') }}
-            </Link>
-        </div>
-
-        <div v-else class="mt-6 space-y-4">
-            <article
-                v-for="connection in sorted"
-                :key="connection.id"
-                class="rounded-lg border border-stone-200 bg-white p-5"
+            <div
+                v-if="flashSuccess"
+                class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
             >
-                <div class="flex items-start justify-between gap-4">
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                            <h2 class="truncate text-sm font-medium text-stone-900">
-                                {{ connection.label }}
-                            </h2>
-                            <span
-                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
-                                :class="healthClass(connection.health)"
-                            >
-                                {{ healthLabels[connection.health] ? t(healthLabels[connection.health]) : connection.health }}
-                            </span>
+                {{ flashSuccess }}
+            </div>
 
-                            <!--
-                                §25 · TOKEN ROZETİ — sağlıktan AYRI bir
-                                soru. `health` kanalın SON cevabını
-                                taşır; bugün cevap veren bir bağlantının
-                                token'ı yarın ölebilir ve o an sağlık
-                                rozeti DEĞİŞMEZ.
+            <div
+                v-if="flashWarning"
+                class="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+            >
+                {{ flashWarning }}
+            </div>
 
-                                Süresiz anahtar taşıyan kanalda (Woo,
-                                Trendyol, Shopify) rozet HİÇ ÇİZİLMEZ:
-                                "geçerli" demek satıcıya orada izlenecek
-                                bir ömür olduğunu düşündürürdü.
-                            -->
-                            <span
-                                v-if="connection.tokenStatus"
-                                class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
-                                :class="tokenClass(connection.tokenStatus)"
-                                :title="tokenTitle(connection)"
-                            >
-                                {{ connection.tokenStatusLabel }}
-                            </span>
+            <div v-if="!sorted.length" class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center">
+                <p class="text-sm text-stone-600">
+                    {{ t('Henüz bağlı mağaza yok. Senkron için en az bir kanal gerekiyor.') }}
+                </p>
+                <Link href="/channels/create" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
+                    {{ t('İlk mağazayı bağla') }}
+                </Link>
+            </div>
+
+            <div v-else class="mt-6 space-y-4">
+                <article
+                    v-for="connection in sorted"
+                    :key="connection.id"
+                    class="rounded-lg border border-stone-200 bg-white p-5"
+                >
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                                <h2 class="truncate text-sm font-medium text-stone-900">
+                                    {{ connection.label }}
+                                </h2>
+                                <span
+                                    class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                                    :class="healthClass(connection.health)"
+                                >
+                                    {{ healthLabels[connection.health] ? t(healthLabels[connection.health]) : connection.health }}
+                                </span>
+
+                                <!--
+                                    §25 · TOKEN ROZETİ — sağlıktan AYRI bir
+                                    soru. `health` kanalın SON cevabını
+                                    taşır; bugün cevap veren bir bağlantının
+                                    token'ı yarın ölebilir ve o an sağlık
+                                    rozeti DEĞİŞMEZ.
+
+                                    Süresiz anahtar taşıyan kanalda (Woo,
+                                    Trendyol, Shopify) rozet HİÇ ÇİZİLMEZ:
+                                    "geçerli" demek satıcıya orada izlenecek
+                                    bir ömür olduğunu düşündürürdü.
+                                -->
+                                <span
+                                    v-if="connection.tokenStatus"
+                                    class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                                    :class="tokenClass(connection.tokenStatus)"
+                                    :title="tokenTitle(connection)"
+                                >
+                                    {{ connection.tokenStatusLabel }}
+                                </span>
+                            </div>
+
+                            <p class="mt-1 truncate font-mono text-xs text-stone-500">
+                                <img v-if="connection.logo" :src="connection.logo" :alt="t(':channel logosu', { channel: connection.channel })" class="mr-1.5 inline-block size-4 align-[-3px] object-contain">{{ connection.channel }}<span v-if="connection.beta" class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900" :title="t('Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.')">Beta</span> · {{ connection.account }}
+                            </p>
+                            <p v-if="connection.priceRule" class="mt-1 text-xs text-stone-600">
+                                {{ t('Fiyat') }}: {{ connection.priceRule }}
+                            </p>
                         </div>
 
-                        <p class="mt-1 truncate font-mono text-xs text-stone-500">
-                            <img v-if="connection.logo" :src="connection.logo" :alt="t(':channel logosu', { channel: connection.channel })" class="mr-1.5 inline-block size-4 align-[-3px] object-contain">{{ connection.channel }}<span v-if="connection.beta" class="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900" :title="t('Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.')">Beta</span> · {{ connection.account }}
-                        </p>
-                        <p v-if="connection.priceRule" class="mt-1 text-xs text-stone-600">
-                            {{ t('Fiyat') }}: {{ connection.priceRule }}
-                        </p>
-                    </div>
-
-                    <div class="flex shrink-0 items-center gap-2">
-                        <Link
-                            v-if="connection.capabilities?.pricing"
-                            :href="`/channels/${connection.id}/pricing`"
-                            class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
-                        >
-                            {{ t('Fiyat kuralı') }}
-                        </Link>
-                        <Link
-                            v-if="connection.hasSettings"
-                            :href="`/channels/${connection.id}/settings`"
-                            class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
-                        >
-                            {{ t('Ayarlar') }}
-                        </Link>
-
-                        <!--
-                            İzin yoksa ya da süresi bittiyse "Tekrar dene"
-                            aynı yetkisiz isteği tekrarlar; satıcıyı kanalın
-                            izin ekranına götüren düğme çıkar.
-                        -->
-                        <button
-                            v-if="connection.authorizeUrl"
-                            type="button"
-                            class="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="authorizing !== null"
-                            @click="authorize(connection)"
-                        >
-                            {{ authorizing === connection.id ? t('Yönlendiriliyor…') : t('İzin ver') }}
-                        </button>
-                        <button
-                            v-else
-                            type="button"
-                            class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="checking !== null"
-                            @click="recheck(connection.id)"
-                        >
-                            {{ checking === connection.id ? t('Kontrol ediliyor…') : t('Tekrar dene') }}
-                        </button>
-                    </div>
-                </div>
-
-                <div
-                    v-if="connection.settingsMissing > 0 && !connection.authorizeUrl"
-                    class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
-                >
-                    <p class="text-sm text-amber-900">
-                        {{ t('İlan açabilmek için :count ayar eksik.', { count: connection.settingsMissing }) }}
-                    </p>
-                    <Link
-                        :href="`/channels/${connection.id}/settings`"
-                        class="text-sm font-medium text-amber-900 underline"
-                    >
-                        {{ t('Ayarları tamamla') }}
-                    </Link>
-                </div>
-
-                <!--
-                    Sağlıksızlık gerekçesi GİZLENMEZ: kullanıcı anahtarı mı
-                    yanlış girdi, mağaza mı kapalı — ancak bu metni görerek
-                    ayırt edebilir.
-                -->
-                <p
-                    v-if="connection.lastError"
-                    class="mt-3 rounded bg-red-50 px-3 py-2 font-mono text-xs text-red-900"
-                >
-                    {{ t(connection.lastError) }}
-                </p>
-
-                <div
-                    v-if="connection.locationChoices?.length"
-                    class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3"
-                >
-                    <label :for="`depo-${connection.id}`" class="block text-sm font-medium text-stone-900">
-                        {{ t('Stok hangi depoya yazılsın?') }}
-                    </label>
-                    <p class="mt-0.5 text-xs text-stone-600">
-                        {{ t('Mağazanda birden fazla depo var. Seçtiğin depodaki stok 34Pazar\'la eşitlenir.') }}
-                    </p>
-                    <div class="mt-2 flex flex-wrap gap-2">
-                        <select
-                            :id="`depo-${connection.id}`"
-                            v-model="chosenLocation[connection.id]"
-                            class="min-w-0 flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm"
-                        >
-                            <option :value="undefined" disabled>{{ t('Depo seç…') }}</option>
-                            <option v-for="location in connection.locationChoices" :key="location.id" :value="location.id">
-                                {{ location.name }}
-                            </option>
-                        </select>
-                        <button
-                            type="button"
-                            class="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-                            :disabled="!chosenLocation[connection.id] || savingLocation !== null"
-                            @click="saveLocation(connection.id)"
-                        >
-                            {{ savingLocation === connection.id ? t('Kaydediliyor…') : t('Kaydet') }}
-                        </button>
-                    </div>
-                </div>
-
-                <div class="mt-4 border-t border-stone-100 pt-4">
-                    <p class="text-xs text-stone-500">{{ t('Kanala yazma izinleri') }}</p>
-                    <ul class="mt-2 grid gap-2 sm:grid-cols-3">
-                        <li
-                            v-for="(label, write) in writeLabels"
-                            :key="write"
-                            class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
-                            :class="connection.writes?.[write] ? 'border-emerald-200 bg-emerald-50' : 'border-stone-200 bg-stone-50'"
-                        >
-                            <span>
-                                <span class="font-medium text-stone-900">{{ t(label) }}</span>
-                                <span :class="connection.writes?.[write] ? 'text-emerald-800' : 'text-stone-600'">
-                                    · {{ connection.writes?.[write] ? t('Açık') : t('Kapalı') }}
-                                </span>
-                            </span>
-                            <button
-                                v-if="connection.writes?.[write] || !connection.writesLocked"
-                                type="button"
-                                class="rounded border border-stone-300 bg-white px-2 py-1 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                :disabled="switching !== null"
-                                @click="setWrite(connection, write, !connection.writes?.[write])"
+                        <div class="flex shrink-0 items-center gap-2">
+                            <Link
+                                v-if="connection.capabilities?.pricing"
+                                :href="`/channels/${connection.id}/pricing`"
+                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                             >
-                                {{ switching === `${connection.id}:${write}` ? t('Kaydediliyor…') : (connection.writes?.[write] ? t('Kapat') : t('Aç')) }}
-                            </button>
-                        </li>
-                    </ul>
-                    <p v-if="connection.writesLocked" class="mt-2 text-xs text-stone-600">
-                        {{ t('Bu kanalın canlı doğrulaması tamamlanmadı; kanala yazma izinleri açılamaz.') }}
-                    </p>
-                </div>
+                                {{ t('Fiyat kuralı') }}
+                            </Link>
+                            <Link
+                                v-if="connection.hasSettings"
+                                :href="`/channels/${connection.id}/settings`"
+                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                            >
+                                {{ t('Ayarlar') }}
+                            </Link>
 
-                <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
-                    <div>
-                        <dt class="text-stone-500">{{ t('Durum') }}</dt>
-                        <dd class="mt-0.5 font-medium text-stone-900">{{ statusLabels[connection.status] ? t(statusLabels[connection.status]) : connection.status }}</dd>
+                            <!--
+                                İzin yoksa ya da süresi bittiyse "Tekrar dene"
+                                aynı yetkisiz isteği tekrarlar; satıcıyı kanalın
+                                izin ekranına götüren düğme çıkar.
+                            -->
+                            <button
+                                v-if="connection.authorizeUrl"
+                                type="button"
+                                class="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                :disabled="authorizing !== null"
+                                @click="authorize(connection)"
+                            >
+                                {{ authorizing === connection.id ? t('Yönlendiriliyor…') : t('İzin ver') }}
+                            </button>
+                            <button
+                                v-else
+                                type="button"
+                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                :disabled="checking !== null"
+                                @click="recheck(connection.id)"
+                            >
+                                {{ checking === connection.id ? t('Kontrol ediliyor…') : t('Tekrar dene') }}
+                            </button>
+                        </div>
                     </div>
-                    <div>
-                        <dt class="text-stone-500">{{ t('Son sağlıklı') }}</dt>
-                        <dd class="mt-0.5 text-stone-700">{{ formatDate(connection.lastHealthyAt) }}</dd>
+
+                    <div
+                        v-if="connection.settingsMissing > 0 && !connection.authorizeUrl"
+                        class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
+                    >
+                        <p class="text-sm text-amber-900">
+                            {{ t('İlan açabilmek için :count ayar eksik.', { count: connection.settingsMissing }) }}
+                        </p>
+                        <Link
+                            :href="`/channels/${connection.id}/settings`"
+                            class="text-sm font-medium text-amber-900 underline"
+                        >
+                            {{ t('Ayarları tamamla') }}
+                        </Link>
                     </div>
-                    <div>
-                        <dt class="text-stone-500">{{ t('Yetenekler') }}</dt>
-                        <dd class="mt-0.5 text-stone-700">
-                            {{ activeCapabilities(connection.capabilities).join(' · ') || '—' }}
-                        </dd>
+
+                    <!--
+                        Sağlıksızlık gerekçesi GİZLENMEZ: kullanıcı anahtarı mı
+                        yanlış girdi, mağaza mı kapalı — ancak bu metni görerek
+                        ayırt edebilir.
+                    -->
+                    <p
+                        v-if="connection.lastError"
+                        class="mt-3 rounded bg-red-50 px-3 py-2 font-mono text-xs text-red-900"
+                    >
+                        {{ t(connection.lastError) }}
+                    </p>
+
+                    <div
+                        v-if="connection.locationChoices?.length"
+                        class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3"
+                    >
+                        <label :for="`depo-${connection.id}`" class="block text-sm font-medium text-stone-900">
+                            {{ t('Stok hangi depoya yazılsın?') }}
+                        </label>
+                        <p class="mt-0.5 text-xs text-stone-600">
+                            {{ t('Mağazanda birden fazla depo var. Seçtiğin depodaki stok 34Pazar\'la eşitlenir.') }}
+                        </p>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                            <select
+                                :id="`depo-${connection.id}`"
+                                v-model="chosenLocation[connection.id]"
+                                class="min-w-0 flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm"
+                            >
+                                <option :value="undefined" disabled>{{ t('Depo seç…') }}</option>
+                                <option v-for="location in connection.locationChoices" :key="location.id" :value="location.id">
+                                    {{ location.name }}
+                                </option>
+                            </select>
+                            <button
+                                type="button"
+                                class="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                                :disabled="!chosenLocation[connection.id] || savingLocation !== null"
+                                @click="saveLocation(connection.id)"
+                            >
+                                {{ savingLocation === connection.id ? t('Kaydediliyor…') : t('Kaydet') }}
+                            </button>
+                        </div>
                     </div>
-                </dl>
-            </article>
-        </div>
+
+                    <div class="mt-4 border-t border-stone-100 pt-4">
+                        <p class="text-xs text-stone-500">{{ t('Kanala yazma izinleri') }}</p>
+                        <ul class="mt-2 grid gap-2 sm:grid-cols-3">
+                            <li
+                                v-for="(label, write) in writeLabels"
+                                :key="write"
+                                class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
+                                :class="connection.writes?.[write] ? 'border-emerald-200 bg-emerald-50' : 'border-stone-200 bg-stone-50'"
+                            >
+                                <span>
+                                    <span class="font-medium text-stone-900">{{ t(label) }}</span>
+                                    <span :class="connection.writes?.[write] ? 'text-emerald-800' : 'text-stone-600'">
+                                        · {{ connection.writes?.[write] ? t('Açık') : t('Kapalı') }}
+                                    </span>
+                                </span>
+                                <button
+                                    v-if="connection.writes?.[write] || !connection.writesLocked"
+                                    type="button"
+                                    class="rounded border border-stone-300 bg-white px-2 py-1 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    :disabled="switching !== null"
+                                    @click="setWrite(connection, write, !connection.writes?.[write])"
+                                >
+                                    {{ switching === `${connection.id}:${write}` ? t('Kaydediliyor…') : (connection.writes?.[write] ? t('Kapat') : t('Aç')) }}
+                                </button>
+                            </li>
+                        </ul>
+                        <p v-if="connection.writesLocked" class="mt-2 text-xs text-stone-600">
+                            {{ t('Bu kanalın canlı doğrulaması tamamlanmadı; kanala yazma izinleri açılamaz.') }}
+                        </p>
+                    </div>
+
+                    <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
+                        <div>
+                            <dt class="text-stone-500">{{ t('Durum') }}</dt>
+                            <dd class="mt-0.5 font-medium text-stone-900">{{ statusLabels[connection.status] ? t(statusLabels[connection.status]) : connection.status }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-stone-500">{{ t('Son sağlıklı') }}</dt>
+                            <dd class="mt-0.5 text-stone-700">{{ formatDate(connection.lastHealthyAt) }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-stone-500">{{ t('Yetenekler') }}</dt>
+                            <dd class="mt-0.5 text-stone-700">
+                                {{ activeCapabilities(connection.capabilities).join(' · ') || '—' }}
+                            </dd>
+                        </div>
+                    </dl>
+                </article>
+            </div>
+        </WriteGuard>
     </PanelLayout>
 </template>

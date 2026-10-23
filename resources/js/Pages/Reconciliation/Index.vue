@@ -5,6 +5,7 @@ import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     rows: { type: Array, default: () => [] },
@@ -14,6 +15,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// S7 · fiyat çakışması kararı yazma işidir.
+const { can } = usePermissions();
 
 /**
  * FLASH EKRAN BAŞINA RENDER EDİLİR — layout onu GÖSTERMEZ.
@@ -393,7 +396,7 @@ function isDeciding(row, decision) {
                             demek olurdu.
                         -->
                         <td class="px-4 py-3">
-                            <div v-if="row.status === 'PRICE_CONFLICT'" class="flex flex-wrap gap-2">
+                            <div v-if="row.status === 'PRICE_CONFLICT' && can('catalog.manage')" class="flex flex-wrap gap-2">
                                 <button
                                     type="button"
                                     class="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-xs text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"

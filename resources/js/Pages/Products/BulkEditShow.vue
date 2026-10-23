@@ -5,6 +5,7 @@ import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { money } from '../../lib/format';
 import { k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     bulkImport: { type: Object, required: true },
@@ -13,6 +14,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// S7 · Excel değişikliğini uygulamak yazma işidir; önizleme herkese açık.
+const { can } = usePermissions();
 const page = usePage();
 const errors = computed(() => page.props.errors ?? {});
 const flashSuccess = computed(() => page.props.flash?.success);
@@ -97,7 +100,7 @@ function priceCell(row) {
         </dl>
 
         <div v-if="bulkImport.status !== 'rejected'" class="mt-6 flex flex-wrap items-center gap-3">
-            <button v-if="canApply" type="button" class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700" @click="apply">
+            <button v-if="canApply && can('catalog.manage')" type="button" class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700" @click="apply">
                 {{ t(':count satırı uygula', { count: bulkImport.counts.change }) }}
             </button>
             <span v-if="applying" class="text-sm text-sky-800">{{ t('Uygulanıyor, sayfa kendiliğinden yenilenir…') }}</span>

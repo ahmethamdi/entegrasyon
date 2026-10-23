@@ -1651,5 +1651,9 @@
     "Ekibe katıldı": "Joined the team",
     "Ekip üyesinin rolü değişti": "Team member role changed",
     "Ekipten çıkarıldı": "Removed from the team",
-    "Davet iptal edildi": "Invitation cancelled"
+    "Davet iptal edildi": "Invitation cancelled",
+    "Bu ekranı yalnız görüntüleyebilirsin; değişiklik için ekip yöneticisine başvur.": "You can only view this screen; ask your team admin to make changes.",
+    "E-fatura hesabı bağlı değil; ekip yöneticisi bağlayabilir.": "No e-invoice account is connected; a team admin can connect one.",
+    "Henüz fatura kesilmedi.": "No invoice has been issued yet.",
+    "Henüz kargo gönderisi açılmadı.": "No carrier shipment has been created yet."
 }

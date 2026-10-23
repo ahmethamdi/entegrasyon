@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     requests: { type: Object, required: true },
@@ -11,6 +12,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// S7 · iade kararı depo işi; salt okunur üye kararı görür, düğmeyi görmez.
+const { can } = usePermissions();
 const page = usePage();
 const flash = computed(() => page.props.flash ?? {});
 
@@ -155,7 +158,7 @@ function submitReject(request) {
                     </tbody>
                 </table>
 
-                <div v-if="request.decision.available" class="border-t border-stone-100 px-4 py-3">
+                <div v-if="request.decision.available && can('orders.work')" class="border-t border-stone-100 px-4 py-3">
                     <p v-if="!request.decision.enabled" class="text-xs text-stone-600">
                         {{ t('Bu kanalda "İade kararı" izni kapalı. Kanallar ekranından açabilirsiniz; kapalıyken kanala karar gönderilmez.') }}
                     </p>

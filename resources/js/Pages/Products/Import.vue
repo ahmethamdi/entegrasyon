@@ -2,6 +2,7 @@
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
+import WriteGuard from '../../Components/WriteGuard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
 
@@ -181,143 +182,145 @@ function toggleErrors(id) {
             {{ banner.text }}
         </div>
 
-        <!--
-            KOLON SÖZLEŞMESİ ÖNCE GÖSTERİLİR: kullanıcı dosyayı yüklemeden
-            önce hangi kolonların gerektiğini bilmeli. Yükleyip hata almak
-            ve sonra öğrenmek gereksiz bir tur demek.
-        -->
-        <div class="mt-6 grid gap-6 lg:grid-cols-3">
-            <div class="lg:col-span-2">
-                <form
-                    class="rounded-lg border border-stone-200 bg-white p-6"
-                    @submit.prevent="submit"
-                >
-                    <label class="block text-sm font-medium text-stone-700">
-                        {{ t('CSV dosyası') }}
-                    </label>
-
-                    <input
-                        ref="fileInput"
-                        type="file"
-                        accept=".csv,text/csv"
-                        class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
-                        @change="onFileChange"
+        <WriteGuard permission="catalog.manage">
+            <!--
+                KOLON SÖZLEŞMESİ ÖNCE GÖSTERİLİR: kullanıcı dosyayı yüklemeden
+                önce hangi kolonların gerektiğini bilmeli. Yükleyip hata almak
+                ve sonra öğrenmek gereksiz bir tur demek.
+            -->
+            <div class="mt-6 grid gap-6 lg:grid-cols-3">
+                <div class="lg:col-span-2">
+                    <form
+                        class="rounded-lg border border-stone-200 bg-white p-6"
+                        @submit.prevent="submit"
                     >
+                        <label class="block text-sm font-medium text-stone-700">
+                            {{ t('CSV dosyası') }}
+                        </label>
 
-                    <p v-if="form.errors.file" class="mt-2 text-sm text-red-700">
-                        {{ form.errors.file }}
-                    </p>
-
-                    <p class="mt-3 text-xs text-stone-500">
-                        {{ t('Dosya arka planda işlenir; büyük dosyalarda sonucu aşağıdaki listeden takip edebilirsin.') }}
-                    </p>
-
-                    <button
-                        type="submit"
-                        class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
-                        :disabled="form.processing || !form.file"
-                    >
-                        {{ form.processing ? t('Yükleniyor…') : t('Yükle') }}
-                    </button>
-                </form>
-
-                <!--
-                    KANALDAN ÇEKME — aynı ekranın ikinci kaynağı.
-                    Satıcının ürünleri ZATEN bir kanalda duruyor; CSV'ye
-                    döküp yeniden yüklemesini istemek, sistemin bağlandığı
-                    kanaldan okuyabildiği veriyi elle taşıtmak demektir.
-                -->
-                <form
-                    class="mt-6 rounded-lg border border-stone-200 bg-white p-6"
-                    @submit.prevent="submitChannel"
-                >
-                    <label class="block text-sm font-medium text-stone-700">
-                        {{ t('Kanaldan çek') }}
-                    </label>
-
-                    <p v-if="connections.length === 0" class="mt-2 text-sm text-stone-600">
-                        {{ t('Ürün çekmeyi destekleyen aktif bir kanal bağlantısı yok. Önce Kanallar ekranından bir mağaza bağla.') }}
-                    </p>
-
-                    <template v-else>
-                        <select
-                            v-model="channelForm.connection_id"
-                            class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
+                        <input
+                            ref="fileInput"
+                            type="file"
+                            accept=".csv,text/csv"
+                            class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
+                            @change="onFileChange"
                         >
-                            <option value="">{{ t('Kanal seç…') }}</option>
-                            <option
-                                v-for="connection in connections"
-                                :key="connection.id"
-                                :value="connection.id"
-                            >
-                                {{ connection.label }} — {{ connection.channel }}
-                            </option>
-                        </select>
 
-                        <p v-if="channelForm.errors.connection_id" class="mt-2 text-sm text-red-700">
-                            {{ channelForm.errors.connection_id }}
+                        <p v-if="form.errors.file" class="mt-2 text-sm text-red-700">
+                            {{ form.errors.file }}
                         </p>
 
-                        <!--
-                            STOK SINIRI BURADA DA SÖYLENİR ve kanal turunda
-                            DAHA KRİTİKTİR: kanaldaki stok bayat olabilir ve
-                            var olan ürüne uygulansaydı satılmış mallar geri
-                            gelirdi.
-                        -->
-                        <p class="mt-3 text-xs leading-relaxed text-stone-500">
-                            {{ t('Kanaldaki ürünler SKU ile eşleştirilir. Yeni SKU\'lar açılır, var olanların yalnızca içeriği güncellenir —') }}
-                            <span class="font-medium text-stone-700">{{ t('stoğa dokunulmaz.') }}</span>
+                        <p class="mt-3 text-xs text-stone-500">
+                            {{ t('Dosya arka planda işlenir; büyük dosyalarda sonucu aşağıdaki listeden takip edebilirsin.') }}
                         </p>
 
                         <button
                             type="submit"
                             class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="channelForm.processing || inFlight || !channelForm.connection_id"
+                            :disabled="form.processing || !form.file"
                         >
-                            {{ channelForm.processing ? t('Başlatılıyor…') : inFlight ? t('Çekiliyor…') : t('Ürünleri çek') }}
+                            {{ form.processing ? t('Yükleniyor…') : t('Yükle') }}
                         </button>
-                    </template>
-                </form>
-            </div>
+                    </form>
 
-            <div class="rounded-lg border border-stone-200 bg-white p-6">
-                <p class="text-sm font-medium text-stone-900">{{ t('Kolonlar') }}</p>
-
-                <p class="mt-3 text-xs uppercase tracking-wide text-stone-500">{{ t('Zorunlu') }}</p>
-                <ul class="mt-1 space-y-1">
-                    <li
-                        v-for="column in columns.required"
-                        :key="column"
-                        class="font-mono text-sm text-stone-900"
+                    <!--
+                        KANALDAN ÇEKME — aynı ekranın ikinci kaynağı.
+                        Satıcının ürünleri ZATEN bir kanalda duruyor; CSV'ye
+                        döküp yeniden yüklemesini istemek, sistemin bağlandığı
+                        kanaldan okuyabildiği veriyi elle taşıtmak demektir.
+                    -->
+                    <form
+                        class="mt-6 rounded-lg border border-stone-200 bg-white p-6"
+                        @submit.prevent="submitChannel"
                     >
-                        {{ column }}
-                    </li>
-                </ul>
+                        <label class="block text-sm font-medium text-stone-700">
+                            {{ t('Kanaldan çek') }}
+                        </label>
 
-                <p class="mt-4 text-xs uppercase tracking-wide text-stone-500">{{ t('İsteğe bağlı') }}</p>
-                <ul class="mt-1 space-y-1">
-                    <li
-                        v-for="column in columns.optional"
-                        :key="column"
-                        class="font-mono text-sm text-stone-600"
-                    >
-                        {{ column }}
-                    </li>
-                </ul>
+                        <p v-if="connections.length === 0" class="mt-2 text-sm text-stone-600">
+                            {{ t('Ürün çekmeyi destekleyen aktif bir kanal bağlantısı yok. Önce Kanallar ekranından bir mağaza bağla.') }}
+                        </p>
 
-                <!--
-                    STOK KOLONUNUN SINIRI AÇIKÇA SÖYLENİR. Var olan bir
-                    üründe stok satırdan yazılsaydı satıcının SATTIĞI mallar
-                    bir dosya yüklemesiyle geri gelir ve bakiye bozulurdu;
-                    kullanıcı bunu bilmeden dosyaya stok yazarsa neden
-                    değişmediğini anlamaz.
-                -->
-                <p class="mt-4 border-t border-stone-100 pt-3 text-xs leading-relaxed text-stone-500">
-                    <span class="font-medium text-stone-700">{{ stockColumn }}</span>
-                    {{ t('yalnızca YENİ ürünün açılış stoğudur. Var olan bir SKU güncellenirken stoğa dokunulmaz — stok düzeltmesi Stok ekranından yapılır.') }}
-                </p>
+                        <template v-else>
+                            <select
+                                v-model="channelForm.connection_id"
+                                class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
+                            >
+                                <option value="">{{ t('Kanal seç…') }}</option>
+                                <option
+                                    v-for="connection in connections"
+                                    :key="connection.id"
+                                    :value="connection.id"
+                                >
+                                    {{ connection.label }} — {{ connection.channel }}
+                                </option>
+                            </select>
+
+                            <p v-if="channelForm.errors.connection_id" class="mt-2 text-sm text-red-700">
+                                {{ channelForm.errors.connection_id }}
+                            </p>
+
+                            <!--
+                                STOK SINIRI BURADA DA SÖYLENİR ve kanal turunda
+                                DAHA KRİTİKTİR: kanaldaki stok bayat olabilir ve
+                                var olan ürüne uygulansaydı satılmış mallar geri
+                                gelirdi.
+                            -->
+                            <p class="mt-3 text-xs leading-relaxed text-stone-500">
+                                {{ t('Kanaldaki ürünler SKU ile eşleştirilir. Yeni SKU\'lar açılır, var olanların yalnızca içeriği güncellenir —') }}
+                                <span class="font-medium text-stone-700">{{ t('stoğa dokunulmaz.') }}</span>
+                            </p>
+
+                            <button
+                                type="submit"
+                                class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                :disabled="channelForm.processing || inFlight || !channelForm.connection_id"
+                            >
+                                {{ channelForm.processing ? t('Başlatılıyor…') : inFlight ? t('Çekiliyor…') : t('Ürünleri çek') }}
+                            </button>
+                        </template>
+                    </form>
+                </div>
+
+                <div class="rounded-lg border border-stone-200 bg-white p-6">
+                    <p class="text-sm font-medium text-stone-900">{{ t('Kolonlar') }}</p>
+
+                    <p class="mt-3 text-xs uppercase tracking-wide text-stone-500">{{ t('Zorunlu') }}</p>
+                    <ul class="mt-1 space-y-1">
+                        <li
+                            v-for="column in columns.required"
+                            :key="column"
+                            class="font-mono text-sm text-stone-900"
+                        >
+                            {{ column }}
+                        </li>
+                    </ul>
+
+                    <p class="mt-4 text-xs uppercase tracking-wide text-stone-500">{{ t('İsteğe bağlı') }}</p>
+                    <ul class="mt-1 space-y-1">
+                        <li
+                            v-for="column in columns.optional"
+                            :key="column"
+                            class="font-mono text-sm text-stone-600"
+                        >
+                            {{ column }}
+                        </li>
+                    </ul>
+
+                    <!--
+                        STOK KOLONUNUN SINIRI AÇIKÇA SÖYLENİR. Var olan bir
+                        üründe stok satırdan yazılsaydı satıcının SATTIĞI mallar
+                        bir dosya yüklemesiyle geri gelir ve bakiye bozulurdu;
+                        kullanıcı bunu bilmeden dosyaya stok yazarsa neden
+                        değişmediğini anlamaz.
+                    -->
+                    <p class="mt-4 border-t border-stone-100 pt-3 text-xs leading-relaxed text-stone-500">
+                        <span class="font-medium text-stone-700">{{ stockColumn }}</span>
+                        {{ t('yalnızca YENİ ürünün açılış stoğudur. Var olan bir SKU güncellenirken stoğa dokunulmaz — stok düzeltmesi Stok ekranından yapılır.') }}
+                    </p>
+                </div>
             </div>
-        </div>
+        </WriteGuard>
 
         <h2 class="mt-10 text-sm font-medium text-stone-900">{{ t('Geçmiş içe aktarmalar') }}</h2>
 

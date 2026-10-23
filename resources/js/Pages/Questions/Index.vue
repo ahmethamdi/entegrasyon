@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
+import { usePermissions } from '../../lib/permissions.js';
 
 const props = defineProps({
     questions: { type: Object, required: true },
@@ -12,6 +13,8 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+// S7 · soru cevabı depo işi; salt okunur üye cevap formunu görmez.
+const { can } = usePermissions();
 const page = usePage();
 const flash = computed(() => page.props.flash ?? {});
 
@@ -116,7 +119,7 @@ function send(question) {
                         {{ t('Bu kanalda "Soru cevabı" izni kapalı. Kanallar ekranından açabilirsiniz.') }}
                         <Link href="/channels" class="underline">{{ t('Kanallara git') }}</Link>
                     </p>
-                    <form v-else class="mt-3 grid gap-2" @submit.prevent="send(question)">
+                    <form v-else-if="can('orders.work')" class="mt-3 grid gap-2" @submit.prevent="send(question)">
                         <textarea
                             v-model="drafts[question.id]"
                             rows="3"
