@@ -10,6 +10,7 @@ use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
+use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Messaging\Consumers\InventoryLevelChangedConsumer;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Enums\SyncDomain;
@@ -20,6 +21,7 @@ use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Symfony\Component\Uid\UuidV7;
@@ -167,6 +169,111 @@ final class FanOutTest extends TestCase
         $this->assertCount(1, $operations);
         $this->assertNotSame($origin->id, $operations->first()->entity_id);
         $this->assertSame(1, $event->fresh()->operations_planned);
+    }
+
+    /**
+     * Yankı bastırma yarışı (S7 yük testi): varyanta son pencerede başka
+     * kanaldan hareket geldiyse o hareketin paketi kaynak kanala da gitmiştir
+     * ve pazaryerinin kendi düşüşünü ezmiş olabilir. Kaynak kanal da hedef.
+     */
+    #[Test]
+    public function origin_connection_is_included_when_another_connection_moved_recently(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        [$origin, $other] = $this->listVariantOn($tenant, $variant, ['woocommerce', 'trendyol']);
+
+        $this->recordMovement($tenant, $variant, $other->channel_connection_id, minutesAgo: 5);
+        $own = $this->recordMovement($tenant, $variant, $origin->channel_connection_id, minutesAgo: 0);
+
+        $event = $this->inventoryChangedEvent(
+            $tenant,
+            $variant,
+            version: 7,
+            originConnectionId: $origin->channel_connection_id,
+            movementId: $own,
+        );
+
+        $this->asTenant($tenant, fn () => app(InventoryLevelChangedConsumer::class)->handle($event));
+
+        $targets = $this->asTenant($tenant, fn () => SyncOperation::query()->pluck('entity_id')->all());
+
+        $this->assertEqualsCanonicalizing([$origin->id, $other->id], $targets);
+        $this->assertSame(2, $event->fresh()->operations_planned);
+    }
+
+    /**
+     * Varyantın tek hareketi kaynak kanalın kendi satışlarıysa ona hiçbir
+     * paket gitmemiştir — bastırma güvenli, gereksiz istek açılmaz. Olayın
+     * KENDİ hareketi de sayılmaz (yoksa her olay kaynağı hedef yapardı).
+     * Pencere dışında kalan eski başka-kanal hareketi de sayılmaz.
+     */
+    #[Test]
+    public function origin_connection_stays_skipped_without_recent_foreign_movement(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        [$origin, $other] = $this->listVariantOn($tenant, $variant, ['woocommerce', 'trendyol']);
+
+        $this->recordMovement($tenant, $variant, $other->channel_connection_id, minutesAgo: 45);
+        $this->recordMovement($tenant, $variant, $origin->channel_connection_id, minutesAgo: 3);
+        $own = $this->recordMovement($tenant, $variant, $origin->channel_connection_id, minutesAgo: 0);
+
+        $event = $this->inventoryChangedEvent(
+            $tenant,
+            $variant,
+            version: 7,
+            originConnectionId: $origin->channel_connection_id,
+            movementId: $own,
+        );
+
+        $this->asTenant($tenant, fn () => app(InventoryLevelChangedConsumer::class)->handle($event));
+
+        $targets = $this->asTenant($tenant, fn () => SyncOperation::query()->pluck('entity_id')->all());
+
+        $this->assertSame([$other->id], $targets);
+    }
+
+    /**
+     * Elle düzeltme (bağlantısız hareket) de kaynak kanala gönderim doğurur;
+     * pencere 0 ise eski davranış — kaynak hep atlanır.
+     */
+    #[Test]
+    public function connectionless_movement_counts_and_zero_window_restores_old_behaviour(): void
+    {
+        [$tenant, $variant] = $this->makeContext();
+
+        [$origin, $other] = $this->listVariantOn($tenant, $variant, ['woocommerce', 'trendyol']);
+
+        $this->recordMovement($tenant, $variant, null, minutesAgo: 2);
+
+        $event = $this->inventoryChangedEvent(
+            $tenant,
+            $variant,
+            version: 7,
+            originConnectionId: $origin->channel_connection_id,
+        );
+
+        config(['entegrasyon.sync.origin_echo_window_minutes' => 0]);
+        $this->asTenant($tenant, fn () => app(InventoryLevelChangedConsumer::class)->handle($event));
+        $this->assertSame(
+            [$other->id],
+            $this->asTenant($tenant, fn () => SyncOperation::query()->pluck('entity_id')->all()),
+        );
+
+        config(['entegrasyon.sync.origin_echo_window_minutes' => 30]);
+        $second = $this->inventoryChangedEvent(
+            $tenant,
+            $variant,
+            version: 8,
+            originConnectionId: $origin->channel_connection_id,
+        );
+        $this->asTenant($tenant, fn () => app(InventoryLevelChangedConsumer::class)->handle($second));
+
+        $this->assertContains(
+            $origin->id,
+            $this->asTenant($tenant, fn () => SyncOperation::query()->pluck('entity_id')->all()),
+        );
     }
 
     /**
@@ -395,6 +502,7 @@ final class FanOutTest extends TestCase
         Variant $variant,
         int $version,
         ?string $originConnectionId = null,
+        ?string $movementId = null,
     ): OutboxEvent {
         return $this->asTenant($tenant, fn () => OutboxEvent::record(
             aggregateType: 'inventory_level',
@@ -408,9 +516,38 @@ final class FanOutTest extends TestCase
                 'available' => 5,
                 'version' => $version,
                 'origin_connection_id' => $originConnectionId,
+                'movement_id' => $movementId,
             ],
             tenantId: $tenant->id,
         ));
+    }
+
+    /** Stok hareketi satırı — yalnız fan-out'un sorduğu alanlar anlamlı. */
+    private function recordMovement(Tenant $tenant, Variant $variant, ?string $connectionId, int $minutesAgo): string
+    {
+        $id = (string) new UuidV7;
+        $warehouseId = $this->asTenant($tenant, fn () => Warehouse::query()->value('id'))
+            ?? $this->asTenant($tenant, fn () => Warehouse::factory()->create()->id);
+
+        DB::table('inventory_movements')->insert([
+            'id' => $id,
+            'tenant_id' => $tenant->id,
+            'warehouse_id' => $warehouseId,
+            'variant_id' => $variant->id,
+            'type' => 'SALE',
+            'on_hand_delta' => -1,
+            'reserved_delta' => 0,
+            'on_hand_after' => 4,
+            'reserved_after' => 0,
+            'source_type' => 'order_line',
+            'channel_connection_id' => $connectionId,
+            'idempotency_key' => 'test:'.$id,
+            'occurred_at' => now()->subMinutes($minutesAgo),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $id;
     }
 
     private function stateFor(Tenant $tenant, string $listingId): ListingSyncState

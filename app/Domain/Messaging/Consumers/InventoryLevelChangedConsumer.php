@@ -10,6 +10,7 @@ use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Jobs\PushInventory;
 use App\Domain\Sync\Models\Listing;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Stok değişimi fan-out tüketicisi.
@@ -58,12 +59,17 @@ final class InventoryLevelChangedConsumer
         /** @var list<string> $pending Kuyruğa atılacak operasyon kimlikleri */
         $pending = [];
 
+        // Yankı bastırma yalnız kaynak kanala yakın zamanda BİZ yazmadıysak
+        // güvenlidir — bkz. originWasRecentlyWritten(). Olay başına tek sorgu.
+        $suppressOrigin = ! $this->originWasRecentlyWritten($event, $payload);
+
         foreach ($listings as $listing) {
             // (2) Anlık yankı bastırma — bir ENİYİLEME, doğruluk kuralı değil.
-            //     Stok değişimi bu kanaldan geldiyse ona geri yazmak gereksiz.
+            //     Stok değişimi bu kanaldan geldiyse ona geri yazmak gereksiz —
+            //     yakın zamanda ona başka bir değer gitmediyse (yarış, yukarıda).
             //     Kanal otorite dışına ÇIKARILMIYOR: mutabakat onu da kontrol
             //     eder ve gerçek bir sürüklenme bulursa onarım açar (§10).
-            if ($this->isOriginConnection($listing, $payload)) {
+            if ($suppressOrigin && $this->isOriginConnection($listing, $payload)) {
                 continue;
             }
 
@@ -113,6 +119,49 @@ final class InventoryLevelChangedConsumer
         foreach ($pending as $operationId) {
             PushInventory::dispatch($operationId, $event->tenant_id)->onQueue('inventory:high');
         }
+    }
+
+    /**
+     * Kaynak kanala son pencerede başka bir değişimin gönderimi gitmiş olabilir mi?
+     *
+     * YANKI BASTIRMA YARIŞI (S7 yük testi, 23 Ekim 2026 — 700 siparişte 7
+     * satır kanalda +1/+2): B kanalındaki satışın paketi A'ya, A'nın kendi
+     * siparişi bizde işlenmeden ÖNCE hazırlanır ve pazaryerinin kendi
+     * düşüşünden SONRA varırsa o düşüşü ezer. A'nın siparişinden doğan olay
+     * A'ya bastırıldığı için değer, ürün bir daha değişene ya da mutabakat
+     * düzeltene kadar fazla kalır — fazla satış riski tam satan üründe.
+     *
+     * Kural: varyantta pencere içinde KAYNAK DIŞI bir hareket varsa (başka
+     * kanalın satışı, elle düzeltme, içe aktarma — hepsi kaynağa da gönderim
+     * doğurur) kaynak kanal da hedef olur; mutlak değer gittiği için tekrar
+     * zararsızdır, sürüm kapısı ve paket birleştirme fazlasını eler. Pencere
+     * sıcak mutabakatın "son 30 dakikada satıldı" penceresiyle aynı
+     * varsayılanı taşır (§10) ve `entegrasyon.sync.origin_echo_window_minutes`
+     * ile ayarlanır; 0 eski davranıştır (hep bastır).
+     *
+     * Olayın KENDİ hareketi ayrıca dışlanmaz: origin_connection_id o
+     * hareketin bağlantısıdır, kaynak dışı filtresi onu zaten eler.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function originWasRecentlyWritten(OutboxEvent $event, array $payload): bool
+    {
+        $origin = $payload['origin_connection_id'] ?? null;
+        $minutes = (int) config('entegrasyon.sync.origin_echo_window_minutes', 30);
+
+        if ($origin === null || $minutes <= 0) {
+            return false;
+        }
+
+        // `DB::table()` global scope'a tabi değil — kiracı filtresi açık.
+        // `movements_variant_idx` (tenant_id, variant_id, occurred_at).
+        return DB::table('inventory_movements')
+            ->where('tenant_id', $event->tenant_id)
+            ->where('variant_id', $payload['variant_id'])
+            ->where('occurred_at', '>', now()->subMinutes($minutes))
+            ->where(static fn ($q) => $q->whereNull('channel_connection_id')
+                ->orWhere('channel_connection_id', '<>', $origin))
+            ->exists();
     }
 
     /**

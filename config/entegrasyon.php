@@ -78,6 +78,15 @@ return [
     ],
 
     /*
+    | Stok fan-out · yankı bastırma penceresi (dk). Varyantta bu süre içinde
+    | kaynak dışı hareket varsa siparişin geldiği kanala da stok yazılır
+    | (S7 yük testi yarışı). 0 = kaynak kanal hep atlanır (eski davranış).
+    */
+    'sync' => [
+        'origin_echo_window_minutes' => (int) env('ORIGIN_ECHO_WINDOW_MINUTES', 30),
+    ],
+
+    /*
     | S7 · işletme izleme turu (`ops:watch`, 5 dk) — Black Friday hazırlığı.
     | Alarm 34Devs'e gider (yukarıdaki ntfy + posta), aynı alarm saatte 1.
     */

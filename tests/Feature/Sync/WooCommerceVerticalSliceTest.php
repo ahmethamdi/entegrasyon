@@ -132,6 +132,11 @@ final class WooCommerceVerticalSliceTest extends TestCase
         // ── (3) Outbox relay → fan-out ───────────────────────────────────
         $this->asSystem(fn () => app(OutboxRelay::class)->run());
 
+        // Açılış stoğu dün girilmiş gibi: pencere içindeki kaynak dışı
+        // hareket kaynak kanalı da hedef yapar (yankı yarışı kuralı,
+        // FanOutTest) — bu dilim bastırmanın kendisini sınar.
+        $this->backdateOpeningMovements($tenant->id);
+
         // SATIŞ olayı hedeflenir. Açılış IMPORT hareketi de outbox'a olay
         // yazar; sırasız okumak açılış olayını seçer, o da origin taşımaz
         // ve kaynak kanal elenmeden fan-out edilir.
@@ -244,6 +249,11 @@ final class WooCommerceVerticalSliceTest extends TestCase
 
         // Zincir devam eder.
         $this->asSystem(fn () => app(OutboxRelay::class)->run());
+
+        // Açılış stoğu dün girilmiş gibi: pencere içindeki kaynak dışı
+        // hareket kaynak kanalı da hedef yapar (yankı yarışı kuralı,
+        // FanOutTest) — bu dilim bastırmanın kendisini sınar.
+        $this->backdateOpeningMovements($tenant->id);
 
         // SATIŞ olayı hedeflenir. Açılış IMPORT hareketi de outbox'a olay
         // yazar; sırasız okumak açılış olayını seçer, o da origin taşımaz
@@ -479,5 +489,13 @@ final class WooCommerceVerticalSliceTest extends TestCase
             ->where('listing_id', $listingId)
             ->where('domain', SyncDomain::INVENTORY->value)
             ->firstOrFail());
+    }
+
+    private function backdateOpeningMovements(string $tenantId): void
+    {
+        DB::table('inventory_movements')
+            ->where('tenant_id', $tenantId)
+            ->where('type', '<>', 'SALE')
+            ->update(['occurred_at' => now()->subDay()]);
     }
 }
