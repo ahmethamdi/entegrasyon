@@ -35,6 +35,7 @@ use App\Http\Middleware\SetLocale;
 use App\Support\LoadTest\SyncLoadTestCommand;
 use App\Support\Observability\CaptureMetricsCommand;
 use App\Support\Observability\DispatchAlertsCommand;
+use App\Support\Observability\OpsWatchCommand;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -106,6 +107,8 @@ return Application::configure(basePath: dirname(__DIR__))
         CaptureMetricsCommand::class,
         // §11 · §12 · eşik aşımı uyarıları. Zamanlaması routes/console.php.
         DispatchAlertsCommand::class,
+        // S7 · canlı işletme izleme (Black Friday). Zamanlaması routes/console.php.
+        OpsWatchCommand::class,
         // §11 · yük testi. ZAMANLANMAZ ve bu bilinçlidir: ölçüm aracıdır,
         // bakım turu değil — zamanlansaydı her gece kendiliğinden veri
         // üretir ve kuyruğu meşgul ederdi. Elle çalıştırılır.

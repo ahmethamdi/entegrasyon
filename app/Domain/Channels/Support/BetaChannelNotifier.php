@@ -7,12 +7,9 @@ namespace App\Domain\Channels\Support;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Models\Tenant;
+use App\Support\Observability\OpsNotifier;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Throwable;
 
 /**
  * Beta kanal bildirimleri — 34Devs'e (kullanıcı kararı 21 Eki 2026).
@@ -94,34 +91,9 @@ final class BetaChannelNotifier
         );
     }
 
+    /** Gönderim `OpsNotifier`'da (S7: izleme turu da aynı yolu kullanır). */
     private function send(string $title, string $body, string $tags): void
     {
-        $topic = (string) config('entegrasyon.beta.ntfy_topic');
-
-        if ($topic !== '') {
-            try {
-                // JSON gövde: başlıkta Türkçe karakter HTTP başlığında bozulurdu.
-                Http::timeout(5)->post(rtrim((string) config('entegrasyon.beta.ntfy_base_url'), '/').'/', [
-                    'topic' => $topic,
-                    'title' => $title,
-                    'message' => $body,
-                    'tags' => [$tags],
-                ]);
-            } catch (Throwable $e) {
-                Log::warning('beta_channel.ntfy_failed', ['error' => $e->getMessage()]);
-            }
-        }
-
-        $email = (string) config('entegrasyon.beta.notify_email');
-
-        if ($email !== '') {
-            try {
-                Mail::raw($body, function ($message) use ($email, $title): void {
-                    $message->to($email)->subject('[34Pazar] '.$title);
-                });
-            } catch (Throwable $e) {
-                Log::warning('beta_channel.mail_failed', ['error' => $e->getMessage()]);
-            }
-        }
+        app(OpsNotifier::class)->send($title, $body, $tags);
     }
 }

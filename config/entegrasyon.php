@@ -78,6 +78,20 @@ return [
     ],
 
     /*
+    | S7 · işletme izleme turu (`ops:watch`, 5 dk) — Black Friday hazırlığı.
+    | Alarm 34Devs'e gider (yukarıdaki ntfy + posta), aynı alarm saatte 1.
+    */
+    'ops' => [
+        // Horizon kuyruğunda en eski işin bekleme süresi (sn).
+        'queue_wait_seconds' => (int) env('OPS_QUEUE_WAIT_SECONDS', 120),
+        // Son 15 dakikada kanal başına 429 sayısı.
+        'rate_limit_hits_15m' => (int) env('OPS_RATE_LIMIT_HITS_15M', 30),
+        // Son 1 saatte ölen (dead) senkron işlemi, tüm sistem.
+        'dead_operations_1h' => (int) env('OPS_DEAD_OPERATIONS_1H', 20),
+        'throttle_seconds' => (int) env('OPS_ALERT_THROTTLE_SECONDS', 3600),
+    ],
+
+    /*
     | Ödeme sağlayıcısı — §13 · Faz 4.
     |
     | KULLANICI KARARI: Stripe (doküman "iyzico" diyor; sapma onaylı).

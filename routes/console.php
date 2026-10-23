@@ -303,6 +303,17 @@ Schedule::command('alerts:dispatch')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S7 · CANLI İŞLETME İZLEME — 5 DAKİKA (Black Friday hazırlığı).
+//
+// Günlük özetin (`alerts:dispatch`) yerine GEÇMEZ: o satıcıya, bu 34Devs'e.
+// Kuyruk tıkanması / devre kesici / 429 / ölü işlem dakikalar içinde
+// fark edilmeli. Tekrar koruması anahtar başına saatte 1 (`OpsNotifier`).
+// BU BLOK OLMADAN TUR HİÇ KOŞMAZ — `OpsWatchScheduleTest` sınar.
+Schedule::command('ops:watch')
+    ->everyFiveMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // V3.0 · §03 · Delta 3 · §20 · TOKEN YENİLEME — HER 15 DAKİKA.
 //
 // SIKLIK EN KISA TTL'İN DÖRTTE BİRİDİR: Etsy'nin access token'ı 1 SAAT
