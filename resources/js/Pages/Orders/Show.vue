@@ -104,6 +104,38 @@ const invoiceBadges = {
     failed: { text: k('Fatura kesilemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
 };
 
+// S6 · Kargo II (Beta) — satıcının kendi Yurtiçi/Aras sözleşmesi.
+const carrierBadges = {
+    pending: { text: k('Açılıyor'), class: 'bg-stone-50 text-stone-700 border-stone-200' },
+    creating: { text: k('Açılıyor'), class: 'bg-stone-50 text-stone-700 border-stone-200' },
+    created: { text: k('Etiket hazır · kargoya verilmedi'), class: 'bg-sky-50 text-sky-800 border-sky-200' },
+    shipped: { text: k('Kargoda'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    delivered: { text: k('Teslim edildi'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    cancelling: { text: k('İptal ediliyor'), class: 'bg-amber-50 text-amber-900 border-amber-200' },
+    cancelled: { text: k('İptal edildi'), class: 'bg-stone-50 text-stone-600 border-stone-200' },
+    failed: { text: k('Açılamadı'), class: 'bg-red-50 text-red-800 border-red-200' },
+};
+const shipmentError = computed(() => page.props.errors?.shipment);
+const carrierBusy = ref(false);
+const carrierDone = { preserveScroll: true, onFinish: () => { carrierBusy.value = false; } };
+
+function createCarrierShipment(code) {
+    carrierBusy.value = true;
+    router.post(`/orders/${props.order.id}/carrier-shipment`, { carrier: code }, carrierDone);
+}
+
+function cancelCarrierShipment() {
+    if (!window.confirm(t('Gönderi kargo firmasında iptal edilsin mi?'))) return;
+    carrierBusy.value = true;
+    router.post(`/orders/${props.order.id}/carrier-shipment/cancel`, {}, carrierDone);
+}
+
+function handOverCarrierShipment() {
+    if (!window.confirm(t('Paket kuryeye verildi mi? Takip numarası kanala bildirilecek.'))) return;
+    carrierBusy.value = true;
+    router.post(`/orders/${props.order.id}/carrier-shipment/hand-over`, {}, carrierDone);
+}
+
 const documentLabels = { e_archive: k('e-Arşiv'), e_invoice: k('e-Fatura') };
 
 const invoiceError = computed(() => page.props.errors?.invoice);
@@ -433,6 +465,107 @@ function stamp(value) {
         <datalist id="carrier-suggestions">
             <option v-for="name in carrierSuggestions" :key="name" :value="name" />
         </datalist>
+
+        <!--
+            KARGO GÖNDERİSİ (S6, Beta) — satıcının kendi Yurtiçi/Aras
+            sözleşmesi. Alıcı kanaldan anlık okunur; etiket hazır olması
+            kargoya verildi demek değildir.
+        -->
+        <template v-if="order.carrierChannelSupported || order.carrierShipment">
+            <h2 class="mt-10 flex items-center gap-2 text-sm font-semibold text-stone-900">
+                {{ t('Kargo gönderisi') }}
+                <span class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">Beta</span>
+            </h2>
+
+            <div class="mt-3 rounded-lg border border-stone-200 bg-white px-4 py-3">
+                <p v-if="shipmentError" class="mb-2 text-xs text-red-700">{{ shipmentError }}</p>
+
+                <template v-if="order.carrierShipment && order.carrierShipment.status !== 'cancelled'">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <p class="text-sm text-stone-900">
+                                {{ order.carrierShipment.carrier }}
+                                <span class="font-mono text-xs text-stone-500">· {{ order.carrierShipment.cargoKey }}</span>
+                                <span v-if="order.carrierShipment.environment === 'test'" class="text-xs text-amber-800">· {{ t('test ortamı') }}</span>
+                            </p>
+                            <p v-if="order.carrierShipment.trackingNumber" class="mt-0.5 text-xs text-stone-600">
+                                {{ t('Takip no') }}:
+                                <a v-if="order.carrierShipment.trackingUrl" :href="order.carrierShipment.trackingUrl" target="_blank" rel="noopener" class="font-mono underline">{{ order.carrierShipment.trackingNumber }}</a>
+                                <span v-else class="font-mono">{{ order.carrierShipment.trackingNumber }}</span>
+                            </p>
+                            <p v-if="order.carrierShipment.carrierStatus" class="mt-0.5 text-[11px] text-stone-500">{{ order.carrierShipment.carrierStatus }}</p>
+                        </div>
+                        <span class="rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="carrierBadges[order.carrierShipment.status]?.class">
+                            {{ t(carrierBadges[order.carrierShipment.status]?.text ?? order.carrierShipment.status) }}
+                        </span>
+                    </div>
+
+                    <p v-if="order.carrierShipment.reason" class="mt-1.5 text-[11px] text-red-700">
+                        {{ order.carrierShipment.reason }}<template v-if="order.carrierShipment.error"> — {{ order.carrierShipment.error }}</template>
+                    </p>
+
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <a v-if="order.carrierShipment.hasZpl" :href="`/orders/${order.id}/carrier-shipment/label.zpl`" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">
+                            {{ t('Etiket (ZPL)') }}
+                        </a>
+                        <a v-if="order.carrierShipment.hasPdf" :href="`/orders/${order.id}/carrier-shipment/label.pdf`" target="_blank" rel="noopener" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">
+                            {{ t('Etiket (PDF)') }}
+                        </a>
+                        <button
+                            v-if="order.carrierShipment.status === 'created' && !order.carrierShipment.notified && order.carrierShipment.trackingNumber"
+                            type="button"
+                            :disabled="carrierBusy"
+                            class="rounded-md bg-stone-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+                            @click="handOverCarrierShipment"
+                        >
+                            {{ t('Kargoya verdim') }}
+                        </button>
+                        <button
+                            v-if="order.carrierShipment.cancellable"
+                            type="button"
+                            :disabled="carrierBusy"
+                            class="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            @click="cancelCarrierShipment"
+                        >
+                            {{ t('Gönderiyi iptal et') }}
+                        </button>
+                        <button
+                            v-if="order.carrierShipment.status === 'failed'"
+                            type="button"
+                            :disabled="carrierBusy"
+                            class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100 disabled:opacity-50"
+                            @click="createCarrierShipment(order.carrierShipment.provider)"
+                        >
+                            {{ t('Tekrar dene') }}
+                        </button>
+                    </div>
+                </template>
+
+                <template v-else>
+                    <p v-if="!order.carrierAccounts.length" class="text-xs text-stone-500">
+                        {{ t('Kendi kargo sözleşmenizle gönderi açmak için') }}
+                        <Link href="/settings/shipping" class="underline">{{ t('kargo ayarlarından hesabınızı bağlayın') }}</Link>.
+                    </p>
+                    <div v-else class="flex flex-wrap items-center justify-between gap-3">
+                        <p class="text-xs text-stone-500">
+                            {{ t('Teslimat adresi :channel\'dan okunur, gönderi kargo firmasında açılır.', { channel: channelName(order.channel.type) }) }}
+                        </p>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                v-for="carrier in order.carrierAccounts"
+                                :key="carrier.code"
+                                type="button"
+                                :disabled="carrierBusy"
+                                class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                @click="createCarrierShipment(carrier.code)"
+                            >
+                                {{ t(':name gönderisi aç', { name: carrier.name }) }}
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
 
         <!--
             E-FATURA. Fatura Paraşüt'ten kesilir; alıcı bilgisi kanaldan

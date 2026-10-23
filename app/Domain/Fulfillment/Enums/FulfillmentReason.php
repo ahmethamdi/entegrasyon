@@ -64,6 +64,21 @@ enum FulfillmentReason: string
     /** Kalem katalogdaki bir varyanta eşlenmemiş — toplama belirsiz olabilir. */
     case VARIANT_UNMATCHED = 'VARIANT_UNMATCHED';
 
+    /** S6 · Bu kargo firması için bağlı (kullanılabilir) hesap yok. */
+    case CARRIER_ACCOUNT_MISSING = 'CARRIER_ACCOUNT_MISSING';
+
+    /** S6 · Kanal gönderilebilir alıcı vermedi (adres yok, iptal, veri izni yok). */
+    case RECIPIENT_UNAVAILABLE = 'RECIPIENT_UNAVAILABLE';
+
+    /** S6 · Kargo firması gönderiyi reddetti (metin `error_detail`'de). */
+    case CARRIER_REJECTED = 'CARRIER_REJECTED';
+
+    /** S6 · Kargo firmasına ulaşılamadı; denemeler tükendi. */
+    case CARRIER_UNAVAILABLE = 'CARRIER_UNAVAILABLE';
+
+    /** S6 · Kargo firması kullanıcı adı/şifreyi reddetti. */
+    case CARRIER_AUTH_FAILED = 'CARRIER_AUTH_FAILED';
+
     /** Kullanıcıya gösterilecek metin (çevrilir; anahtar Türkçe metnin kendisi). */
     public function label(): string
     {
@@ -85,6 +100,11 @@ enum FulfillmentReason: string
             self::INVOICE_BOOKS_ONLY => 'Fatura yalnız muhasebeye işlendi; indirilecek e-belge yok.',
             self::INVOICE_QUOTA_EXCEEDED => 'Bu ayki fatura kotan doldu; daha fazla fatura için planını yükselt.',
             self::VARIANT_UNMATCHED => 'Kalem katalogdaki bir varyanta eşlenmemiş; kanal verisi gösteriliyor.',
+            self::CARRIER_ACCOUNT_MISSING => 'Bu kargo firması için hesap bağlı değil; Kargo ayarlarından bağlayın.',
+            self::RECIPIENT_UNAVAILABLE => 'Kanal gönderilebilir bir teslimat adresi vermedi.',
+            self::CARRIER_REJECTED => 'Kargo firması gönderiyi reddetti.',
+            self::CARRIER_UNAVAILABLE => 'Kargo firmasına ulaşılamadı; biraz sonra yeniden deneyin.',
+            self::CARRIER_AUTH_FAILED => 'Kargo firması kullanıcı adı/şifreyi reddetti; Kargo ayarlarından yeniden bağlayın.',
         });
     }
 
@@ -93,7 +113,7 @@ enum FulfillmentReason: string
     {
         return match ($this) {
             self::LABEL_NOT_READY, self::INVOICE_PENDING, self::CHANNEL_UNAVAILABLE => false,
-            self::LABEL_CREATION_FAILED, self::SHIPMENT_NOT_FOUND, self::LABEL_FORMAT_UNSUPPORTED => false,
+            self::LABEL_CREATION_FAILED, self::SHIPMENT_NOT_FOUND, self::LABEL_FORMAT_UNSUPPORTED, self::CARRIER_UNAVAILABLE => false,
             default => true,
         };
     }

@@ -23,6 +23,7 @@ use App\Domain\Reconciliation\Console\ReconcileHotCommand;
 use App\Domain\Reconciliation\Console\ReconcilePricesCommand;
 use App\Domain\Reconciliation\Console\ReconcileWarmCommand;
 use App\Domain\Returns\Console\SyncReturnsCommand;
+use App\Domain\Shipping\Console\TrackCarrierShipmentsCommand;
 use App\Domain\Suppliers\Console\SyncSuppliersCommand;
 use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\PollChannelBatchesCommand;
@@ -88,6 +89,7 @@ return Application::configure(basePath: dirname(__DIR__))
         SyncQuestionsCommand::class,
         // S5 · saatlik tedarikçi XML turu + yarıda kalan tur taraması.
         SyncSuppliersCommand::class,
+        TrackCarrierShipmentsCommand::class,
         // ADR-001 · tek seferlik kanonik durum geri doldurma (zamanlanmaz).
         BackfillOrderStateCommand::class,
         // A12 · eşleşmemiş sipariş satırları. Zamanlaması routes/console.php.

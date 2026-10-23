@@ -22,6 +22,7 @@ use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsOrderReconciliation;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsShippingRecipient;
 use App\Domain\Channels\Contracts\SupportsTokenRefresh;
 use App\Domain\Channels\Contracts\SupportsWebhookRegistration;
 use App\Domain\Channels\Contracts\VerifiesWebhookSender;
@@ -36,6 +37,8 @@ use App\Domain\Invoicing\Support\InvoiceLine;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
+use App\Domain\Shipping\Exceptions\RecipientUnavailable;
+use App\Domain\Shipping\Support\ShipmentRecipient;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Support\InventoryPushBatch;
@@ -123,7 +126,7 @@ use Throwable;
  * ilan edilen ama çalışmayan yetenek panelde çalışmayan sekme demektir
  * (§05).
  */
-final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsInvoiceData, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsTokenRefresh, SupportsWebhookRegistration, VerifiesWebhookSender
+final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsInvoiceData, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsShippingRecipient, SupportsTokenRefresh, SupportsWebhookRegistration, VerifiesWebhookSender
 {
     /** Sipariş mutabakatı sayfa boyu — 100 kalemli siparişte maliyet ~ sayfa × kalem. */
     private const RECOVER_PAGE_SIZE = 25;
@@ -645,6 +648,68 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
     }
 
     // ------------------------------------------------------------- fatura
+
+    /**
+     * Teslimat adresi — kargo gönderisi açılırken ANLIK okunur (§ S6 Kargo II).
+     *
+     * Türkiye'de Shopify adresinde `province` il, `city` ilçedir. Korumalı
+     * müşteri verisi izni yoksa (ACCESS_DENIED) gönderi açılamaz — fatura
+     * taslağıyla aynı kalıcı ret.
+     */
+    public function fetchShippingRecipient(Order $order): ShipmentRecipient
+    {
+        $id = (string) $order->external_id;
+
+        try {
+            $data = $this->gql(
+                <<<'GQL'
+                query ShippingRecipient($id: ID!) {
+                  order(id: $id) {
+                    cancelledAt email phone
+                    shippingAddress { name company address1 address2 city province phone countryCodeV2 }
+                  }
+                }
+                GQL,
+                variables: ['id' => str_starts_with($id, 'gid://') ? $id : 'gid://shopify/Order/'.$id],
+                operation: 'shippingRecipient',
+            );
+        } catch (ShopifyGraphqlException $e) {
+            if ($e->hasCode('ACCESS_DENIED')) {
+                throw new RecipientUnavailable('Shopify alıcının adresini vermedi: 34Pazar uygulamasının korumalı müşteri verisi izni yok.');
+            }
+
+            throw $e;
+        }
+
+        $remote = $data['order'] ?? null;
+
+        if (! is_array($remote)) {
+            throw new RecipientUnavailable('Sipariş Shopify\'da bulunamadı.');
+        }
+
+        if (($remote['cancelledAt'] ?? null) !== null) {
+            throw new RecipientUnavailable('Sipariş iptal edilmiş; gönderi açılmaz.');
+        }
+
+        $address = is_array($remote['shippingAddress'] ?? null) ? $remote['shippingAddress'] : null;
+        $text = static fn (mixed $v): string => is_scalar($v) ? trim((string) $v) : '';
+
+        if ($address === null || $text($address['address1'] ?? null) === '') {
+            throw new RecipientUnavailable('Siparişte teslimat adresi yok (dijital ürün ya da mağazadan teslim olabilir).');
+        }
+
+        $province = $text($address['province'] ?? null);
+        $city = $text($address['city'] ?? null);
+
+        return new ShipmentRecipient(
+            name: $text($address['name'] ?? null) !== '' ? $text($address['name']) : $text($address['company'] ?? null),
+            address: trim($text($address['address1'] ?? null).' '.$text($address['address2'] ?? null)),
+            city: $province !== '' ? $province : $city,
+            district: $province !== '' ? $city : '',
+            phone: $text($address['phone'] ?? null) !== '' ? $text($address['phone']) : $text($remote['phone'] ?? null),
+            email: $text($remote['email'] ?? null) !== '' ? $text($remote['email']) : null,
+        );
+    }
 
     /**
      * Fatura taslağı (S6) — sipariş GraphQL ile ANLIK okunur, yazılmaz.

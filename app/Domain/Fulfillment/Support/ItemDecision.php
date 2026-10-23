@@ -14,16 +14,17 @@ final readonly class ItemDecision
         public string $outcome,
         public ?FulfillmentReason $reason = null,
         public ?string $labelId = null,
+        public ?string $shipmentId = null,
     ) {}
 
-    public static function queued(?string $labelId = null): self
+    public static function queued(?string $labelId = null, ?string $shipmentId = null): self
     {
-        return new self(FulfillmentBatchItem::QUEUED, null, $labelId);
+        return new self(FulfillmentBatchItem::QUEUED, null, $labelId, $shipmentId);
     }
 
-    public static function succeeded(?string $labelId = null): self
+    public static function succeeded(?string $labelId = null, ?string $shipmentId = null): self
     {
-        return new self(FulfillmentBatchItem::SUCCEEDED, null, $labelId);
+        return new self(FulfillmentBatchItem::SUCCEEDED, null, $labelId, $shipmentId);
     }
 
     public static function actionRequired(FulfillmentReason $reason): self

@@ -81,6 +81,11 @@ class HandleInertiaRequests extends Middleware
             // Dil anahtarı yalnız İngilizce panel açıkken görünür.
             'localeSwitch' => (bool) config('app.english_panel'),
 
+            // Açılıp kapanabilen modüller (acil kapatma anahtarları).
+            'features' => [
+                'carrierShipping' => (bool) config('shipping.enabled'),
+            ],
+
             // Tek seferlik bildirimler. `warning` sessiz başarısızlığın
             // panjurudur: kanal cevap vermediğinde kullanıcı bunu görmeli,
             // yoksa "kaydedildi" sanıp ürün göndermeye başlar.

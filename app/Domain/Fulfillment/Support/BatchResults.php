@@ -8,6 +8,7 @@ use App\Domain\Fulfillment\Enums\FulfillmentReason;
 use App\Domain\Fulfillment\Models\FulfillmentBatch;
 use App\Domain\Fulfillment\Models\FulfillmentBatchItem;
 use App\Domain\Fulfillment\Models\ShippingLabel;
+use App\Domain\Shipping\Models\CarrierShipment;
 
 /**
  * Toplu işlemin kalem başına GÜNCEL sonucu.
@@ -24,7 +25,7 @@ final class BatchResults
     public function for(FulfillmentBatch $batch): array
     {
         $items = $batch->items()
-            ->with(['order:id,external_id,external_number,state,channel_connection_id', 'order.invoice', 'label'])
+            ->with(['order:id,external_id,external_number,state,channel_connection_id', 'order.invoice', 'label', 'shipment'])
             ->orderBy('created_at')
             ->get();
 
@@ -75,6 +76,22 @@ final class BatchResults
                     ['cargoProvider' => $label->cargo_provider],
                 ],
                 default => ['in_progress', FulfillmentReason::LABEL_NOT_READY, []],
+            };
+        }
+
+        if (isset(FulfillmentBatch::CARRIER_ACTIONS[$action]) && $item->shipment !== null) {
+            $shipment = $item->shipment;
+            $extra = ['carrier' => $shipment->carrierName(), 'trackingNumber' => $shipment->tracking_number, 'hasLabel' => $shipment->hasLabel()];
+
+            return match ($shipment->status) {
+                CarrierShipment::STATUS_CREATED, CarrierShipment::STATUS_SHIPPED, CarrierShipment::STATUS_DELIVERED => ['succeeded', null, $extra],
+                CarrierShipment::STATUS_FAILED => [
+                    $shipment->reason()?->requiresAction() ?? false ? 'action_required' : 'failed',
+                    $shipment->reason() ?? FulfillmentReason::CARRIER_UNAVAILABLE,
+                    [...$extra, 'detail' => $shipment->error_detail],
+                ],
+                CarrierShipment::STATUS_CANCELLED => ['action_required', FulfillmentReason::INVALID_ORDER_STATE, $extra],
+                default => ['in_progress', null, $extra],
             };
         }
 

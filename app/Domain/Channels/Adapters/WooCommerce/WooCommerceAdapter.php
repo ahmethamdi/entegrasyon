@@ -19,6 +19,7 @@ use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrderReconciliation;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsShippingRecipient;
 use App\Domain\Channels\Contracts\SupportsWebhookRegistration;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
@@ -27,6 +28,9 @@ use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
+use App\Domain\Shipping\Exceptions\RecipientUnavailable;
+use App\Domain\Shipping\Support\ShipmentRecipient;
+use App\Domain\Shipping\Support\TurkishProvinces;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
@@ -78,7 +82,7 @@ use Throwable;
  * Webhook bir yetenek değil taşıma biçimidir — SupportsWebhooks arayüzü
  * YOKTUR. İmza doğrulama ve olay kimliği çıkarma ChannelAdapter'ın parçası.
  */
-final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsWebhookRegistration
+final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, SupportsCatalog, SupportsCatalogImport, SupportsFulfillment, SupportsInventory, SupportsOrderReconciliation, SupportsOrders, SupportsPricing, SupportsShippingRecipient, SupportsWebhookRegistration
 {
     /**
      * Sipariş akışının ihtiyaç duyduğu konular — `WooOrderNormalizer` üçünü
@@ -782,6 +786,51 @@ final class WooCommerceAdapter implements ChannelAdapter, MapsOrderState, Suppor
         return WooOrderNormalizer::normalize(
             $message,
             refundDetails: is_array($refunds) ? array_values(array_filter($refunds, 'is_array')) : [],
+        );
+    }
+
+    /**
+     * Teslimat adresi — kargo gönderisi açılırken ANLIK okunur (§ S6 Kargo II).
+     *
+     * WooCommerce Türkiye'de il `state` alanında plaka koduyla (`TR34`),
+     * ilçe `city`'de durur. Teslimat telefonu yoksa fatura telefonu kullanılır.
+     */
+    public function fetchShippingRecipient(Order $order): ShipmentRecipient
+    {
+        $response = $this->client->get('orders/'.rawurlencode((string) $order->external_id));
+
+        if ($response->status() === 404) {
+            throw new RecipientUnavailable('Sipariş WooCommerce\'ta bulunamadı.');
+        }
+
+        $response->throw();
+        $remote = $response->json();
+
+        if (! is_array($remote)) {
+            throw new RecipientUnavailable('WooCommerce siparişi okunamadı.');
+        }
+
+        if (in_array($remote['status'] ?? null, ['cancelled', 'refunded', 'failed', 'trash'], true)) {
+            throw new RecipientUnavailable('Sipariş iptal/iade edilmiş; gönderi açılmaz.');
+        }
+
+        $shipping = is_array($remote['shipping'] ?? null) ? $remote['shipping'] : [];
+        $billing = is_array($remote['billing'] ?? null) ? $remote['billing'] : [];
+        $text = static fn (mixed $v): string => is_scalar($v) ? trim((string) $v) : '';
+
+        if ($text($shipping['address_1'] ?? null) === '') {
+            throw new RecipientUnavailable('Siparişte teslimat adresi yok.');
+        }
+
+        $name = trim($text($shipping['first_name'] ?? null).' '.$text($shipping['last_name'] ?? null));
+
+        return new ShipmentRecipient(
+            name: $name !== '' ? $name : $text($shipping['company'] ?? null),
+            address: trim($text($shipping['address_1'] ?? null).' '.$text($shipping['address_2'] ?? null)),
+            city: TurkishProvinces::name($text($shipping['state'] ?? null)),
+            district: $text($shipping['city'] ?? null),
+            phone: $text($shipping['phone'] ?? null) !== '' ? $text($shipping['phone']) : $text($billing['phone'] ?? null),
+            email: $text($billing['email'] ?? null) !== '' ? $text($billing['email']) : null,
         );
     }
 

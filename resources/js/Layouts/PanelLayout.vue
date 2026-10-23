@@ -74,6 +74,11 @@ const navGroups = [
              */
             { href: '/settings/invoicing', label: k('Fatura ve muhasebe') },
             /*
+             * Kargo — satıcının kendi Yurtiçi/Aras sözleşmesi (S6, Beta).
+             * Acil kapatma anahtarı kapalıysa (`shipping.enabled`) gizlenir.
+             */
+            { href: '/settings/shipping', label: k('Kargo'), feature: 'carrierShipping' },
+            /*
              * Katkı raporu (S1) — sipariş başına KDV dahil katkı, beklenen ve
              * gerçekleşen ayrı; her rakam ayrıntıda kaynağına iner.
              */
@@ -337,7 +342,7 @@ function logout() {
                     </p>
 
                     <ul v-show="!group.collapsible || advancedOpen" :class="groupIndex === 0 ? 'pt-1' : ''">
-                        <li v-for="item in group.items" :key="item.href ?? item.label">
+                        <li v-for="item in group.items.filter((i) => !i.feature || page.props.features?.[i.feature])" :key="item.href ?? item.label">
                             <span
                                 v-if="item.soon"
                                 class="flex items-center justify-between rounded px-3 py-2 text-sm text-stone-400"

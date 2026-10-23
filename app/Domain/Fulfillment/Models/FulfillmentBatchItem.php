@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Fulfillment\Models;
 
 use App\Domain\Orders\Models\Order;
+use App\Domain\Shipping\Models\CarrierShipment;
 use App\Support\Tenancy\BelongsToTenant;
 use App\Support\Uuid\HasUuidV7;
 use Illuminate\Database\Eloquent\Model;
@@ -20,6 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $outcome
  * @property string|null $reason_code
  * @property string|null $shipping_label_id
+ * @property string|null $carrier_shipment_id
  */
 class FulfillmentBatchItem extends Model
 {
@@ -44,5 +46,10 @@ class FulfillmentBatchItem extends Model
     public function label(): BelongsTo
     {
         return $this->belongsTo(ShippingLabel::class, 'shipping_label_id');
+    }
+
+    public function shipment(): BelongsTo
+    {
+        return $this->belongsTo(CarrierShipment::class, 'carrier_shipment_id');
     }
 }

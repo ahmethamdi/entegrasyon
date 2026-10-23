@@ -34,12 +34,30 @@ class FulfillmentBatch extends Model
 
     public const ACTION_PICKING = 'picking';
 
+    /** S6 · Satıcının kendi kargo sözleşmesiyle gönderi aç (firma başına bir eylem). */
+    public const ACTION_CARRIER_YURTICI = 'carrier_yurtici';
+
+    public const ACTION_CARRIER_ARAS = 'carrier_aras';
+
+    /** Eylem → kargo firması kodu (`CarrierAccount::PROVIDER_*`). */
+    public const CARRIER_ACTIONS = [
+        self::ACTION_CARRIER_YURTICI => 'yurtici',
+        self::ACTION_CARRIER_ARAS => 'aras',
+    ];
+
     public const ACTIONS = [
         self::ACTION_LABELS,
         self::ACTION_INVOICE_DOCUMENTS,
         self::ACTION_ISSUE_INVOICES,
         self::ACTION_PICKING,
+        self::ACTION_CARRIER_YURTICI,
+        self::ACTION_CARRIER_ARAS,
     ];
+
+    public function isCarrierAction(): bool
+    {
+        return isset(self::CARRIER_ACTIONS[$this->action]);
+    }
 
     protected $guarded = ['id'];
 

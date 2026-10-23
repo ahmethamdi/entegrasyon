@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Domain\Billing\Exceptions\QuotaExceededException;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Contracts\SupportsInvoiceData;
+use App\Domain\Channels\Contracts\SupportsShippingRecipient;
 use App\Domain\Invoicing\Actions\RequestInvoice;
 use App\Domain\Invoicing\Actions\RequestInvoiceCorrection;
 use App\Domain\Invoicing\Exceptions\InvoiceCorrectionRefused;
@@ -22,6 +23,8 @@ use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Models\OrderEvent;
 use App\Domain\Orders\Models\OrderLine;
 use App\Domain\Returns\Models\ReturnRequest;
+use App\Domain\Shipping\Models\CarrierAccount;
+use App\Domain\Shipping\Models\CarrierShipment;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -191,6 +194,16 @@ final class OrderController extends Controller
                 'invoiceChannelSupported' => $this->channelSupportsInvoicing($order),
                 'invoiceAccountReady' => (bool) InvoiceAccount::query()->first()?->isUsable(),
 
+                // S6 · Kargo II (BETA) — satıcının kendi Yurtiçi/Aras sözleşmesi.
+                // Acil kapatma anahtarı kapalıysa bölüm hiç görünmez.
+                'carrierShipment' => config('shipping.enabled') ? $this->presentCarrierShipment($order) : null,
+                'carrierChannelSupported' => (bool) config('shipping.enabled') && is_subclass_of((string) ($order->connection?->channelType?->adapter_class ?? ''), SupportsShippingRecipient::class),
+                'carrierAccounts' => CarrierAccount::query()
+                    ->where('status', CarrierAccount::STATUS_CONNECTED)
+                    ->get()
+                    ->map(fn (CarrierAccount $a): array => ['code' => $a->provider, 'name' => CarrierAccount::displayName($a->provider), 'environment' => $a->environment])
+                    ->values()->all(),
+
                 // S6 · düzeltmeler (iptal, iade kaydı) ve açılabilecek olanlar.
                 'invoiceCorrections' => $order->invoiceCorrections
                     ->sortBy('created_at')
@@ -206,6 +219,35 @@ final class OrderController extends Controller
                 'returnInvoiceCandidates' => $this->returnInvoiceCandidates($order),
             ],
         ]);
+    }
+
+    /** @return array<string, mixed>|null */
+    private function presentCarrierShipment(Order $order): ?array
+    {
+        $shipment = CarrierShipment::query()->where('order_id', $order->id)->first();
+
+        if ($shipment === null) {
+            return null;
+        }
+
+        return [
+            'carrier' => $shipment->carrierName(),
+            'provider' => $shipment->provider,
+            'environment' => $shipment->environment,
+            'cargoKey' => $shipment->cargo_key,
+            'status' => $shipment->status,
+            'reason' => $shipment->reason()?->label(),
+            'error' => $shipment->error_detail,
+            'carrierStatus' => $shipment->carrier_status_text,
+            'trackingNumber' => $shipment->tracking_number,
+            'trackingUrl' => $shipment->tracking_url,
+            'hasZpl' => $shipment->label_zpl !== null,
+            'hasPdf' => $shipment->label_pdf !== null,
+            'notified' => $shipment->fulfillment_id !== null,
+            'cancellable' => $shipment->isCancellable() && $shipment->fulfillment_id === null,
+            'confirmedAt' => $shipment->confirmed_at?->toIso8601String(),
+            'shippedAt' => $shipment->shipped_at?->toIso8601String(),
+        ];
     }
 
     /**

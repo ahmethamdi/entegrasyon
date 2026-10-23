@@ -218,6 +218,15 @@ Schedule::command('suppliers:sync')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S6 · Kargo II — satıcının kendi Yurtiçi sözleşmesiyle açılan gönderilerin
+// durumu. Kargoya verilen gönderinin takip numarası kanala buradan gider
+// (etiketin hazır olması kargoya verildi demek değildir). Aras'ın durum
+// servisi doğrulanamadı; Aras'ta satıcı "kargoya verdim" der.
+Schedule::command('shipping:track')
+    ->everyThirtyMinutes()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // A12 · EŞLEŞMEMİŞ SİPARİŞ SATIRLARI — SKU sonradan kataloğa girince stok
 // düşülür. Zamanlanmazsa satır sonsuza kadar PENDING kalır, bakiye satılmış
 // adet kadar fazla görünür ve kanallara FAZLA STOK gider.

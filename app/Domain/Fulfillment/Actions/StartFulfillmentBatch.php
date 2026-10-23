@@ -12,6 +12,7 @@ use App\Domain\Fulfillment\Support\InvoiceDocuments;
 use App\Domain\Fulfillment\Support\ItemDecision;
 use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Orders\Models\Order;
+use App\Domain\Shipping\Actions\RequestCarrierShipment;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -40,6 +41,7 @@ final class StartFulfillmentBatch
     public function __construct(
         private readonly RequestShippingLabel $labels,
         private readonly InvoiceDocuments $invoices,
+        private readonly RequestCarrierShipment $shipments,
     ) {}
 
     /** @param list<string> $orderIds */
@@ -109,6 +111,7 @@ final class StartFulfillmentBatch
                     'outcome' => $decision->outcome,
                     'reason_code' => $decision->reason?->value,
                     'shipping_label_id' => $decision->labelId,
+                    'carrier_shipment_id' => $decision->shipmentId,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];
@@ -129,6 +132,8 @@ final class StartFulfillmentBatch
             FulfillmentBatch::ACTION_PICKING => FulfillmentPolicy::allows($order, FulfillmentPolicy::PICK)
                 ? ItemDecision::succeeded()
                 : ItemDecision::actionRequired(FulfillmentReason::INVALID_ORDER_STATE),
+            FulfillmentBatch::ACTION_CARRIER_YURTICI,
+            FulfillmentBatch::ACTION_CARRIER_ARAS => $this->shipments->run($order, FulfillmentBatch::CARRIER_ACTIONS[$action], $userId),
         };
     }
 }

@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\BulkEditController;
+use App\Http\Controllers\CarrierShipmentController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\ChannelPricingController;
@@ -35,12 +36,14 @@ use App\Http\Controllers\ProductImportController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ReturnController;
+use App\Http\Controllers\ShippingSettingsController;
 use App\Http\Controllers\ShopifyInstallController;
 use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\SupplierSourceController;
 use App\Http\Controllers\SyncFailureController;
 use App\Http\Controllers\WooAuthController;
+use App\Http\Middleware\EnsureCarrierShippingEnabled;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
@@ -407,6 +410,20 @@ Route::middleware(['auth', 'verified', 'tenant'])->group(function (): void {
         ->name('settings.invoicing.parasut.authorize');
     Route::get('/settings/invoicing/parasut/callback', [InvoiceSettingsController::class, 'callback'])
         ->name('settings.invoicing.parasut.callback');
+
+    // S6 · Kargo II (BETA) — satıcının kendi Yurtiçi/Aras sözleşmesi. Alıcı
+    // kanaldan ANLIK okunur; kargoya verilen gönderinin takip numarası
+    // mevcut kargo bildirimi yoluyla kanala gider.
+    // Acil kapatma: `CARRIER_SHIPPING_ENABLED=false` → hepsi 404.
+    Route::middleware(EnsureCarrierShippingEnabled::class)->group(function (): void {
+        Route::get('/settings/shipping', [ShippingSettingsController::class, 'index'])->name('settings.shipping');
+        Route::post('/settings/shipping', [ShippingSettingsController::class, 'store'])->name('settings.shipping.store');
+        Route::delete('/settings/shipping/{provider}', [ShippingSettingsController::class, 'destroy'])->name('settings.shipping.destroy');
+        Route::post('/orders/{order}/carrier-shipment', [CarrierShipmentController::class, 'store'])->name('orders.carrier.store');
+        Route::post('/orders/{order}/carrier-shipment/cancel', [CarrierShipmentController::class, 'cancel'])->name('orders.carrier.cancel');
+        Route::post('/orders/{order}/carrier-shipment/hand-over', [CarrierShipmentController::class, 'handOver'])->name('orders.carrier.handover');
+        Route::get('/orders/{order}/carrier-shipment/label.{format}', [CarrierShipmentController::class, 'label'])->name('orders.carrier.label');
+    });
 
     // Onay durumu ekranı (§13 · Faz 4, §14 · onay süreci). SALT OKUNUR:
     // onay kararını KANAL verir ve biz yalnızca okuruz (`approval:track`,
