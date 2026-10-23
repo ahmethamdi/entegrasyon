@@ -27,9 +27,12 @@ use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncAttempt;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Domain\Sync\Support\ConnectionPushLock;
 use App\Domain\Sync\Support\InventoryBatchBuilder;
 use App\Domain\Sync\Support\SyncResultRecorder;
+use Illuminate\Database\Connection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Redis;
 use PHPUnit\Framework\Attributes\Test;
@@ -103,6 +106,64 @@ final class PushInventoryCircuitTest extends TestCase
         // Operasyon TERMİNAL DEĞİL: iş ertelendi, kaybolmadı.
         $this->assertNotSame(SyncOperationStatus::COMPLETED, $fresh->status);
         $this->assertNotSame(SyncOperationStatus::DEAD, $fresh->status);
+    }
+
+    /**
+     * BAĞLANTIDA BAŞKA PAKET GİDERKEN İKİNCİSİ GÖNDERİLMEZ (S7 yük testi).
+     *
+     * Kilit olmadan iki iş aynı bekleyen operasyonları toplayıp ikisi de
+     * gönderiyordu: sonuç kayıtları deadlock'a düşüyor, eski değerli paket
+     * yenisinden sonra varıp kanalda stoğu FAZLA bırakıyordu. Kilidi
+     * tutan BAŞKA bir oturumdur — aynı oturumda advisory kilit yeniden
+     * girilebilir olduğu için test aksi halde hiçbir şey ölçmezdi.
+     */
+    #[Test]
+    public function a_second_sender_on_the_same_connection_waits_instead_of_pushing(): void
+    {
+        [$tenant, $variant, $connection] = $this->makeContext();
+
+        ProgrammableInventoryAdapter::succeedOn('woocommerce');
+
+        $operation = $this->openOperation($tenant, $variant, version: 5);
+        $other = $this->otherSession();
+        $key = ConnectionPushLock::key($connection->id, SyncDomain::INVENTORY);
+        $other->select('SELECT pg_advisory_lock(hashtextextended(?, 0))', [$key]);
+
+        try {
+            $job = (new PushInventory($operation->id, $tenant->id))->withFakeQueueInteractions();
+            $job->handle(app(InventoryBatchBuilder::class), app(SyncResultRecorder::class), app(AdapterRegistry::class));
+
+            $job->assertReleased(delay: PushInventory::LOCKED_RETRY_SECONDS);
+            $this->assertSame([], ProgrammableInventoryAdapter::pushesFor('woocommerce'), 'Kilit başkasındayken kanala çağrı YAPILMAMALI.');
+            $this->assertSame(0, $this->asTenant($tenant, fn () => $operation->fresh())->attempt_count, 'Ertelenen iş deneme AÇMAZ.');
+        } finally {
+            $other->select('SELECT pg_advisory_unlock(hashtextextended(?, 0))', [$key]);
+        }
+
+        // Kilit bırakılınca aynı iş normal gider.
+        $this->runJob($tenant, $operation->id);
+        $this->assertCount(1, ProgrammableInventoryAdapter::pushesFor('woocommerce'));
+    }
+
+    /** Kanal hata verse de kilit bırakılır — yoksa bağlantının stoğu bir daha gitmezdi. */
+    #[Test]
+    public function the_sender_lock_is_released_even_when_the_channel_fails(): void
+    {
+        [$tenant, $variant, $connection] = $this->makeContext();
+
+        ProgrammableInventoryAdapter::failOn('woocommerce', ErrorClass::SERVER_ERROR);
+
+        $operation = $this->openOperation($tenant, $variant, version: 5);
+
+        $this->runJob($tenant, $operation->id);
+
+        $this->assertNotEmpty(ProgrammableInventoryAdapter::pushesFor('woocommerce'), 'Kanal denenmiş olmalı.');
+
+        $key = ConnectionPushLock::key($connection->id, SyncDomain::INVENTORY);
+        $acquired = (bool) $this->otherSession()->selectOne('SELECT pg_try_advisory_lock(hashtextextended(?, 0)) AS ok', [$key])->ok;
+        $this->otherSession()->select('SELECT pg_advisory_unlock(hashtextextended(?, 0))', [$key]);
+
+        $this->assertTrue($acquired, 'Hata sonrası kilit BIRAKILMALI.');
     }
 
     /** Devre KAPALIYKEN normal akış işler. */
@@ -338,6 +399,14 @@ final class PushInventoryCircuitTest extends TestCase
         return $this->asTenant($tenant, fn () => SyncOperation::query()
             ->where('entity_version', $version)
             ->firstOrFail());
+    }
+
+    /** Ayrı veritabanı oturumu — advisory kilit oturum başınadır. */
+    private function otherSession(): Connection
+    {
+        config(['database.connections.push_lock_probe' => config('database.connections.'.config('database.default'))]);
+
+        return DB::connection('push_lock_probe');
     }
 
     private function runJob(Tenant $tenant, string $operationId): void
