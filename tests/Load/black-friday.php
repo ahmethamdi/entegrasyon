@@ -9,6 +9,7 @@ declare(strict_types=1);
  *   docker compose exec -d app php artisan outbox:relay
  *   docker compose exec app php tests/Load/black-friday.php [--minutes=5] [--per-minute=100]
  *       [--burst-per-minute=300] [--variants=2000] [--channels=5] [--latency-ms=150]
+ *       [--price-variants=0]   (patlama dakikasında bu kadar varyantın fiyatı değişir)
  *
  * `loadtest:sync` hattı KUYRUĞA KADAR ölçer. Bu betik UÇTAN UCA ölçer:
  * gerçek webhook ucu → inbox → Horizon işçileri → stok düşüşü → outbox →
@@ -22,6 +23,7 @@ declare(strict_types=1);
  * zaten yoktur (`autoload-dev`).
  */
 
+use App\Domain\Catalog\Actions\SetVariantPrice;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -52,13 +54,14 @@ if (! app()->environment('local')) {
     exit(1);
 }
 
-$opt = getopt('', ['minutes::', 'per-minute::', 'burst-per-minute::', 'variants::', 'channels::', 'latency-ms::', 'webhook-base::', 'keep']);
+$opt = getopt('', ['minutes::', 'per-minute::', 'burst-per-minute::', 'variants::', 'channels::', 'latency-ms::', 'webhook-base::', 'price-variants::', 'keep']);
 $minutes = (int) ($opt['minutes'] ?? 5);
 $perMinute = (int) ($opt['per-minute'] ?? 100);
 $burstPerMinute = (int) ($opt['burst-per-minute'] ?? 300);
 $variantCount = (int) ($opt['variants'] ?? 2000);
 $channelCount = (int) ($opt['channels'] ?? 5);
 $latencyMs = (int) ($opt['latency-ms'] ?? 150);
+$priceVariants = (int) ($opt['price-variants'] ?? 0);
 $webhookBase = rtrim((string) ($opt['webhook-base'] ?? 'http://nginx'), '/');
 
 const OPENING_STOCK = 100_000;
@@ -99,7 +102,7 @@ DB::table('channel_types')->updateOrInsert(['code' => 'loadtest'], [
     'name' => 'Yük testi',
     'kind' => 'marketplace',
     'adapter_class' => LoadTestChannelAdapter::class,
-    'capabilities' => json_encode(['inventory' => true, 'orders' => true]),
+    'capabilities' => json_encode(['inventory' => true, 'orders' => true, 'pricing' => true]),
     // Trendyol düzeyi: 5 istek/sn, 100'lük stok paketi.
     'rate_limit_profile' => json_encode(['strategy' => 'fixed_window', 'requests_per_second' => 5, 'burst_capacity' => 10, 'max_inventory_batch' => 100]),
     'supports_webhooks' => true,
@@ -109,7 +112,7 @@ DB::table('channel_types')->updateOrInsert(['code' => 'loadtest'], [
     'updated_at' => now(),
 ]);
 Redis::set(LoadTestChannelAdapter::LATENCY_KEY, $latencyMs);
-Redis::del(LoadTestChannelAdapter::PUSHES_KEY, LoadTestChannelAdapter::REMOTE_KEY);
+Redis::del(LoadTestChannelAdapter::PUSHES_KEY, LoadTestChannelAdapter::REMOTE_KEY, LoadTestChannelAdapter::PRICE_PUSHES_KEY, LoadTestChannelAdapter::REMOTE_PRICE_KEY);
 
 $tenantId = null;
 $ownerId = null;
@@ -187,7 +190,7 @@ try {
     };
     $seedDrain = $waitDrain(DRAIN_TIMEOUT_S);
     $say('  hazır ('.round($seedDrain, 1).' sn)');
-    Redis::del(LoadTestChannelAdapter::PUSHES_KEY, LoadTestChannelAdapter::REMOTE_KEY);
+    Redis::del(LoadTestChannelAdapter::PUSHES_KEY, LoadTestChannelAdapter::REMOTE_KEY, LoadTestChannelAdapter::PRICE_PUSHES_KEY, LoadTestChannelAdapter::REMOTE_PRICE_KEY);
     foreach ($connections as $connectionId) {
         foreach ($skus as $sku) {
             Redis::hset(LoadTestChannelAdapter::REMOTE_KEY, "{$connectionId}|{$sku}", OPENING_STOCK);
@@ -214,6 +217,13 @@ try {
     $loadStarted = microtime(true);
     $nextSample = $loadStarted;
 
+    // Kampanya başladı: patlama dakikasında fiyatlar da toplu değişir —
+    // siparişlerin arasına serpilir (satıcı paneli / fiyat kuralı gibi).
+    $burstMinute = ($minutes >= 3 && $burstPerMinute > 0) ? intdiv($minutes, 2) : 0;
+    $priceQueue = array_slice($skus, 0, min($priceVariants, count($skus)));
+    $pricePerOrder = $priceQueue === [] ? 0 : (int) ceil(count($priceQueue) / max(1, $plan[$burstMinute]));
+    $priceSetAt = [];   // sku => [t, fiyat]
+
     foreach ($plan as $minute => $count) {
         $interval = 60.0 / max(1, $count);
         $minuteStart = $loadStarted + $minute * 60;
@@ -231,6 +241,17 @@ try {
                     $nextSample = $now + 2.0;
                 }
                 usleep((int) min(50_000, max(1000, ($due - $now) * 1_000_000)));
+            }
+
+            if ($minute === $burstMinute && $priceQueue !== []) {
+                $batch = array_splice($priceQueue, 0, $pricePerOrder);
+                TenantContext::runFor($tenantId, function () use ($batch, &$priceSetAt): void {
+                    foreach (Variant::query()->whereIn('sku', $batch)->get() as $variant) {
+                        $price = round(random_int(5000, 20000) / 100, 2);
+                        $priceSetAt[$variant->sku] = [microtime(true), number_format($price, 2, '.', '')];
+                        app(SetVariantPrice::class)->run($variant, $price);
+                    }
+                });
             }
 
             $orderNo++;
@@ -364,6 +385,48 @@ try {
         }
     }
 
+    // FİYAT: değişen her varyantın YENİ fiyatı bütün listing'lerinde mi,
+    // ve ne kadar sürede? Kanalda son kalan değer yerel fiyattan farklıysa
+    // eski paket yenisini ezmiştir (kilidin önlemesi gereken yarış).
+    $priceLatency = [];
+    $priceWrongAtEnd = 0;
+    $priceNeverArrived = 0;
+    if ($priceSetAt !== []) {
+        $listingsBySku = TenantContext::runAsSystem(fn () => DB::table('listings as l')
+            ->join('variants as v', 'v.id', '=', 'l.variant_id')
+            ->where('l.tenant_id', $tenantId)
+            ->whereIn('v.sku', array_keys($priceSetAt))
+            ->get(['l.id', 'v.sku', 'v.price']));
+        $pricePushes = [];
+        foreach (Redis::lrange(LoadTestChannelAdapter::PRICE_PUSHES_KEY, 0, -1) as $row) {
+            [$listingId, $price, $ts] = explode('|', $row);
+            $pricePushes[$listingId][] = [(float) $ts, $price];
+        }
+        $remotePrice = Redis::hgetall(LoadTestChannelAdapter::REMOTE_PRICE_KEY);
+        $worstBySku = [];
+        foreach ($listingsBySku as $row) {
+            [$t0, $price] = $priceSetAt[$row->sku];
+            if (number_format((float) ($remotePrice[$row->id] ?? -1), 2, '.', '') !== number_format((float) $row->price, 2, '.', '')) {
+                $priceWrongAtEnd++;
+            }
+            $hit = null;
+            foreach ($pricePushes[$row->id] ?? [] as [$ts, $p]) {
+                if ($ts >= $t0 && number_format((float) $p, 2, '.', '') === $price) {
+                    $hit = $ts;
+                    break;
+                }
+            }
+            if ($hit === null) {
+                $priceNeverArrived++;
+                $worstBySku[$row->sku] = INF;
+
+                continue;
+            }
+            $worstBySku[$row->sku] = max($worstBySku[$row->sku] ?? 0.0, $hit - $t0);
+        }
+        $priceLatency = array_values(array_filter($worstBySku, 'is_finite'));
+    }
+
     $orders = TenantContext::runAsSystem(fn () => DB::table('orders')->where('tenant_id', $tenantId)->count());
     $saleMovements = TenantContext::runAsSystem(fn () => DB::table('inventory_movements')->where('tenant_id', $tenantId)->where('type', 'SALE')->count());
     $expectedSold = array_sum($soldThrough);
@@ -430,6 +493,13 @@ try {
             'kanala_istek_sayisi' => count($requests),
             'istek_basina_kalem' => $requests === [] ? null : round($pushRequests / count($requests), 2),
         ],
+        'fiyat' => [
+            'degisen_varyant' => count($priceSetAt),
+            'uctan_uca_tum_kanallarda_s' => ['p50' => pct($priceLatency, 50), 'p95' => pct($priceLatency, 95), 'max' => pct($priceLatency, 100)],
+            'hic_ulasmayan_listing' => $priceNeverArrived,
+            'sonda_kanalda_yanlis_fiyat' => $priceWrongAtEnd,
+            'kanala_giden_fiyat_kalemi' => (int) Redis::llen(LoadTestChannelAdapter::PRICE_PUSHES_KEY),
+        ],
         'ops_watch_bulgu' => app(OpsWatch::class)->findings(),
     ];
 } finally {
@@ -449,7 +519,7 @@ try {
         fn ($q) => $q->from('channel_connections')->whereColumn('channel_connections.channel_type_code', 'channel_types.code')
     )->delete();
     if (! isset($opt['keep'])) {
-        Redis::del(LoadTestChannelAdapter::PUSHES_KEY, LoadTestChannelAdapter::LATENCY_KEY, LoadTestChannelAdapter::REMOTE_KEY);
+        Redis::del(LoadTestChannelAdapter::PUSHES_KEY, LoadTestChannelAdapter::LATENCY_KEY, LoadTestChannelAdapter::REMOTE_KEY, LoadTestChannelAdapter::PRICE_PUSHES_KEY, LoadTestChannelAdapter::REMOTE_PRICE_KEY);
     }
 }
 
