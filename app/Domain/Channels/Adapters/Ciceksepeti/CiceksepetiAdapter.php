@@ -4,34 +4,51 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Adapters\Ciceksepeti;
 
+use App\Domain\Catalog\Models\Product;
+use App\Domain\Catalog\Models\Variant;
+use App\Domain\Channels\Adapters\Ciceksepeti\Catalog\CiceksepetiCatalog;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
+use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
+use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\HealthResult;
 use App\Domain\Channels\Contracts\MapsOrderState;
 use App\Domain\Channels\Contracts\RateLimitProfile;
+use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsBatchStatus;
+use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsOrders;
 use App\Domain\Channels\Contracts\SupportsPricing;
+use App\Domain\Channels\Contracts\SupportsTaxonomy;
+use App\Domain\Channels\Contracts\ValidatesPublication;
+use App\Domain\Channels\Exceptions\ListingNotPublishable;
+use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
+use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Messaging\Models\InboxMessage;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Sync\Enums\ErrorClass;
+use App\Domain\Sync\Enums\PublishReason;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
+use App\Domain\Sync\Support\ApprovalStatusBatch;
 use App\Domain\Sync\Support\BatchItemFailure;
 use App\Domain\Sync\Support\BatchStatus;
+use App\Domain\Sync\Support\CategoryTreeSnapshot;
 use App\Domain\Sync\Support\InventoryPushBatch;
+use App\Domain\Sync\Support\ListingPayload;
 use App\Domain\Sync\Support\NormalizedOrderEvent;
 use App\Domain\Sync\Support\OrderPage;
 use App\Domain\Sync\Support\PricePushBatch;
 use App\Domain\Sync\Support\RemoteInventorySnapshot;
+use App\Domain\Sync\Support\RemoteListing;
 use App\Domain\Sync\Support\RemotePriceSnapshot;
 use App\Domain\Sync\Support\RemoteProduct;
 use App\Domain\Sync\Support\RemoteProductPage;
@@ -55,7 +72,8 @@ use Throwable;
  *
  * Araştırma: `docs/YENI-KANALLAR-API-NOTLARI.md` §5 (ciceksepeti.dev'in 27
  * sayfası gerçek Chrome ile okundu). Gerçek mağazayla HENÜZ SINANMADI →
- * kanal `is_active = false`. Ürün açma (`POST /Products`) bu sürümde YOK.
+ * kanal `is_active = false`. Ürün açma/güncelleme (`POST`/`PUT /Products`)
+ * S10'da eklendi (`CiceksepetiCatalog`).
  *
  * ─────────────────────────────────────────────────────────────────────
  * ⚠️ ALMANYA'DAN ERİŞİM YOK — HTML 403 = ERİŞİM ENGELİ, ANAHTAR HATASI DEĞİL
@@ -198,7 +216,7 @@ use Throwable;
  * otomatik bir adım satıcının kendi akışını bozardı. `acknowledgeOrder`
  * istek atmaz. Satıcı tarafı iptal/ret ucu da yok (panelden).
  */
-final class CiceksepetiAdapter implements ChannelAdapter, DeclaresChannelCurrency, MapsOrderState, SupportsBatchStatus, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing
+final class CiceksepetiAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
 {
     use DeclaresRequestQuota;
     use MapsOrderStateFromTable;
@@ -967,6 +985,321 @@ final class CiceksepetiAdapter implements ChannelAdapter, DeclaresChannelCurrenc
         $this->pace('products', self::PRODUCTS_INTERVAL);
 
         return self::jsonBody($this->api('GET', '/Products', query: $query), 'products');
+    }
+
+    // ------------------------------------------------------- katalog (S10)
+
+    private function catalog(): CiceksepetiCatalog
+    {
+        return new CiceksepetiCatalog((array) ($this->connection->settings ?? []));
+    }
+
+    /** `GET /Categories` — tüm ağaç tek istekte. */
+    public function fetchCategoryTree(): CategoryTreeSnapshot
+    {
+        $body = json_decode($this->api('GET', '/Categories')->body(), true);
+
+        if (! is_array($body)) {
+            throw new RuntimeException('Çiçeksepeti kategori ağacı okunamadı.');
+        }
+
+        return CiceksepetiCatalog::tree($body);
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function fetchCategoryAttributes(string $categoryId): array
+    {
+        return CiceksepetiCatalog::attributes(self::jsonBody($this->api('GET', '/Categories/'.rawurlencode($categoryId).'/attributes'), 'categoryAttributes'));
+    }
+
+    public function taxonomyVersion(): string
+    {
+        return $this->fetchCategoryTree()->version;
+    }
+
+    /** @return list<string> */
+    public function autoFilledAttributes(): array
+    {
+        return [];
+    }
+
+    public function validateForPublication(Product $product, ChannelCategory $category): array
+    {
+        return $this->catalog()->validate($product, $category);
+    }
+
+    /**
+     * Teslimat tipi ve süresi — `POST /Products` zorunlu alanları. Teslim
+     * süresi satıcının müşteriye VERDİĞİ SÖZDÜR; varsayılan konmaz.
+     *
+     * @return list<ConnectionSettingField>
+     */
+    public function connectionSettingFields(): array
+    {
+        $catalog = $this->catalog();
+        $option = static fn (array $labels): array => array_map(
+            static fn (string $value, string $label): array => ['value' => $value, 'label' => __($label), 'usable' => true],
+            array_map('strval', array_keys($labels)),
+            array_values($labels),
+        );
+
+        return [
+            new ConnectionSettingField(
+                key: CiceksepetiCatalog::SETTING_DELIVERY_TYPE,
+                label: __('Teslimat tipi'),
+                options: $option(CiceksepetiCatalog::DELIVERY_TYPES),
+                value: $catalog->deliveryType(),
+                hint: __('Çiçeksepeti\'ne açılan yeni ürünler bu teslimat tipiyle gönderilir.'),
+            ),
+            new ConnectionSettingField(
+                key: CiceksepetiCatalog::SETTING_DELIVERY_MESSAGE_TYPE,
+                label: __('Teslim süresi'),
+                options: $option(CiceksepetiCatalog::DELIVERY_MESSAGE_TYPES),
+                value: $catalog->deliveryMessageType(),
+                hint: __('Ürün sayfasında müşteriye gösterilen süre. Gerçekten tutabileceğin süreyi seç.'),
+            ),
+        ];
+    }
+
+    /** @return list<string> */
+    public function missingConnectionSettings(): array
+    {
+        $catalog = $this->catalog();
+
+        return array_values(array_filter([
+            $catalog->deliveryType() === null ? CiceksepetiCatalog::SETTING_DELIVERY_TYPE : null,
+            $catalog->deliveryMessageType() === null ? CiceksepetiCatalog::SETTING_DELIVERY_MESSAGE_TYPE : null,
+        ]));
+    }
+
+    /**
+     * `POST /Products` — asenkron (`batchId`, en geç 24 saat). Kimlik
+     * `stockCode` HEMEN yazılır; kalem sonucu `batch-status`'tan onayda okunur.
+     */
+    public function createListing(ListingPayload $payload): AdapterResult
+    {
+        $item = $this->catalog()->item($payload);
+
+        return $this->productWrite('POST', $payload, $item);
+    }
+
+    /**
+     * `PUT /Products` — yalnız YAYINDAKİ üründe (onay bekleyen/reddedilen
+     * ürün güncellenmez; red sebebi düzeltilip yeniden açılır).
+     */
+    public function updateListing(ListingPayload $payload): AdapterResult
+    {
+        if ($payload->listing->lifecycle_status !== 'live') {
+            throw ListingNotPublishable::because(PublishReason::LISTING_UPDATE_UNSUPPORTED, (string) $payload->listing->external_id);
+        }
+
+        return $this->productWrite('PUT', $payload, $this->catalog()->item($payload, forUpdate: true));
+    }
+
+    /** @param array<string, mixed> $item */
+    private function productWrite(string $method, ListingPayload $payload, array $item): AdapterResult
+    {
+        $this->pace('products-write', self::PRODUCTS_INTERVAL);
+
+        try {
+            $body = self::jsonBody($this->api($method, '/Products', body: ['products' => [$item]]));
+        } catch (RequestException $e) {
+            if ($e->response->status() === 400) {
+                // Kesin red DÖNÜLÜR: istisna "istek gitti mi?" belirsizliğine düşerdi.
+                return AdapterResult::failure(ErrorClass::VALIDATION, 'Çiçeksepeti ürünü reddetti: '.self::rejectionText($e->response->body()));
+            }
+
+            throw $e;
+        }
+
+        $batchId = trim((string) (self::pick($body, 'batchId') ?? ''));
+
+        if ($batchId === '') {
+            throw new RuntimeException('Çiçeksepeti işlem kimliği (batchId) dönmedi.');
+        }
+
+        return AdapterResult::success([
+            'external_id' => (string) $item['stockCode'],
+            'external_parent_id' => (string) $item['mainProductCode'],
+            'channel_metadata' => [
+                'ciceksepeti_product_batch_ids' => array_slice([
+                    ...array_filter((array) ($payload->listing->channel_metadata['ciceksepeti_product_batch_ids'] ?? []), 'is_string'),
+                    $batchId,
+                ], -5),
+            ],
+        ]);
+    }
+
+    /**
+     * Red gövdesinin OKUNUR metni — JSON çözülür (ham gövdede Türkçe harfler
+     * `\u0131` kaçışıyla gelir ve satıcıya anlamsız görünürdü). Bilinen
+     * alanlar: `message`, `errors[]`, `failureReasons[{message}]`.
+     */
+    private static function rejectionText(string $raw): string
+    {
+        $body = json_decode($raw, true);
+
+        if (! is_array($body)) {
+            return mb_substr(trim($raw), 0, 500) ?: 'sebep belirtilmedi';
+        }
+
+        $texts = [];
+
+        foreach (['message', 'Message', 'title', 'detail'] as $key) {
+            if (is_string($body[$key] ?? null) && trim($body[$key]) !== '') {
+                $texts[] = trim($body[$key]);
+            }
+        }
+
+        foreach ([...(array) ($body['errors'] ?? []), ...(array) ($body['failureReasons'] ?? [])] as $error) {
+            $text = is_array($error) ? (string) ($error['message'] ?? $error['Message'] ?? '') : (is_scalar($error) ? (string) $error : '');
+
+            if (trim($text) !== '') {
+                $texts[] = trim($text);
+            }
+        }
+
+        return $texts === [] ? mb_substr(json_encode($body, JSON_UNESCAPED_UNICODE) ?: '', 0, 500) : mb_substr(implode(' · ', array_unique($texts)), 0, 500);
+    }
+
+    /** Silme ucu yok (belge); "stok 0 + pasif" ayrı iş — bu sürümde KAPSAM DIŞI. */
+    public function delist(Listing $listing): AdapterResult
+    {
+        throw new RuntimeException('Çiçeksepeti listeden çıkarma bu sürümde KAPSAM DIŞI.');
+    }
+
+    /** "Önce ara, sonra yarat": aynı stockCode Çiçeksepeti'nde VAR mı (her statüde). */
+    public function findExistingListing(Variant $variant): ?RemoteListing
+    {
+        $code = trim((string) $variant->sku);
+
+        return $code === '' ? null : $this->remoteByStockCode($code);
+    }
+
+    public function fetchListing(Listing $listing): ?RemoteListing
+    {
+        $code = trim((string) $listing->external_id);
+
+        return $code === '' ? null : $this->remoteByStockCode($code);
+    }
+
+    /**
+     * Onay — `GET /Products?StockCode=` satırının `productStatusType`'ı
+     * (`approvalStatus`): satışta approved · reddedilen rejected
+     * (`passiveDescription`) · satışa kapalı inactive · onay bekleyen bekler. Ürün listede yoksa son
+     * ürün işinin kalem hatası (`batch-status`) → rejected.
+     *
+     * DOĞRULANMADI: statü sayı mı metin mi (tuzak 4), ret sebebinin hangi
+     * alanda döndüğü.
+     *
+     * @param  list<Listing>  $listings
+     */
+    public function fetchApprovalStatus(array $listings): ApprovalStatusBatch
+    {
+        $out = [];
+
+        foreach ($listings as $listing) {
+            $code = trim((string) $listing->external_id);
+
+            if ($code === '') {
+                continue;
+            }
+
+            $row = $this->productRow($code);
+
+            if ($row === null) {
+                $failure = $this->productBatchFailure($listing, $code);
+
+                if ($failure !== null) {
+                    $out[$code] = ['status' => 'rejected', 'reason' => $failure];
+                }
+
+                continue;
+            }
+
+            $status = self::approvalStatus(self::pick($row, 'productStatusType'));
+            $reason = trim((string) (self::pick($row, 'passiveDescription') ?? ''));
+
+            $entry = match ($status) {
+                'approved' => ['status' => 'approved', 'channel_metadata' => array_filter(['ciceksepeti_product_code' => is_scalar(self::pick($row, 'productCode')) ? (string) self::pick($row, 'productCode') : null])],
+                'rejected' => ['status' => 'rejected', 'reason' => mb_substr($reason !== '' ? $reason : 'Çiçeksepeti ürünü reddetti.', 0, 1000)],
+                'inactive' => ['status' => 'inactive', 'reason' => $reason !== '' ? mb_substr($reason, 0, 1000) : 'Çiçeksepeti: satışa kapalı'],
+                default => null,
+            };
+
+            if ($entry !== null) {
+                $out[$code] = $entry;
+            }
+        }
+
+        return new ApprovalStatusBatch($out, new DateTimeImmutable);
+    }
+
+    /**
+     * Onay hükmü — içe aktarmadaki `productStatus` sözlüğünden: satışta
+     * (`published`, `published_pending_approval` = yeni sürüm onayda ama
+     * eski satışta, `out_of_stock`) approved; `rejected`; `passive`
+     * inactive; geri kalanı bekliyor. Metin statü ("YAYINDA") de okunur.
+     */
+    private static function approvalStatus(mixed $raw): ?string
+    {
+        $status = self::productStatus($raw);
+        $text = mb_strtoupper((string) $status);
+
+        return match (true) {
+            in_array($status, ['published', 'published_pending_approval', 'out_of_stock'], true), $text === 'YAYINDA' => 'approved',
+            $status === 'rejected', str_contains($text, 'RED') => 'rejected',
+            $status === 'passive', str_contains($text, 'KAPALI') => 'inactive',
+            default => null,
+        };
+    }
+
+    private function remoteByStockCode(string $code): ?RemoteListing
+    {
+        $row = $this->productRow($code);
+
+        if ($row === null) {
+            return null;
+        }
+
+        $parent = trim((string) (self::pick($row, 'mainProductCode') ?? ''));
+
+        return new RemoteListing(
+            externalId: $code,
+            title: is_scalar(self::pick($row, 'productName')) ? (string) self::pick($row, 'productName') : null,
+            status: self::approvalStatus(self::pick($row, 'productStatusType')) ?? 'pending',
+            raw: $row,
+            parentExternalId: $parent !== '' ? $parent : null,
+        );
+    }
+
+    /** @return array<string, mixed>|null */
+    private function productRow(string $code): ?array
+    {
+        $body = $this->productQuery(['StockCode' => $code, 'PageSize' => self::PRODUCT_PAGE_SIZE, 'Page' => 1]);
+
+        foreach (self::rows(self::pick($body, 'products')) as $row) {
+            if (trim((string) self::pick($row, 'stockCode')) === $code) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /** Son ürün işinin bu stockCode'a ait hatası — `batch-status` kalemleri. */
+    private function productBatchFailure(Listing $listing, string $code): ?string
+    {
+        $batchId = collect((array) ($listing->channel_metadata['ciceksepeti_product_batch_ids'] ?? []))->last();
+
+        if (! is_string($batchId) || $batchId === '') {
+            return null;
+        }
+
+        $status = $this->fetchBatchStatus($batchId, SyncDomain::CONTENT);
+        $failure = $status->isCompleted() ? ($status->failed[$code] ?? null) : null;
+
+        return $failure === null ? null : mb_substr($failure->reason, 0, 1000);
     }
 
     // ------------------------------------------------------------- siparişler

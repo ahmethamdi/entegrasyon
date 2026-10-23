@@ -75,7 +75,8 @@ final class CiceksepetiAdapterTest extends TestCase
         $this->assertInstanceOf(SupportsPricing::class, $adapter);
         $this->assertInstanceOf(SupportsOrders::class, $adapter);
         $this->assertNotInstanceOf(SupportsTokenRefresh::class, $adapter);
-        $this->assertNotInstanceOf(SupportsCatalog::class, $adapter);
+        // S10: ürün açma + taksonomi + onay takibi eklendi.
+        $this->assertInstanceOf(SupportsCatalog::class, $adapter);
         $this->assertSame('TRY', $adapter->channelCurrency());
         $this->assertSame(200, $adapter->maxInventoryBatchSize());
         $this->assertSame(200, $adapter->maxPriceBatchSize());

@@ -358,14 +358,15 @@ class ChannelTypeSeeder extends Seeder
                 'kind' => 'marketplace',
                 'adapter_class' => 'App\\Domain\\Channels\\Adapters\\Ciceksepeti\\CiceksepetiAdapter',
                 'capabilities' => [
-                    // Ürün açma (`POST /Products`) ve kargo adımı bu turda YAZILMADI.
-                    'catalog' => false,
+                    // S10 (24 Eki 2026): ürün açma/güncelleme (`POST`/`PUT
+                    // /Products`) + taksonomi + onay takibi. Kargo adımı YAZILMADI.
+                    'catalog' => true,
                     'catalog_import' => true,
                     'inventory' => true,
                     'pricing' => true,
                     'orders' => true,
-                    'taxonomy' => false,
-                    'approval' => false,
+                    'taxonomy' => true,
+                    'approval' => true,
                     'fulfillment' => false,
                 ],
                 'rate_limit_profile' => [

@@ -1694,6 +1694,24 @@ hepsi kırmızı.
   `SupportsBatchStatus`, `sync:poll-batches`; 4xxx kodlu `Failed` kalıcı,
   kodsuz `Failed` geçici sayılıyor — DOĞRULANMADI.)
 
+**S10 (24 Eki 2026) — ürün açma/güncelleme eklendi** (`Catalog/CiceksepetiCatalog.php`,
+test `tests/Feature/Publishing/CiceksepetiPublishingTest.php`, 6 test, 6/6 mutasyon):
+
+- `POST /Products` (varyant başına öğe, `batchId` zorunlu; yoksa istisna), kimlik
+  `stockCode` = varyant SKU'su, `mainProductCode` = ürün SKU'su, barkod isteğe bağlı.
+- Taksonomi `GET /Categories` (iç içe ağaç) + `GET /Categories/{id}/attributes`;
+  "Kişiselleştirilebilir Özellik" alınmaz. Öznitelik YALNIZ kimlikle (`Id`, `ValueId`).
+- Teslimat tipi ve teslim süresi **bağlantı ayarı** (Kanallar → Ayarlar); varsayılan
+  YOK — teslim süresi satıcının müşteriye sözü.
+- Açıklama 7.750 karakteri aşarsa KIRPILMAZ, gönderilmez. Liste fiyatı yalnız indirim
+  %1–%80 aralığındaysa gider.
+- `PUT /Products` yalnız yayındaki üründe, `isActive: true` ile.
+- 400 kesin red (okunur metinle), istisna değil.
+- Onay: `GET /Products?StockCode=` statüsü (satışta / reddedilen + `passiveDescription`
+  / satışa kapalı); listede yoksa son ürün işinin `batch-status` kalem hatası.
+- DOĞRULANMADI: güncellemede öznitelik/barkod aynı gönderilince kabul ediliyor mu;
+  ret sebebinin alanı; statünün sayı mı metin mi geldiği; görsel sayısı sınırı.
+
 **Bilinen sınırlar:**
 
 - İçe aktarma sayfa başına 5 sn bekliyor; `ImportProductsFromChannelJob`
@@ -2207,7 +2225,18 @@ kırmızı.
 - **Onay (3→12):** `acknowledgeOrder` → `PUT /order/updateOrderStatusList`.
   Yazıldı ama hiçbir akışa bağlı değil (gerekçe sınıf notunda: `12`'de
   kargolanmayan sipariş otomatik iadeye düşüyor ve satıcı puanı düşüyor).
-- **Yazılmayanlar:** ürün açma, kargo/takip bildirme, `getRefund` ile iade
+- **S10 (24 Eki 2026) — ürün açma eklendi** (`Catalog/PazaramaCatalog.php`, test
+  `tests/Feature/Publishing/PazaramaPublishingTest.php`, 6 test, 4/4 mutasyon):
+  `POST /product/create` (kimlik barkod `Code`, `GroupCode` = ürün SKU'su, `StockCode`
+  = varyant SKU'su), marka `brand/getBrands?name=` tam eşleşme (yalnız bulunan
+  önbellekte), öznitelik yalnız kimlikle, KDV ve desi bağlantı ayarı, ürün ekleme için
+  ayrı 10 sn kapısı. Yanıtta `data.batchRequestId` (Tem 2026 belgesi; sıfır GUID gelirse
+  iş kaydı tutulmaz). Onay: `products/approved?Code=` → approved; `products/unapproved`
+  satırında ret metni → rejected; yoksa `getProductBatchResult` `failedProducts`.
+  İçerik güncelleme ucu belgede YOK → `LISTING_UPDATE_UNSUPPORTED`. DOĞRULANMADI:
+  onaysız listede `code` parametre adı, `state`/`productStatus` kodları, `GroupCode`
+  uzunluk sınırı (belge 10, örnekler 12 ve 36), görsel sayısı sınırı.
+- **Yazılmayanlar:** kargo/takip bildirme, `getRefund` ile iade
   ayrıntısı. (`lake-projections` ile batch sonucu okuma 8 Eki'de eklendi:
   `SupportsBatchStatus`, `sync:poll-batches`; `5` "Onaya gönderildi"
   başarı sayılmıyor, panelde "Bekliyor". DOĞRULANMADI: satır listesinin
