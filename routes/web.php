@@ -19,6 +19,7 @@ use App\Http\Controllers\ChannelPricingController;
 use App\Http\Controllers\ChannelSettingsController;
 use App\Http\Controllers\ContributionReportController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DemoLoginController;
 use App\Http\Controllers\EbayOAuthController;
 use App\Http\Controllers\EtsyOAuthController;
 use App\Http\Controllers\FulfillmentController;
@@ -162,6 +163,11 @@ Route::get('/invitations/{token}', [InvitationController::class, 'show'])
 // SÜPER ADMIN — platformu işleten. `tenant` ara katmanı YOK (yönetici tüm
 // kiracıların üstünde); yetki `can:superAdmin` (sunucu ayarındaki e-posta
 // listesi, `SuperAdmin`). Yetkisiz kullanıcı 403 alır.
+// S12 · salt okunur demo paneli — tek tık (DemoAccount).
+Route::get('/demo', DemoLoginController::class)
+    ->middleware('throttle:20,1')
+    ->name('demo');
+
 Route::middleware(['auth', 'verified', 'can:superAdmin'])->prefix('admin')->group(function (): void {
     Route::get('/', [AdminController::class, 'dashboard'])->name('admin.dashboard');
     Route::get('/tenants', [AdminController::class, 'tenants'])->name('admin.tenants');

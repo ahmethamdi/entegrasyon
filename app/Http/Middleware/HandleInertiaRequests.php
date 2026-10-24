@@ -79,6 +79,8 @@ class HandleInertiaRequests extends Middleware
 
                 return $role instanceof TenantRole ? ['value' => $role->value, 'label' => $role->label()] : null;
             },
+            // S12 · demo kiracısı: panel üstünde "örnek veri" şeridi.
+            'demo' => fn (): bool => (bool) ($request->attributes->get('tenant')?->is_demo ?? false),
             // Birden çok firmanın üyesi olan kullanıcıya firma seçici.
             'memberships' => function () use ($request): array {
                 if ($request->user() === null || $request->attributes->get('tenant') === null) {

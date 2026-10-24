@@ -6,6 +6,7 @@ namespace App\Domain\Identity\Models;
 
 use App\Domain\Identity\Notifications\ResetPasswordNotification;
 use App\Domain\Identity\Notifications\VerifyEmailNotification;
+use App\Domain\Identity\Support\DemoAccount;
 use App\Http\Middleware\SetLocale;
 use App\Support\Uuid\HasUuidV7;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -75,12 +76,21 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     /** Doğrulama e-postası (alıcının dilinde) — gerekçe bildirim sınıfında. */
     public function sendEmailVerificationNotification(): void
     {
+        // Demo adresinin posta kutusu yok (S12 · DemoAccount).
+        if ($this->email === DemoAccount::EMAIL) {
+            return;
+        }
+
         $this->notify(new VerifyEmailNotification);
     }
 
     /** Sıfırlama e-postası (alıcının dilinde) — gerekçe bildirim sınıfında. */
     public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
     {
+        if ($this->email === DemoAccount::EMAIL) {
+            return;
+        }
+
         $this->notify(new ResetPasswordNotification($token));
     }
 

@@ -415,7 +415,7 @@ function formatDate(iso) {
                     <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-stone-100 pt-4 text-xs sm:grid-cols-3">
                         <div>
                             <dt class="text-stone-500">{{ t('Durum') }}</dt>
-                            <dd class="mt-0.5 font-medium text-stone-900">{{ statusLabels[connection.status] ? t(statusLabels[connection.status]) : connection.status }}</dd>
+                            <dd class="mt-0.5 font-medium text-stone-900">{{ $page.props.demo ? t('Örnek bağlantı (demo)') : statusLabels[connection.status] ? t(statusLabels[connection.status]) : connection.status }}</dd>
                         </div>
                         <div>
                             <dt class="text-stone-500">{{ t('Son sağlıklı') }}</dt>

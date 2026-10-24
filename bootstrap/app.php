@@ -10,6 +10,7 @@ use App\Domain\Channels\Console\RefreshExpiringTokensCommand;
 use App\Domain\Channels\Console\RegisterWebhooksCommand;
 use App\Domain\Channels\Console\SyncTaxonomyCommand;
 use App\Domain\Finance\Console\SyncFinancialTransactionsCommand;
+use App\Domain\Identity\Console\InstallDemoCommand;
 use App\Domain\Messaging\Console\DetectUnconsumedEventsCommand;
 use App\Domain\Messaging\Console\OutboxRelayCommand;
 use App\Domain\Messaging\Console\RecoverPendingInbox;
@@ -100,6 +101,7 @@ return Application::configure(basePath: dirname(__DIR__))
         TickPriceCampaignsCommand::class,
         // S9 · TCMB kur çekimi (zamanlaması routes/console.php).
         FetchExchangeRatesCommand::class,
+        InstallDemoCommand::class,
         // §13 · Faz 3 · api_calls saklama. Zamanlaması routes/console.php.
         PruneApiCallsCommand::class,
         // V3.0 · §03 · Delta 3 · token yenileme. Zamanlaması routes/console.php.

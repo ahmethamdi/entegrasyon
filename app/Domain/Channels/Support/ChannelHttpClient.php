@@ -6,6 +6,7 @@ namespace App\Domain\Channels\Support;
 
 use App\Domain\Channels\Exceptions\BlockedDestinationException;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Identity\Support\DemoAccount;
 use App\Domain\Sync\Enums\ErrorClass;
 use App\Support\Logging\PayloadRedactor;
 use App\Support\Tenancy\TenantContext;
@@ -333,6 +334,12 @@ final class ChannelHttpClient
      */
     private function pinDestination(string $url): array
     {
+        // S12 · demo kiracısı dışarı ÇIKMAZ — bağlantıları zaten `inactive`
+        // doğar; bu kapı onlara ulaşan unutulmuş bir yol için son çizgidir.
+        if (DemoAccount::isDemoTenant($this->connection->tenant_id)) {
+            throw new BlockedDestinationException('Demo hesabı kanallara istek göndermez.');
+        }
+
         $parts = parse_url($url);
         $host = (string) ($parts['host'] ?? '');
         $port = isset($parts['port']) ? (int) $parts['port'] : null;

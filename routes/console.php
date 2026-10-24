@@ -333,6 +333,15 @@ Schedule::command('ops:watch')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S12 · DEMO HESABI — HER GECE BAŞTAN KURULUR (`/demo`).
+//
+// Siparişler "1 saat önce" görünsün; demo verisi kalıcı eskimesin.
+// Demo kapalıysa (DEMO_ENABLED=false) komut hiçbir şey yapmaz.
+Schedule::command('demo:install --fresh')
+    ->dailyAt('04:30')
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // V3.0 · §03 · Delta 3 · §20 · TOKEN YENİLEME — HER 15 DAKİKA.
 //
 // SIKLIK EN KISA TTL'İN DÖRTTE BİRİDİR: Etsy'nin access token'ı 1 SAAT

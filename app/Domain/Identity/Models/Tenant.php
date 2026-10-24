@@ -36,12 +36,14 @@ class Tenant extends Model
         'default_locale',
         'timezone',
         'trial_ends_at',
+        'is_demo',
     ];
 
     protected function casts(): array
     {
         return [
             'trial_ends_at' => 'datetime',
+            'is_demo' => 'boolean',
         ];
     }
 

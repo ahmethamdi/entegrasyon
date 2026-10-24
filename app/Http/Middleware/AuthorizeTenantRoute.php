@@ -32,6 +32,13 @@ final class AuthorizeTenantRoute
             abort(403, __('Bu işlem için yetkin yok. Hesap sahibinden rolünü değiştirmesini iste.'));
         }
 
+        // S12 · demo kiracısında rolden BAĞIMSIZ olarak yalnız okuma geçer:
+        // herkes aynı hesapla girer; tek açık bir yazma rotası demoyu
+        // herkes için bozardı (App\Domain\Identity\Support\DemoAccount).
+        if (! $request->isMethodSafe() && ($request->attributes->get('tenant')?->is_demo ?? false)) {
+            abort(403, __('Demo hesabında değişiklik yapılamaz. Kendi verinle denemek için ücretsiz hesap aç.'));
+        }
+
         return $next($request);
     }
 }

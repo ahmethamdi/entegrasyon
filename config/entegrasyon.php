@@ -132,6 +132,14 @@ return [
     | Model seçimi: başlık/açıklama hızlı ve ucuz modelle; öznitelik ve
     | kategori (görsel + uzun değer listesi) kaliteli modelle.
     */
+    /*
+    | S12 · herkese açık demo (`/demo`, `demo:install`). Kapalıyken rota 404
+    | ve kurulum yapılmaz. Ayrıntı: App\Domain\Identity\Support\DemoAccount.
+    */
+    'demo' => [
+        'enabled' => (bool) env('DEMO_ENABLED', true),
+    ],
+
     'ai' => [
         'enabled' => (bool) env('AI_LISTING_ENABLED', true),
         'api_key' => env('ANTHROPIC_API_KEY'),

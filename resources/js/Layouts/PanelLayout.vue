@@ -635,6 +635,12 @@ function logout() {
                 </div>
             </section>
 
+            <!-- S12 · demo hesabı: veri örnektir, değişiklik kaydedilmez. -->
+            <div v-if="page.props.demo" class="border-b border-sky-200 bg-sky-50 px-6 py-2.5 text-sm text-sky-900 lg:px-8" role="note">
+                {{ t('Demo hesabı: ürünler, siparişler ve kanallar örnektir; hiçbir mağazaya bağlı değildir ve değişiklik kaydedilmez.') }}
+                <a href="/register" class="ml-1 font-medium underline underline-offset-2 hover:text-sky-950">{{ t('Kendi verinle ücretsiz dene') }} →</a>
+            </div>
+
             <!-- Alt menü yüksekliği kadar boşluk: son satır menünün altında kalmasın. -->
             <main id="main" tabindex="-1" class="mx-auto max-w-5xl px-6 pb-28 pt-10 lg:px-8 lg:pb-10">
                 <slot />
