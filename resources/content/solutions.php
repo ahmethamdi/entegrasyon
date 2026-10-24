@@ -201,7 +201,7 @@ return [
                 ['Zarar korumasını aç', 'Alış maliyeti ve en az kâr yüzdesi: tabanın altındaki fiyat gönderilmez, neden panelde yazar.'],
             ],
             'faqs' => [
-                ['q' => 'Kanalın para birimi farklıysa?', 'a' => 'Kur çevirisi yapılmaz. Kanal EUR, ürün fiyatın TRY ise fiyat gönderilmez ve panelde "kanal fiyatı girin" uyarısı çıkar. Kanal fiyatını kanalın biriminde girersen o gider.'],
+                ['q' => 'Kanalın para birimi farklıysa?', 'a' => 'Kanalın fiyat kuralında kur çevirisini açarsan TL fiyatın TCMB döviz alış kuruyla çevrilir; kur payı, yuvarlama ve en düşük fiyat da oradan ayarlanır. Çeviri kapalıysa ya da kur 4 günden eskiyse fiyat gönderilmez ve panel kanal fiyatı girmeni ister.'],
                 ['q' => 'Ürüne kanala özel fiyat girebilir miyim?', 'a' => 'Evet. Elle girilen kanal fiyatı kuralın önüne geçer; zarar koruması onu da denetler.'],
                 ['q' => 'İki kampanya çakışırsa?', 'a' => 'Müşteriye en düşük fiyatı veren kampanya uygulanır.'],
             ],
@@ -224,7 +224,7 @@ return [
                 ['Turn on the loss guard', 'Cost and minimum margin: prices below the floor are not sent and the reason appears in the panel.'],
             ],
             'faqs' => [
-                ['q' => 'What if the channel uses another currency?', 'a' => 'There is no currency conversion. If the channel is EUR and your price is TRY, the price is not sent and the panel asks for a channel price. A channel price entered in the channel\'s currency is sent.'],
+                ['q' => 'What if the channel uses another currency?', 'a' => 'Turn on currency conversion in the channel\'s price rule and your TRY price is converted at the CBRT forex buying rate, with your markup, rounding and minimum price. If conversion is off or the rate is older than 4 days, the price is not sent and the panel asks for a channel price.'],
                 ['q' => 'Can I set a channel-specific price?', 'a' => 'Yes. A manual channel price overrides the rule; the loss guard still checks it.'],
                 ['q' => 'What if two campaigns overlap?', 'a' => 'The campaign giving the lowest price applies.'],
             ],
@@ -413,11 +413,11 @@ return [
             ],
             'how' => [
                 ['Kanalı bağla', 'Kaufland\'da API anahtarı, Amazon/eBay/Etsy/OTTO\'da kanalın kendi izin ekranı.'],
-                ['Kanal fiyatını gir', 'Kanalın para biriminde (EUR, USD…) fiyat girersin; kur çevirisi yapılmaz.'],
+                ['Kur çevirisini aç', 'TL fiyatın TCMB kuruyla kanalın birimine (EUR, USD…) çevrilir; kur payı ve yuvarlamayı sen seçersin. İstersen kanal fiyatını elle de girebilirsin.'],
                 ['Stok ve sipariş tek yerde', 'Yurtdışı siparişi de stoktan düşer; Türkiye kanalların güncellenir.'],
             ],
             'faqs' => [
-                ['q' => 'Kur çevirisi yapıyor musunuz?', 'a' => 'Hayır. Kanalın para birimi ürün fiyatından farklıysa fiyat gönderilmez ve panel kanal fiyatı girmeni ister. Böylece TL fiyat yanlışlıkla euro olarak satılmaz.'],
+                ['q' => 'Kur çevirisi yapıyor musunuz?', 'a' => 'Evet. Kanalın fiyat kuralında açarsın: TL fiyat TCMB döviz alış kuruyla çevrilir, üstüne kur payı ve yuvarlama uygulanır. Kur çekilemezse ya da 4 günden eskiyse fiyat gönderilmez; TL fiyat yanlışlıkla euro olarak satılmaz.'],
                 ['q' => 'Yeni ürünü yurtdışı kanalda açabilir miyim?', 'a' => 'eBay\'de ürün yayını var. Amazon, Kaufland ve OTTO\'da şimdilik kanaldaki mevcut ürünlerinin stok ve fiyatını yönetirsin.'],
             ],
         ],
@@ -435,11 +435,11 @@ return [
             ],
             'how' => [
                 ['Connect the channel', 'API keys for Kaufland; the channel\'s own consent screen for Amazon, eBay, Etsy and OTTO.'],
-                ['Enter channel prices', 'In the channel\'s currency (EUR, USD…); there is no currency conversion.'],
+                ['Turn on currency conversion', 'Your TRY price is converted to the channel\'s currency (EUR, USD…) at the CBRT rate, with the markup and rounding you choose. You can still enter a channel price by hand.'],
                 ['One stock, one order list', 'International orders reduce the same stock; your other channels are updated.'],
             ],
             'faqs' => [
-                ['q' => 'Do you convert currencies?', 'a' => 'No. If the channel\'s currency differs from your product price, the price is not sent and the panel asks for a channel price, so a TRY price is never sold as euros by mistake.'],
+                ['q' => 'Do you convert currencies?', 'a' => 'Yes. Turn it on in the channel\'s price rule: your TRY price is converted at the CBRT forex buying rate, then your markup and rounding are applied. If the rate cannot be fetched or is older than 4 days, the price is not sent, so a TRY price is never sold as euros by mistake.'],
                 ['q' => 'Can I create new listings abroad?', 'a' => 'eBay supports publishing. On Amazon, Kaufland and OTTO you currently manage stock and prices of your existing listings.'],
             ],
         ],
