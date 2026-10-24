@@ -32,8 +32,15 @@ if [[ "${DEPLOY_TARGET}" == "plesk" ]]; then
     COMPOSE=(docker compose -f docker-compose.prod.yml -f docker-compose.plesk.yml --env-file .env.production)
 fi
 
-echo "→ Kod güncelleniyor"
-git pull --ff-only
+# Geri alma (docs/RUNBOOK.md §3.3): sunucuda `git reset --hard <iyi-commit>`
+# sonrası pull ATLANMALI, yoksa kötü commit geri gelir:
+#   DEPLOY_SKIP_PULL=1 ./deploy.sh
+if [[ "${DEPLOY_SKIP_PULL:-}" == "1" ]]; then
+    echo "→ Kod güncelleme ATLANDI (DEPLOY_SKIP_PULL=1): $(git log -1 --format='%h %s')"
+else
+    echo "→ Kod güncelleniyor"
+    git pull --ff-only
+fi
 
 echo "→ İmajlar derleniyor"
 "${COMPOSE[@]}" build
@@ -69,6 +76,8 @@ DOMAIN="$(grep -E '^APP_DOMAIN=' .env.production | cut -d= -f2)"
 for i in $(seq 1 30); do
     if curl -fsS "https://${DOMAIN}/up" >/dev/null 2>&1; then
         echo "✓ https://${DOMAIN} ayakta"
+        # S13 · deploy öncesi dökümlerin temizliği (hata dağıtımı düşürmez).
+        ./docker/prod/prune-deploy-backups.sh /var/backups 10 14 || true
         exit 0
     fi
     sleep 2
