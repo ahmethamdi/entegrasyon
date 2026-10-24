@@ -20,6 +20,7 @@ use Database\Seeders\ChannelTypeSeeder;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -194,6 +195,18 @@ final class DemoAccountTest extends TestCase
         $demo->sendEmailVerificationNotification();
 
         Notification::assertNothingSent();
+    }
+
+    /** Site "Demoyu incele" der — ama yalnız demo kuruluysa (bağlantı 404 vermesin). */
+    #[Test]
+    public function the_site_links_to_the_demo_only_when_it_exists(): void
+    {
+        $this->get('/fiyatlar')->assertOk()->assertDontSee('Demoyu incele');
+
+        $this->artisan('demo:install')->assertSuccessful();
+        Cache::forget('site:demo-available');
+
+        $this->get('/fiyatlar')->assertSee('Demoyu incele')->assertSee('href="'.route('demo').'"', false);
     }
 
     #[Test]

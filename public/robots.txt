@@ -21,5 +21,6 @@ Disallow: /reconciliation
 Disallow: /failures
 Disallow: /metrics
 Disallow: /help
+Disallow: /demo
 
 Sitemap: https://34pazar.com/sitemap.xml

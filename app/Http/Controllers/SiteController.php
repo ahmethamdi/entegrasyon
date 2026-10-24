@@ -10,11 +10,13 @@ use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelLogo;
+use App\Domain\Identity\Support\DemoAccount;
 use App\Support\Site\Blog;
 use App\Support\Site\Solutions;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Tanıtım sitesi — 34pazar.com, herkese açık, Blade ile sunucuda üretilir.
@@ -219,6 +221,9 @@ final class SiteController extends Controller
             'plans' => $this->planList(),
             'channels' => $this->channelList(),
             'isLoggedIn' => $request->user() !== null,
+            // S12 · "Demoyu incele" yalnız demo kuruluysa (bağlantı 404 vermesin).
+            'demoAvailable' => (bool) config('entegrasyon.demo.enabled')
+                && Cache::remember('site:demo-available', 600, fn (): bool => DemoAccount::user() !== null),
             'legalPages' => self::LEGAL_PAGES,
             'lang' => 'tr',
             'solutionMenu' => Solutions::menu(($data['lang'] ?? 'tr') === 'en' ? 'en' : 'tr'),

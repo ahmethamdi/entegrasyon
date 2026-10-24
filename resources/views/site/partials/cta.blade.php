@@ -10,6 +10,7 @@
       $ctaText   alt cümle
       $ctaTone   'navy' → lacivert zemin (ana sayfa); yoksa marka kırmızısı
       $lang      'en' → İngilizce metin
+      $demoAvailable  S12 · demo kuruluysa "Demoyu incele" (/demo)
 --}}
 @php
     $loggedIn = $isLoggedIn ?? false;
@@ -30,6 +31,9 @@
                 <a href="{{ url('/panel') }}" class="btn btn-light btn-lg">{{ $t('Panele git', 'Open panel') }}</a>
             @else
                 <a href="{{ route('register') }}" class="btn {{ ($ctaTone ?? null) === 'navy' ? 'btn-primary' : 'btn-light' }} btn-lg">{{ $t('Ücretsiz dene', 'Try free') }}</a>
+                @if ($demoAvailable ?? false)
+                    <a href="{{ route('demo') }}" class="btn btn-ghost-light btn-lg" rel="nofollow">{{ $t('Demoyu incele', 'Explore the demo') }}</a>
+                @endif
                 <a href="{{ route('site.contact') }}" class="btn btn-ghost-light btn-lg">{{ $t('Bize ulaş', 'Contact us') }}</a>
             @endif
         </div>
