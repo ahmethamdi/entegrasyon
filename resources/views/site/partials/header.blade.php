@@ -131,7 +131,7 @@
                         </div>
                     </li>
                     @if ($key === 'cozumler')
-                        <li class="flex items-center"><a href="{{ route('site.pricing') }}" class="nav-link" @if (request()->routeIs('site.pricing')) aria-current="page" @endif>{{ $t('Fiyatlar', 'Pricing') }}</a></li>
+                        <li class="flex items-center"><a href="{{ $en ? route('site.en.pricing') : route('site.pricing') }}" class="nav-link" @if (request()->routeIs('site.pricing', 'site.en.pricing')) aria-current="page" @endif>{{ $t('Fiyatlar', 'Pricing') }}</a></li>
                     @endif
                 @endforeach
             </ul>
@@ -185,7 +185,7 @@
                     </ul>
                 </details>
                 @if ($key === 'cozumler')
-                    <a href="{{ route('site.pricing') }}" class="menu-item" @if (request()->routeIs('site.pricing')) aria-current="page" @endif>{{ $t('Fiyatlar', 'Pricing') }}</a>
+                    <a href="{{ $en ? route('site.en.pricing') : route('site.pricing') }}" class="menu-item" @if (request()->routeIs('site.pricing', 'site.en.pricing')) aria-current="page" @endif>{{ $t('Fiyatlar', 'Pricing') }}</a>
                 @endif
             @endforeach
             <div class="mt-6 grid gap-3">

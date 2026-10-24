@@ -75,6 +75,7 @@
 
     <h2>6. İptal ve hesabın kapatılması</h2>
     <ul>
+        <li>İade güvencesi: ilk ücretli ödemenizden itibaren {{ config('site.refund_days') }} gün içinde <a href="mailto:{{ config('site.contact_email') }}">{{ config('site.contact_email') }}</a> adresine ya da WhatsApp destek hattımıza yazarak iade isteyebilirsiniz; ödediğiniz tutarın tamamı, ödemenin yapıldığı yönteme iade edilir ve aboneliğiniz sona erer. Bu güvence hesap başına ilk ücretli abonelik için bir kez geçerlidir ve kanundan doğan cayma hakkınızı sınırlamaz.</li>
         <li>Ücretli aboneliğinizi istediğiniz zaman iptal edebilirsiniz. İptal, ödemesi yapılmış dönemin sonunda geçerli olur; o tarihe kadar ücretli plan özelliklerini kullanmaya devam edersiniz. Kısmi dönem için ücret iadesi yapılmaz; tüketicilerin kanundan doğan hakları saklıdır (bkz. <a href="{{ route('site.legal', 'mesafeli-satis') }}">mesafeli hizmet sözleşmesi</a>).</li>
         <li>Hesabınızın tamamen kapatılmasını <a href="mailto:{{ config('site.contact_email') }}">{{ config('site.contact_email') }}</a> adresine yazarak isteyebilirsiniz. Kapatma sonrası verilerin akıbeti gizlilik metninde açıklanmıştır.</li>
         <li>Bu koşulların esaslı bir ihlali halinde hesabınızı, mümkünse önceden bildirimde bulunarak, askıya alabilir veya kapatabiliriz.</li>

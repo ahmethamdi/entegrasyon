@@ -176,7 +176,7 @@
                 <div class="section-head">
                     <p class="eyebrow">{{ $t('Çözümler', 'Solutions') }}</p>
                     <h2 id="cozum-baslik" class="heading-2">{{ $t('Neler yapabilirsin?', 'What you can do') }}</h2>
-                    <p class="lead">{{ $t('Bütün paketlerde aynı özellikler; paketler yalnız ürün, kanal ve fatura sayısıyla ayrılır.', 'Every plan has the same features; plans differ only in products, channels and invoices.') }}</p>
+                    <p class="lead">{{ $t('Bütün paketlerde aynı özellikler ve bütün kanallar; paketler ürün, kanal, kullanıcı ve fatura sayısıyla ayrılır.', 'Every plan has the same features and every channel; plans differ in products, channels, users and invoices.') }}</p>
                 </div>
                 <a href="{{ route('site.features') }}" class="btn btn-secondary">{{ $t('Bütün özellikler', 'All features') }}</a>
             </div>
@@ -311,7 +311,7 @@
                     @include('site.partials.plans', ['plans' => $plans, 'isLoggedIn' => $isLoggedIn, 'lang' => $lang ?? 'tr'])
                 </div>
                 <p class="mt-8 text-center">
-                    <a href="{{ route('site.pricing') }}" class="link">{{ $t('Paketleri karşılaştır', 'Compare plans') }}</a>
+                    <a href="{{ $en ? route('site.en.pricing') : route('site.pricing') }}" class="link">{{ $t('Paketleri ayrıntılı karşılaştır', 'Compare plans in detail') }}</a>
                 </p>
             </div>
         </section>

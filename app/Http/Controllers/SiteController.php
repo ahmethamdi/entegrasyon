@@ -68,6 +68,11 @@ final class SiteController extends Controller
         return $this->page('site.pricing', $request);
     }
 
+    public function pricingEn(Request $request): View
+    {
+        return $this->page('site.pricing', $request, ['lang' => 'en']);
+    }
+
     public function channels(Request $request): View
     {
         return $this->page('site.channels', $request);
@@ -223,6 +228,7 @@ final class SiteController extends Controller
             ['loc' => route('site.en.home'), 'lastmod' => null],
             ['loc' => route('site.features'), 'lastmod' => null],
             ['loc' => route('site.pricing'), 'lastmod' => null],
+            ['loc' => route('site.en.pricing'), 'lastmod' => null],
             ['loc' => route('site.channels'), 'lastmod' => null],
             ['loc' => route('site.about'), 'lastmod' => null],
             ['loc' => route('site.contact'), 'lastmod' => null],

@@ -42,6 +42,23 @@
     };
     $count = fn (?int $v): string => $v === null ? $t('Sınırsız', 'Unlimited') : number_format($v, 0, ',', '.');
     $cta = fn (array $p): string => $loggedIn ? $t('Paketleri gör', 'See plans') : ($isFree($p) ? $t('Ücretsiz başla', 'Start free') : $t('Hesap aç', 'Sign up'));
+
+    // Pakete dahil olanlar — yalnız GERÇEKTE verilenler (24 Eki 2026
+    // kullanıcı kararları: destek her gün, kurulum ve iade ücretli pakette).
+    $hours = config('site.support_hours');
+    $refundDays = (int) config('site.refund_days');
+    $perks = function (array $p) use ($isFree, $t, $hours, $refundDays): array {
+        $list = [
+            $t('Bütün kanallar ve bütün özellikler', 'Every channel and every feature'),
+            $t("WhatsApp ve e-posta destek, her gün {$hours}", "WhatsApp and email support, daily {$hours} (TRT)"),
+        ];
+        if (! $isFree($p)) {
+            $list[] = $t('Kurulum ve ilk ürün aktarımı birlikte, ücretsiz', 'Free setup and first product import, done together');
+            $list[] = $t("İlk ödemeden {$refundDays} gün içinde tam iade", "Full refund within {$refundDays} days of your first payment");
+        }
+
+        return $list;
+    };
 @endphp
 
 @if (count($plans))
@@ -91,7 +108,13 @@
                     @endif
                 </dl>
 
-                <a href="{{ $href }}" class="btn {{ $hi ? 'btn-primary' : 'btn-secondary' }} mt-6 w-full">
+                <ul class="mt-5 mb-6 grid gap-2 text-sm">
+                    @foreach ($perks($plan) as $perk)
+                        <li class="flex gap-2"><span class="text-ok" aria-hidden="true">✓</span><span>{{ $perk }}</span></li>
+                    @endforeach
+                </ul>
+
+                <a href="{{ $href }}" class="btn {{ $hi ? 'btn-primary' : 'btn-secondary' }} mt-auto w-full">
                     {{ $cta($plan) }}<span class="sr-only"> — {{ $plan['name'] }} {{ $t('paketi', 'plan') }}</span>
                 </a>
             </li>

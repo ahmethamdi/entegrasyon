@@ -38,7 +38,7 @@ final class HomePageTest extends TestCase
         return [
             'ana sayfa' => ['/', 'Sık sorulanlar'],
             'özellikler' => ['/ozellikler', 'Tek stok, bütün kanallar.'],
-            'fiyatlar' => ['/fiyatlar', 'Fiyatlar aylıktır.'],
+            'fiyatlar' => ['/fiyatlar', 'Aylık paketler. Bütün kanallar her pakette.'],
             'entegrasyonlar' => ['/entegrasyonlar', 'Bir panel, bütün satış kanalların.'],
             'hakkımızda' => ['/hakkimizda', "34Pazar'ı 34Devs yapıyor."],
             'iletişim' => ['/iletisim', 'Bize'],
@@ -169,7 +169,7 @@ final class HomePageTest extends TestCase
             ->assertSee('Kurumsal')
             ->assertSee('1.499 ₺')
             ->assertSee('Kart bilgisi gerekmez')
-            ->assertSee('Fiyatlar aylıktır.');
+            ->assertSee('Aylık ödeme, yıllık peşin yok');
     }
 
     /**
