@@ -103,16 +103,13 @@
         <section class="section" aria-labelledby="kanal-h2">
             <div class="wrap">
                 <h2 id="kanal-h2" class="heading-2">{{ $t('Hangi kanallarda?', 'Which channels?') }}</h2>
-                <p class="lead mt-3 max-w-[60ch]">{{ $t('"Beta" rozetli kanallar yeni: ilk kurulumda ekibimiz seninle birlikte kontrol eder.', 'Channels marked "Beta" are new: our team checks the first setup with you.') }}</p>
+                <p class="lead mt-3 max-w-[60ch]">{{ $t('Bu çözüm aşağıdaki kanalların hepsinde çalışır.', 'This works on all of the channels below.') }}</p>
                 <ul class="mt-8 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
                     @foreach ($solutionChannels as $ch)
                         <li>
                             <a href="{{ route('site.channel', $ch['code']) }}" class="channel-card">
                                 @include('site.partials.channel-icon', ['ch' => $ch])
                                 <span class="mt-3 block font-semibold text-ink [overflow-wrap:anywhere]">{{ $ch['name'] }}</span>
-                                @if ($ch['beta'])
-                                    <span class="badge badge--brand mt-1">Beta</span>
-                                @endif
                             </a>
                         </li>
                     @endforeach

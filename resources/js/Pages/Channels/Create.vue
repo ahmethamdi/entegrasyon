@@ -145,15 +145,12 @@ function submit() {
                     class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                     <option v-for="type in channelTypes" :key="type.code" :value="type.code">
-                        {{ type.beta ? `${type.name} (Beta)` : type.name }}
+                        {{ type.name }}
                     </option>
                 </select>
                 <div v-if="selected?.logo" class="mt-3 flex h-7 items-center">
                     <img :src="selected.logo" :alt="t(':channel logosu', { channel: selected.name })" class="size-10 rounded-md border border-stone-200 bg-white p-1 object-contain">
                 </div>
-                <p v-if="selected?.beta" class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                    <span class="font-semibold">Beta</span> · {{ t('Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.') }}
-                </p>
                 <p v-if="form.errors.channel_type_code" class="mt-1 text-sm text-red-700">
                     {{ form.errors.channel_type_code }}
                 </p>

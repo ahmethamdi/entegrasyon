@@ -82,7 +82,7 @@ final class SiteController extends Controller
      */
     public function channel(Request $request, string $channel): View
     {
-        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active', 'is_beta']);
+        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active']);
 
         abort_if($type === null, 404);
 
@@ -196,7 +196,7 @@ final class SiteController extends Controller
 
     public function helpChannel(Request $request, string $channel): View
     {
-        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active', 'is_beta']);
+        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active']);
 
         abort_if($type === null || ! $this->hasGuide($type->code), 404);
 
@@ -311,13 +311,13 @@ final class SiteController extends Controller
             ->all();
     }
 
-    /** @return list<array{code: string, name: string, available: bool, beta: bool, logo: ?string, marketplace: bool, cargoPush: bool}> */
+    /** @return list<array{code: string, name: string, available: bool, logo: ?string, marketplace: bool, cargoPush: bool}> */
     private function channelList(): array
     {
         return ChannelType::query()
             ->orderByDesc('is_active')
             ->orderBy('name')
-            ->get(['code', 'name', 'kind', 'adapter_class', 'is_active', 'is_beta'])
+            ->get(['code', 'name', 'kind', 'adapter_class', 'is_active'])
             ->map(fn (ChannelType $type): array => $this->presentChannel($type))
             ->all();
     }
@@ -331,7 +331,7 @@ final class SiteController extends Controller
      * Adaptör örneklenmez (bağlantı bilgisi gerekmez); yalnız sınıfın
      * arayüzü uygulayıp uygulamadığına bakılır.
      *
-     * @return array{code: string, name: string, available: bool, beta: bool, logo: ?string, marketplace: bool, cargoPush: bool}
+     * @return array{code: string, name: string, available: bool, logo: ?string, marketplace: bool, cargoPush: bool}
      */
     private function presentChannel(ChannelType $type): array
     {
@@ -339,8 +339,6 @@ final class SiteController extends Controller
             'code' => $type->code,
             'name' => $type->name,
             'available' => (bool) $type->is_active,
-            // Beta: açık ama gerçek satıcı hesabıyla henüz doğrulanmadı (21 Eki kararı).
-            'beta' => (bool) $type->is_active && (bool) $type->is_beta,
             'logo' => ChannelLogo::url($type->code),
             'wordmark' => ChannelLogo::isWordmark($type->code),
             'icon' => ChannelLogo::icon($type->code),

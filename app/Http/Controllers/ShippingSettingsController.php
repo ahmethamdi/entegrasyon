@@ -17,9 +17,9 @@ use Inertia\Response as InertiaResponse;
 /**
  * S6 · Kargo ayarları — satıcının Yurtiçi / Aras web servis hesabı.
  *
- * BETA: iki firma da yalnız firmaların herkese açık test ortamında uçtan
- * uca denendi; gerçek müşteri hesabıyla gönderi açılmadı. Ekranda Beta
- * rozetiyle gösterilir ve ilk gerçek gönderi birlikte kontrol edilir.
+ * İki firma da yalnız firmaların herkese açık test ortamında uçtan uca
+ * denendi; gerçek müşteri hesabıyla gönderi açılmadı (23 Eki kararıyla
+ * ekranda Beta rozeti YOK).
  *
  * Şifre ekrana GERİ GÖNDERİLMEZ: yalnız kullanıcı adının son 3 hanesi.
  */
@@ -33,8 +33,6 @@ final class ShippingSettingsController extends Controller
             'carriers' => array_map(fn (string $provider): array => [
                 'code' => $provider,
                 'name' => CarrierAccount::displayName($provider),
-                // 23 Eki kullanıcı kararı: Beta değil, normal özellik.
-                'beta' => false,
                 // Durum sorgusu: Yurtiçi kargoya verileni kendisi bildirir;
                 // Aras'ta satıcı "kargoya verdim" der.
                 'autoTracking' => $provider === CarrierAccount::PROVIDER_YURTICI,

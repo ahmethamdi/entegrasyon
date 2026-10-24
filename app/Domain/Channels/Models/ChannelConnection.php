@@ -57,7 +57,7 @@ class ChannelConnection extends Model
     ];
 
     /**
-     * Beta kanal bildirimi — bağlantı İLK KEZ kurulunca (`connected_at`
+     * Doğrulanmamış kanal bildirimi (iç izleme) — bağlantı İLK KEZ kurulunca (`connected_at`
      * boştan dolar). Satır yaratılışı değil kurulma anı izlenir: OAuth
      * akışları satırı geçici kimlikle önceden açar.
      */

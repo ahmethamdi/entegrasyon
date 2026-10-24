@@ -63,7 +63,7 @@ final class Solutions
      * Çözümün çalıştığı AÇIK kanallar.
      *
      * @param  array<string, mixed>  $solution
-     * @return list<array{code: string, name: string, logo: ?string, wordmark: bool, beta: bool}>
+     * @return list<array{code: string, name: string, logo: ?string, wordmark: bool}>
      */
     public static function channels(array $solution): array
     {
@@ -76,7 +76,7 @@ final class Solutions
         return ChannelType::query()
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['code', 'name', 'adapter_class', 'is_beta'])
+            ->get(['code', 'name', 'adapter_class'])
             ->filter(function (ChannelType $type) use ($rule): bool {
                 if (is_array($rule)) {
                     return in_array($type->code, $rule, true);
@@ -92,7 +92,6 @@ final class Solutions
                 'logo' => ChannelLogo::url($type->code),
                 'wordmark' => ChannelLogo::isWordmark($type->code),
                 'icon' => ChannelLogo::icon($type->code),
-                'beta' => (bool) $type->is_beta,
             ])
             ->values()
             ->all();

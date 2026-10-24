@@ -7,7 +7,6 @@
     doğrulanmış cümleler taşır:
       - Yeni bağlantıda ürün yayını, fiyat ve stok gönderimi KAPALI başlar
         (ADR-010 · outbound write gates, varsayılan false).
-      - Beta cümlesi /entegrasyonlar ile aynıdır.
       - Ortak sorular panel yardımından (HelpController::channelQuestions).
     Uygulaması sunucuda tanımsız kanal (`appMissing`) "şu an bağlanamaz" der;
     bağlanamayan bir kanalı adım adım anlatmak yanlış vaat olurdu.
@@ -42,14 +41,8 @@
             </nav>
             <div class="mt-6 flex flex-wrap items-center gap-3">
                 @include('site.partials.channel-icon', ['ch' => $channel])
-                @if ($channel['beta'] ?? false)
-                    <span class="badge badge--brand">Beta</span>
-                @endif
             </div>
             <h1 id="rehber-h1" class="h-page mt-4 max-w-[26ch] [overflow-wrap:anywhere]">{{ $name }} nasıl bağlanır</h1>
-            @if ($channel['beta'] ?? false)
-                <p class="mt-4 max-w-[56ch] text-sm muted">Bu kanal yeni; ilk kurulumda ekibimiz sizinle birlikte kontrol eder.</p>
-            @endif
         </div>
     </section>
 

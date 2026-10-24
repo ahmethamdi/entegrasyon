@@ -7,7 +7,7 @@ import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
-    // [{ code, name, beta, autoTracking, account: { status, environment, username, lastError, verifiedAt } | null }]
+    // [{ code, name, autoTracking, account: { status, environment, username, lastError, verifiedAt } | null }]
     carriers: { type: Array, default: () => [] },
 });
 
@@ -71,9 +71,6 @@ function remove(carrier) {
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
                             <p class="text-sm font-medium text-stone-900">{{ carrier.name }}</p>
-                            <span v-if="carrier.beta" class="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">
-                                Beta
-                            </span>
                         </div>
                         <span
                             v-if="carrier.account && statusLabels[carrier.account.status]"
@@ -88,9 +85,6 @@ function remove(carrier) {
                         {{ carrier.autoTracking
                             ? t('Durum kendiliğinden izlenir: kargo paketi teslim alınca takip numarası kanala bildirilir.')
                             : t('Firma durum sorgusu sunmuyor: paketi kuryeye verince sipariş ekranından "Kargoya verdim" deyin; takip numarası kanala gider.') }}
-                    </p>
-                    <p v-if="carrier.beta" class="mt-1 text-xs text-amber-800">
-                        {{ t('Beta: ilk gerçek gönderinizi ekibimiz sizinle birlikte kontrol eder.') }}
                     </p>
 
                     <p v-if="errors['carrier_' + carrier.code]" class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">

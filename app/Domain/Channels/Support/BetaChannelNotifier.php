@@ -12,15 +12,17 @@ use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Cache;
 
 /**
- * Beta kanal bildirimleri — 34Devs'e (kullanıcı kararı 21 Eki 2026).
+ * Doğrulanmamış kanal bildirimleri — yalnız 34Devs'e (21 Eki 2026).
  *
- * Beta kanal = gerçek hesapta doğrulanmamış ama satışa açık. İlk müşteriyle
+ * Kapsam `ChannelType::UNVERIFIED_CODES`: gerçek hesapta doğrulanmamış ama
+ * satışa açık kanallar. 24 Eki 2026'dan beri satıcıya "Beta" diye
+ * görünmezler; bu bildirim görünmez iç izlemedir. İlk müşteriyle
  * birlikte doğrulanacağı için ekip iki anı KAÇIRMAMALI: yeni bağlantı ve o
  * bağlantının ilk ciddi hatası (kalıcı hata, kimlik hatası, ölen sipariş).
  *
  * ⚠️ BİLDİRİM ASLA ASIL İŞİ DÜŞÜRMEZ. ntfy ya da posta hatası yutulur ve
  * yalnız loglanır — bildirim yüzünden sipariş/stok işi başarısız sayılsaydı
- * beta kanal tam da izlenmek istendiği anda bozulurdu.
+ * kanal tam da izlenmek istendiği anda bozulurdu.
  *
  * ⚠️ KİŞİSEL VERİ GİTMEZ: yalnız kanal, bağlantı adı, kiracı adı, hata
  * sınıfı ve maskelenmiş hata özetinin ilk 200 karakteri.
@@ -32,14 +34,14 @@ final class BetaChannelNotifier
 
     public function connected(ChannelConnection $connection): void
     {
-        $type = $this->betaType($connection);
+        $type = $this->watchedType($connection);
 
         if ($type === null) {
             return;
         }
 
         $this->send(
-            title: "Beta kanal bağlandı: {$type->name}",
+            title: "Yeni kanal bağlantısı: {$type->name}",
             body: $this->describe($connection, $type).' — ilk kurulumu satıcıyla birlikte kontrol edin.',
             tags: 'new',
         );
@@ -47,7 +49,7 @@ final class BetaChannelNotifier
 
     public function failed(ChannelConnection $connection, string $kind, string $detail = ''): void
     {
-        $type = $this->betaType($connection);
+        $type = $this->watchedType($connection);
 
         if ($type === null) {
             return;
@@ -61,19 +63,19 @@ final class BetaChannelNotifier
         $summary = trim(mb_substr($detail, 0, 200));
 
         $this->send(
-            title: "Beta kanal hatası: {$type->name} ({$kind})",
+            title: "Kanal hatası: {$type->name} ({$kind})",
             body: $this->describe($connection, $type).($summary !== '' ? " — {$summary}" : ''),
             tags: 'warning',
         );
     }
 
-    private function betaType(ChannelConnection $connection): ?ChannelType
+    private function watchedType(ChannelConnection $connection): ?ChannelType
     {
         $type = TenantContext::runAsSystem(
             fn (): ?ChannelType => ChannelType::query()->find($connection->channel_type_code),
         );
 
-        return $type?->is_beta === true ? $type : null;
+        return $type !== null && in_array($type->code, ChannelType::UNVERIFIED_CODES, true) ? $type : null;
     }
 
     private function describe(ChannelConnection $connection, ChannelType $type): string

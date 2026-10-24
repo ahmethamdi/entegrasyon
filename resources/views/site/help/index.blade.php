@@ -34,9 +34,6 @@
                             @include('site.partials.channel-icon', ['ch' => $guide, 'size' => 'sm'])
                             <span class="font-semibold text-ink">{{ $guide['name'] }}</span>
                         </span>
-                        @if ($guide['beta'] ?? false)
-                            <span class="badge badge--brand">Beta</span>
-                        @endif
                     </a>
                 </li>
             @endforeach

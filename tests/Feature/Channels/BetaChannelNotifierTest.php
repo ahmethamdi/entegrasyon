@@ -23,7 +23,8 @@ use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Beta kanal bildirimleri (kullanıcı kararı 21 Eki 2026).
+ * Doğrulanmamış kanal bildirimleri — iç izleme (21 Eki 2026; 24 Eki'de
+ * Beta rozeti kaldırıldı, kapsam `ChannelType::UNVERIFIED_CODES`).
  *
  * Beta kanala bağlantı kurulunca ve o bağlantıda ciddi hata olunca 34Devs
  * ntfy + posta ile haberdar olur. Hata bildirimi bağlantı başına saatte bir.
@@ -53,26 +54,26 @@ final class BetaChannelNotifierTest extends TestCase
         });
     }
 
-    /** Beta kanalda bağlantı İLK KEZ kurulunca (connected_at dolunca) bildirim gider. */
+    /** Doğrulanmamış kanalda bağlantı İLK KEZ kurulunca (connected_at dolunca) bildirim gider. */
     #[Test]
     public function a_new_beta_connection_is_announced(): void
     {
-        [$tenant, $connection] = $this->connection('ebay', beta: true);
+        [$tenant, $connection] = $this->connection('ebay');
 
         $this->asTenant($tenant, fn () => $connection->forceFill(['connected_at' => now()])->save());
 
         Http::assertSent(fn (HttpRequest $r): bool => $r->url() === 'https://ntfy.example/'
             && $r['topic'] === 'test-34pazar-beta'
-            && str_contains((string) $r['title'], 'Beta kanal bağlandı: eBay'));
+            && str_contains((string) $r['title'], 'Yeni kanal bağlantısı: eBay'));
         $this->assertCount(1, $this->mailSubjects);
-        $this->assertStringContainsString('[34Pazar] Beta kanal bağlandı', $this->mailSubjects[0]);
+        $this->assertStringContainsString('[34Pazar] Yeni kanal bağlantısı', $this->mailSubjects[0]);
     }
 
-    /** Doğrulanmış (beta olmayan) kanal bildirim üretmez. */
+    /** Doğrulanmış kanal bildirim üretmez. */
     #[Test]
     public function a_verified_channel_is_not_announced(): void
     {
-        [$tenant, $connection] = $this->connection('trendyol', beta: false);
+        [$tenant, $connection] = $this->connection('trendyol');
 
         $this->asTenant($tenant, fn () => $connection->forceFill(['connected_at' => now()])->save());
         app(BetaChannelNotifier::class)->failed($connection, 'AUTHENTICATION', 'x');
@@ -85,7 +86,7 @@ final class BetaChannelNotifierTest extends TestCase
     #[Test]
     public function an_existing_connection_is_not_announced_again(): void
     {
-        [$tenant, $connection] = $this->connection('ebay', beta: true, connected: true);
+        [$tenant, $connection] = $this->connection('ebay', connected: true);
 
         $this->asTenant($tenant, fn () => $connection->forceFill(['connected_at' => now()->addMinute(), 'label' => 'Yeni ad'])->save());
 
@@ -96,8 +97,8 @@ final class BetaChannelNotifierTest extends TestCase
     #[Test]
     public function failures_are_throttled_per_connection_per_hour(): void
     {
-        [, $connection] = $this->connection('ebay', beta: true, connected: true);
-        [, $other] = $this->connection('ebay', beta: true, connected: true);
+        [, $connection] = $this->connection('ebay', connected: true);
+        [, $other] = $this->connection('ebay', connected: true);
 
         $notifier = app(BetaChannelNotifier::class);
         $notifier->failed($connection, 'AUTHENTICATION', 'token geçersiz');
@@ -119,7 +120,7 @@ final class BetaChannelNotifierTest extends TestCase
     {
         Http::fake(['https://ntfy.example/*' => fn () => throw new ConnectionException('kapalı')]);
 
-        [, $connection] = $this->connection('ebay', beta: true, connected: true);
+        [, $connection] = $this->connection('ebay', connected: true);
 
         app(BetaChannelNotifier::class)->failed($connection, 'AUTHENTICATION', 'x');
 
@@ -135,16 +136,16 @@ final class BetaChannelNotifierTest extends TestCase
             '*' => Http::response(['errors' => [['errorId' => 1001]]], 401),
         ]);
 
-        [$tenant, $connection] = $this->connection('ebay', beta: true, connected: true);
+        [$tenant, $connection] = $this->connection('ebay', connected: true);
 
         $this->asTenant($tenant, fn () => app(CheckChannelHealth::class)->run($connection));
 
         Http::assertSent(fn (HttpRequest $r): bool => $r->url() === 'https://ntfy.example/'
-            && str_contains((string) $r['title'], 'Beta kanal hatası: eBay (sağlık kontrolü)'));
+            && str_contains((string) $r['title'], 'Kanal hatası: eBay (sağlık kontrolü)'));
     }
 
     /** @return array{0: Tenant, 1: ChannelConnection} */
-    private function connection(string $code, bool $beta, bool $connected = false): array
+    private function connection(string $code, bool $connected = false): array
     {
         $this->asSystem(fn (): ChannelType => ChannelType::query()->updateOrCreate(
             ['code' => $code],
@@ -154,7 +155,9 @@ final class BetaChannelNotifierTest extends TestCase
                 'adapter_class' => $code === 'ebay' ? EbayAdapter::class : TrendyolAdapter::class,
                 'supports_webhooks' => false,
                 'is_active' => true,
-                'is_beta' => $beta,
+                // Kapsam koddan gelir (UNVERIFIED_CODES), bayraktan DEĞİL:
+                // 24 Eki'den beri is_beta hep false.
+                'is_beta' => false,
             ],
         ));
 

@@ -6,7 +6,7 @@
     düğme + Escape, site.js). JS çalışmasa da hover/odakla açılır ve bütün
     bağlantılar alt bilgide de vardır. Mobilde gruplar <details> akordeonu.
 
-    Kanallar veritabanından (`$channels`, logolu, Beta rozetli); çözümler
+    Kanallar veritabanından (`$channels`, logolu); çözümler
     `resources/content/solutions.php`'den (`$solutionMenu`). Elle liste yok.
 --}}
 @php
@@ -89,9 +89,6 @@
                                                             <a href="{{ route('site.channel', $ch['code']) }}" class="mega-link">
                                                                 @include('site.partials.channel-icon', ['ch' => $ch, 'size' => 'sm'])
                                                                 <span class="font-semibold text-ink">{{ $ch['name'] }}</span>
-                                                                @if ($ch['beta'] ?? false)
-                                                                    <span class="badge badge--brand ml-auto text-[0.6875rem]">Beta</span>
-                                                                @endif
                                                             </a>
                                                         </li>
                                                     @endforeach
@@ -169,7 +166,6 @@
                                         <a href="{{ route('site.channel', $ch['code']) }}" class="mobile-sub">
                                             @include('site.partials.channel-icon', ['ch' => $ch, 'size' => 'sm'])
                                             <span>{{ $ch['name'] }}</span>
-                                            @if ($ch['beta'] ?? false)<span class="badge badge--brand ml-auto text-[0.6875rem]">Beta</span>@endif
                                         </a>
                                     </li>
                                 @endforeach

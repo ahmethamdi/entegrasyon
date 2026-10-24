@@ -27,14 +27,18 @@ class ChannelType extends Model
     public $incrementing = false;
 
     /**
-     * BETA KANALLAR (kullanıcı kararı 21 Eki 2026): gerçek satıcı hesabıyla
-     * uçtan uca doğrulanmamış ama satışa AÇIK kanallar. Panelde ve sitede
-     * "Beta" rozeti taşır; yeni bağlantıda yazma izinleri ADR-010 gereği
-     * kapalı doğar, bağlantı ve ilk hata 34Devs'e bildirilir
-     * (`BetaChannelNotifier`). Trendyol, Shopify ve Etsy gerçek hesapta
-     * doğrulandığı için listede YOK. Kanal doğrulanınca buradan çıkarılır.
+     * GERÇEK HESAPTA DOĞRULANMAMIŞ KANALLAR — yalnız İÇ İZLEME.
+     *
+     * 21 Eki 2026'da bu kanallar "Beta" rozetiyle açılmıştı; 24 Eki 2026
+     * kullanıcı kararıyla rozet ve Beta durumu KALDIRILDI: sitede ve panelde
+     * diğer kanallardan farkları yok (`is_beta` her zaman false). Liste iki
+     * iş için kalır: (1) yeni kurulumda kanal AÇIK doğar (seeder),
+     * (2) bağlantı ve ilk ciddi hata 34Devs'e bildirilir
+     * (`BetaChannelNotifier`) — ilk müşteride birlikte bakılacak.
+     * Yazma izinleri her kanalda aynı: ADR-010 gereği kapalı doğar.
+     * Kanal gerçek hesapta doğrulanınca buradan çıkarılır.
      */
-    public const BETA_CODES = [
+    public const UNVERIFIED_CODES = [
         'woocommerce', 'hepsiburada', 'n11', 'ikas', 'ticimax', 'pazarama', 'ciceksepeti', 'ebay', 'kaufland', 'idefix', 'otto', 'amazon',
     ];
 

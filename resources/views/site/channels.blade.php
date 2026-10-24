@@ -32,12 +32,10 @@
             <p class="eyebrow">Entegrasyonlar</p>
             <h1 id="kanal-h1" class="h-page mt-3 max-w-[24ch]">Bir panel, bütün satış kanalların.</h1>
             <p class="lead mt-5 max-w-[56ch]">
-                Bugün bağlayabildiğin bütün kanallar. "Beta" rozetli olanlar yeni: ilk kurulumda ekibimiz seninle birlikte kontrol eder. Her kanalın sayfasında orada neyin çalıştığını tek tek yazıyoruz.
+                Bugün bağlayabildiğin bütün kanallar. Her kanalın sayfasında orada neyin çalıştığını tek tek yazıyoruz.
             </p>
             <p class="mt-5 text-sm muted">
                 <span class="font-semibold text-ink">{{ count($available) }}</span> kanal
-                @php $betaCount = count(array_filter($available, fn ($c) => $c['beta'] ?? false)); @endphp
-                @if ($betaCount) · <span class="font-semibold text-ink">{{ $betaCount }}</span> beta @endif
                 @if (count($upcoming)) · <span class="font-semibold text-ink">{{ count($upcoming) }}</span> yakında @endif
             </p>
         </div>
@@ -46,7 +44,7 @@
     @if (count($available))
         <section class="wrap pt-12 lg:pt-16" aria-labelledby="aktif-h2">
             <h2 id="aktif-h2" class="heading-3">Bağlanabilen kanallar</h2>
-            <p class="mt-1 text-[0.9875rem] muted">Hepsini bugün bağlayabilirsin; "Beta" rozetli olanlarda ilk kurulumu birlikte kontrol ederiz.</p>
+            <p class="mt-1 text-[0.9875rem] muted">Hepsini bugün bağlayabilirsin.</p>
             <div class="mt-5">
                 @include('site.partials.channel-list', ['channels' => $available])
             </div>

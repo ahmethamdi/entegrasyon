@@ -222,7 +222,7 @@
                     <div class="section-head">
                         <p class="eyebrow">{{ $t('Entegrasyonlar', 'Integrations') }}</p>
                         <h2 id="kanal-baslik" class="heading-2">{{ $t('Bağlanabilen kanallar', 'Channels you can connect') }}</h2>
-                        <p class="lead">{{ $t('Her kanalda neyin çalıştığını açıkça yazıyoruz. "Beta" kanallarda ilk kurulumu ekibimiz seninle birlikte kontrol eder.', 'We state exactly what works on each channel. On "Beta" channels our team checks the first setup with you.') }}</p>
+                        <p class="lead">{{ $t('Her kanalda neyin çalıştığını açıkça yazıyoruz.', 'We state exactly what works on each channel.') }}</p>
                     </div>
                     <a href="{{ route('site.channels') }}" class="link">{{ $t('Tüm entegrasyonlar', 'All integrations') }}</a>
                 </div>
@@ -260,11 +260,7 @@
                                             @endif
                                         </td>
                                         <td>
-                                            @if ($ch['beta'])
-                                                <span class="badge badge--brand">Beta</span>
-                                            @else
-                                                <span class="badge badge--active">{{ $t('Aktif', 'Live') }}</span>
-                                            @endif
+                                            <span class="badge badge--active">{{ $t('Aktif', 'Live') }}</span>
                                         </td>
                                     </tr>
                                 @endforeach

@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\Schema;
  *
  * Gerçek hesapta doğrulanmamış kanallar canlıda AÇIK olur ama "Beta" rozeti
  * taşır. Liste bu migration'da ANLIK GÖRÜNTÜ olarak yazılır (o günkü karar);
- * sonraki değişiklikler `ChannelType::BETA_CODES` + seeder ile gelir.
+ * sonraki değişiklikler seeder ile gelir. 24 Eki 2026: Beta kaldırıldı
+ * (2026_10_24_000300 bütün bayrakları söndürür).
  */
 return new class extends Migration
 {

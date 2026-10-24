@@ -53,11 +53,11 @@ final class OutboundWriteSettingsTest extends TestCase
     // ─────────────────────────────────────────── kilit ve açık eylem
 
     /**
-     * 21 Eki 2026 kullanıcı kararı: beta kanallarda yazma izinleri kapalı
-     * DOĞAR ama satıcı açabilir — varsayılan kilit listesi boş.
+     * Yazma izinleri HER kanalda kapalı DOĞAR ama satıcı açabilir —
+     * varsayılan kilit listesi boş (21 Eki; 24 Eki'de Beta kaldırıldı).
      */
     #[Test]
-    public function beta_channel_writes_are_closed_by_default_but_can_be_enabled(): void
+    public function unverified_channel_writes_are_closed_by_default_but_can_be_enabled(): void
     {
         [$tenant] = $this->tenant();
 

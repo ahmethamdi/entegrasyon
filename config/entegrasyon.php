@@ -66,10 +66,10 @@ return [
     ],
 
     /*
-    | Beta kanal bildirimleri (kullanıcı kararı 21 Eki 2026) — 34Devs'e.
-    | Beta kanala yeni bağlantı kurulunca ve o bağlantıda kalıcı/kimlik
-    | hatası olunca: ntfy konusu (boşsa atlanır) + posta. Hata bildirimi
-    | bağlantı başına saatte en çok bir kez.
+    | 34Devs iç bildirimleri (ntfy + posta). Anahtar adı tarihsel ("beta"):
+    | 21 Eki'de Beta kanallar için açıldı; 24 Eki'de rozet kaldırıldı ama
+    | doğrulanmamış kanal izlemesi (`ChannelType::UNVERIFIED_CODES`) ve
+    | ops:watch alarmları aynı kanalı kullanır. Satıcıya görünmez.
     */
     'beta' => [
         'ntfy_topic' => env('BETA_NTFY_TOPIC'),
@@ -186,8 +186,8 @@ return [
     | onay verildiğinde çıkarılır.
     |
     | 21 Eki 2026 kullanıcı kararı: varsayılan liste BOŞ — doğrulanmamış
-    | kanallar "beta" olarak açık; yazma izinleri yine kapalı doğar ama
-    | satıcı açabilir. Acil durumda env ile kanal yeniden kilitlenebilir.
+    | kanallar açık (24 Eki'den beri Beta rozeti de yok); yazma izinleri her
+    | kanalda olduğu gibi kapalı doğar ama satıcı açabilir. Acil durumda env ile kanal yeniden kilitlenebilir.
     */
     'outbound_write_locked_channels' => array_values(array_filter(array_map(
         'trim',

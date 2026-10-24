@@ -405,7 +405,7 @@ return [
             'title' => 'Yurtdışı pazaryerleri: Amazon, eBay, Etsy, OTTO, Kaufland',
             'description' => 'Avrupa ve dünya pazaryerlerinde stok, fiyat ve sipariş tek panelden. Kanalın para birimi farklıysa yanlış fiyat gitmez.',
             'h1' => 'Türkiye\'den dünyaya, aynı stokla.',
-            'lead' => 'Amazon, eBay, Etsy, OTTO Market ve Kaufland\'ı Türkiye\'deki kanallarınla aynı stoğa bağla. Yeni kanallar "Beta": ilk kurulumda ekibimiz seninle birlikte kontrol eder.',
+            'lead' => 'Amazon, eBay, Etsy, OTTO Market ve Kaufland\'ı Türkiye\'deki kanallarınla aynı stoğa bağla.',
             'problems' => [
                 'Yurtdışı satış için ayrı bir stok tablosu tutuyorsun.',
                 'TL fiyat yurtdışı kanala aynı rakamla gidiyor.',
@@ -418,7 +418,6 @@ return [
             ],
             'faqs' => [
                 ['q' => 'Kur çevirisi yapıyor musunuz?', 'a' => 'Hayır. Kanalın para birimi ürün fiyatından farklıysa fiyat gönderilmez ve panel kanal fiyatı girmeni ister. Böylece TL fiyat yanlışlıkla euro olarak satılmaz.'],
-                ['q' => 'Beta ne demek?', 'a' => 'Kanal gerçek bir satıcı hesabıyla uçtan uca henüz denenmedi. Bağlayabilirsin; ilk kurulumda ekibimiz seninle birlikte kontrol eder ve sorunları önceliklendirir.'],
                 ['q' => 'Yeni ürünü yurtdışı kanalda açabilir miyim?', 'a' => 'eBay\'de ürün yayını var. Amazon, Kaufland ve OTTO\'da şimdilik kanaldaki mevcut ürünlerinin stok ve fiyatını yönetirsin.'],
             ],
         ],
@@ -428,7 +427,7 @@ return [
             'title' => 'International marketplaces: Amazon, eBay, Etsy, OTTO, Kaufland',
             'description' => 'Stock, prices and orders on European and global marketplaces from one panel. If the channel uses another currency, a wrong price is never sent.',
             'h1' => 'Sell abroad from the same stock.',
-            'lead' => 'Connect Amazon, eBay, Etsy, OTTO Market and Kaufland to the same stock as your other channels. New channels are "Beta": our team checks the first setup with you.',
+            'lead' => 'Connect Amazon, eBay, Etsy, OTTO Market and Kaufland to the same stock as your other channels.',
             'problems' => [
                 'You keep a separate stock sheet for international sales.',
                 'Your TRY price goes to a EUR channel with the same number.',
@@ -441,7 +440,6 @@ return [
             ],
             'faqs' => [
                 ['q' => 'Do you convert currencies?', 'a' => 'No. If the channel\'s currency differs from your product price, the price is not sent and the panel asks for a channel price, so a TRY price is never sold as euros by mistake.'],
-                ['q' => 'What does Beta mean?', 'a' => 'The channel has not yet been tested end to end with a real seller account. You can connect it; our team checks the first setup with you and prioritises any issues.'],
                 ['q' => 'Can I create new listings abroad?', 'a' => 'eBay supports publishing. On Amazon, Kaufland and OTTO you currently manage stock and prices of your existing listings.'],
             ],
         ],

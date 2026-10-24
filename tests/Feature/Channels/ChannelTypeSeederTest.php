@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Channels;
 
+use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Contracts\SupportsApprovalWorkflow;
 use App\Domain\Channels\Contracts\SupportsCatalog;
 use App\Domain\Channels\Contracts\SupportsCatalogImport;
@@ -182,31 +183,34 @@ final class ChannelTypeSeederTest extends TestCase
      * ve testte de karar olarak durmalıdır.
      */
     #[Test]
-    public function newly_seeded_channels_are_born_open_and_unverified_ones_are_beta(): void
+    public function newly_seeded_channels_are_born_open_and_none_is_beta(): void
     {
+        // Canlıdaki eski durum: 21 Eki'de Beta işaretlenmiş bir kanal. Seeder
+        // her koşuşta bayrağı söndürmeli (24 Eki kararı), yoksa canlı satır
+        // rozetini sessizce korurdu.
+        ChannelType::query()->create([
+            'code' => 'ebay', 'name' => 'eBay', 'kind' => 'marketplace', 'adapter_class' => EbayAdapter::class,
+            'supports_webhooks' => false, 'is_active' => true, 'is_beta' => true,
+        ]);
+
         $this->seed(ChannelTypeSeeder::class);
 
-        // 21 Eki 2026 kullanıcı kararı: doğrulanmamış kanal BETA olarak
-        // AÇIK doğar (§05'in "kapalı doğar" kuralının yerine). Hiçbir kanal
-        // artık kapalı doğmuyor; kapalılık operatörün sonraki kararıdır.
-        foreach (ChannelType::BETA_CODES as $code) {
+        // 21 Eki 2026 kullanıcı kararı: doğrulanmamış kanal AÇIK doğar
+        // (§05'in "kapalı doğar" kuralının yerine). Hiçbir kanal artık kapalı
+        // doğmuyor; kapalılık operatörün sonraki kararıdır.
+        foreach (ChannelType::UNVERIFIED_CODES as $code) {
             $this->assertTrue(
                 (bool) ChannelType::query()->where('code', $code)->value('is_active'),
-                "`{$code}` beta kanal olarak AÇIK doğmalıydı (21 Eki kararı).",
-            );
-            $this->assertTrue(
-                (bool) ChannelType::query()->where('code', $code)->value('is_beta'),
-                "`{$code}` gerçek hesapta doğrulanmadı — Beta rozeti taşımalı.",
+                "`{$code}` AÇIK doğmalıydı (21 Eki kararı).",
             );
         }
 
-        // Gerçek hesapta uçtan uca doğrulanan kanallar beta DEĞİLDİR.
-        foreach (['trendyol', 'shopify', 'etsy'] as $code) {
-            $this->assertFalse(
-                (bool) ChannelType::query()->where('code', $code)->value('is_beta'),
-                "`{$code}` gerçek hesapta doğrulandı — Beta rozeti taşımamalı.",
-            );
-        }
+        // 24 Eki 2026 kullanıcı kararı: Beta durumu YOK — hiçbir kanal.
+        $this->assertSame(
+            [],
+            ChannelType::query()->where('is_beta', true)->pluck('code')->all(),
+            'Beta kaldırıldı (24 Eki) — hiçbir kanal is_beta taşımamalı.',
+        );
 
         // Yayına AÇIK çıkan kanallar — her biri bir karar.
         $open = [
