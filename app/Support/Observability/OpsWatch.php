@@ -26,6 +26,12 @@ use Throwable;
  *   hız sınırı      son 15 dk 429 (kanal başına)
  *   ölü işlem       son 1 saatte `dead`e düşen senkron (sistem)
  *   kur             çevirisi açık bir birimin kuru yok ya da bayat (S9)
+ *   sağlıksız kanal canlı ilanı olan bağlantı 24 saatten uzun sağlıksız
+ *                   (24 Ekim: test kiracısında Etsy anahtarı 6 Ekim'den beri
+ *                   403 veriyordu; bağlantı `pending` olduğu için devre
+ *                   kesici sinyali onu hiç görmedi, kimse haber almadı).
+ *                   Günde bir kez gider — kendiliğinden düzelmeyen bir
+ *                   durumda saatlik tekrar yalnız gürültüdür.
  *
  * Her sinyal kendi anahtarıyla saatte en çok bir kez gider (`OpsNotifier`).
  * Ölçümlerden biri hata verirse (Redis yok, Horizon yok) diğerleri yine
@@ -38,7 +44,7 @@ final class OpsWatch
         private readonly CircuitBreaker $breaker,
     ) {}
 
-    /** @return list<array{key: string, title: string, body: string}> */
+    /** @return list<array{key: string, title: string, body: string, throttle?: int}> */
     public function findings(): array
     {
         return TenantContext::runAsSystem(fn (): array => [
@@ -48,6 +54,7 @@ final class OpsWatch
             ...$this->guard('dead', fn () => $this->deadOperations()),
             ...$this->guard('ai', fn () => $this->aiErrors()),
             ...$this->guard('fx', fn () => $this->staleExchangeRates()),
+            ...$this->guard('unhealthy', fn () => $this->unhealthyConnections()),
         ]);
     }
 
@@ -58,7 +65,9 @@ final class OpsWatch
         $sent = 0;
 
         foreach ($findings as $f) {
-            if ($this->notifier->send($f['title'], $f['body'], 'rotating_light', $f['key'], (int) config('entegrasyon.ops.throttle_seconds', 3600))) {
+            $throttle = $f['throttle'] ?? (int) config('entegrasyon.ops.throttle_seconds', 3600);
+
+            if ($this->notifier->send($f['title'], $f['body'], 'rotating_light', $f['key'], $throttle)) {
                 $sent++;
             }
         }
@@ -208,6 +217,40 @@ final class OpsWatch
         }
 
         return $out;
+    }
+
+    /**
+     * Canlı ilanı olan ve uzun süredir sağlıksız bağlantılar.
+     *
+     * Sağlıksız bağlantıda stok ve fiyat gitmez, mutabakat "ulaşılamadı"
+     * yazar; satıcı paneli görmezse fark etmez. `inactive` (erişim iptal,
+     * mağazadan kaldırma) bilinçli kapanıştır, sayılmaz.
+     *
+     * @return list<array{key: string, title: string, body: string, throttle: int}>
+     */
+    private function unhealthyConnections(): array
+    {
+        $hours = (int) config('entegrasyon.ops.unhealthy_connection_hours', 24);
+
+        $rows = DB::select(<<<'SQL'
+            SELECT c.id, c.label, c.channel_type_code AS channel, t.name AS tenant,
+                   coalesce(c.last_healthy_at, c.connected_at, c.created_at) AS since,
+                   left(coalesce(c.last_error, ''), 160) AS error
+              FROM channel_connections c
+              JOIN tenants t ON t.id = c.tenant_id
+             WHERE c.health_status = 'unhealthy'
+               AND c.status <> 'inactive'
+               AND coalesce(c.last_healthy_at, c.connected_at, c.created_at) < clock_timestamp() - make_interval(hours => ?)
+               AND EXISTS (SELECT 1 FROM listings l
+                            WHERE l.channel_connection_id = c.id AND l.lifecycle_status = 'live')
+        SQL, [$hours]);
+
+        return array_map(static fn (object $r): array => [
+            'key' => "unhealthy:{$r->id}",
+            'title' => "Kanal {$hours} saatten uzun sağlıksız: {$r->channel}",
+            'body' => sprintf('"%s" · kiracı %s · son sağlıklı %s. Bu bağlantıya stok ve fiyat gitmiyor. Son hata: %s', $r->label, $r->tenant, $r->since, $r->error !== '' ? $r->error : '—'),
+            'throttle' => 86400,
+        ], $rows);
     }
 
     /**

@@ -101,6 +101,8 @@ return [
         // Son 1 saatte AI öneri çağrısı hata oranı (yüzde) ve en az çağrı sayısı.
         'ai_error_rate_percent' => (int) env('OPS_AI_ERROR_RATE_PERCENT', 30),
         'ai_error_min_calls' => (int) env('OPS_AI_ERROR_MIN_CALLS', 5),
+        // Canlı ilanı olan bağlantı bu kadar saattir sağlıksızsa (günde bir alarm).
+        'unhealthy_connection_hours' => (int) env('OPS_UNHEALTHY_CONNECTION_HOURS', 24),
     ],
 
     /*

@@ -12,6 +12,7 @@ use App\Domain\Channels\Support\CircuitBreaker;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
+use App\Domain\Sync\Models\Listing;
 use App\Support\Observability\OpsWatch;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -162,6 +163,44 @@ final class OpsWatchTest extends TestCase
 
         $calls(6, 4);   // %40
         $this->assertContains('ai:errors', array_column(app(OpsWatch::class)->findings(), 'key'));
+    }
+
+    /**
+     * Canlı ilanı olan bağlantı 24 saatten uzun sağlıksızsa günde bir alarm.
+     *
+     * 24 Ekim (canlı): Etsy anahtarı 18 gündür 403 veriyordu; bağlantı
+     * `pending` olduğu için devre kesici sinyali onu görmedi.
+     */
+    #[Test]
+    public function a_connection_unhealthy_for_a_day_with_live_listings_raises_a_daily_alert(): void
+    {
+        $make = fn (array $attrs, bool $live = true): ChannelConnection => $this->asTenant($this->tenant, function () use ($attrs, $live): ChannelConnection {
+            $c = ChannelConnection::factory()->create(['channel_type_code' => 'trendyol', ...$attrs]);
+            Listing::factory()->create(['channel_connection_id' => $c->id, 'lifecycle_status' => $live ? 'live' : 'delisted']);
+
+            return $c;
+        });
+
+        $long = $make(['status' => 'pending', 'health_status' => 'unhealthy', 'last_healthy_at' => now()->subHours(25), 'last_error' => '403 API key not found']);
+        $make(['status' => 'active', 'health_status' => 'unhealthy', 'last_healthy_at' => now()->subHours(23)]);   // henüz 24 sa değil
+        $make(['status' => 'inactive', 'health_status' => 'unhealthy', 'last_healthy_at' => now()->subDays(3)]);  // bilinçli kapanış
+        $make(['status' => 'pending', 'health_status' => 'unhealthy', 'last_healthy_at' => now()->subDays(3)], live: false);  // canlı ilan yok
+        $make(['status' => 'active', 'health_status' => 'healthy', 'last_healthy_at' => now()->subDays(3)]);
+
+        $unhealthy = array_values(array_filter(
+            array_column(app(OpsWatch::class)->findings(), 'key'),
+            static fn (string $k): bool => str_starts_with($k, 'unhealthy:'),
+        ));
+        $this->assertSame(["unhealthy:{$long->id}"], $unhealthy);
+
+        $this->artisan('ops:watch')->expectsOutputToContain('gönderildi: 1');
+        Http::assertSent(fn (HttpRequest $r): bool => str_contains((string) $r['message'], '403 API key not found'));
+
+        // Saatlik değil günlük: 2 saat sonra yeniden gitmez, 25 saat sonra gider.
+        $this->travel(2)->hours();
+        $this->artisan('ops:watch')->expectsOutputToContain('gönderildi: 0');
+        $this->travel(23)->hours();
+        $this->artisan('ops:watch')->expectsOutputToContain('gönderildi: 1');
     }
 
     #[Test]
