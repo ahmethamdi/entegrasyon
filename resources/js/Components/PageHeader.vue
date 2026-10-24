@@ -33,8 +33,10 @@ defineProps({
                 </p>
             </div>
 
-            <!-- Eylem yuvası — sağa hizalı, başlıkla aynı taban çizgisinde. -->
-            <div v-if="$slots.actions" class="flex shrink-0 items-center gap-2">
+            <!-- Eylem yuvası — sağa hizalı, başlıkla aynı taban çizgisinde.
+                 Dar ekranda düğmeler alt satıra sarılır; `shrink-0` + tek
+                 satır üç düğmede 390 px'te sayfayı 419 px'e taşıyordu. -->
+            <div v-if="$slots.actions" class="flex max-w-full flex-wrap items-center gap-2">
                 <slot name="actions" />
             </div>
         </div>

@@ -33,7 +33,7 @@ const date = (iso) => (iso ? new Date(iso).toLocaleDateString(intlLocale(), { da
             <button type="submit" class="rounded-md bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Ara') }}</button>
         </form>
 
-        <div class="mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-[760px] text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-500">
                     <tr>

@@ -80,7 +80,7 @@ const components = [
                 {{ basis === 'expected' ? t('Dönem toplamı — beklenen') : t('Dönem toplamı — gerçekleşen') }}
             </h2>
             <p v-if="Object.keys(basisTotals).length === 0" class="mt-1 text-sm text-stone-500">{{ t('Bu dönemde sipariş yok.') }}</p>
-            <div v-for="(bucket, currency) in basisTotals" :key="currency" class="mt-2 overflow-x-auto rounded border border-stone-200 bg-white p-3 text-sm">
+            <div v-for="(bucket, currency) in basisTotals" :key="currency" class="relative mt-2 overflow-x-auto rounded border border-stone-200 bg-white p-3 text-sm">
                 <div class="flex flex-wrap gap-x-6 gap-y-1">
                     <span v-for="[key, label] in components" :key="key">
                         {{ t(label) }}: <strong>{{ money(bucket[key] ?? '0.00', currency) }}</strong>
@@ -105,7 +105,7 @@ const components = [
 
         <p v-if="truncated" class="mt-4 text-sm text-amber-800">{{ t('Dönemde 200\'den fazla sipariş var; en yeni 200 gösteriliyor ve toplamlar onlardan.') }}</p>
 
-        <div class="mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
+        <div class="relative mt-6 overflow-x-auto rounded border border-stone-200 bg-white">
             <table class="min-w-full text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-600">
                     <tr>
@@ -152,7 +152,7 @@ const components = [
                 {{ t('Siparişe güvenle bağlanamayan pazaryeri işlemleri. Tahminle bağlanmaz ve katkıya girmez; sipariş sonradan gelirse otomatik yeniden denenir.') }}
                 {{ t('Doğrulanmamış ya da tanınmayan türdeki işlem sayısı: :count', { count: unmatched.unclassified }) }}
             </p>
-            <div v-if="unmatched.rows.length" class="mt-2 overflow-x-auto rounded border border-stone-200 bg-white">
+            <div v-if="unmatched.rows.length" class="relative mt-2 overflow-x-auto rounded border border-stone-200 bg-white">
                 <table class="min-w-full text-sm">
                     <thead class="bg-stone-50 text-left text-xs text-stone-600">
                         <tr>

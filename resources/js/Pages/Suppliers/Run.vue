@@ -120,7 +120,7 @@ function filter(kind) {
             </button>
         </div>
 
-        <div class="mt-4 overflow-x-auto rounded-lg border border-stone-200">
+        <div class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-600">
                     <tr>

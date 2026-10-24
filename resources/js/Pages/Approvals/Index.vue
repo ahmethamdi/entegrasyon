@@ -186,7 +186,7 @@ function applyFilter(patch) {
                 bir şeride düşüp okunamaz hâle gelir. Genişlik verilince
                 kutu KAYAR ve sayfa taşması ÜRETMEZ.
             -->
-            <div class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+            <div class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
                 <table class="w-full min-w-4xl text-sm">
                     <thead class="border-b border-stone-200 bg-stone-50 text-left">
                         <tr>

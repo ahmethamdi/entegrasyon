@@ -207,7 +207,12 @@ function placedAt(row) {
 
         <!-- liste -->
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div v-else class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <!--
+            `relative` ŞART: tablodaki `sr-only` etiketler `absolute`tur ve
+            kap konumlandırılmamışsa kaydırma kutusu onları KIRPMAZ — 390
+            px'te sayfa 759 px'e taşıyordu (24 Eki 2026'da ölçüldü).
+        -->
+        <div v-else class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>

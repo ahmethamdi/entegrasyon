@@ -73,7 +73,7 @@ onBeforeUnmount(() => clearInterval(timer));
             </Link>
         </div>
 
-        <div class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>

@@ -213,7 +213,7 @@ function submitCount() {
             <template #toolbar>
                 <div class="flex flex-wrap items-center gap-3">
                     <!-- Sekmeler sayılarıyla: satıcı tıklamadan "3 ürün stoksuz" görür. -->
-                    <div class="-mx-1 flex max-w-full gap-1 overflow-x-auto px-1" role="group" :aria-label="t('Ürün filtresi')">
+                    <div class="relative -mx-1 flex max-w-full gap-1 overflow-x-auto px-1" role="group" :aria-label="t('Ürün filtresi')">
                         <button
                             v-for="tab in tabs"
                             :key="tab.key"

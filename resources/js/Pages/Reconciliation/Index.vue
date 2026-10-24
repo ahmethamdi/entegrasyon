@@ -304,7 +304,7 @@ function isDeciding(row, decision) {
             sütunları sıkıştırır ve "Sebep" gibi metin taşıyan sütun
             okunamaz hâle gelir. Genişlik verilince kutu KAYAR.
         -->
-        <div class="mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <!-- Karar sütunu iki düğme taşıyor: asgari genişlik ONA GÖRE. -->
             <table class="w-full min-w-5xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">

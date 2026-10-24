@@ -263,7 +263,7 @@ function stamp(value) {
         <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Kalemler') }}</h2>
 
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div class="mt-3 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-3 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>

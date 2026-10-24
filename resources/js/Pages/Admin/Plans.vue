@@ -31,7 +31,7 @@ const limit = (n) => (n === null || n === undefined ? t('Sınırsız') : n);
 
         <div v-if="flashSuccess" class="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ flashSuccess }}</div>
 
-        <div class="mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-[620px] text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-500">
                     <tr>

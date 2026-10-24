@@ -104,7 +104,7 @@ const planLabel = (p) => `${p.name} · ${Number(p.price) > 0 ? money(p.price, p.
 
         <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Abonelik geçmişi') }}</h2>
-            <div class="mt-3 overflow-x-auto">
+            <div class="relative mt-3 overflow-x-auto">
                 <table class="w-full min-w-[520px] text-sm">
                     <thead class="text-left text-xs text-stone-500">
                         <tr><th class="py-1 font-medium">{{ t('Plan') }}</th><th class="py-1 font-medium">{{ t('Durum') }}</th><th class="py-1 font-medium">{{ t('Kaynak') }}</th><th class="py-1 font-medium">{{ t('Başlangıç') }}</th><th class="py-1 font-medium">{{ t('Bitiş') }}</th></tr>

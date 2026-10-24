@@ -53,7 +53,7 @@ function when(iso) {
 
         <p v-if="sources.length === 0" class="mt-8 text-sm text-stone-600">{{ t('Henüz tedarikçi yok.') }}</p>
 
-        <div v-else class="mt-6 overflow-x-auto rounded-lg border border-stone-200">
+        <div v-else class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-600">
                     <tr>

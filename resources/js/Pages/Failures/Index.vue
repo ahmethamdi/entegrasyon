@@ -192,7 +192,7 @@ function domainFor(domain) {
             genişlik verilince sütunlar doğal boyutlarını korur ve kutu
             KAYAR — kaydırma zaten tasarlanan davranıştı.
         -->
-        <div class="mt-8 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-8 overflow-x-auto rounded-lg border border-stone-200 bg-white">
             <table class="w-full min-w-208 text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
