@@ -1,5 +1,11 @@
 # Yedekleme ve Geri Yükleme Provası
 
+> **S13 (25 Ekim 2026) güncellemesi:** off-site şifreli yedek (IONOS S3, age),
+> 7 günlük + 4 haftalık + 6 aylık saklama, haftalık OTOMATİK geri yükleme
+> provası (`backup:verify`), zamanlayıcı nabzı (healthchecks.io) ve RPO/RTO
+> hedefleri eklendi. Kurulum, olay adımları ve elle geri yükleme:
+> **docs/RUNBOOK.md**. Aşağıdaki Ağustos provası tarihî kayıttır.
+
 **Kaynak:** Mimari Karar Dokümanı v2.2 · §11 (kontrol listesi) · §15
 (Yedekleme tablosu).
 
