@@ -48,6 +48,9 @@ return [
         // Panelde "Shopify'dan kur" düğmesinin adresi — App Store sayfası.
         // Mağaza adresi panelde SORULAMAZ (App Store kuralı 2.3.1).
         'install_url' => env('SHOPIFY_INSTALL_URL', 'https://apps.shopify.com/34pazar'),
+        // App Store sayfası yayında mı (onay sonrası true). Kapalıyken site
+        // rehberi App Store bağlantısı vermez — 24 Eki'de sayfa 404'tü.
+        'listing_public' => (bool) env('SHOPIFY_LISTING_PUBLIC', false),
     ],
 
     // 34Pazar Etsy uygulaması (developers.etsy.com → Your Apps) — tek

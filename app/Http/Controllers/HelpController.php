@@ -44,6 +44,23 @@ final class HelpController extends Controller
     }
 
     /**
+     * Kanal soruları — sitedeki kanal rehberleri de bunları gösterir (S12),
+     * metin tek yerde kalsın.
+     *
+     * @return list<array{q: string, a: string}>
+     */
+    public static function channelQuestions(): array
+    {
+        foreach (self::sections() as $section) {
+            if ($section['id'] === 'kanallar') {
+                return $section['items'];
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Yardım içeriği.
      *
      * TEK KAYNAK: ekran yalnızca gösterir, metin burada yaşar. Bölüm

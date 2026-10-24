@@ -9,6 +9,7 @@ use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
+use App\Domain\Channels\Support\ChannelConnectForm;
 use App\Domain\Channels\Support\ChannelLogo;
 use App\Domain\Identity\Support\DemoAccount;
 use App\Support\Site\Blog;
@@ -177,6 +178,44 @@ final class SiteController extends Controller
      * Site haritası — yalnız herkese açık, dizine girmesi istenen adresler.
      * Panel ve giriş sayfaları BİLEREK yoktur.
      */
+    /**
+     * S12 · /yardim — kanal bağlama rehberleri.
+     *
+     * İÇERİK İKİNCİ KEZ YAZILMAZ: "neler istenir, nereden alınır" metni
+     * bağlanma formunun tanımından (`ChannelConnectForm`) okunur — panelde
+     * satıcının gördüğü alanların ve ipuçlarının AYNISI. Ayrı yazılsaydı
+     * form değişince rehber sessizce eski kalırdı. Ortak sorular panel
+     * yardımından (`HelpController`, "kanallar") gelir.
+     */
+    public function helpIndex(Request $request): View
+    {
+        return $this->page('site.help.index', $request, [
+            'guides' => array_values(array_filter($this->channelList(), fn (array $c): bool => $this->hasGuide($c['code']))),
+        ]);
+    }
+
+    public function helpChannel(Request $request, string $channel): View
+    {
+        $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active', 'is_beta']);
+
+        abort_if($type === null || ! $this->hasGuide($type->code), 404);
+
+        return $this->page('site.help.channel', $request, [
+            'channel' => $this->presentChannel($type),
+            'form' => ChannelConnectForm::present($type->code),
+            'installOnly' => ChannelConnectForm::installOnly($type->code),
+            'installPublic' => (bool) config("services.{$type->code}.listing_public", false),
+            'faqs' => HelpController::channelQuestions(),
+        ]);
+    }
+
+    /** Rehber yalnız AÇIK ve panelden bağlanma tanımı olan kanal için. */
+    private function hasGuide(string $code): bool
+    {
+        return ChannelConnectForm::isDefined($code)
+            && (bool) ChannelType::query()->where('code', $code)->value('is_active');
+    }
+
     public function sitemap(Blog $blog): Response
     {
         $urls = [
@@ -192,6 +231,13 @@ final class SiteController extends Controller
 
         foreach ($this->channelList() as $channel) {
             $urls[] = ['loc' => route('site.channel', $channel['code']), 'lastmod' => null];
+        }
+
+        $urls[] = ['loc' => route('site.help'), 'lastmod' => null];
+        foreach ($this->channelList() as $channel) {
+            if ($this->hasGuide($channel['code'])) {
+                $urls[] = ['loc' => route('site.help.channel', $channel['code']), 'lastmod' => null];
+            }
         }
 
         foreach (Solutions::all() as $slug => $solution) {

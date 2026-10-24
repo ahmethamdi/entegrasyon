@@ -137,6 +137,8 @@ Route::controller(SiteController::class)->withoutMiddleware(SetLocale::class)->g
     Route::get('/en/solutions/{slug}', 'solutionEn')->where('slug', '[a-z0-9-]+')->name('site.en.solution');
     Route::get('/en', 'homeEn')->name('site.en.home');
     Route::get('/en/{page}', 'english')->where('page', '[a-z0-9-]+')->name('site.en');
+    Route::get('/yardim', 'helpIndex')->name('site.help');
+    Route::get('/yardim/{channel}', 'helpChannel')->where('channel', '[a-z0-9-]+')->name('site.help.channel');
     Route::get('/sitemap.xml', 'sitemap')->name('site.sitemap');
 });
 

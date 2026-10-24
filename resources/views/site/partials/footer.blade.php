@@ -39,6 +39,7 @@
                     <li><a class="footer-link" href="{{ route('site.pricing') }}">Fiyatlar</a></li>
                     <li><a class="footer-link" href="{{ route('site.channels') }}">Entegrasyonlar</a></li>
                     <li><a class="footer-link" href="{{ route('home') }}#sss">Sık sorulanlar</a></li>
+                    <li><a class="footer-link" href="{{ route('site.help') }}">Kanal bağlama rehberleri</a></li>
                 </ul>
             </nav>
 
