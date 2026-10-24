@@ -86,7 +86,7 @@
             [$t('Yurtiçi ve Aras gönderisi, kendi sözleşmenle (WooCommerce siparişlerinde)', 'Yurtiçi and Aras shipments on your own contract (WooCommerce orders)'), null],
         ],
         $t('E-fatura', 'E-invoices') => [
-            [$t('Paraşüt hesabınla e-fatura ve e-arşiv', 'E-invoices and e-archive invoices with your Paraşüt account'), null],
+            [$t('Kendi Nilvera hesabınla e-fatura ve e-arşiv', 'E-invoices and e-archive invoices with your own Nilvera account'), null],
             [$t('Fatura bilgisi Trendyol, Hepsiburada, n11 ve Shopify siparişinden okunur', 'Billing details read from Trendyol, Hepsiburada, n11 and Shopify orders'), null],
         ],
         $t('Ekip ve roller', 'Team and roles') => [
@@ -242,7 +242,7 @@
                             @endif
                             @if ($anyInvoice)
                                 <tr>
-                                    <th scope="row">{{ $t('E-fatura / ay (Paraşüt)', 'E-invoices / month (Paraşüt)') }}</th>
+                                    <th scope="row">{{ $t('E-fatura / ay (Nilvera)', 'E-invoices / month (Nilvera)') }}</th>
                                     @foreach ($plans as $plan)
                                         <td class="font-semibold tabular-nums {{ $plan['code'] === 'pro' ? 'is-hi' : '' }}">{{ ($plan['hasInvoiceLimit'] ?? false) ? $count($plan['invoiceLimit']) : '—' }}</td>
                                     @endforeach

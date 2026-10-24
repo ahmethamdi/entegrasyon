@@ -187,7 +187,7 @@ final class HomePageTest extends TestCase
         $this->get('/fiyatlar')
             ->assertOk()
             ->assertSee('<th scope="row">Kullanıcı</th>', false)
-            ->assertSee('E-fatura / ay (Paraşüt)')
+            ->assertSee('E-fatura / ay (Nilvera)')
             ->assertDontSee('AI önerisi / ay')
             ->assertDontSee('yalnız ürün ve kanal sayısıyla');
 

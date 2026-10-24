@@ -52,7 +52,7 @@
 
     $capabilities = [
         $t('Fazla satış koruması', 'Overselling protection'),
-        $t('Paraşüt ile e-fatura', 'E-invoices via Paraşüt'),
+        $t('Nilvera ile e-fatura', 'E-invoices via Nilvera'),
         $t('Fiyat kuralı ve kampanya', 'Price rules and campaigns'),
         $t('Aylık ödeme, taahhüt yok', 'Monthly billing, no contract'),
     ];
@@ -61,7 +61,7 @@
     $why = [
         ['calendar', $t('Aylık öde, yıllık peşin yok', 'Pay monthly, no annual prepayment'), $t('Ücretli paketler aylık abonelik. İstediğin zaman değiştirir ya da iptal edersin.', 'Paid plans are monthly subscriptions. Change or cancel whenever you like.').($freePlan ? $t(' Ücretsiz paket kart bilgisi istemez.', ' The free plan needs no card.') : '')],
         ['shield', $t('Fazla satışa karşı stok çekirdeği', 'One stock core against overselling'), $t('Stok tek yerde tutulur, her satış bir kez düşülür. Kanallara eksi sayı gitmez; fazla satış panelde en üstte görünür.', 'Stock lives in one place and each sale is deducted once. Channels never get a negative number; overselling shows up first in the panel.')],
-        ['scale', $t('Paraşüt e-fatura pakette', 'Paraşüt e-invoicing included'), $t('E-fatura ve e-arşiv kendi Paraşüt hesabından; her pakette aylık fatura hakkı var, ayrı modül ücreti yok.', 'E-invoices and e-archive invoices from your own Paraşüt account; every plan includes a monthly invoice allowance, no add-on fee.')],
+        ['scale', $t('E-fatura pakette', 'E-invoicing included'), $t('E-fatura ve e-arşiv kendi Nilvera hesabından; her pakette aylık fatura hakkı var, ayrı modül ücreti yok. Kontör Nilvera hesabından düşer.', 'E-invoices and e-archive invoices from your own Nilvera account; every plan includes a monthly invoice allowance, no add-on fee. Credits are deducted from your Nilvera account.')],
         ['map', $t('Yurtdışı ve kur koruması', 'International, currency-safe'), $t('Yurtdışı pazaryerleri aynı stokla çalışır. Kanalın para birimi farklıysa TL fiyat yanlışlıkla euro olarak gitmez.', 'International marketplaces share the same stock. If a channel uses another currency, a lira price is never sent as euros by mistake.')],
     ];
 
@@ -100,7 +100,7 @@
     $faqs[] = ['q' => $t('Her kanalda farklı fiyat kullanabilir miyim?', 'Can I use different prices per channel?'), 'a' => $t('Evet. Kanal başına yüzde ya da tutar farkı ve yuvarlama tanımlayabilir, istersen bir ürüne kanal için elle fiyat girebilirsin. Alış maliyetini girdiysen maliyetin altına düşen fiyat kanala gönderilmez.', 'Yes. Set a percentage or fixed difference and rounding per channel, or enter a manual channel price for a product. If you entered a cost price, a price below cost is never sent.')];
     $faqs[] = ['q' => $t('Kanalın kendi panelinde fiyat değiştirirsem ne olur?', 'What if I change a price in the channel\'s own panel?'), 'a' => $t('Değişikliğini sessizce ezmeyiz. Farkı gördüğümüzde sana gösteririz; hangi fiyatın geçerli olacağına sen karar verirsin.', 'We never overwrite it silently. When we see the difference we show it to you, and you decide which price wins.')];
     $faqs[] = ['q' => $t('Teknik bilgi gerekiyor mu?', 'Do I need technical skills?'), 'a' => $t('Kod yazman gerekmez. Bir kanalı bağlamak için o kanalın satıcı panelinden API anahtarı gibi birkaç bilgiyi alıp bağlantı formuna yapıştırırsın; form hangi bilgiyi istediğini tek tek gösterir.', 'No coding. To connect a channel you copy a few details such as an API key from its seller panel into the connection form, which tells you exactly what it needs.')];
-    $faqs[] = ['q' => $t('E-fatura kesebiliyor muyum?', 'Can I issue e-invoices?'), 'a' => $t('Evet, kendi Paraşüt hesabından: alıcı e-fatura mükellefiyse e-fatura, değilse e-arşiv. Trendyol, Hepsiburada, n11 ve Shopify siparişlerinde fatura bilgisi kanaldan okunur.', 'Yes, from your own Paraşüt account (Turkey): an e-invoice if the buyer is registered for it, otherwise an e-archive invoice. Billing details are read from Trendyol, Hepsiburada, n11 and Shopify orders.')];
+    $faqs[] = ['q' => $t('E-fatura kesebiliyor muyum?', 'Can I issue e-invoices?'), 'a' => $t('Evet, kendi Nilvera hesabından: alıcı e-fatura mükellefiyse e-fatura, değilse e-arşiv. Trendyol, Hepsiburada, n11 ve Shopify siparişlerinde fatura bilgisi kanaldan okunur.', 'Yes, from your own Nilvera account (Turkey): an e-invoice if the buyer is registered for it, otherwise an e-archive invoice. Billing details are read from Trendyol, Hepsiburada, n11 and Shopify orders.')];
 
     $description = $en
         ? 'Manage your marketplace and online store stock, orders and prices from one panel. A sale on one channel reduces stock on all the others.'
