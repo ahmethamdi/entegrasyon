@@ -333,6 +333,34 @@ Schedule::command('ops:watch')
     ->onOneServer()
     ->withoutOverlapping();
 
+// S13 · ZAMANLAYICI NABZI — 5 DAKİKA (healthchecks.io dead-man switch).
+//
+// ops:watch zamanlayıcıyla birlikte ölür; bu ping susarsa alarmı DIŞARIDAKİ
+// servis verir. onOneServer YOK: kilit Redis'te — Redis ölürse nabız da
+// susmalı ki dışarıdan görülsün (kilit beklemesi nabzı sessizce durdurmaz).
+Schedule::command('ops:heartbeat')
+    ->everyFiveMinutes()
+    ->runInBackground();
+
+// S13 · OFF-SİTE YEDEK — HER GECE 02:00 UTC (İstanbul 05:00).
+//
+// Yerel 03:30 dökümünden (sunucu cron'u) BAĞIMSIZ: o hızlı geri yükleme
+// için, bu sunucu kaybına karşı. 03:00 taksonomi ve 04:30 demo kurulumuyla
+// çakışmasın diye 02:00.
+Schedule::command('backup:offsite')
+    ->dailyAt('02:00')
+    ->onOneServer()
+    ->withoutOverlapping(120);
+
+// S13 · GERİ YÜKLEME PROVASI — HER PAZAR 02:40 UTC.
+//
+// Gece yedeğinden sonra koşar; en yeni tam yedeği geçici veritabanına açar,
+// satırları sayar, siler. Sonuç (başarı da) 34Devs'e gider.
+Schedule::command('backup:verify')
+    ->weeklyOn(0, '02:40')
+    ->onOneServer()
+    ->withoutOverlapping(120);
+
 // S12 · DEMO HESABI — HER GECE BAŞTAN KURULUR (`/demo`).
 //
 // Siparişler "1 saat önce" görünsün; demo verisi kalıcı eskimesin.

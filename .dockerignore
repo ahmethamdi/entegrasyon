@@ -13,3 +13,4 @@ tests
 docs/pdf
 .playwright-cli
 .phpunit.cache
+secrets

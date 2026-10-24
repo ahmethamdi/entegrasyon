@@ -65,6 +65,12 @@ services:
   scheduler:
     <<: *app
     command: ["php", "artisan", "schedule:work"]
+    # S13 · off-site yedeğin age kimlik dosyası (.env'de DEĞİL). Klasör yoksa
+    # Docker boş açar → uygulama "yapılandırılmadı" alarmı verir, kurulum
+    # durmaz. `volumes` burada yazılınca anchor'dakini EZER — storage tekrar.
+    volumes:
+      - storage:/var/www/html/storage
+      - ./secrets:/run/secrets/34pazar:ro
 
   relay:
     <<: *app

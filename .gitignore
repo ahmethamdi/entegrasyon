@@ -33,3 +33,6 @@ Thumbs.db
 # Projeye ait bir yapılandırma DEĞİL: geliştiricinin o oturumda onayladığı
 # kabuk komutlarından oluşuyor ve makineden makineye değişir.
 /.claude
+
+# S13 · off-site yedek şifreleme anahtarı (sunucuda /opt/34pazar/secrets)
+/secrets

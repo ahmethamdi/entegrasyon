@@ -23,7 +23,9 @@ RUN composer dump-autoload --optimize --classmap-authoritative --no-dev --ignore
 # Aşama 3: çalışma imajı (app, horizon, scheduler, relay aynı imajı kullanır).
 FROM php:8.3-fpm-alpine AS app
 
-RUN apk add --no-cache icu-libs libzip libpq \
+# postgresql16-client + age: S13 off-site yedek (pg_dump/pg_restore, şifreleme).
+# pg_dump sürümü sunucudaki PostgreSQL 16 ile AYNI ana sürüm olmalı.
+RUN apk add --no-cache icu-libs libzip libpq postgresql16-client age \
     && apk add --no-cache --virtual .build-deps icu-dev libzip-dev postgresql-dev linux-headers $PHPIZE_DEPS \
     && docker-php-ext-configure intl \
     && docker-php-ext-install -j"$(nproc)" pdo_pgsql pgsql intl zip bcmath opcache pcntl posix \

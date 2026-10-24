@@ -14,6 +14,8 @@ use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Models\User;
 use App\Domain\Identity\Support\SuperAdmin;
+use App\Support\Backup\DatabaseSnapshot;
+use App\Support\Backup\PostgresSnapshot;
 use App\Support\Logging\PayloadRedactor;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -39,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(FxRates::class);
 
         $this->app->bind(PaymentGateway::class, StripePaymentGateway::class);
+        $this->app->bind(DatabaseSnapshot::class, PostgresSnapshot::class);
         // S8 · Claude; testler `FakeLanguageModel` bağlar (SDK kendi HTTP istemcisiyle çıkar).
         $this->app->bind(LanguageModel::class, AnthropicLanguageModel::class);
     }

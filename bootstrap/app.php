@@ -34,9 +34,12 @@ use App\Http\Middleware\AuthorizeTenantRoute;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SetLocale;
+use App\Support\Backup\BackupOffsiteCommand;
+use App\Support\Backup\BackupVerifyCommand;
 use App\Support\LoadTest\SyncLoadTestCommand;
 use App\Support\Observability\CaptureMetricsCommand;
 use App\Support\Observability\DispatchAlertsCommand;
+use App\Support\Observability\HeartbeatCommand;
 use App\Support\Observability\OpsWatchCommand;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -114,6 +117,10 @@ return Application::configure(basePath: dirname(__DIR__))
         DispatchAlertsCommand::class,
         // S7 · canlı işletme izleme (Black Friday). Zamanlaması routes/console.php.
         OpsWatchCommand::class,
+        // S13 · off-site yedek, geri yükleme provası, zamanlayıcı nabzı.
+        BackupOffsiteCommand::class,
+        BackupVerifyCommand::class,
+        HeartbeatCommand::class,
         // §11 · yük testi. ZAMANLANMAZ ve bu bilinçlidir: ölçüm aracıdır,
         // bakım turu değil — zamanlansaydı her gece kendiliğinden veri
         // üretir ve kuyruğu meşgul ederdi. Elle çalıştırılır.
