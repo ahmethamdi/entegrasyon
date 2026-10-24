@@ -1785,6 +1785,7 @@
     "Bu dönemde birden fazla kanalda satışta olan bir ürünün satışı yok; süre ve tükenme koruması ilk böyle satışta ölçülür.": "No product listed on more than one channel was sold in this period; update time and sell-out protection are measured on the first such sale.",
     ":total kanal satışının :multi tanesinde ürün başka kanalda da satıştaydı; :reached tanesinde yeni stok diğer kanalların hepsine ulaştı.": "In :multi of :total channel sales the product was also on sale elsewhere; in :reached of them the new stock reached every other channel.",
     ":count satışta en az bir kanala henüz ulaşmadı ya da gönderim başarısız oldu.": "In :count sales the update has not reached at least one channel yet, or sending failed.",
+    ":count satışta ürünün bugün canlı olan bir ilanına o an stok gönderilmedi: ilan satış sırasında canlı değildi ya da o kanalda stok gönderimi kapalıydı. Bu ilanlar süreye ve korumaya katılmadı.": "In :count sales a listing that is live today was not sent stock at the time: it was not live during the sale, or stock sync was off on that channel. These listings are left out of the timing and protection figures.",
     "Satışların %95'inde bu süre ya da daha kısa.": "95% of sales took this long or less.",
     "Ürün çek": "Pull products",
     "Ürünlerini mağazandan, tedarikçi XML'inden ya da Excel/CSV dosyasından çek.": "Pull your products from your store, a supplier XML feed or an Excel/CSV file.",

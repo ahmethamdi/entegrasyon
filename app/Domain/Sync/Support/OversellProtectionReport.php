@@ -27,7 +27,15 @@ use Illuminate\Support\Facades\DB;
  *     satıştan önce açılmış ve bugün canlı (`lifecycle_status = live`)
  *     ilanı, bağlantısı `active`. Bugün canlı olma şartı yaklaşıktır:
  *     sonradan kaldırılan ilan sayılmaz.
- *   - ULAŞMA: o ilan için satıştan SONRA yaratılmış ve `completed` olmuş
+ *   - HEDEF: satışın stok olayı (`InventoryLevelChanged`, yükte
+ *     `movement_id`) o ilana bir `INVENTORY_PUSH` açtı. Satış anında canlı
+ *     olmayan ya da stok gönderimi kapalı ilana fan-out iş açmaz; bugünkü
+ *     canlılık o anı kanıtlamaz (24 Ekim: test kiracısında Trendyol ilanı
+ *     satış günü pasifti, ilk stok 23 saat sonra elle düzeltmeyle gitti ve
+ *     ekran bunu "23 sa gecikme" diye gösterdi). Hedef olmayan ilan süreye
+ *     ve korumaya GİRMEZ; satış `not_targeted` olarak ayrıca sayılır ki
+ *     fan-out'un bir ilanı ATLAMASI da görünür kalsın.
+ *   - ULAŞMA: HEDEF ilan için satıştan SONRA yaratılmış ve `completed` olmuş
  *     ilk `INVENTORY_PUSH`. Zaman damgaları saniye hassasiyetinde olduğu
  *     için yaratılma 1 sn geriye toleranslıdır.
  *   - GECİKME: satış kaydı → son DİĞER İLANA ulaşma (en yavaş kanal).
@@ -60,7 +68,7 @@ final class OversellProtectionReport
      * @return array{
      *     from: string, to: string,
      *     orders: array{count: int, channels: int},
-     *     sales: array{total: int, multi_channel: int, reached: int, pending: int},
+     *     sales: array{total: int, multi_channel: int, reached: int, pending: int, not_targeted: int},
      *     latency: array{avg: float|null, p50: float|null, p95: float|null, max: float|null},
      *     stockouts: array{protected: int, unprotected: int},
      *     reconciliation: array{checked: int, drift: int, repaired: int, review: int, unreachable: int}
@@ -77,13 +85,14 @@ final class OversellProtectionReport
             [$tenant, ...$window],
         );
 
-        // Satış başına: diğer ilan sayısı, ulaşılan ilan sayısı, en yavaş ulaşma.
+        // Satış başına: diğer ilan, hedef ilan, ulaşılan hedef, en yavaş ulaşma.
         $rows = DB::select(
             'SELECT m.id,
                     (m.on_hand_after - m.reserved_after) AS available_after,
                     count(l.id) AS others,
-                    count(r.completed_at) AS reached,
-                    max(extract(epoch FROM r.completed_at - m.created_at)) AS slowest
+                    count(t.id) AS targeted,
+                    count(r.completed_at) FILTER (WHERE t.id IS NOT NULL) AS reached,
+                    max(extract(epoch FROM r.completed_at - m.created_at)) FILTER (WHERE t.id IS NOT NULL) AS slowest
                FROM inventory_movements m
                LEFT JOIN listings l
                       ON l.tenant_id = m.tenant_id
@@ -93,6 +102,22 @@ final class OversellProtectionReport
                      AND l.created_at <= m.created_at
                      AND EXISTS (SELECT 1 FROM channel_connections c
                                   WHERE c.id = l.channel_connection_id AND c.status = ?)
+               LEFT JOIN inventory_levels il
+                      ON il.tenant_id = m.tenant_id
+                     AND il.warehouse_id = m.warehouse_id
+                     AND il.variant_id = m.variant_id
+               LEFT JOIN LATERAL (
+                      SELECT o.id
+                        FROM outbox_events e
+                        JOIN sync_operations o
+                          ON o.outbox_event_id = e.id
+                         AND o.entity_type = ?
+                         AND o.entity_id = l.id
+                       WHERE e.aggregate_type = ?
+                         AND e.aggregate_id = il.id
+                         AND e.payload->>\'movement_id\' = m.id::text
+                       LIMIT 1
+                  ) t ON l.id IS NOT NULL
                LEFT JOIN LATERAL (
                       SELECT min(o.completed_at) AS completed_at
                         FROM sync_operations o
@@ -108,19 +133,27 @@ final class OversellProtectionReport
                 AND m.channel_connection_id IS NOT NULL
                 AND m.created_at BETWEEN ? AND ?
               GROUP BY m.id, m.on_hand_after, m.reserved_after',
-            ['live', 'active', 'listing', SyncDomain::INVENTORY->operationType(), SyncOperationStatus::COMPLETED->value, $tenant, MovementType::SALE->value, ...$window],
+            ['live', 'active', 'listing', 'inventory_level', 'listing', SyncDomain::INVENTORY->operationType(), SyncOperationStatus::COMPLETED->value, $tenant, MovementType::SALE->value, ...$window],
         );
 
         $latencies = [];
-        $multi = $reached = $pending = $protected = $unprotected = 0;
+        $multi = $reached = $pending = $notTargeted = $protected = $unprotected = 0;
 
         foreach ($rows as $row) {
             if ((int) $row->others === 0) {
                 continue;
             }
 
+            if ((int) $row->targeted < (int) $row->others) {
+                $notTargeted++;
+            }
+
+            if ((int) $row->targeted === 0) {
+                continue;
+            }
+
             $multi++;
-            $complete = (int) $row->reached === (int) $row->others;
+            $complete = (int) $row->reached === (int) $row->targeted;
 
             if ($complete) {
                 $reached++;
@@ -151,7 +184,7 @@ final class OversellProtectionReport
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
             'orders' => ['count' => (int) $orders->n, 'channels' => (int) $orders->c],
-            'sales' => ['total' => count($rows), 'multi_channel' => $multi, 'reached' => $reached, 'pending' => $pending],
+            'sales' => ['total' => count($rows), 'multi_channel' => $multi, 'reached' => $reached, 'pending' => $pending, 'not_targeted' => $notTargeted],
             'latency' => self::summary($latencies),
             'stockouts' => ['protected' => $protected, 'unprotected' => $unprotected],
             'reconciliation' => [

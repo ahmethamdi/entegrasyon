@@ -76,12 +76,12 @@ final class OversellReportTest extends TestCase
         $this->listing($this->a, $shared, '2026-10-01 00:00:00');
 
         // 1) Son birim A'da satıldı → B'ye sıfır 4 sn sonra gitti.
-        $this->sale($this->a, $shared, at: '2026-10-20 10:00:00', availableAfter: 0);
-        $this->push($listingB, created: '2026-10-20 10:00:01', completed: '2026-10-20 10:00:04');
+        $e1 = $this->sale($this->a, $shared, at: '2026-10-20 10:00:00', availableAfter: 0);
+        $this->push($listingB, created: '2026-10-20 10:00:01', completed: '2026-10-20 10:00:04', event: $e1);
 
         // 2) Bir satış daha: B'ye giden gönderim ölü — ulaşmadı.
-        $this->sale($this->a, $shared, at: '2026-10-21 09:00:00', availableAfter: 3);
-        $this->push($listingB, created: '2026-10-21 09:00:01', completed: null, status: 'dead');
+        $e2 = $this->sale($this->a, $shared, at: '2026-10-21 09:00:00', availableAfter: 3);
+        $this->push($listingB, created: '2026-10-21 09:00:01', completed: null, status: 'dead', event: $e2);
 
         // 3) Yalnız A'da satılan ürün.
         $solo = $this->variant();
@@ -100,7 +100,7 @@ final class OversellReportTest extends TestCase
         $report = $this->report();
 
         $this->assertSame(['count' => 2, 'channels' => 2], $report['orders']);
-        $this->assertSame(['total' => 3, 'multi_channel' => 2, 'reached' => 1, 'pending' => 1], $report['sales']);
+        $this->assertSame(['total' => 3, 'multi_channel' => 2, 'reached' => 1, 'pending' => 1, 'not_targeted' => 0], $report['sales']);
         $this->assertSame(4.0, (float) $report['latency']['p95']);
         $this->assertSame(['protected' => 1, 'unprotected' => 0], $report['stockouts']);
         $this->assertSame(['checked' => 4, 'drift' => 2, 'repaired' => 1, 'review' => 1, 'unreachable' => 1], $report['reconciliation']);
@@ -117,14 +117,63 @@ final class OversellReportTest extends TestCase
     {
         $shared = $this->variant();
         $listingB = $this->listing($this->b, $shared, '2026-10-01 00:00:00');
-        $this->sale($this->a, $shared, at: '2026-10-20 10:00:00', availableAfter: 0);
+        $event = $this->sale($this->a, $shared, at: '2026-10-20 10:00:00', availableAfter: 0);
         $this->push($listingB, created: '2026-10-20 09:59:00', completed: '2026-10-20 10:00:02');
+        $this->push($listingB, created: '2026-10-20 10:00:01', completed: null, status: 'pending', event: $event);
 
         $report = $this->report();
 
         $this->assertSame(0, $report['sales']['reached']);
         $this->assertSame(['protected' => 0, 'unprotected' => 1], $report['stockouts']);
         $this->assertNull($report['latency']['p95']);
+    }
+
+    /**
+     * ⚠️ SATIŞ ANINDA HEDEF OLMAYAN İLAN SÜREYE GİRMEZ (24 Ekim, canlı).
+     *
+     * Test kiracısında Trendyol ilanı satış günü pasifti; fan-out ona iş
+     * açmadı, stok 23 saat sonra elle düzeltmeyle gitti. Bugünkü canlılığa
+     * bakan sorgu bunu "23 sa gecikme" diye gösteriyordu. Hedef olmayan
+     * ilan ayrı sayılır — fan-out'un bir ilanı atlaması da görünsün.
+     */
+    #[Test]
+    public function a_listing_the_sale_did_not_target_is_counted_apart_not_as_latency(): void
+    {
+        $shared = $this->variant();
+        $listingB = $this->listing($this->b, $shared, '2026-10-01 00:00:00');
+
+        // Önceki satış B'ye ulaştı — aynı stok satırının ESKİ olayı sonraki
+        // satışı "hedefledi" saydırmamalı (olay hareketle eşlenir).
+        $earlier = $this->sale($this->a, $shared, at: '2026-10-06 10:00:00', availableAfter: 2);
+        $this->push($listingB, created: '2026-10-06 10:00:01', completed: '2026-10-06 10:00:02', event: $earlier);
+
+        $this->sale($this->a, $shared, at: '2026-10-07 07:57:26', availableAfter: 1);
+        $this->push($listingB, created: '2026-10-08 07:03:42', completed: '2026-10-08 07:03:45');
+
+        $report = $this->report();
+
+        $this->assertSame(['total' => 2, 'multi_channel' => 1, 'reached' => 1, 'pending' => 0, 'not_targeted' => 1], $report['sales']);
+        $this->assertSame(2.0, (float) $report['latency']['max']);
+    }
+
+    /** Bir ilan hedef, öbürü değilse süre yalnız hedeften ölçülür. */
+    #[Test]
+    public function latency_is_measured_over_targeted_listings_only(): void
+    {
+        $shared = $this->variant();
+        $listingB = $this->listing($this->b, $shared, '2026-10-01 00:00:00');
+        $c = $this->asTenant($this->tenant, fn (): ChannelConnection => ChannelConnection::factory()->create(['status' => 'active']));
+        $listingC = $this->listing($c, $shared, '2026-10-01 00:00:00');
+
+        $event = $this->sale($this->a, $shared, at: '2026-10-20 10:00:00', availableAfter: 0);
+        $this->push($listingB, created: '2026-10-20 10:00:01', completed: '2026-10-20 10:00:03', event: $event);
+        $this->push($listingC, created: '2026-10-21 10:00:00', completed: '2026-10-21 10:00:02');
+
+        $report = $this->report();
+
+        $this->assertSame(['total' => 1, 'multi_channel' => 1, 'reached' => 1, 'pending' => 0, 'not_targeted' => 1], $report['sales']);
+        $this->assertSame(3.0, (float) $report['latency']['max']);
+        $this->assertSame(['protected' => 1, 'unprotected' => 0], $report['stockouts']);
     }
 
     /** Satıştan SONRA açılan ilan "diğer ilan" değildir. */
@@ -187,10 +236,25 @@ final class OversellReportTest extends TestCase
         ]));
     }
 
-    private function sale(ChannelConnection $connection, Variant $variant, string $at, int $availableAfter): void
+    /** Satış hareketi + fan-out'un okuduğu stok olayı; olay kimliğini döner. */
+    private function sale(ChannelConnection $connection, Variant $variant, string $at, int $availableAfter): string
     {
+        $level = DB::table('inventory_levels')
+            ->where('warehouse_id', $this->warehouse)->where('variant_id', $variant->id)->value('id');
+
+        if ($level === null) {
+            $level = (string) Str::uuid();
+            DB::table('inventory_levels')->insert([
+                'id' => $level, 'tenant_id' => $this->tenant->id, 'warehouse_id' => $this->warehouse,
+                'variant_id' => $variant->id, 'created_at' => $at, 'updated_at' => $at,
+            ]);
+        }
+
+        $movement = (string) Str::uuid();
+        $event = (string) Str::uuid();
+
         DB::table('inventory_movements')->insert([
-            'id' => (string) Str::uuid(),
+            'id' => $movement,
             'tenant_id' => $this->tenant->id,
             'warehouse_id' => $this->warehouse,
             'variant_id' => $variant->id,
@@ -206,9 +270,19 @@ final class OversellReportTest extends TestCase
             'created_at' => $at,
             'updated_at' => $at,
         ]);
+
+        DB::table('outbox_events')->insert([
+            'id' => $event, 'tenant_id' => $this->tenant->id, 'aggregate_type' => 'inventory_level',
+            'aggregate_id' => $level, 'event_type' => 'InventoryLevelChanged',
+            'payload' => json_encode(['movement_id' => $movement, 'variant_id' => $variant->id]),
+            'available_at' => $at, 'created_at' => $at, 'updated_at' => $at,
+        ]);
+
+        return $event;
     }
 
-    private function push(Listing $listing, string $created, ?string $completed, string $status = 'completed'): void
+    /** `$event` verilirse gönderim o satışın fan-out'undan açılmıştır. */
+    private function push(Listing $listing, string $created, ?string $completed, string $status = 'completed', ?string $event = null): void
     {
         DB::table('sync_operations')->insert([
             'id' => (string) Str::uuid(),
@@ -220,6 +294,7 @@ final class OversellReportTest extends TestCase
             'entity_version' => 1,
             'idempotency_key' => 'inv:'.uniqid(),
             'status' => $status,
+            'outbox_event_id' => $event,
             'completed_at' => $completed,
             'created_at' => $created,
             'updated_at' => $created,

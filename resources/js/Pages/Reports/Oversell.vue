@@ -86,6 +86,9 @@ const measured = computed(() => props.report.sales.multi_channel > 0);
                 {{ t(':total kanal satışının :multi tanesinde ürün başka kanalda da satıştaydı; :reached tanesinde yeni stok diğer kanalların hepsine ulaştı.', { total: count(report.sales.total), multi: count(report.sales.multi_channel), reached: count(report.sales.reached) }) }}
                 <span v-if="report.sales.pending > 0" class="text-amber-800">{{ t(':count satışta en az bir kanala henüz ulaşmadı ya da gönderim başarısız oldu.', { count: report.sales.pending }) }}</span>
             </p>
+            <p v-if="report.sales.not_targeted > 0" class="mt-1 text-stone-600">
+                {{ t(':count satışta ürünün bugün canlı olan bir ilanına o an stok gönderilmedi: ilan satış sırasında canlı değildi ya da o kanalda stok gönderimi kapalıydı. Bu ilanlar süreye ve korumaya katılmadı.', { count: report.sales.not_targeted }) }}
+            </p>
         </section>
     </PanelLayout>
 </template>
