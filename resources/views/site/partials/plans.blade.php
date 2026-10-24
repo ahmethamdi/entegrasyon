@@ -13,9 +13,10 @@
     "Profesyonel" için "en çok tercih edilen" DENMEZ — bunu gösteren
     veri yok. Yerine kimin için olduğunu söyleyen nötr bir not.
 
-    Paketler ürün, kanal ve aylık fatura sayısıyla ayrılır (QuotaMetric);
-    "tüm paketlerde" listesi bu yüzden ortak. Fatura satırı yalnız planın
-    limitlerinde anahtar varsa basılır. `$lang` = en → İngilizce metin.
+    Paketler ürün, kanal, kullanıcı ve aylık fatura sayısıyla ayrılır
+    (QuotaMetric); AI öneri hakkı yalnız özellik açıkken görünür (S8).
+    Bir limit satırı yalnız planın limitlerinde anahtar varsa basılır.
+    `$lang` = en → İngilizce metin.
 --}}
 @php
     $loggedIn = $isLoggedIn ?? false;
@@ -74,6 +75,18 @@
                         <div class="flex justify-between gap-4 border-b border-line py-3">
                             <dt class="muted">{{ $t('E-fatura / ay', 'E-invoices / month') }}</dt>
                             <dd class="font-semibold tabular-nums">{{ $count($plan['invoiceLimit']) }}</dd>
+                        </div>
+                    @endif
+                    @if ($plan['hasUserLimit'] ?? false)
+                        <div class="flex justify-between gap-4 border-b border-line py-3">
+                            <dt class="muted">{{ $t('Kullanıcı', 'Users') }}</dt>
+                            <dd class="font-semibold tabular-nums">{{ $count($plan['userLimit']) }}</dd>
+                        </div>
+                    @endif
+                    @if ($plan['showAi'] ?? false)
+                        <div class="flex justify-between gap-4 border-b border-line py-3">
+                            <dt class="muted">{{ $t('AI önerisi / ay', 'AI suggestions / month') }}</dt>
+                            <dd class="font-semibold tabular-nums">{{ $count($plan['aiLimit']) }}</dd>
                         </div>
                     @endif
                 </dl>

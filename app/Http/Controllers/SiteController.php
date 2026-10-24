@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Ai\Support\AiFeature;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
@@ -225,9 +226,18 @@ final class SiteController extends Controller
         ]);
     }
 
-    /** @return list<array{code: string, name: string, priceMonthly: string, currency: string, productLimit: int|null, channelLimit: int|null, hasInvoiceLimit: bool, invoiceLimit: int|null}> */
+    /**
+     * Paket satırları. Bir limit satırı ancak planın limitlerinde o anahtar
+     * VARSA basılır — eksik veri "Sınırsız" okunmasın. AI öneri hakkı
+     * yalnız özellik açıkken (S8, anahtar girilmiş) gösterilir: kapalı bir
+     * özelliği pakette satmak yanlış vaat olurdu.
+     *
+     * @return list<array{code: string, name: string, priceMonthly: string, currency: string, productLimit: int|null, channelLimit: int|null, hasInvoiceLimit: bool, invoiceLimit: int|null, hasUserLimit: bool, userLimit: int|null, showAi: bool, aiLimit: int|null}>
+     */
     private function planList(): array
     {
+        $ai = AiFeature::enabled();
+
         return Plan::query()
             ->where('is_public', true)
             ->orderBy('price_monthly')
@@ -242,6 +252,10 @@ final class SiteController extends Controller
                 // Anahtar yoksa satır hiç basılmaz: eksik veri "Sınırsız" okunmasın.
                 'hasInvoiceLimit' => array_key_exists(QuotaMetric::INVOICES->value, $plan->limits ?? []),
                 'invoiceLimit' => $plan->limits[QuotaMetric::INVOICES->value] ?? null,
+                'hasUserLimit' => array_key_exists(QuotaMetric::USERS->value, $plan->limits ?? []),
+                'userLimit' => $plan->limits[QuotaMetric::USERS->value] ?? null,
+                'showAi' => $ai && array_key_exists(QuotaMetric::AI_SUGGESTIONS->value, $plan->limits ?? []),
+                'aiLimit' => $plan->limits[QuotaMetric::AI_SUGGESTIONS->value] ?? null,
             ])
             ->all();
     }

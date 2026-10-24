@@ -4,10 +4,13 @@
     KDV hakkında BİLEREK bir şey yazılmaz (kullanıcı kararı): vergi
     durumu kesinleşmeden "KDV dahil/hariç" demek yanlış bilgi olurdu.
 
-    Kota gerçeği (QuotaMetric): paketler YALNIZ ürün sayısı ve kanal
-    bağlantısı sayısıyla ayrılır. Sınır yeni ekleme anında uygulanır
-    (ürün ekleme, içe aktarma, kanal bağlama) — sayfa da bunu söyler.
+    Kota gerçeği (QuotaMetric, 24 Ekim 2026): paketler ürün, kanal,
+    kullanıcı ve aylık e-fatura sayısıyla ayrılır; AI öneri hakkı yalnız
+    özellik açıkken sayılır ve gösterilir. Özellikler bütün paketlerde
+    aynıdır. Sınır yeni ekleme anında uygulanır (ürün ekleme, içe aktarma,
+    kanal bağlama, ekip daveti, fatura kesme) — sayfa da bunu söyler.
     "Kanal sayısına göre kısıtlama yok" DENMEZ: paketlerin kanal sınırı var.
+    Satırlar `$plans`'taki anahtarlardan basılır; elle rakam yok.
 
     Ödeme gerçeği: abonelik aylıktır (Stripe `interval=month`, Shopify
     `EVERY_30_DAYS`), iptal her zaman yapılabilir ve dönem sonunda geçerli
@@ -29,14 +32,21 @@
         return ($p['currency'] ?? 'TRY') === 'TRY' ? $formatted.' ₺' : $formatted.' '.$p['currency'];
     };
 
-    // Bütün paketlerde aynı olan özellikler (paket farkı yalnız ürün/kanal sayısı).
+    $anyInvoice = collect($plans)->contains(fn ($p) => $p['hasInvoiceLimit'] ?? false);
+    $anyUsers = collect($plans)->contains(fn ($p) => $p['hasUserLimit'] ?? false);
+    $anyAi = collect($plans)->contains(fn ($p) => $p['showAi'] ?? false);
+
+    // Bütün paketlerde aynı olan özellikler (paket farkı yukarıdaki sayılar).
     $included = [
         'Tek stok ve kanallara stok gönderimi',
         'Bütün kanalların siparişi tek listede',
         'Kanal başına fiyat ve fiyat kuralları',
         'Zarar koruması',
         'Süreli kampanyalar',
+        'Otomatik kur çevirisi (TCMB kuru, yurt dışı kanallar)',
         'Kargo takip numarası bildirimi (destekleyen kanallarda)',
+        'Yurtiçi ve Aras gönderisi, kendi sözleşmenle (WooCommerce siparişlerinde)',
+        'Ekip üyeleri ve roller (sahip, yönetici, depo, salt okunur)',
         'Toplu ürün aktarımı (CSV ve kanaldan)',
         'Sipariş sayısına sınır yok',
     ];
@@ -50,11 +60,14 @@
     $faqs[] = ['q' => 'Ürün sayısı neye göre hesaplanır?', 'a' => 'Kataloğundaki ürün sayısına göre. Aynı ürün kaç kanalda satılırsa satılsın bir kez sayılır.'];
     $faqs[] = ['q' => 'Kanal sayısı neye göre hesaplanır?', 'a' => 'Bağladığın her mağaza bir kanaldır. İki ayrı Trendyol mağazası bağlarsan iki kanal sayılır.'];
     $faqs[] = ['q' => 'Sınıra gelince ne olur?', 'a' => 'Yeni ürün ekleyemez ya da yeni kanal bağlayamazsın; panel paketini yükseltmeni söyler. Sınır yeni ekleme anında uygulanır.'];
-    $faqs[] = ['q' => 'Paketler arasında özellik farkı var mı?', 'a' => 'Hayır. Paketler yalnız ürün ve kanal sayısıyla ayrılır. Stok, sipariş, fiyat kuralları, kampanyalar ve kargo ekranları hepsinde aynı.'];
+    $faqs[] = ['q' => 'Paketler arasında özellik farkı var mı?', 'a' => 'Hayır. Paketler ürün, kanal, kullanıcı ve aylık e-fatura sayısıyla ayrılır. Stok, sipariş, fiyat kuralları, kampanyalar, kur çevirisi ve kargo ekranları hepsinde aynı.'];
+    if ($anyUsers) {
+        $faqs[] = ['q' => 'Kullanıcı sayısı neye göre hesaplanır?', 'a' => 'Hesap sahibi dahil, ekipteki her kişi bir kullanıcıdır. Gönderilmiş ama henüz kabul edilmemiş davet de yer tutar.'];
+    }
 @endphp
 
 @section('title', 'Fiyatlar: ürün ve kanal sayına göre aylık paketler')
-@section('description', 'Paketler ürün ve kanal sayısıyla ayrılır; fiyatlar aylıktır. Ücretsiz paketle kart bilgisi girmeden başla, büyüdükçe yükselt.')
+@section('description', 'Paketler ürün, kanal ve kullanıcı sayısıyla ayrılır; fiyatlar aylıktır. Ücretsiz paketle kart bilgisi girmeden başla, büyüdükçe yükselt.')
 
 @push('jsonld')
     @include('site.partials.seo.faq', ['faqs' => $faqs])
@@ -69,7 +82,7 @@
         <div class="wrap pt-12 pb-10 text-center lg:pt-16">
             <p class="eyebrow">Fiyatlar</p>
             <h1 id="fiyat-h1" class="h-page mx-auto mt-3 max-w-[22ch]">Ürün ve kanal sayına göre, sade paketler.</h1>
-            <p class="lead mx-auto mt-5 max-w-[52ch]">Paketler yalnız ürün ve kanal sayısıyla ayrılır; bütün özellikler her pakette var.</p>
+            <p class="lead mx-auto mt-5 max-w-[52ch]">Paketler ürün, kanal ve kullanıcı sayısıyla ayrılır; bütün özellikler her pakette var.</p>
             <p class="mt-4 font-semibold">Fiyatlar aylıktır.</p>
             <ul class="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm muted">
                 <li class="flex items-center gap-1.5"><span class="text-ok" aria-hidden="true">✓</span> Yıllık peşin ödeme yok</li>
@@ -90,11 +103,11 @@
             <div class="wrap">
                 <div class="section-head">
                     <h2 id="karsilastir-h2" class="heading-2">Paketleri karşılaştır</h2>
-                    <p class="lead">Fark yalnız ilk iki satırda. Geri kalan her şey bütün paketlerde aynı.</p>
+                    <p class="lead">Fark yalnız sayı satırlarında. Geri kalan her şey bütün paketlerde aynı.</p>
                 </div>
                 <div class="relative mt-8 overflow-x-auto rounded-xl border border-line" tabindex="0" role="region" aria-labelledby="karsilastir-h2">
                     <table class="compare">
-                        <caption class="sr-only">Paketlerin ürün sınırı, kanal sınırı, aylık fiyatı ve özellikleri</caption>
+                        <caption class="sr-only">Paketlerin aylık fiyatı, ürün, kanal, kullanıcı ve fatura sınırları ve özellikleri</caption>
                         <thead>
                             <tr>
                                 <th scope="col" class="text-left">Paket</th>
@@ -122,6 +135,30 @@
                                     <td class="font-semibold tabular-nums {{ $plan['code'] === 'pro' ? 'is-hi' : '' }}">{{ $count($plan['channelLimit']) }}</td>
                                 @endforeach
                             </tr>
+                            @if ($anyUsers)
+                                <tr>
+                                    <th scope="row">Kullanıcı</th>
+                                    @foreach ($plans as $plan)
+                                        <td class="font-semibold tabular-nums {{ $plan['code'] === 'pro' ? 'is-hi' : '' }}">{{ ($plan['hasUserLimit'] ?? false) ? $count($plan['userLimit']) : '—' }}</td>
+                                    @endforeach
+                                </tr>
+                            @endif
+                            @if ($anyInvoice)
+                                <tr>
+                                    <th scope="row">E-fatura / ay (Paraşüt)</th>
+                                    @foreach ($plans as $plan)
+                                        <td class="font-semibold tabular-nums {{ $plan['code'] === 'pro' ? 'is-hi' : '' }}">{{ ($plan['hasInvoiceLimit'] ?? false) ? $count($plan['invoiceLimit']) : '—' }}</td>
+                                    @endforeach
+                                </tr>
+                            @endif
+                            @if ($anyAi)
+                                <tr>
+                                    <th scope="row">AI önerisi / ay</th>
+                                    @foreach ($plans as $plan)
+                                        <td class="font-semibold tabular-nums {{ $plan['code'] === 'pro' ? 'is-hi' : '' }}">{{ ($plan['showAi'] ?? false) ? $count($plan['aiLimit']) : '—' }}</td>
+                                    @endforeach
+                                </tr>
+                            @endif
                             @foreach ($included as $feature)
                                 <tr>
                                     <th scope="row">{{ $feature }}</th>
@@ -143,12 +180,13 @@
     <section class="section bg-soft" aria-labelledby="sayim-h2">
         <div class="wrap">
             <h2 id="sayim-h2" class="heading-2">Ne sayılır, ne sayılmaz?</h2>
-            <dl class="mt-8 grid gap-5 md:grid-cols-3">
-                @foreach ([
+            <dl class="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+                @foreach (array_filter([
                     ['Ürün', 'Kataloğundaki her ürün bir kez sayılır. Üç kanalda satılan ürün yine bir üründür.'],
                     ['Kanal', 'Bağladığın her mağaza bir kanaldır. Aynı pazaryerinde iki mağazan varsa iki kanal sayılır.'],
+                    $anyUsers ? ['Kullanıcı', 'Hesap sahibi dahil ekipteki her kişi. Kabul edilmemiş davet de yer tutar.'] : null,
                     ['Sipariş', 'Paketlerde sipariş sayısına bağlı bir sınır yok.'],
-                ] as [$term, $desc])
+                ]) as [$term, $desc])
                     <div class="card">
                         <dt class="heading-3">{{ $term }}</dt>
                         <dd class="mt-2 muted">{{ $desc }}</dd>

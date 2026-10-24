@@ -173,6 +173,30 @@ final class HomePageTest extends TestCase
     }
 
     /**
+     * Paketler kullanıcı ve e-fatura sayısıyla da ayrılır (S6, S7) — tablo
+     * bunu söyler; "yalnız ürün ve kanal" cümlesi geri gelmesin. AI öneri
+     * hakkı yalnız özellik açıkken satılır: anahtarsız kapalı bir özelliği
+     * pakette göstermek yanlış vaat olurdu.
+     */
+    #[Test]
+    public function pricing_shows_user_and_invoice_limits_and_ai_only_when_enabled(): void
+    {
+        (new PlanSeeder)->run();
+        config(['entegrasyon.ai.enabled' => true, 'entegrasyon.ai.api_key' => '']);
+
+        $this->get('/fiyatlar')
+            ->assertOk()
+            ->assertSee('<th scope="row">Kullanıcı</th>', false)
+            ->assertSee('E-fatura / ay (Paraşüt)')
+            ->assertDontSee('AI önerisi / ay')
+            ->assertDontSee('yalnız ürün ve kanal sayısıyla');
+
+        config(['entegrasyon.ai.api_key' => 'sk-test']);
+
+        $this->get('/fiyatlar')->assertSee('AI önerisi / ay')->assertSee('10.000');
+    }
+
+    /**
      * Kapalı kanal listede kalır ama "Yakında" diye durur.
      *
      * Bayrak yanlış okunsaydı desteklemediğimiz bir kanalı satmış olurduk.
