@@ -173,12 +173,12 @@ const correctionLabels = { cancel: k('Fatura iptali'), return: k('İade kaydı')
 
 const correctionBadges = {
     pending: { text: k('İşleniyor'), class: 'bg-sky-50 text-sky-800 border-sky-200' },
-    issued: { text: k('Paraşüt\'e işlendi'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
+    issued: { text: k('Entegratöre işlendi'), class: 'bg-emerald-50 text-emerald-800 border-emerald-200' },
     failed: { text: k('İşlenemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
 };
 
 function cancelInvoice() {
-    if (!window.confirm(t('Fatura Paraşüt\'te iptal edilecek. Bu geri alınamaz. Devam edilsin mi?'))) return;
+    if (!window.confirm(t('Fatura e-fatura entegratörünüzde (:provider) iptal edilecek. Bu geri alınamaz. Devam edilsin mi?', { provider: props.order.invoiceProvider ?? '' }))) return;
     router.post(`/orders/${props.order.id}/invoice/cancel`, {}, { preserveScroll: true });
 }
 
@@ -570,7 +570,7 @@ function stamp(value) {
         </template>
 
         <!--
-            E-FATURA. Fatura Paraşüt'ten kesilir; alıcı bilgisi kanaldan
+            E-FATURA. Fatura satıcının entegratöründen (Nilvera / Paraşüt) kesilir; alıcı bilgisi kanaldan
             anlık okunur, burada gösterilmez ve saklanmaz.
         -->
         <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Fatura') }}</h2>
@@ -646,11 +646,11 @@ function stamp(value) {
                 </p>
                 <p v-else-if="!order.invoiceAccountReady && can('settings.manage')" class="text-xs text-stone-500">
                     {{ t('Fatura kesmek için önce') }}
-                    <Link href="/settings/invoicing" class="underline">{{ t('e-fatura ayarlarından Paraşüt hesabınızı bağlayın') }}</Link>.
+                    <Link href="/settings/invoicing" class="underline">{{ t('e-fatura ayarlarından entegratör hesabınızı bağlayın') }}</Link>.
                 </p>
                 <div v-else-if="order.invoiceAccountReady && can('orders.work')" class="flex flex-wrap items-center justify-between gap-3">
                     <p class="text-xs text-stone-500">
-                        {{ t('Alıcı bilgisi :channel\'dan okunur, fatura Paraşüt\'ten kesilir.', { channel: channelName(order.channel.type) }) }}
+                        {{ t('Alıcı bilgisi :channel\'dan okunur, fatura :provider hesabınızdan kesilir.', { channel: channelName(order.channel.type), provider: order.invoiceProvider ?? '' }) }}
                     </p>
                     <button
                         type="button"
@@ -699,7 +699,7 @@ function stamp(value) {
             </ul>
 
             <div v-if="order.canCancelInvoice && can('finance.manage')" class="mt-2 flex flex-wrap items-center justify-between gap-3 border-t border-stone-100 pt-2">
-                <p class="text-xs text-stone-500">{{ t('Sipariş iptal edildi. Faturayı Paraşüt\'te iptal edebilirsiniz.') }}</p>
+                <p class="text-xs text-stone-500">{{ t('Sipariş iptal edildi. Faturayı e-fatura entegratörünüzde iptal edebilirsiniz.') }}</p>
                 <button
                     type="button"
                     class="rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-800 transition hover:bg-red-50"

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Invoicing\Contracts\ProvidesPdfContent;
 use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Invoicing\Support\InvoicePdfResponse;
 use App\Domain\Invoicing\Support\InvoiceProviders;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +24,8 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  *
  * YANITLAR:
  *   302  fatura kesilmiş, Paraşüt adresi verdi
+ *   200  fatura kesilmiş, Nilvera dosyayı verdi (`ProvidesPdfContent`):
+ *        PDF bu yanıtta akar, yine saklanmaz
  *   410  fatura İPTAL edildi (iade faturayı geçersiz kılmaz: kısmi iadede
  *        müşterinin elindeki satış faturası hâlâ geçerli belgedir)
  *   404  bilinmeyen token, kesilmemiş fatura ya da Paraşüt şu an vermiyor
@@ -80,8 +84,17 @@ final class InvoiceLinkController extends Controller
             return $this->page(404);
         }
 
+        $provider = $providers->for($account);
+
         try {
-            $url = $providers->for($account)->pdfUrl($invoice);
+            // Nilvera adres vermez, dosyayı verir: bağlantı PDF'i akıtır.
+            if ($provider instanceof ProvidesPdfContent) {
+                $pdf = $provider->pdfContent($invoice, InvoicePdfResponse::MAX_BYTES);
+
+                return $pdf === null ? $this->page(404) : $this->secure(InvoicePdfResponse::make($pdf, $invoice));
+            }
+
+            $url = $provider->pdfUrl($invoice);
         } catch (InvoiceProviderException) {
             $url = null;
         }

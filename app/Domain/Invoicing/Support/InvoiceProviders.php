@@ -6,6 +6,8 @@ namespace App\Domain\Invoicing\Support;
 
 use App\Domain\Invoicing\Contracts\InvoiceProvider;
 use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Invoicing\Providers\Nilvera\NilveraClient;
+use App\Domain\Invoicing\Providers\Nilvera\NilveraInvoiceProvider;
 use App\Domain\Invoicing\Providers\Parasut\ParasutClient;
 use App\Domain\Invoicing\Providers\Parasut\ParasutInvoiceProvider;
 use RuntimeException;
@@ -21,6 +23,10 @@ class InvoiceProviders
         return match ($account->provider) {
             InvoiceAccount::PROVIDER_PARASUT => new ParasutInvoiceProvider(
                 new ParasutClient($account),
+                $account->setting(InvoiceAccount::SETTING_SERIES),
+            ),
+            InvoiceAccount::PROVIDER_NILVERA => new NilveraInvoiceProvider(
+                new NilveraClient($account),
                 $account->setting(InvoiceAccount::SETTING_SERIES),
             ),
             default => throw new RuntimeException("Bilinmeyen fatura entegratörü: {$account->provider}"),

@@ -10,11 +10,13 @@ use App\Domain\Channels\Contracts\SupportsInvoiceData;
 use App\Domain\Channels\Contracts\SupportsShippingRecipient;
 use App\Domain\Invoicing\Actions\RequestInvoice;
 use App\Domain\Invoicing\Actions\RequestInvoiceCorrection;
+use App\Domain\Invoicing\Contracts\ProvidesPdfContent;
 use App\Domain\Invoicing\Exceptions\InvoiceCorrectionRefused;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
 use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Invoicing\Support\InvoicePdfResponse;
 use App\Domain\Invoicing\Support\InvoiceProviders;
 use App\Domain\Invoicing\Support\ReturnDraftBuilder;
 use App\Domain\Orders\Actions\RecordPanelShipment;
@@ -32,6 +34,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Sipariş listesi — kullanıcının siparişi göreceği tek yer.
@@ -193,6 +196,7 @@ final class OrderController extends Controller
                 ],
                 'invoiceChannelSupported' => $this->channelSupportsInvoicing($order),
                 'invoiceAccountReady' => (bool) InvoiceAccount::query()->first()?->isUsable(),
+                'invoiceProvider' => InvoiceAccount::query()->first()?->providerName(),
 
                 // S6 · Kargo II (BETA) — satıcının kendi Yurtiçi/Aras sözleşmesi.
                 // Acil kapatma anahtarı kapalıysa bölüm hiç görünmez.
@@ -260,7 +264,7 @@ final class OrderController extends Controller
         $account = InvoiceAccount::query()->first();
 
         if ($account === null || ! $account->isUsable()) {
-            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından Paraşüt hesabınızı bağlayın.')]);
+            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından entegratör hesabınızı bağlayın.')]);
         }
 
         try {
@@ -279,7 +283,7 @@ final class OrderController extends Controller
         $account = InvoiceAccount::query()->first();
 
         if ($account === null || ! $account->isUsable()) {
-            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından Paraşüt hesabınızı bağlayın.')]);
+            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından entegratör hesabınızı bağlayın.')]);
         }
 
         try {
@@ -323,7 +327,7 @@ final class OrderController extends Controller
         $account = InvoiceAccount::query()->first();
 
         if ($account === null || ! $account->isUsable()) {
-            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından Paraşüt hesabınızı bağlayın.')]);
+            return back()->withErrors(['invoice' => __('Önce e-fatura ayarlarından entegratör hesabınızı bağlayın.')]);
         }
 
         if ($order->invoice()->exists()) {
@@ -377,8 +381,11 @@ final class OrderController extends Controller
      * Bağlantı saklanmaz ve sayfaya gömülmez: süresi dolar (Paraşüt ~1 sa)
      * ve ekrandaki eski bağlantı "erişim reddedildi" verirdi. Her tıklamada
      * taze bağlantı istenir.
+     *
+     * Dosyayı doğrudan veren entegratörde (Nilvera, `ProvidesPdfContent`)
+     * PDF bu yanıtta akar; diske yazılmaz.
      */
-    public function invoicePdf(string $order, InvoiceProviders $providers): RedirectResponse
+    public function invoicePdf(string $order, InvoiceProviders $providers): RedirectResponse|Response
     {
         $invoice = Invoice::query()
             ->sales()
@@ -388,8 +395,18 @@ final class OrderController extends Controller
 
         $account = InvoiceAccount::query()->first();
 
+        $provider = $account === null ? null : $providers->for($account);
+
         try {
-            $url = $account === null ? null : $providers->for($account)->pdfUrl($invoice);
+            if ($provider instanceof ProvidesPdfContent) {
+                $pdf = $provider->pdfContent($invoice, InvoicePdfResponse::MAX_BYTES);
+
+                if ($pdf !== null) {
+                    return InvoicePdfResponse::make($pdf, $invoice);
+                }
+            }
+
+            $url = $provider === null || $provider instanceof ProvidesPdfContent ? null : $provider->pdfUrl($invoice);
         } catch (InvoiceProviderException $e) {
             return back()->withErrors(['invoice' => $e->getMessage()]);
         }
@@ -524,6 +541,12 @@ final class OrderController extends Controller
         $sale = $order->invoice;
 
         if ($sale === null || $sale->status !== Invoice::STATUS_ISSUED || $sale->document_type === Invoice::TYPE_E_INVOICE) {
+            return [];
+        }
+
+        // İade KAYDI muhasebe tutan entegratörün işidir (Paraşüt); Nilvera
+        // yalnız e-belge keser — düğme gösterilseydi her tıklama reddedilirdi.
+        if ($sale->provider !== InvoiceAccount::PROVIDER_PARASUT) {
             return [];
         }
 

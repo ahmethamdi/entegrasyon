@@ -148,6 +148,7 @@ final class RoutePermissions
         'settings.invoicing.update' => P::SETTINGS_MANAGE,
         'settings.invoicing.destroy' => P::SETTINGS_MANAGE,
         'settings.invoicing.parasut.authorize' => P::SETTINGS_MANAGE,
+        'settings.invoicing.nilvera.connect' => P::SETTINGS_MANAGE,
         'settings.invoicing.parasut.callback' => P::SETTINGS_MANAGE,
         'settings.shipping.store' => P::SETTINGS_MANAGE,
         'settings.shipping.destroy' => P::SETTINGS_MANAGE,

@@ -10,6 +10,7 @@ use App\Domain\Identity\Actions\RecordAuditLog;
 use App\Domain\Identity\Enums\AuditAction;
 use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
 use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Invoicing\Providers\Nilvera\NilveraClient;
 use App\Domain\Invoicing\Providers\Parasut\ParasutApp;
 use App\Domain\Invoicing\Providers\Parasut\ParasutAuth;
 use App\Domain\Invoicing\Providers\Parasut\ParasutClient;
@@ -26,8 +27,15 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Fatura ve muhasebe ayarları — Paraşüt hesabını bağlama, firma ve seri,
- * kip (e-belge / yalnız muhasebe), otomatik aktarım, tahsilat hesapları.
+ * Fatura ve muhasebe ayarları — entegratör hesabını bağlama (Nilvera ya da
+ * Paraşüt), firma ve seri, kip (e-belge / yalnız muhasebe), otomatik
+ * aktarım, tahsilat hesapları.
+ *
+ * NİLVERA: satıcı Nilvera portalında kendi API anahtarını üretir ve buraya
+ * yapıştırır. 34Pazar'ın uygulama anahtarına gerek YOKTUR — bu yüzden
+ * Nilvera her kurulumda açıktır; Paraşüt yalnız sunucuda uygulama
+ * tanımlıysa (`ParasutApp::configured`). Kip ve tahsilat Nilvera'da yoktur
+ * (muhasebe tutmaz, `InvoiceAccount::keepsBooks`).
  *
  * ⚠️ KOMİSYON VE KARGO GİDERİ BURADAN AKTARILMAZ: Trendyol onları aylık
  * e-fatura olarak keser ve fatura Paraşüt'ün gelen kutusuna kendiliğinden
@@ -53,7 +61,7 @@ final class InvoiceSettingsController extends Controller
     {
         $account = InvoiceAccount::query()->first();
 
-        [$ledgerAccounts, $ledgerError] = $account !== null && $account->isUsable()
+        [$ledgerAccounts, $ledgerError] = $account !== null && $account->isUsable() && $account->keepsBooks()
             ? $this->ledgerAccountsForScreen($account)
             : [[], null];
 
@@ -61,6 +69,10 @@ final class InvoiceSettingsController extends Controller
             'available' => ParasutApp::configured(),
             'account' => $account === null ? null : [
                 'provider' => $account->provider,
+                'providerName' => $account->providerName(),
+                'keepsBooks' => $account->keepsBooks(),
+                'environment' => $account->setting(InvoiceAccount::SETTING_ENVIRONMENT),
+                'credits' => $account->provider === InvoiceAccount::PROVIDER_NILVERA && $account->isUsable() ? $this->nilveraCredits($account) : null,
                 'status' => $account->status,
                 'companyId' => $account->company_id,
                 'companyName' => $account->company_name,
@@ -79,6 +91,68 @@ final class InvoiceSettingsController extends Controller
             'ledgerAccounts' => $ledgerAccounts,
             'ledgerAccountsError' => $ledgerError,
         ]);
+    }
+
+    /**
+     * Nilvera'ya API anahtarıyla bağlanır — anahtar KAYDEDİLMEDEN önce
+     * denenir (`general/Company`): yanlış ya da süresi dolmuş anahtar
+     * kaydedilseydi hata ancak ilk faturada, satıcının görmediği bir işte
+     * çıkardı. Firmanın unvanı ve VKN'si Nilvera'dan okunur, elle girilmez.
+     *
+     * Anahtar `credentials`'ta ŞİFRELİ durur, ekrana geri dönmez.
+     */
+    public function connectNilvera(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'api_key' => ['required', 'string', 'min:16', 'max:512', 'regex:/^[A-Za-z0-9._\-]+$/'],
+            'environment' => ['required', 'string', Rule::in([InvoiceAccount::ENVIRONMENT_LIVE, InvoiceAccount::ENVIRONMENT_TEST])],
+        ]);
+
+        try {
+            $company = NilveraClient::probe($validated['api_key'], $validated['environment']);
+        } catch (InvoiceProviderException $e) {
+            Log::warning('nilvera.connect_failed', ['class' => $e->class->value]);
+
+            throw ValidationException::withMessages(['api_key' => __('Nilvera anahtarı doğrulanamadı: :reason', ['reason' => $e->getMessage()])]);
+        }
+
+        $taxNumber = trim((string) ($company['TaxNumber'] ?? ''));
+        $name = trim((string) ($company['Name'] ?? ''));
+
+        if ($taxNumber === '') {
+            throw ValidationException::withMessages(['api_key' => __('Nilvera bu anahtar için firma bilgisi döndürmedi.')]);
+        }
+
+        $account = InvoiceAccount::query()->firstOrNew(['tenant_id' => TenantContext::idOrFail()]);
+
+        // Başka entegratörden geçişte eski ayarlar (Paraşüt firmaları,
+        // tahsilat eşlemesi) TAŞINMAZ: Nilvera'da anlamları yok.
+        $previous = $account->provider === InvoiceAccount::PROVIDER_NILVERA ? ($account->settings ?? []) : [];
+
+        $account->forceFill([
+            'provider' => InvoiceAccount::PROVIDER_NILVERA,
+            'credentials' => ['api_key' => $validated['api_key']],
+            'token_expires_at' => null,
+            'company_id' => $taxNumber,
+            'company_name' => $name !== '' ? $name : $taxNumber,
+            'settings' => [
+                ...$previous,
+                InvoiceAccount::SETTING_ENVIRONMENT => $validated['environment'],
+                'companies' => [['id' => $taxNumber, 'name' => $name !== '' ? $name : $taxNumber]],
+            ],
+            'status' => InvoiceAccount::STATUS_CONNECTED,
+            'last_error' => null,
+        ])->save();
+
+        $this->audit->run(
+            action: AuditAction::INVOICE_ACCOUNT_CONNECTED,
+            subjectType: 'invoice_accounts',
+            subjectId: $account->id,
+            changes: ['provider' => InvoiceAccount::PROVIDER_NILVERA, 'company_id' => $taxNumber, 'environment' => $validated['environment']],
+            userId: $request->user()?->id,
+        );
+
+        return $this->back(__('Nilvera bağlandı.'));
     }
 
     public function redirect(Request $request): Response|RedirectResponse
@@ -183,7 +257,8 @@ final class InvoiceSettingsController extends Controller
 
         $validated = $request->validate([
             'company_id' => ['required', 'string', Rule::in($companies->pluck('id')->all())],
-            'invoice_series' => ['nullable', 'string', 'max:16', 'regex:/^[A-Za-z0-9]*$/'],
+            // Nilvera seriyi 3 karakter ister (portalda tanımlı seri).
+            'invoice_series' => ['nullable', 'string', 'max:16', $account->provider === InvoiceAccount::PROVIDER_NILVERA ? 'regex:/^([A-Za-z0-9]{3})?$/' : 'regex:/^[A-Za-z0-9]*$/'],
             'mode' => ['sometimes', 'string', Rule::in(InvoiceAccount::MODES)],
             'auto_issue' => ['sometimes', 'string', Rule::in(InvoiceAccount::AUTO_ISSUE_OPTIONS)],
             'payment_accounts' => ['sometimes', 'array'],
@@ -203,7 +278,7 @@ final class InvoiceSettingsController extends Controller
             $settings = $this->withAutoIssue($account, $settings, $validated['auto_issue']);
         }
 
-        if (array_key_exists('payment_accounts', $validated)) {
+        if (array_key_exists('payment_accounts', $validated) && $account->keepsBooks()) {
             $settings[InvoiceAccount::SETTING_PAYMENT_ACCOUNTS] = $this->validatedPaymentAccounts($account, (array) $validated['payment_accounts']);
         }
 
@@ -240,7 +315,29 @@ final class InvoiceSettingsController extends Controller
             );
         }
 
-        return back()->with('success', __('Paraşüt bağlantısı kaldırıldı.'));
+        return back()->with('success', __('e-Fatura bağlantısı kaldırıldı.'));
+    }
+
+    /**
+     * Kalan kontör — ekran için, HATA EKRANI DÜŞÜRMEZ (Nilvera o an
+     * cevap vermese de satıcı ayarlarını değiştirebilmeli).
+     *
+     * @return list<array{name: string, remaining: int}>|null
+     */
+    private function nilveraCredits(InvoiceAccount $account): ?array
+    {
+        try {
+            $credits = (new NilveraClient($account))->get('general/Credits');
+        } catch (Throwable $e) {
+            Log::warning('nilvera.credits_unavailable', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        return array_values(array_map(static fn (mixed $c): array => [
+            'name' => (string) (is_array($c) ? ($c['Name'] ?? '') : ''),
+            'remaining' => (int) (is_array($c) ? ($c['RemainingCredit'] ?? 0) : 0),
+        ], array_is_list($credits) ? $credits : []));
     }
 
     private function back(string $message): RedirectResponse

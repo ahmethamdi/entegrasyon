@@ -10,6 +10,7 @@ use App\Domain\Channels\Contracts\SupportsInvoiceUpload;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\ChannelRateLimiter;
 use App\Domain\Channels\Support\CircuitBreaker;
+use App\Domain\Invoicing\Contracts\ProvidesPdfContent;
 use App\Domain\Invoicing\Exceptions\InvoiceProviderException;
 use App\Domain\Invoicing\Models\Invoice;
 use App\Domain\Invoicing\Models\InvoiceAccount;
@@ -176,20 +177,26 @@ final class UploadInvoiceToChannel implements ShouldQueue
         $account = InvoiceAccount::query()->first();
 
         if ($account === null || ! $account->isUsable()) {
-            $this->fail($invoice, 'Paraşüt bağlantısı yok ya da yenilenmeli; e-fatura ayarlarından bağlayın, sonra yeniden deneyin.');
+            $this->fail($invoice, 'e-Fatura entegratörü bağlantısı yok ya da yenilenmeli; e-fatura ayarlarından bağlayın, sonra yeniden deneyin.');
 
             return;
         }
 
+        $provider = $providers->for($account);
+
+        // Dosyayı doğrudan veren entegratörde (Nilvera) süreli bağlantı
+        // yoktur; belge kimliği varsa PDF hazırdır ve kota sonrası indirilir.
+        $direct = $provider instanceof ProvidesPdfContent;
+
         try {
-            $url = $providers->for($account)->pdfUrl($invoice);
+            $url = $direct ? null : $provider->pdfUrl($invoice);
         } catch (InvoiceProviderException $e) {
             $this->retryOrFail($invoice, $e->class, 'PDF bağlantısı alınamadı. '.$e->getMessage(), $e->retryAfterSeconds());
 
             return;
         }
 
-        if ($url === null) {
+        if ($direct ? $invoice->provider_document_id === null : $url === null) {
             // Belge imzalanıyor — deneme SAYILMAZ, pencere `retryUntil`.
             $this->release(self::PDF_WAIT_SECONDS);
 
@@ -205,7 +212,13 @@ final class UploadInvoiceToChannel implements ShouldQueue
         }
 
         try {
-            $pdf = $fetcher->fetch($url, $adapter->maxInvoiceFileBytes());
+            $pdf = $provider instanceof ProvidesPdfContent
+                ? $provider->pdfContent($invoice, $adapter->maxInvoiceFileBytes())
+                : $fetcher->fetch((string) $url, $adapter->maxInvoiceFileBytes());
+
+            if ($pdf === null) {
+                throw new InvoiceProviderException(ErrorClass::SERVER_ERROR, 'Fatura PDF\'i entegratörde henüz yok.');
+            }
         } catch (InvoiceProviderException $e) {
             $this->retryOrFail($invoice, $e->class, $e->getMessage(), $e->retryAfterSeconds());
 

@@ -125,7 +125,7 @@ final class IssueInvoice implements ShouldQueue
         $account = InvoiceAccount::query()->first();
 
         if ($account === null || ! $account->isUsable()) {
-            $this->fail($invoice, 'Paraşüt bağlantısı yok ya da yenilenmeli; e-fatura ayarlarından bağlayın, sonra yeniden deneyin.');
+            $this->fail($invoice, 'e-Fatura entegratörü bağlantısı yok ya da yenilenmeli; e-fatura ayarlarından bağlayın, sonra yeniden deneyin.');
 
             return;
         }

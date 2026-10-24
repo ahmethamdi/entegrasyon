@@ -75,6 +75,20 @@ function connect() {
     connectForm.post('/settings/invoicing/parasut/authorize');
 }
 
+// Nilvera: satıcı portalda kendi API anahtarını üretir (34Pazar'ın uygulama
+// anahtarına gerek yok). Anahtar kaydedilmeden önce sunucuda denenir.
+const nilveraForm = useForm({ api_key: '', environment: 'live' });
+const showNilveraForm = computed(() => !props.account || (props.account.provider === 'nilvera' && props.account.status !== 'connected'));
+
+function connectNilvera() {
+    nilveraForm.post('/settings/invoicing/nilvera', {
+        preserveScroll: true,
+        onSuccess: () => nilveraForm.reset('api_key'),
+    });
+}
+
+const reconnectNilvera = computed(() => props.account?.provider === 'nilvera');
+
 function save() {
     form.transform((data) => {
         if (ready.value) return data;
@@ -84,7 +98,7 @@ function save() {
 }
 
 function disconnect() {
-    if (!window.confirm(t('Paraşüt bağlantısı kaldırılsın mı? Kesilmiş faturalar Paraşüt\'te kalır.'))) return;
+    if (!window.confirm(t('e-Fatura bağlantısı kaldırılsın mı? Kesilmiş faturalar :provider hesabınızda kalır.', { provider: props.account?.providerName ?? '' }))) return;
     router.delete('/settings/invoicing', { preserveScroll: true });
 }
 </script>
@@ -102,15 +116,47 @@ function disconnect() {
             </p>
 
             <p class="mt-6 max-w-2xl text-sm text-stone-600">
-                {{ t('Siparişin faturası Paraşüt hesabınızdan kesilir: alıcı e-fatura mükellefiyse e-fatura, değilse e-arşiv. Alıcının adı, adresi ve kimlik numarası fatura anında kanaldan okunur ve 34Pazar\'da saklanmaz.') }}
+                {{ t('Siparişin faturası kendi e-fatura entegratörü hesabınızdan kesilir: alıcı e-fatura mükellefiyse e-fatura, değilse e-arşiv. Alıcının adı, adresi ve kimlik numarası fatura anında kanaldan okunur ve 34Pazar\'da saklanmaz.') }}
             </p>
 
-            <!-- Sunucuda Paraşüt uygulaması tanımlı değilse bağlanılamaz. -->
-            <div v-if="!available" class="mt-6 rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-600">
-                {{ t('Paraşüt bağlantısı henüz açık değil.') }}
+            <!--
+                NİLVERA: satıcının kendi API anahtarıyla — her kurulumda açık.
+                Hesap yokken ya da Nilvera bağlantısı koptuğunda görünür.
+            -->
+            <div v-if="showNilveraForm" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+                <p class="text-sm font-medium text-stone-900">Nilvera</p>
+                <p class="mt-1 max-w-2xl text-xs text-stone-500">
+                    {{ t('Nilvera portalında API Tanımları → Yeni Anahtar ile bir anahtar üretip buraya yapıştırın. Anahtar şifreli saklanır ve ekrana geri gelmez. Kontörünüz Nilvera hesabınızdan düşer.') }}
+                </p>
+                <form class="mt-4 flex flex-wrap items-end gap-4" @submit.prevent="connectNilvera">
+                    <div>
+                        <label for="nilvera-key" class="block text-xs font-medium text-stone-700">{{ t('API anahtarı') }}</label>
+                        <input
+                            id="nilvera-key"
+                            v-model="nilveraForm.api_key"
+                            type="password"
+                            autocomplete="off"
+                            required
+                            class="mt-1 w-80 max-w-full rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        >
+                    </div>
+                    <label class="flex items-center gap-2 text-xs text-stone-700">
+                        <input v-model="nilveraForm.environment" type="checkbox" true-value="test" false-value="live">
+                        {{ t('Test ortamı anahtarı') }}
+                    </label>
+                    <button
+                        type="submit"
+                        :disabled="nilveraForm.processing"
+                        class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {{ t('Nilvera\'ya bağlan') }}
+                    </button>
+                    <p v-if="nilveraForm.errors.api_key" class="w-full text-sm text-red-700">{{ nilveraForm.errors.api_key }}</p>
+                </form>
             </div>
 
-            <div v-else-if="!account" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <!-- Paraşüt yalnız sunucuda uygulama tanımlıysa bağlanabilir. -->
+            <div v-if="!account && available" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
                 <p class="text-sm font-medium text-stone-900">Paraşüt</p>
                 <p class="mt-1 text-xs text-stone-500">
                     {{ t('Paraşüt\'te oturum açıp 34Pazar\'a izin verirsiniz; şifreniz bize gelmez.') }}
@@ -125,11 +171,17 @@ function disconnect() {
                 </button>
             </div>
 
-            <div v-else class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <div v-if="account" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <p class="text-sm font-medium text-stone-900">Paraşüt</p>
+                        <p class="text-sm font-medium text-stone-900">
+                            {{ account.providerName }}
+                            <span v-if="account.environment === 'test'" class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">{{ t('Test ortamı') }}</span>
+                        </p>
                         <p v-if="account.companyName" class="mt-0.5 text-xs text-stone-500">{{ account.companyName }}</p>
+                        <p v-for="credit in account.credits ?? []" :key="credit.name" class="mt-0.5 font-mono text-[11px] text-stone-500">
+                            {{ t(':name: :count kontör kaldı', { name: credit.name, count: credit.remaining }) }}
+                        </p>
                     </div>
                     <span
                         v-if="statusLabels[account.status]"
@@ -164,16 +216,16 @@ function disconnect() {
                                 id="series"
                                 v-model="form.invoice_series"
                                 type="text"
-                                maxlength="16"
-                                :placeholder="t('örn. TRY')"
+                                :maxlength="account.provider === 'nilvera' ? 3 : 16"
+                                :placeholder="account.provider === 'nilvera' ? t('örn. EAR') : t('örn. TRY')"
                                 class="mt-1 w-32 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm uppercase focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                         </div>
                     </div>
 
                     <template v-if="ready">
-                        <!-- KİP: e-belge mi, yalnız muhasebe mi. -->
-                        <fieldset class="mt-6 border-t border-stone-100 pt-5">
+                        <!-- KİP: e-belge mi, yalnız muhasebe mi (yalnız muhasebe tutan entegratörde). -->
+                        <fieldset v-if="account.keepsBooks" class="mt-6 border-t border-stone-100 pt-5">
                             <legend class="text-sm font-medium text-stone-900">{{ t('Faturayı nasıl işleyelim?') }}</legend>
                             <div class="mt-3 space-y-3">
                                 <label v-for="option in modeOptions" :key="option.value" class="flex cursor-pointer items-start gap-2">
@@ -207,8 +259,8 @@ function disconnect() {
                             <p v-if="form.errors.auto_issue" class="mt-2 text-sm text-red-700">{{ form.errors.auto_issue }}</p>
                         </fieldset>
 
-                        <!-- TAHSİLAT: kanal → kasa/banka. -->
-                        <fieldset class="mt-6 border-t border-stone-100 pt-5">
+                        <!-- TAHSİLAT: kanal → kasa/banka (yalnız muhasebe tutan entegratörde). -->
+                        <fieldset v-if="account.keepsBooks" class="mt-6 border-t border-stone-100 pt-5">
                             <legend class="text-sm font-medium text-stone-900">{{ t('Tahsilat hesapları') }}</legend>
                             <p class="mt-1 max-w-2xl text-xs text-stone-500">
                                 {{ t('Pazar yeri parayı müşteriden tahsil eder. Kanal için bir kasa/banka hesabı seçerseniz fatura o hesaba tahsil edilmiş olarak işlenir; seçmezseniz açık hesap kalır.') }}
@@ -258,7 +310,7 @@ function disconnect() {
 
                 <div class="mt-6 flex flex-wrap gap-3 border-t border-stone-100 pt-4">
                     <button
-                        v-if="account.status === 'revoked'"
+                        v-if="account.status === 'revoked' && !reconnectNilvera"
                         type="button"
                         class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700"
                         @click="connect"

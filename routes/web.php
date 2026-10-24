@@ -439,6 +439,9 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     Route::get('/settings/invoicing', [InvoiceSettingsController::class, 'index'])->name('settings.invoicing');
     Route::put('/settings/invoicing', [InvoiceSettingsController::class, 'update'])->name('settings.invoicing.update');
     Route::delete('/settings/invoicing', [InvoiceSettingsController::class, 'destroy'])->name('settings.invoicing.destroy');
+    Route::post('/settings/invoicing/nilvera', [InvoiceSettingsController::class, 'connectNilvera'])
+        ->middleware('throttle:10,1')
+        ->name('settings.invoicing.nilvera.connect');
     Route::post('/settings/invoicing/parasut/authorize', [InvoiceSettingsController::class, 'redirect'])
         ->name('settings.invoicing.parasut.authorize');
     Route::get('/settings/invoicing/parasut/callback', [InvoiceSettingsController::class, 'callback'])

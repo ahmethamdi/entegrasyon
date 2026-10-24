@@ -68,12 +68,16 @@ final class RequestInvoiceCorrection
      */
     public function recordReturn(ReturnRequest $request, InvoiceAccount $account, ?string $actorId = null): Invoice
     {
+        if (! $account->keepsBooks()) {
+            throw new InvoiceCorrectionRefused(__(':provider yalnız e-belge keser; iade kaydını muhasebe programınızda açın.', ['provider' => $account->providerName()]));
+        }
+
         $order = $request->order ?? throw new InvoiceCorrectionRefused(__('İade talebi bir siparişle eşleşmedi.'));
 
         $sale = $this->issuedSale($order);
 
         if ($sale->document_type === Invoice::TYPE_E_INVOICE) {
-            throw new InvoiceCorrectionRefused(__('Alıcı e-fatura mükellefi: iade faturasını alıcı keser ve Paraşüt gelen kutunuza düşer; ayrıca kaydedilmez.'));
+            throw new InvoiceCorrectionRefused(__('Alıcı e-fatura mükellefi: iade faturasını alıcı keser ve entegratörünüzün gelen kutusuna düşer; ayrıca kaydedilmez.'));
         }
 
         $cancelled = Invoice::query()
