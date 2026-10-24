@@ -236,12 +236,11 @@
                                 <th scope="col">{{ $t('Stok', 'Stock') }}</th>
                                 <th scope="col">{{ $t('Sipariş', 'Orders') }}</th>
                                 <th scope="col">{{ $t('Kargo bildirimi', 'Tracking upload') }}<span aria-hidden="true">*</span></th>
-                                <th scope="col">{{ $t('Durum', 'Status') }}</th>
                             </tr>
                         </thead>
                         @foreach ($channelGroups as $group => $rows)
                             <tbody>
-                                <tr class="home-table__group"><th scope="rowgroup" colspan="5">{{ $group }}</th></tr>
+                                <tr class="home-table__group"><th scope="rowgroup" colspan="4">{{ $group }}</th></tr>
                                 @foreach ($rows as $ch)
                                     <tr>
                                         <th scope="row">
@@ -258,9 +257,6 @@
                                             @else
                                                 <span class="muted" aria-hidden="true">—</span><span class="sr-only">{{ $t('Kanal panelinden', 'In the channel\'s panel') }}</span>
                                             @endif
-                                        </td>
-                                        <td>
-                                            <span class="badge badge--active">{{ $t('Aktif', 'Live') }}</span>
                                         </td>
                                     </tr>
                                 @endforeach

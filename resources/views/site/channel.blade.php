@@ -93,11 +93,9 @@
 
             <div class="mt-8 flex flex-wrap items-center gap-3">
                 <span class="text-sm font-semibold muted">{{ $kind }}</span>
-                @if ($isOn)
-                    <span class="badge badge--active">Aktif</span>
-                @else
+                @unless ($isOn)
                     <span class="badge badge--soon">Yakında</span>
-                @endif
+                @endunless
             </div>
 
             @if ($channel['logo'] ?? null)

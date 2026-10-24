@@ -12,11 +12,10 @@
                 <span class="mt-3 block font-semibold [overflow-wrap:anywhere] {{ $ch['available'] ? 'text-ink' : 'muted' }}">{{ $ch['name'] }}</span>
                 <span class="mt-1 flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-1">
                     <span class="text-xs font-normal muted">{{ $ch['marketplace'] ? ($enList ? 'Marketplace' : 'Pazaryeri') : ($enList ? 'Online store' : 'E-ticaret sitesi') }}</span>
-                    @if ($ch['available'])
-                        <span class="badge badge--active">{{ $enList ? 'Live' : 'Aktif' }}</span>
-                    @else
+                    {{-- Açık kanalda rozet yok (24 Eki kullanıcı kararı); yalnız kapalı kanal işaretlenir. --}}
+                    @unless ($ch['available'])
                         <span class="badge badge--soon">{{ $enList ? 'Soon' : 'Yakında' }}</span>
-                    @endif
+                    @endunless
                 </span>
             </a>
         </li>

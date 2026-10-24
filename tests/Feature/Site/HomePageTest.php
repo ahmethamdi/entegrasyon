@@ -211,8 +211,8 @@ final class HomePageTest extends TestCase
             ->assertSee('WooCommerce')
             ->assertSee('Kapalı Kanal')
             ->assertSee('Yakında')
-            // Rozet birebir: "Aktif kanallar" başlığı tek başına testi geçirmesin.
-            ->assertSee('<span class="badge badge--active">Aktif</span>', false);
+            // Açık kanalda "Aktif" rozeti gösterilmez (24 Eki kullanıcı kararı).
+            ->assertDontSee('<span class="badge badge--active">Aktif</span>', false);
     }
 
     /**
