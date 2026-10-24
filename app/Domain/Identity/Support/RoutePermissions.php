@@ -77,6 +77,7 @@ final class RoutePermissions
         'mappings.index' => P::CATALOG_VIEW,
         'approvals.index' => P::CATALOG_VIEW,
         'reconciliation.index' => P::CATALOG_VIEW,
+        'reports.oversell' => P::CATALOG_VIEW,
         'failures.index' => P::CATALOG_VIEW,
         'metrics.index' => P::CATALOG_VIEW,
 

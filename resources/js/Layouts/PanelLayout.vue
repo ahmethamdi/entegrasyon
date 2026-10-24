@@ -97,6 +97,8 @@ const navGroups = [
              * gerçekleşen ayrı; her rakam ayrıntıda kaynağına iner.
              */
             { href: '/reports/contribution', label: k('Katkı raporu'), perm: 'finance.view' },
+            // S11 · kanıt ekranı — satışta ekran görüntüsü olarak kullanılır.
+            { href: '/reports/oversell', label: k('Fazla satış koruması'), perm: 'catalog.view' },
         ],
     },
     {

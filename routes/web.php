@@ -31,6 +31,7 @@ use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\MetricsController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OttoOAuthController;
+use App\Http\Controllers\OversellReportController;
 use App\Http\Controllers\PriceCampaignController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
@@ -379,6 +380,9 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     // başına izlenebilir. Salt okunur.
     Route::get('/reports/contribution', [ContributionReportController::class, 'index'])->name('reports.contribution');
     Route::get('/reports/contribution/{order}', [ContributionReportController::class, 'show'])->name('reports.contribution.show');
+
+    // S11 · "Fazla satış yok" kanıt ekranı — son 30 günün ölçülmüş rakamları.
+    Route::get('/reports/oversell', [OversellReportController::class, 'index'])->name('reports.oversell');
 
     // Kargo bildirimi — satıcı takip numarasını TEK yerden girer, sipariş
     // geldiği kanala gönderilir (Shopify, Woo). Siparişin kendisi yine
