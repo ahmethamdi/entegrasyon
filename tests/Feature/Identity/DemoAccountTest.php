@@ -20,7 +20,6 @@ use Database\Seeders\ChannelTypeSeeder;
 use Database\Seeders\PlanSeeder;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -203,8 +202,8 @@ final class DemoAccountTest extends TestCase
     {
         $this->get('/fiyatlar')->assertOk()->assertDontSee('Demoyu incele');
 
+        // Önbellek "demo yok" ile ısınmışken kurulum onu temizlemeli.
         $this->artisan('demo:install')->assertSuccessful();
-        Cache::forget('site:demo-available');
 
         $this->get('/fiyatlar')->assertSee('Demoyu incele')->assertSee('href="'.route('demo').'"', false);
     }

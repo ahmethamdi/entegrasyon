@@ -269,7 +269,7 @@ final class SiteController extends Controller
             'isLoggedIn' => $request->user() !== null,
             // S12 · "Demoyu incele" yalnız demo kuruluysa (bağlantı 404 vermesin).
             'demoAvailable' => (bool) config('entegrasyon.demo.enabled')
-                && Cache::remember('site:demo-available', 600, fn (): bool => DemoAccount::user() !== null),
+                && Cache::remember(DemoAccount::SITE_CACHE_KEY, 600, fn (): bool => DemoAccount::user() !== null),
             'legalPages' => self::LEGAL_PAGES,
             'lang' => 'tr',
             'solutionMenu' => Solutions::menu(($data['lang'] ?? 'tr') === 'en' ? 'en' : 'tr'),

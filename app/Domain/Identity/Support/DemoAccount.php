@@ -24,6 +24,7 @@ use App\Domain\Orders\Support\IncomingOrderLine;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Support\Tenancy\TenantContext;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Symfony\Component\Uid\UuidV7;
@@ -58,6 +59,8 @@ final class DemoAccount
     public const EMAIL = 'demo@demo.34pazar.com';
 
     public const TENANT_NAME = 'Örnek Mağaza (demo)';
+
+    public const SITE_CACHE_KEY = 'site:demo-available';
 
     /** @var array<string, bool> */
     private static array $demoTenants = [];
@@ -136,6 +139,10 @@ final class DemoAccount
         } finally {
             TenantContext::clear();
         }
+
+        // Sitedeki "Demoyu incele" bağlantısı önbellekten okunur (10 dk);
+        // kurulumdan hemen sonra görünsün.
+        Cache::forget(self::SITE_CACHE_KEY);
 
         return ['tenant' => $tenant, 'created' => true];
     }
