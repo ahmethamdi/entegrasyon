@@ -75,7 +75,7 @@ RewriteRule ^(.*)$ https://34pazar.com$1 [R=301,L]
 ProxyPreserveHost On
 ProxyTimeout 120
 ProxyPass /.well-known/acme-challenge !
-ProxyPass / http://127.0.0.1:8090/
+ProxyPass / http://127.0.0.1:8090/ retry=0
 ProxyPassReverse / http://127.0.0.1:8090/
 RequestHeader set X-Forwarded-Proto "https"
 RequestHeader set X-Forwarded-Port "443"
@@ -84,6 +84,12 @@ LimitRequestBody 22020096
 
 Sonra `plesk sbin httpdmng --reconfigure-domain 34pazar.com`. HTTP→HTTPS
 301'i Plesk'in varsayılanı (yeni abonelikte açık geldi).
+
+`retry=0` OLMAZSA Apache, arka uç bir kez bağlantıyı reddedince onu 60 sn
+"hatalı" sayar ve o süre boyunca HİÇ denemeden 503 döner. Dağıtımda Caddy
+~1 sn yeniden başlarken bu 60 sn'lik 503'e dönüşüyordu (24 Ekim 2026,
+canlıda ölçüldü: deploy başına ~93 sn kesinti). Panelden değiştirilirse bu
+satır korunmalı.
 
 `ProxyPass /.well-known/acme-challenge !` OLMAZSA Let's Encrypt
 yenilemesi uygulamaya gider ve 404 alır — sertifika 90 günde düşer.

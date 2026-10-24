@@ -47,8 +47,12 @@
 	respond @hidden 404
 
 	encode zstd gzip
+	# Dağıtımda app konteyneri birkaç saniye yokken istek 502 ile düşmez:
+	# Caddy bağlanamazsa 15 sn boyunca yeniden dener (deploy.sh, 24 Ekim).
 	php_fastcgi app:9000 {
 		root /var/www/html/public
+		lb_try_duration 15s
+		lb_try_interval 250ms
 	}
 	file_server
 }

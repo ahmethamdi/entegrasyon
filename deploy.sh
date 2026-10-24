@@ -6,6 +6,13 @@
 # Sıra önemlidir: migration YENİ kodla ama süreçler değişmeden ÖNCE
 # koşar; şema geriye uyumlu yazıldığı sürece eski süreçler birkaç saniye
 # daha çalışabilir. Ayrıntı: docs/URETIM-KURULUM.md
+#
+# ⚠️ MIGRATION KURALI (kesintisiz dağıtım, 24 Ekim 2026): migration koştuğu
+# anda ESKİ kod hâlâ istek karşılar ve işçiler eski koddadır. Bu yüzden bir
+# dağıtımda yalnız GERİYE UYUMLU değişiklik yapılır: kolon/tablo EKLE,
+# nullable ya da varsayılanlı yap. Eski kodun okuduğu kolonu silmek ya da
+# adını değiştirmek İKİ dağıtımdır: önce kod o kolonu bırakır, sonraki
+# dağıtımda migration onu kaldırır.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -37,8 +44,22 @@ echo "→ Veritabanı ve Redis"
 echo "→ Migration"
 "${COMPOSE[@]}" run --rm app php artisan migrate --force
 
-echo "→ Süreçler yeniden başlatılıyor"
-"${COMPOSE[@]}" up -d --remove-orphans
+# SÜREÇLER SIRAYLA (24 Ekim 2026). Eski `up -d` hepsini birlikte yeniden
+# yaratıyordu: web, Horizon'un 90 sn'lik zarif duruşunu beklerken kapalı
+# kalıyor, site ~90 sn 503 veriyordu (yerelde ve canlıda ölçüldü).
+#   1. app   — php-fpm SIGQUIT ile elindeki istekleri bitirir; yeni süreç
+#              ayağa kalkana kadar Caddy isteği bekletip yeniden dener
+#              (Caddyfile · lb_try_duration).
+#   2. web   — yalnız imajı değiştiyse yenilenir; ~1 sn'lik boşluk kalır.
+#   3. işçiler — en son; uzun zarif duruşları artık siteyi tutmaz.
+echo "→ Süreçler yenileniyor: app"
+"${COMPOSE[@]}" up -d --no-deps app
+
+echo "→ Süreçler yenileniyor: web"
+"${COMPOSE[@]}" up -d --no-deps web
+
+echo "→ Süreçler yenileniyor: işçiler"
+"${COMPOSE[@]}" up -d --no-deps --remove-orphans horizon scheduler relay
 
 # Horizon işçileri ellerindeki işi bitirip yeni kodla döner.
 "${COMPOSE[@]}" exec -T horizon php artisan horizon:terminate || true

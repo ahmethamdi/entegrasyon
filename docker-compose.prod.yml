@@ -50,6 +50,10 @@ services:
 
   app:
     <<: *app
+    # php-fpm SIGTERM'de istekleri keser; SIGQUIT'te elindekileri bitirip
+    # kapanır. Dağıtımda yarıda kalan istek olmasın (deploy.sh).
+    stop_signal: SIGQUIT
+    stop_grace_period: 30s
 
   horizon:
     <<: *app
