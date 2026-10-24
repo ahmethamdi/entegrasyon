@@ -55,6 +55,7 @@ final class Subscription extends Model
         'started_at',
         'current_period_end',
         'cancelled_at',
+        'cancel_at',
         'external_ref',
     ];
 
@@ -64,6 +65,7 @@ final class Subscription extends Model
             'started_at' => 'datetime',
             'current_period_end' => 'datetime',
             'cancelled_at' => 'datetime',
+            'cancel_at' => 'datetime',
         ];
     }
 

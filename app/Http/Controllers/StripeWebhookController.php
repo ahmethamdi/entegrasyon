@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Billing\Actions\HandleStripeBillingEvent;
 use App\Domain\Billing\Actions\SyncSubscriptionFromStripe;
+use App\Domain\Billing\Support\WebhookEventLedger;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
@@ -44,13 +46,31 @@ use Stripe\Webhook;
  *
  * KİRACI BAĞLAMI YOKTUR: istek Stripe'tan gelir ve kiracı ancak
  * metadata'dan öğrenilir. Yazma `runAsSystem` altında yapılır.
+ *
+ * S14 · OLAY TEKİLLİĞİ: aynı `evt_…` ikinci kez gelirse İŞLENMEZ
+ * (`WebhookEventLedger`); işleme ortasında düşen olay damgalanmaz ve
+ * Stripe'ın yeniden denemesiyle tekrar işlenir. Bu uç noktada dinlenmesi
+ * gereken olaylar (Stripe Dashboard → Webhooks):
+ *   checkout.session.completed, customer.subscription.created|updated|deleted,
+ *   invoice.payment_failed, invoice.paid, charge.refunded
  */
 final class StripeWebhookController extends Controller
 {
     /** İmza zaman damgası toleransı — tekrar saldırısına karşı. */
     private const TOLERANCE_SECONDS = 300;
 
-    public function __invoke(Request $request, SyncSubscriptionFromStripe $sync): Response
+    /** Dinlenen olaylar — dashboard'daki uç nokta bunlarla eşleşmeli (test sınar). */
+    public const HANDLED_EVENTS = [
+        'checkout.session.completed',
+        'customer.subscription.created',
+        'customer.subscription.updated',
+        'customer.subscription.deleted',
+        'invoice.payment_failed',
+        'invoice.paid',
+        'charge.refunded',
+    ];
+
+    public function __invoke(Request $request, SyncSubscriptionFromStripe $sync, HandleStripeBillingEvent $billing, WebhookEventLedger $ledger): Response
     {
         $secret = config('entegrasyon.stripe.webhook_secret');
 
@@ -99,13 +119,32 @@ final class StripeWebhookController extends Controller
             default => [],
         };
 
+        if (! in_array($event->type, self::HANDLED_EVENTS, true)) {
+            Log::info('stripe.unhandled_event', ['type' => $event->type]);
+
+            return response()->noContent(200);
+        }
+
+        $eventId = is_string($event->id ?? null) ? $event->id : '';
+        if ($eventId !== '' && ! $ledger->claim('stripe', $eventId, $event->type)) {
+            Log::info('stripe.duplicate_event', ['id' => $eventId, 'type' => $event->type]);
+
+            return response()->noContent(200);
+        }
+
         match ($event->type) {
             'checkout.session.completed' => $sync->fromCheckoutSession($object),
             'customer.subscription.updated',
             'customer.subscription.created' => $sync->fromSubscriptionEvent($object),
             'customer.subscription.deleted' => $sync->fromSubscriptionEvent($object, deleted: true),
-            default => Log::info('stripe.unhandled_event', ['type' => $event->type]),
+            'invoice.payment_failed' => $billing->paymentFailed($object),
+            'invoice.paid' => $billing->paymentSucceeded($object),
+            'charge.refunded' => $billing->chargeRefunded($object),
         };
+
+        if ($eventId !== '') {
+            $ledger->markProcessed('stripe', $eventId);
+        }
 
         // (4) HER DURUMDA 2xx.
         return response()->noContent(200);

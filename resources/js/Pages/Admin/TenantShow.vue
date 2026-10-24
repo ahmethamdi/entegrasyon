@@ -14,6 +14,8 @@ const props = defineProps({
     subscriptions: { type: Array, default: () => [] },
     usage: { type: Object, required: true },
     plans: { type: Array, default: () => [] },
+    refundGuarantee: { type: Object, default: () => ({ eligible: false, reason: null, deadline: null }) },
+    refunds: { type: Array, default: () => [] },
 });
 
 const { t } = useI18n();
@@ -25,6 +27,15 @@ const currentPlan = computed(() => props.plans.find((p) => p.code === current.va
 
 const form = useForm({ plan_code: current.value?.plan ?? '', ends_at: '' });
 const submit = () => form.post(`/admin/tenants/${props.tenant.id}/plan`, { preserveScroll: true });
+
+/* S14 · 14 gün iadesi — GERÇEK PARA İADESİ; tarayıcı onayı + sunucuda `confirm`. */
+const refundForm = useForm({ confirm: false });
+const refundError = computed(() => page.props.errors?.refund ?? page.props.errors?.confirm ?? null);
+const refund = () => {
+    if (!window.confirm(t('Son ödeme Stripe üzerinden TAMAMEN iade edilecek, abonelik hemen bitecek ve müşteri ücretsiz plana düşecek. Emin misin?'))) return;
+    refundForm.confirm = true;
+    refundForm.post(`/admin/tenants/${props.tenant.id}/refund-guarantee`, { preserveScroll: true, onFinish: () => { refundForm.confirm = false; } });
+};
 
 const date = (iso) => (iso ? new Date(iso).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 const limit = (n) => (n === null || n === undefined ? t('Sınırsız') : n);
@@ -101,6 +112,28 @@ const planLabel = (p) => `${p.name} · ${Number(p.price) > 0 ? money(p.price, p.
                 </ul>
             </section>
         </div>
+
+        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <h2 class="text-sm font-semibold text-stone-900">{{ t('14 gün iade güvencesi') }}</h2>
+            <p class="mt-1 text-sm text-stone-600">{{ t('İlk ücretli abonelikte, ilk ödemeden itibaren 14 gün içinde, hesap başına bir kez tam iade. İade sonrası abonelik hemen biter ve müşteri ücretsiz plana geçer; verisi silinmez.') }}</p>
+            <p v-if="refundError" class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">{{ refundError }}</p>
+            <div class="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                    v-if="refundGuarantee.eligible"
+                    type="button"
+                    class="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-800 transition hover:bg-red-50 disabled:opacity-50"
+                    :disabled="refundForm.processing"
+                    @click="refund"
+                >
+                    {{ refundForm.processing ? t('İade ediliyor…') : t('Son ödemeyi iade et ve ücretsize düşür') }}
+                </button>
+                <span v-if="refundGuarantee.eligible && refundGuarantee.deadline" class="text-xs text-stone-500">{{ t('Son gün: :date', { date: date(refundGuarantee.deadline) }) }}</span>
+                <span v-if="!refundGuarantee.eligible" class="text-sm text-stone-500">{{ t('Uygun değil:') }} {{ t(refundGuarantee.reason ?? '') }}</span>
+            </div>
+            <ul v-if="refunds.length" class="mt-3 space-y-1 text-xs text-stone-600">
+                <li v-for="(r, i) in refunds" :key="i">{{ date(r.at) }} · {{ money(r.amount, r.currency) }} · {{ r.full ? t('tam') : t('kısmi') }}{{ r.guarantee ? ' · ' + t('14 gün güvencesi') : '' }}</li>
+            </ul>
+        </section>
 
         <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Abonelik geçmişi') }}</h2>

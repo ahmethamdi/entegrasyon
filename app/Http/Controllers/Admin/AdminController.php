@@ -6,7 +6,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Domain\Billing\Actions\AssignPlanManually;
 use App\Domain\Billing\Actions\CreateCustomPlan;
+use App\Domain\Billing\Actions\RefundGuarantee;
 use App\Domain\Billing\Enums\QuotaMetric;
+use App\Domain\Billing\Models\BillingRefund;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Identity\Models\Tenant;
@@ -91,9 +93,9 @@ final class AdminController extends Controller
         ]);
     }
 
-    public function showTenant(string $tenant): InertiaResponse
+    public function showTenant(string $tenant, RefundGuarantee $guarantee): InertiaResponse
     {
-        return Inertia::render('Admin/TenantShow', TenantContext::runAsSystem(function () use ($tenant): array {
+        return Inertia::render('Admin/TenantShow', TenantContext::runAsSystem(function () use ($tenant, $guarantee): array {
             $model = Tenant::query()->findOrFail($tenant);
 
             $users = DB::table('tenant_users as tu')
@@ -152,8 +154,51 @@ final class AdminController extends Controller
                     'orders30' => DB::table('orders')->where('tenant_id', $model->id)->where('placed_at', '>=', now()->subDays(30))->count(),
                 ],
                 'plans' => $this->planOptions(),
+                // S14 · 14 gün iade güvencesi: uygun mu, değilse neden.
+                'refundGuarantee' => (function () use ($guarantee, $model): array {
+                    $check = $guarantee->eligibility($model->id);
+
+                    return ['eligible' => $check['eligible'], 'reason' => $check['reason'], 'deadline' => $check['deadline']];
+                })(),
+                'refunds' => BillingRefund::withoutGlobalScopes()
+                    ->where('tenant_id', $model->id)
+                    ->orderByDesc('refunded_at')
+                    ->limit(10)
+                    ->get()
+                    ->map(fn (BillingRefund $r): array => [
+                        'amount' => (string) $r->amount,
+                        'currency' => $r->currency,
+                        'full' => $r->full,
+                        'guarantee' => $r->guarantee,
+                        'at' => $r->refunded_at?->toIso8601String(),
+                    ])->all(),
             ];
         }));
+    }
+
+    /**
+     * S14 · 14 gün iade güvencesi — PARA İADESİ YAPAR (Stripe), aboneliği
+     * keser, planı hemen ücretsize düşürür. Yalnız süper admin (rota grubu).
+     */
+    public function refundGuarantee(Request $request, string $tenant, RefundGuarantee $guarantee): RedirectResponse
+    {
+        $request->validate(['confirm' => ['accepted']], ['confirm.accepted' => __('İadeyi onaylaman gerekiyor.')]);
+
+        $model = TenantContext::runAsSystem(fn () => Tenant::query()->findOrFail($tenant));
+
+        try {
+            $record = $guarantee->run($model->id, $request->user()?->id);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return redirect("/admin/tenants/{$model->id}")->withErrors(['refund' => $e->getMessage()]);
+        }
+
+        return redirect("/admin/tenants/{$model->id}")->with('success', __(':amount :currency iade edildi; :tenant ücretsiz plana geçti.', [
+            'amount' => (string) $record->amount,
+            'currency' => $record->currency,
+            'tenant' => $model->name,
+        ]));
     }
 
     public function assignPlan(Request $request, string $tenant, AssignPlanManually $assign): RedirectResponse

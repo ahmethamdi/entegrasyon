@@ -13,8 +13,10 @@ use App\Domain\Billing\Models\BillingConsent;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Support\ShopifyBilling;
+use App\Domain\Billing\Support\StripePaymentGateway;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -64,7 +66,11 @@ final class BillingController extends Controller
                 'status' => $subscription?->status,
                 'currentPeriodEnd' => $subscription?->current_period_end?->toIso8601String(),
                 'cancelledAt' => $subscription?->cancelled_at?->toIso8601String(),
+                // S14 · dönem sonu iptali planlandıysa bitiş tarihi.
+                'cancelAt' => $subscription?->cancel_at?->toIso8601String(),
             ],
+            // S14 · Türk kartı reddi rehberi (ödeme sayfasındaki notun aynısı).
+            'cardDeclineHint' => StripePaymentGateway::CARD_DECLINE_HINT,
             'usage' => $this->usage($quota, $plan),
             // Shopify mağazası olan satıcı Shopify faturasıyla öder (App
             // Store kuralı 1.2.1); ekran fiyatı USD ve "Shopify faturana
@@ -72,7 +78,11 @@ final class BillingController extends Controller
             'billing' => [
                 'provider' => $shop !== null ? 'shopify' : 'stripe',
                 'shop' => $shop?->external_account_id,
-                'canDowngrade' => $shop !== null && $subscription !== null && $subscription->provider === 'shopify',
+                // Ücretsize dönüş self-servis: Shopify'da hemen (kural 1.2.3),
+                // Stripe'ta ödenmiş dönemin sonunda (S14). Zaten planlanmışsa düğme yok.
+                'canDowngrade' => $subscription !== null && ($shop !== null
+                    ? $subscription->provider === 'shopify'
+                    : $subscription->external_ref !== null && in_array($subscription->provider, [null, 'stripe'], true) && $subscription->cancel_at === null),
             ],
             // Sağlayıcı yapılandırılmamışsa ekran bunu SÖYLER; "satın al"
             // düğmesine basıp sessizce hata almak, sebebi hiç
@@ -115,11 +125,11 @@ final class BillingController extends Controller
 
         // ÜCRETSİZ PLAN İÇİN ÖDEME AÇILMAZ: Stripe sıfır tutarlı
         // abonelik oturumunu reddeder ve kullanıcı anlamsız bir hata
-        // görürdü.
+        // görürdü. Yaşayan Stripe aboneliği varsa bu bir İPTALDİR (S14):
+        // ödenmiş dönemin sonunda biter (fiyat sayfası: "istediğin zaman
+        // iptal, dönem sonuna kadar kullanırsın").
         if ($plan->priceInMinorUnits() <= 0) {
-            throw ValidationException::withMessages([
-                'plan_code' => 'Ücretsiz plan için ödeme gerekmez.',
-            ]);
+            return $this->cancelAtPeriodEnd($gateway);
         }
 
         if (! $gateway->isConfigured()) {
@@ -180,9 +190,19 @@ final class BillingController extends Controller
                 );
             }
 
+            // S14 · MÜŞTERİ YENİDEN KULLANILIR: her checkout'ta yeni müşteri
+            // açılsaydı terk edilen her ödeme Stripe'ta yetim müşteri bırakırdı;
+            // ayrıca iade ve başarısız ödeme olayları kiracıya bu kimlikle bağlanır.
+            $known = TenantContext::runAsSystem(fn () => Tenant::query()->whereKey($tenantId)->value('billing_customer_ref'));
+            $customer = $gateway->ensureCustomer($tenantId, is_string($known) ? $known : null);
+            if ($customer !== $known) {
+                TenantContext::runAsSystem(fn () => Tenant::query()->whereKey($tenantId)->update(['billing_customer_ref' => $customer]));
+            }
+
             $url = $gateway->startCheckout(
                 $plan,
                 $tenantId,
+                $customer,
                 url('/billing?durum=basarili'),
                 url('/billing?durum=iptal'),
             );
@@ -240,6 +260,17 @@ final class BillingController extends Controller
 
         if ($live !== null && $live->plan_code === $plan->code) {
             throw ValidationException::withMessages(['plan_code' => __('Zaten bu plandasın.')]);
+        }
+
+        // S14 · KARTLA (Stripe) YAŞAYAN ABONELİK VARKEN Shopify aboneliği açılmaz:
+        // kiracı başına tek aktif abonelik kısıtı Shopify aktivasyonunu geri alırdı
+        // (Shopify ücret keser, paket açılmaz) ve satıcı iki yerden faturalanırdı.
+        $stripeLive = Subscription::query()
+            ->where('provider', 'stripe')
+            ->whereIn('status', Subscription::LIVE_STATUSES)
+            ->exists();
+        if ($stripeLive) {
+            throw ValidationException::withMessages(['plan_code' => __('Kartla ödenen aboneliğin sürüyor. Önce onu iptal et (Ücretsiz plana geç); dönem bitince Shopify faturasıyla devam edebilirsin.')]);
         }
 
         if ($plan->shopify_price_usd === null) {
@@ -330,6 +361,38 @@ final class BillingController extends Controller
             'cancelled' => __('Shopify\'da onay verilmedi; planın değişmedi.'),
             default => __('Shopify onayı bekleniyor.'),
         });
+    }
+
+    /**
+     * Satıcının kendi iptali (Stripe): dönem sonunda biter, para iadesi yok.
+     * Yerel durum webhook'tan gelir (`cancel_at`); burada yazılmaz.
+     */
+    private function cancelAtPeriodEnd(PaymentGateway $gateway): RedirectResponse
+    {
+        $live = Subscription::query()
+            ->whereIn('status', Subscription::LIVE_STATUSES)
+            ->whereNotNull('external_ref')
+            ->where(fn ($q) => $q->whereNull('provider')->orWhere('provider', 'stripe'))
+            ->latest('started_at')
+            ->first();
+
+        if ($live === null) {
+            throw ValidationException::withMessages(['plan_code' => __('Zaten ücretsiz plandasın.')]);
+        }
+
+        if ($live->cancel_at !== null) {
+            throw ValidationException::withMessages(['plan_code' => __('Aboneliğin zaten :tarih tarihinde bitecek.', ['tarih' => $live->cancel_at->timezone('Europe/Istanbul')->format('d.m.Y')])]);
+        }
+
+        try {
+            $gateway->cancelAtPeriodEnd((string) $live->external_ref);
+        } catch (ApiErrorException $e) {
+            report($e);
+
+            throw ValidationException::withMessages(['plan_code' => __('Abonelik iptal edilemedi. Lütfen tekrar dene.')]);
+        }
+
+        return redirect('/billing')->with('success', __('İptal isteğin alındı. Paketin ödenmiş dönemin sonuna kadar açık kalır, sonra ücretsiz plana geçersin; verilerin silinmez.'));
     }
 
     // ─────────────────────────────────────────────────── yardımcılar

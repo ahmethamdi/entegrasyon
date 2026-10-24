@@ -12,6 +12,7 @@ const props = defineProps({
     usage: { type: Object, default: () => ({}) },
     billing: { type: Object, default: () => ({ provider: 'stripe' }) },
     paymentsEnabled: { type: Boolean, default: false },
+    cardDeclineHint: { type: String, default: '' },
 });
 
 const { t } = useI18n();
@@ -110,7 +111,10 @@ function buy() {
 /* Ücretsize dönüş — self-servis (kural 1.2.3); onay kutusu gerekmez. */
 function downgrade(plan) {
     if (buying.value !== null) return;
-    if (!window.confirm(t('Shopify aboneliğin iptal edilip ücretsiz plana geçilecek. Emin misin?'))) return;
+    const question = viaShopify.value
+        ? t('Shopify aboneliğin iptal edilip ücretsiz plana geçilecek. Emin misin?')
+        : t('Aboneliğin ödenmiş dönemin sonunda bitecek ve ücretsiz plana geçeceksin; verilerin silinmez. Emin misin?');
+    if (!window.confirm(question)) return;
 
     buying.value = plan.code;
     router.post('/billing/checkout', { plan_code: plan.code }, {
@@ -119,6 +123,15 @@ function downgrade(plan) {
         },
     });
 }
+
+/*
+ * S14 · KART REDDİ REHBERİ — ödeme sayfasından vazgeçip dönen (`?durum=iptal`),
+ * ödemesi alınamayan (`past_due`) ya da ödemeye geçmek üzere olan satıcıya.
+ * Türk bankaları yurt dışı satıcıyı ilk denemede sık reddeder.
+ */
+const returnedFromCheckout = computed(() => new URLSearchParams(page.url.split('?')[1] ?? '').get('durum') === 'iptal');
+const showCardHint = computed(() => !viaShopify.value && props.cardDeclineHint !== ''
+    && (returnedFromCheckout.value || props.current.status === 'past_due'));
 
 const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) => ({ key, ...row })));
 </script>
@@ -157,6 +170,17 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
             {{ t('Ödemeler :shop mağazanın Shopify faturasına eklenir. Fiyatlar USD\'dir; onay Shopify\'da verilir.', { shop: billing.shop }) }}
         </div>
 
+        <div
+            v-if="showCardHint"
+            class="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4"
+            role="note"
+        >
+            <p class="text-sm font-medium text-amber-900">
+                {{ current.status === 'past_due' ? t('Son ödemen alınamadı.') : t('Ödeme tamamlanmadı.') }}
+            </p>
+            <p class="mt-1 text-xs leading-relaxed text-amber-800">{{ t(cardDeclineHint) }}</p>
+        </div>
+
         <p v-if="errors.plan_code || errors.accept_terms" class="mt-6 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             {{ errors.plan_code ?? errors.accept_terms }}
         </p>
@@ -184,7 +208,10 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                     </span>
                 </div>
 
-                <p v-if="current.currentPeriodEnd" class="mt-2 text-xs text-stone-600">
+                <p v-if="current.cancelAt" class="mt-2 text-xs text-amber-800">
+                    {{ t('Aboneliğin :date tarihinde bitecek; sonra ücretsiz plana geçersin. Verilerin silinmez.', { date: formatDate(current.cancelAt) }) }}
+                </p>
+                <p v-else-if="current.currentPeriodEnd" class="mt-2 text-xs text-stone-600">
                     {{ t('Yenileme tarihi: :date', { date: formatDate(current.currentPeriodEnd) }) }}
                 </p>
             </div>
@@ -289,6 +316,9 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                     {{ viaShopify
                         ? t('Abonelik her ay yenilenir ve Shopify faturana eklenir; istediğin zaman iptal edebilirsin.')
                         : t('Abonelik her ay yenilenir, istediğin zaman iptal edebilirsin.') }}
+                </p>
+                <p v-if="!viaShopify && cardDeclineHint" class="mt-2 text-xs leading-relaxed text-stone-500">
+                    {{ t(cardDeclineHint) }}
                 </p>
 
                 <label class="mt-4 flex items-start gap-3 text-sm text-stone-800">

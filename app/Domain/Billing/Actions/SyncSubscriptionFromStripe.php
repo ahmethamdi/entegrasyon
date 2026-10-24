@@ -7,6 +7,8 @@ namespace App\Domain\Billing\Actions;
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Identity\Actions\RecordAuditLog;
+use App\Domain\Identity\Enums\AuditAction;
 use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -47,6 +49,7 @@ final class SyncSubscriptionFromStripe
 {
     public function __construct(
         private readonly PaymentGateway $gateway,
+        private readonly RecordAuditLog $audit,
     ) {}
 
     /**
@@ -131,6 +134,7 @@ final class SyncSubscriptionFromStripe
                 // günceller, ikincisini AÇMAZ.
                 $subscription = Subscription::withoutGlobalScopes()
                     ->firstOrNew(['external_ref' => $externalRef]);
+                $wasActive = $subscription->exists && $subscription->status === 'active';
 
                 $subscription->fill([
                     'tenant_id' => $tenantId,
@@ -146,6 +150,16 @@ final class SyncSubscriptionFromStripe
                 // de cevaplanabilsin diye DEĞİL — o hâlâ abonelikten
                 // okunur — panelin ve raporun tek bakışta görmesi için.
                 Tenant::query()->whereKey($tenantId)->update(['plan_code' => $planCode]);
+
+                if (! $wasActive) {
+                    $this->audit->run(
+                        action: AuditAction::SUBSCRIPTION_ACTIVATED,
+                        subjectType: 'subscription',
+                        subjectId: $subscription->id,
+                        changes: ['plan' => $planCode, 'ref' => $externalRef, 'replaced' => $supersededRefs],
+                        tenantId: $tenantId,
+                    );
+                }
 
                 return $subscription;
             });
@@ -164,6 +178,31 @@ final class SyncSubscriptionFromStripe
 
             return $subscription;
         });
+    }
+
+    /** @param array{status: ?string, plan: ?string, cancel_at: ?string} $before */
+    private function auditTransition(Subscription $subscription, array $before): void
+    {
+        $base = ['ref' => $subscription->external_ref, 'plan' => $subscription->plan_code];
+        $write = fn (AuditAction $action, array $changes) => $this->audit->run(
+            action: $action,
+            subjectType: 'subscription',
+            subjectId: $subscription->id,
+            changes: $base + $changes,
+            tenantId: $subscription->tenant_id,
+        );
+
+        if ($before['status'] !== 'cancelled' && $subscription->status === 'cancelled') {
+            $write(AuditAction::SUBSCRIPTION_CANCELLED, ['old_status' => $before['status']]);
+
+            return;
+        }
+        if ($before['plan'] !== $subscription->plan_code) {
+            $write(AuditAction::SUBSCRIPTION_PLAN_CHANGED, ['old' => $before['plan'], 'new' => $subscription->plan_code]);
+        }
+        if ($before['cancel_at'] === null && $subscription->cancel_at !== null) {
+            $write(AuditAction::SUBSCRIPTION_CANCEL_SCHEDULED, ['cancel_at' => $subscription->cancel_at->toIso8601String()]);
+        }
     }
 
     private function cancelAtProvider(string $ref, string $tenantId): void
@@ -213,6 +252,7 @@ final class SyncSubscriptionFromStripe
                 ? 'cancelled'
                 : (self::STATUS_MAP[$object['status'] ?? ''] ?? 'past_due');
 
+            $before = ['status' => $subscription->status, 'plan' => $subscription->plan_code, 'cancel_at' => $subscription->cancel_at?->toIso8601String()];
             $subscription->status = $status;
 
             // PLAN DEĞİŞİKLİĞİ buradan gelir: panel aynı aboneliğin kalemini
@@ -250,7 +290,23 @@ final class SyncSubscriptionFromStripe
                 $subscription->cancelled_at = now();
             }
 
+            // S14 · DÖNEM SONU İPTALİ. Stripe abonelik olayı nesnenin TAMAMINI
+            // taşır: `cancel_at` anahtarı VARSA ve null ise iptal geri alınmıştır.
+            // Eski API sürümleri yalnız `cancel_at_period_end` gönderir → dönem sonu.
+            if (! $deleted && array_key_exists('cancel_at', $object)) {
+                $cancelAt = $object['cancel_at'];
+                if (! is_int($cancelAt) && ($object['cancel_at_period_end'] ?? false) === true && is_int($periodEnd)) {
+                    $cancelAt = $periodEnd;
+                }
+                $subscription->cancel_at = is_int($cancelAt) ? now()->setTimestamp($cancelAt) : null;
+            }
+            if ($status === 'cancelled') {
+                $subscription->cancel_at = null;
+            }
+
             $subscription->save();
+
+            $this->auditTransition($subscription, $before);
 
             return $subscription;
         });

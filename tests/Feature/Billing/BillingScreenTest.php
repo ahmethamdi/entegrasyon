@@ -326,7 +326,8 @@ final class BillingScreenTest extends TestCase
 
         $this->actingAs($user)
             ->post('/billing/checkout', ['plan_code' => 'free'])
-            ->assertSessionHasErrors(['plan_code' => 'Ücretsiz plan için ödeme gerekmez.']);
+            // S14: ücretsiz plan = iptal yolu; yaşayan abonelik yoksa sebebi bu.
+            ->assertSessionHasErrors(['plan_code' => 'Zaten ücretsiz plandasın.']);
     }
 
     /**

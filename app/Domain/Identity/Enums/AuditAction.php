@@ -104,6 +104,27 @@ enum AuditAction: string
 
     case INVITATION_CANCELLED = 'team.invitation_cancelled';
 
+    /**
+     * S14 · abonelik yaşam döngüsü. Yükte plan kodları, sağlayıcı, tutar ve
+     * sağlayıcı kimlikleri (`sub_…`, `ch_…`) — kart bilgisi ASLA (bize zaten
+     * gelmez). `user_id` webhook yolunda NULL'dur (Stripe'tan gelir).
+     */
+    case SUBSCRIPTION_ACTIVATED = 'billing.subscription_activated';
+
+    case SUBSCRIPTION_PLAN_CHANGED = 'billing.subscription_plan_changed';
+
+    case SUBSCRIPTION_CANCEL_SCHEDULED = 'billing.subscription_cancel_scheduled';
+
+    case SUBSCRIPTION_CANCELLED = 'billing.subscription_cancelled';
+
+    case PAYMENT_FAILED = 'billing.payment_failed';
+
+    case PAYMENT_SUCCEEDED = 'billing.payment_succeeded';
+
+    case REFUND_RECORDED = 'billing.refund_recorded';
+
+    case DOWNGRADED_TO_FREE = 'billing.downgraded_to_free';
+
     /** Panelde gösterilecek Türkçe ad. */
     public function label(): string
     {
@@ -126,6 +147,14 @@ enum AuditAction: string
             self::MEMBER_ROLE_CHANGED => 'Ekip üyesinin rolü değişti',
             self::MEMBER_REMOVED => 'Ekipten çıkarıldı',
             self::INVITATION_CANCELLED => 'Davet iptal edildi',
+            self::SUBSCRIPTION_ACTIVATED => 'Abonelik başladı',
+            self::SUBSCRIPTION_PLAN_CHANGED => 'Abonelik planı değişti',
+            self::SUBSCRIPTION_CANCEL_SCHEDULED => 'Abonelik dönem sonunda bitecek',
+            self::SUBSCRIPTION_CANCELLED => 'Abonelik iptal edildi',
+            self::PAYMENT_FAILED => 'Ödeme alınamadı',
+            self::PAYMENT_SUCCEEDED => 'Ödeme alındı',
+            self::REFUND_RECORDED => 'İade kaydedildi',
+            self::DOWNGRADED_TO_FREE => 'Ücretsiz plana düşürüldü',
         });
     }
 }
