@@ -63,6 +63,7 @@ class OrderLine extends Model
         'cost_captured_at',
         'financials_source',
         'financials_captured_at',
+        'bundle_components',
     ];
 
     protected function casts(): array
@@ -86,6 +87,7 @@ class OrderLine extends Model
             'cost_captured_at' => 'datetime',
             'financials_source' => 'array',
             'financials_captured_at' => 'datetime',
+            'bundle_components' => 'array',
         ];
     }
 
@@ -118,6 +120,32 @@ class OrderLine extends Model
     }
 
     /** İptal ve iade sonrası kalan geçerli miktar. */
+    /**
+     * Stoğun DÜŞÜLDÜĞÜ hedefler — set satırında satış anındaki bileşenler
+     * (`bundle_components` görüntüsü), standart satırda varyantın kendisi.
+     *
+     * İptal ve iade stoğu buna göre geri ekler: setin tanımı sonradan
+     * değişse de satılan bileşen geri gelir.
+     *
+     * @return list<array{variant_id: string, quantity: int}>
+     */
+    public function stockTargets(): array
+    {
+        if (is_array($this->bundle_components) && $this->bundle_components !== []) {
+            return array_values(array_map(static fn (array $c): array => [
+                'variant_id' => (string) $c['variant_id'],
+                'quantity' => (int) $c['quantity'],
+            ], $this->bundle_components));
+        }
+
+        return $this->variant_id === null ? [] : [['variant_id' => $this->variant_id, 'quantity' => 1]];
+    }
+
+    public function isBundleLine(): bool
+    {
+        return is_array($this->bundle_components) && $this->bundle_components !== [];
+    }
+
     public function effectiveQuantity(): int
     {
         return $this->quantity - $this->quantity_cancelled - $this->quantity_returned;

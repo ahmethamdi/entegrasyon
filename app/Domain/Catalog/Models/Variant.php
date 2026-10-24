@@ -23,12 +23,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $sku
  * @property string|null $barcode
  * @property int $content_version
+ * @property string $kind `standard` | `bundle`
+ * @property int $bundle_revision setin tanım sürümü (stok sürümüne eklenir)
  */
 class Variant extends Model
 {
     use BelongsToTenant;
     use HasFactory;
     use HasUuidV7;
+
+    public const KIND_STANDARD = 'standard';
+
+    /**
+     * Set / paket — kendi stoğu YOK, bileşenlerinden türetilir
+     * (`variant_components`, `SellableStock`). Stok hareketi yazılamaz.
+     */
+    public const KIND_BUNDLE = 'bundle';
 
     protected $fillable = [
         'tenant_id',
@@ -42,6 +52,13 @@ class Variant extends Model
         'weight_grams',
         'status',
         'content_version',
+        'kind',
+        'bundle_revision',
+    ];
+
+    protected $attributes = [
+        'kind' => self::KIND_STANDARD,
+        'bundle_revision' => 0,
     ];
 
     protected function casts(): array
@@ -52,12 +69,24 @@ class Variant extends Model
             'cost_price' => 'decimal:2',
             'weight_grams' => 'integer',
             'content_version' => 'integer',
+            'bundle_revision' => 'integer',
         ];
     }
 
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function isBundle(): bool
+    {
+        return $this->kind === self::KIND_BUNDLE;
+    }
+
+    /** Setin bileşenleri (yalnız set varyantında dolu). */
+    public function components(): HasMany
+    {
+        return $this->hasMany(VariantComponent::class, 'bundle_variant_id');
     }
 
     public function options(): HasMany

@@ -84,6 +84,10 @@ final class RoutePermissions
         // Katalog — yazma. "Oluştur" ekranları da yazma ister: açılıp
         // gönderilemeyen form salt okunur üyeye yalnız hayal kırıklığıdır.
         'products.create' => P::CATALOG_MANAGE,
+        'products.bundles.create' => P::CATALOG_MANAGE,
+        'products.bundles.variants' => P::CATALOG_MANAGE,
+        'products.bundles.store' => P::CATALOG_MANAGE,
+        'products.bundles.update' => P::CATALOG_MANAGE,
         'products.store' => P::CATALOG_MANAGE,
         'products.update' => P::CATALOG_MANAGE,
         'products.variants.cost' => P::CATALOG_MANAGE,

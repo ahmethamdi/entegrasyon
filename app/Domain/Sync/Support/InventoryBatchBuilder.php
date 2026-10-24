@@ -6,8 +6,8 @@ namespace App\Domain\Sync\Support;
 
 use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Registry\AdapterRegistry;
-use App\Domain\Inventory\Models\InventoryLevel;
-use App\Domain\Inventory\Support\OutboundQuantity;
+use App\Domain\Inventory\Support\SellableStock;
+use App\Domain\Inventory\Support\StockView;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\SyncOperation;
@@ -101,9 +101,9 @@ final class InventoryBatchBuilder
                 continue;
             }
 
-            $level = $this->levelFor($listing);
+            $stock = $this->stockFor($listing);
 
-            if ($level === null) {
+            if ($stock === null || ! $stock->known) {
                 continue;
             }
 
@@ -114,7 +114,7 @@ final class InventoryBatchBuilder
                 externalId: $listing->external_id,
                 sku: $listing->variant->sku,
                 // GİDEN DÖNÜŞÜM — kırpmanın tek meşru yeri.
-                quantity: OutboundQuantity::forChannel($level),
+                quantity: $stock->outbound(),
                 version: $operation->entity_version,
                 externalParentId: $listing->external_parent_id,
             );
@@ -153,12 +153,17 @@ final class InventoryBatchBuilder
     }
 
     /**
-     * Listing'in varsayılan depodaki stok seviyesi.
+     * Listing'in varsayılan depodaki satılabilir stoğu.
      *
      * Çok depolu senaryoda gönderilecek bakiye bağlantının depo eşlemesinden
      * gelir; şimdilik kiracının varsayılan deposu kullanılır (§5).
+     *
+     * SET İLANI kendi seviyesi olmadığı için eskiden burada SESSİZCE
+     * atlanırdı (denetim § E); değeri bileşenlerden türetilir
+     * (`SellableStock`). Standart varyantta seviye satırı yoksa (`known`
+     * false) yine atlanır — eski davranış.
      */
-    private function levelFor(Listing $listing): ?InventoryLevel
+    private function stockFor(Listing $listing): ?StockView
     {
         $warehouseId = $this->defaultWarehouseId($listing->tenant_id);
 
@@ -166,10 +171,7 @@ final class InventoryBatchBuilder
             return null;
         }
 
-        return InventoryLevel::query()
-            ->where('warehouse_id', $warehouseId)
-            ->where('variant_id', $listing->variant_id)
-            ->first();
+        return SellableStock::forVariant($listing->tenant_id, $listing->variant_id, $warehouseId);
     }
 
     /** @var array<string, string|null> */

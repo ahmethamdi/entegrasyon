@@ -14,6 +14,7 @@ use App\Domain\Catalog\Exceptions\DuplicateSkuException;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\ProductImage;
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Database\Eloquent\Builder;
@@ -181,8 +182,48 @@ final class ProductController extends Controller
                     'currency' => $variant->currency,
                     'costPrice' => $variant->cost_price === null ? null : (string) $variant->cost_price,
                 ])->all(),
+                'bundle' => $this->bundleFor($model),
             ],
         ]);
+    }
+
+    /**
+     * Setin bileşenleri ekran için — sette dolu, standart üründe null.
+     *
+     * @return array{components: list<array{variantId: string, sku: string, title: string, quantity: int, available: int, sets: int}>, available: int, limitingSku: ?string}|null
+     */
+    private function bundleFor(Product $product): ?array
+    {
+        $bundle = $product->variants->first(fn (Variant $v): bool => $v->isBundle());
+
+        if ($bundle === null) {
+            return null;
+        }
+
+        $tenantId = TenantContext::idOrFail();
+        $components = SellableStock::componentsOf($tenantId, [$bundle->id])[$bundle->id] ?? [];
+        $ids = array_column($components, 'variant_id');
+        $views = SellableStock::forVariants($tenantId, $ids);
+        $info = DB::table('variants')
+            ->join('products', 'products.id', '=', 'variants.product_id')
+            ->where('variants.tenant_id', $tenantId)
+            ->whereIn('variants.id', $ids)
+            ->get(['variants.id', 'variants.sku', 'products.title'])
+            ->keyBy('id');
+        $view = SellableStock::forVariant($tenantId, $bundle->id);
+
+        return [
+            'components' => array_map(static fn (array $c): array => [
+                'variantId' => $c['variant_id'],
+                'sku' => (string) ($info[$c['variant_id']]->sku ?? ''),
+                'title' => (string) ($info[$c['variant_id']]->title ?? ''),
+                'quantity' => $c['quantity'],
+                'available' => $views[$c['variant_id']]->available ?? 0,
+                'sets' => (int) floor(($views[$c['variant_id']]->available ?? 0) / $c['quantity']),
+            ], $components),
+            'available' => $view->available ?? 0,
+            'limitingSku' => $view?->limitingVariantId === null ? null : (string) ($info[$view->limitingVariantId]->sku ?? ''),
+        ];
     }
 
     /**
@@ -263,12 +304,26 @@ final class ProductController extends Controller
             ));
     }
 
-    /** Ürünün satılabilir toplamı — kiracı filtresi AÇIK (çapraz varyant). */
+    /**
+     * Ürünün satılabilir toplamı — kiracı filtresi AÇIK (çapraz varyant).
+     *
+     * SET ürününde seviye satırı yoktur: değer bileşenlerden türetilir
+     * (min ⌊bileşen / adet⌋, `SellableStock` ile aynı kural). Yazılmasaydı
+     * her set "Tükenen" sekmesine düşerdi.
+     */
     private function availableSql(): string
     {
-        return '(SELECT coalesce(sum(il.available), 0) FROM variants v
-            JOIN inventory_levels il ON il.variant_id = v.id
-            WHERE v.product_id = products.id AND v.tenant_id = products.tenant_id)';
+        return "(CASE WHEN EXISTS (SELECT 1 FROM variants bv
+                WHERE bv.product_id = products.id AND bv.tenant_id = products.tenant_id AND bv.kind = 'bundle')
+            THEN (SELECT coalesce(min(floor(coalesce(cl.available, 0)::numeric / vc.quantity)), 0)
+                FROM variants bv
+                JOIN variant_components vc ON vc.bundle_variant_id = bv.id AND vc.tenant_id = bv.tenant_id
+                LEFT JOIN inventory_levels cl ON cl.variant_id = vc.component_variant_id AND cl.tenant_id = bv.tenant_id
+                WHERE bv.product_id = products.id AND bv.tenant_id = products.tenant_id)
+            ELSE (SELECT coalesce(sum(il.available), 0) FROM variants v
+                JOIN inventory_levels il ON il.variant_id = v.id
+                WHERE v.product_id = products.id AND v.tenant_id = products.tenant_id)
+            END)";
     }
 
     /**
@@ -464,6 +519,8 @@ final class ProductController extends Controller
                 ->where('inventory_levels.warehouse_id', '=', $warehouseId))
             ->whereIn('variants.product_id', $productIds)
             ->where('variants.tenant_id', TenantContext::idOrFail())
+            // Setin sayımı olmaz — stoğu bileşenlerinden türetilir.
+            ->where('variants.kind', Variant::KIND_STANDARD)
             ->groupBy('variants.product_id')
             ->havingRaw('count(DISTINCT variants.id) = 1')
             ->selectRaw('variants.product_id, min(variants.id::text) AS variant_id, coalesce(sum(inventory_levels.on_hand), 0) AS on_hand')
@@ -529,6 +586,57 @@ final class ProductController extends Controller
                 'minPrice' => $row->min_price,
                 'maxPrice' => $row->max_price,
                 'currency' => $row->currency,
+                'isBundle' => false,
+                'limitingSku' => null,
+            ];
+        }
+
+        return $this->withBundleStock($stock, $productIds);
+    }
+
+    /**
+     * SET ürünlerinin stoğu bileşenlerden türetilir (`SellableStock`) —
+     * seviye toplamı sette hep 0 olurdu. "Rafta" değeri de türetilmiş set
+     * sayısıdır; stoğu SINIRLAYAN bileşen ekranda söylenir.
+     *
+     * @param  array<string, array<string, mixed>>  $stock
+     * @param  list<string>  $productIds
+     * @return array<string, array<string, mixed>>
+     */
+    private function withBundleStock(array $stock, array $productIds): array
+    {
+        $tenantId = TenantContext::idOrFail();
+
+        $bundles = DB::table('variants')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('product_id', $productIds)
+            ->where('kind', Variant::KIND_BUNDLE)
+            ->pluck('product_id', 'id');
+
+        if ($bundles->isEmpty()) {
+            return $stock;
+        }
+
+        $views = SellableStock::forVariants($tenantId, $bundles->keys()->map(static fn (mixed $id): string => (string) $id)->all());
+        $limitingSkus = DB::table('variants')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('id', array_filter(array_map(static fn ($v) => $v->limitingVariantId, $views)))
+            ->pluck('sku', 'id');
+
+        foreach ($bundles as $variantId => $productId) {
+            $view = $views[(string) $variantId] ?? null;
+
+            if ($view === null || ! isset($stock[$productId])) {
+                continue;
+            }
+
+            $stock[$productId] = [
+                ...$stock[$productId],
+                'onHand' => $view->available,
+                'available' => $view->available,
+                'oversold' => $view->available < 0 ? 1 : 0,
+                'isBundle' => true,
+                'limitingSku' => $view->limitingVariantId === null ? null : ($limitingSkus[$view->limitingVariantId] ?? null),
             ];
         }
 
@@ -544,6 +652,7 @@ final class ProductController extends Controller
         $counts = $stock[$product->id] ?? [
             'onHand' => 0, 'available' => 0, 'variants' => 0, 'oversold' => 0,
             'minPrice' => null, 'maxPrice' => null, 'currency' => null,
+            'isBundle' => false, 'limitingSku' => null,
         ];
 
         return [
@@ -562,6 +671,9 @@ final class ProductController extends Controller
             'maxPrice' => $counts['maxPrice'] !== $counts['minPrice'] ? $counts['maxPrice'] : null,
             'currency' => $counts['currency'],
             'contentVersion' => $product->content_version,
+            // Set: stok bileşenlerden türetilir; sınırlayan bileşen gösterilir.
+            'isBundle' => $counts['isBundle'],
+            'limitingSku' => $counts['limitingSku'],
         ];
     }
 

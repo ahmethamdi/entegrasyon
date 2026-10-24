@@ -399,6 +399,14 @@ final class ApplySupplierItem
             return false;
         }
 
+        // SET'in kendi stoğu yok (`LockInventoryRows` reddeder): satır
+        // sebebiyle atlanır, akış durmaz.
+        if ($variant->isBundle()) {
+            $this->skip($ctx, $record, SupplierReason::SUPPLIER_STOCK_BUNDLE, $item->stock->rawText);
+
+            return false;
+        }
+
         if (! $item->stock->hasValue()) {
             $reason = $item->stock->state === FieldState::INVALID
                 ? SupplierReason::SUPPLIER_STOCK_INVALID

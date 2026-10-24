@@ -203,6 +203,12 @@ function submitCount() {
                     {{ t('Excel ile fiyat/stok') }}
                 </Link>
                 <Link
+                    href="/products/bundles/create"
+                    class="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                >
+                    {{ t('Set oluştur') }}
+                </Link>
+                <Link
                     href="/products/create"
                     class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
                 >
@@ -404,6 +410,10 @@ function submitCount() {
                                 <span v-if="item.row.status !== 'active'" class="ml-1 rounded-full border border-stone-200 px-1.5 py-px text-[11px] text-stone-600">
                                     {{ item.row.status === 'draft' ? t('Taslak') : t('Arşiv') }}
                                 </span>
+                                <!-- SET: stok bileşenlerden türetilir, sayımı yapılmaz. -->
+                                <span v-if="item.row.isBundle" class="ml-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-px text-[11px] font-medium text-sky-800">
+                                    {{ t('Set') }}
+                                </span>
                             </p>
                             <div class="mt-1.5 flex flex-wrap gap-1">
                                 <component
@@ -446,6 +456,9 @@ function submitCount() {
                             <!-- KIRPMA YOK (§17 · P0): eksik açıkça yazılır. -->
                             <p v-if="item.row.shortfall" class="mt-0.5 text-[11px] text-red-700">
                                 {{ t(':count adet eksik', { count: item.row.shortfall }) }}
+                            </p>
+                            <p v-else-if="item.row.isBundle && item.row.limitingSku" class="mt-0.5 max-w-36 truncate text-[11px] text-stone-500" :title="t('Stoğu sınırlayan: :sku', { sku: item.row.limitingSku })">
+                                {{ t('set · sınır: :sku', { sku: item.row.limitingSku }) }}
                             </p>
                             <p v-else class="mt-0.5 text-[11px] text-stone-500">{{ t('stok') }}</p>
                         </div>

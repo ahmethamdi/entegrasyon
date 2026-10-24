@@ -52,6 +52,9 @@ enum BulkEditReason: string
     /** Satır uygulanırken beklenmeyen hata. */
     case BULK_ROW_FAILED = 'BULK_ROW_FAILED';
 
+    /** Satır bir SET: stoğu bileşenlerden türetilir, dosyadan yazılmaz. */
+    case BULK_BUNDLE = 'BULK_BUNDLE';
+
     public function label(): string
     {
         return __(match ($this) {
@@ -69,6 +72,7 @@ enum BulkEditReason: string
             self::BULK_CHANGED_SINCE_PREVIEW => 'Önizlemeden sonra değişti',
             self::BULK_ALREADY_APPLIED => 'Bu dosya zaten uygulandı',
             self::BULK_ROW_FAILED => 'Satır uygulanamadı',
+            self::BULK_BUNDLE => 'Set ürün: stoğu bileşenlerinden hesaplanır, fiyatı ürün ekranından değiştirin',
         });
     }
 }

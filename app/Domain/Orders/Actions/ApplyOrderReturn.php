@@ -73,10 +73,17 @@ final class ApplyOrderReturn
             // (2) TÜM varyantlar TEK sorguda, sabit sırada kilitlenir. Yalnız
             //     stoğu DÜŞÜLMÜŞ satırlar: eşleşmemiş veya açılış stoğunda
             //     sayılmış satıra stok geri verilmez, yalnız sayacı ilerler.
-            $variantIds = array_values(array_unique(array_map(
-                static fn (array $pair): string => $pair['line']->variant_id,
-                array_filter($lines, static fn (array $pair): bool => $pair['line']->stockWasDeducted()),
-            )));
+            //     Set satırı satış anındaki BİLEŞENLERİNE açılır
+            //     (`OrderLine::stockTargets`).
+            $variantIds = [];
+
+            foreach (array_filter($lines, static fn (array $pair): bool => $pair['line']->stockWasDeducted()) as $pair) {
+                foreach ($pair['line']->stockTargets() as $target) {
+                    $variantIds[] = $target['variant_id'];
+                }
+            }
+
+            $variantIds = array_values(array_unique($variantIds));
 
             if ($variantIds !== []) {
                 $warehouse = $warehouseId ?? $this->defaultWarehouseId($tenantId);
@@ -101,16 +108,20 @@ final class ApplyOrderReturn
                     continue;
                 }
 
-                $this->applyMovement->run(
-                    warehouseId: $warehouse,
-                    variantId: $line->variant_id,
-                    type: MovementType::RETURN,
-                    quantity: $quantity,
-                    idempotencyKey: MovementKey::returnOf($orderEvent->id, $line->id),
-                    sourceType: 'order_event',
-                    sourceId: $orderEvent->id,
-                    channelConnectionId: $order->channel_connection_id,
-                );
+                foreach ($line->stockTargets() as $target) {
+                    $this->applyMovement->run(
+                        warehouseId: $warehouse,
+                        variantId: $target['variant_id'],
+                        type: MovementType::RETURN,
+                        quantity: $quantity * $target['quantity'],
+                        idempotencyKey: $line->isBundleLine()
+                            ? MovementKey::component(MovementKey::returnOf($orderEvent->id, $line->id), $target['variant_id'])
+                            : MovementKey::returnOf($orderEvent->id, $line->id),
+                        sourceType: $line->isBundleLine() ? ApplyMovement::SOURCE_BUNDLE_EVENT_COMPONENT : 'order_event',
+                        sourceId: $orderEvent->id,
+                        channelConnectionId: $order->channel_connection_id,
+                    );
+                }
 
                 // Sayaç ilerletilir; CHECK kısıtı toplamın miktarı aşmasını
                 // veritabanı düzeyinde engeller.

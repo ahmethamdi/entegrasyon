@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
+import BundleComponentsEditor from '../../Components/BundleComponentsEditor.vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import WriteGuard from '../../Components/WriteGuard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
@@ -28,6 +29,19 @@ function submit() {
 // ALIŞ MALİYETİ — varyant başına, ayrı kaydedilir (ürün formundan bağımsız).
 const costs = ref(Object.fromEntries((props.product.variants ?? []).map((v) => [v.id, v.costPrice ?? ''])));
 const savingCost = ref(null);
+
+// SET — içerik ayrı kaydedilir; stok bileşenlerden hesaplanır.
+const bundleComponents = ref((props.product.bundle?.components ?? []).map((c) => ({ ...c })));
+const savingBundle = ref(false);
+
+function saveBundle() {
+    savingBundle.value = true;
+    router.put(
+        `/products/${props.product.id}/bundle`,
+        { components: bundleComponents.value.map((c) => ({ variant_id: c.variantId, quantity: c.quantity })) },
+        { preserveScroll: true, onFinish: () => { savingBundle.value = false; } },
+    );
+}
 
 function saveCost(variant) {
     savingCost.value = variant.id;
@@ -192,6 +206,26 @@ function saveCost(variant) {
                     </Link>
                 </div>
             </form>
+
+            <section v-if="product.bundle" class="mt-10 max-w-2xl border-t border-stone-200 pt-6">
+                <h2 class="text-sm font-medium text-stone-900">{{ t('Setin içindekiler') }}</h2>
+                <p class="mt-0.5 text-xs text-stone-500">
+                    {{ t('Set stoğu: :count', { count: product.bundle.available }) }}
+                    <span v-if="product.bundle.limitingSku">· {{ t('Sınırlayan: :sku', { sku: product.bundle.limitingSku }) }}</span>
+                </p>
+                <p class="mt-1 text-xs text-stone-500">
+                    {{ t('İçeriği değiştirirseniz kanallara yeni set stoğu gider. Daha önce satılan setlerin iptal ve iadesinde, satıldığı andaki içerik geri eklenir.') }}
+                </p>
+                <BundleComponentsEditor v-model="bundleComponents" class="mt-3" :error="$page.props.errors?.components" />
+                <button
+                    type="button"
+                    :disabled="savingBundle || !bundleComponents.length"
+                    class="mt-4 rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    @click="saveBundle"
+                >
+                    {{ savingBundle ? t('Kaydediliyor…') : t('Setin içeriğini kaydet') }}
+                </button>
+            </section>
 
             <section v-if="product.variants?.length" class="mt-10 max-w-xl border-t border-stone-200 pt-6">
                 <h2 class="text-sm font-medium text-stone-900">{{ t('Alış maliyeti') }}</h2>

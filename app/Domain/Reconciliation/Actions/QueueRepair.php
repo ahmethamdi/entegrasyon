@@ -6,7 +6,7 @@ namespace App\Domain\Reconciliation\Actions;
 
 use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Support\OutboundWriteGate;
-use App\Domain\Inventory\Models\InventoryLevel;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Reconciliation\Enums\ItemStatus;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
 use App\Domain\Sync\Actions\OpenSyncOperation;
@@ -14,6 +14,7 @@ use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Jobs\PushInventory;
 use App\Domain\Sync\Models\SyncOperation;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Sürüklenme bulunan kalem için onarım operasyonu açar.
@@ -92,8 +93,9 @@ final class QueueRepair
      */
     private function currentVersionFor(string $variantId): int
     {
-        return (int) (InventoryLevel::query()
-            ->where('variant_id', $variantId)
-            ->value('version') ?? 0);
+        // Set: bileşen sürümleri toplamı + tanım sürümü (`SellableStock`).
+        $tenantId = (string) DB::table('variants')->where('id', $variantId)->value('tenant_id');
+
+        return SellableStock::forVariant($tenantId, $variantId)->version ?? 0;
     }
 }

@@ -12,6 +12,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\SessionController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\BulkEditController;
+use App\Http\Controllers\BundleController;
 use App\Http\Controllers\CarrierShipmentController;
 use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
@@ -295,6 +296,10 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     // Açılış stoğu ledger üzerinden girer; içerik düzenlemesi stoğa dokunmaz.
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
+    Route::get('/products/bundles/create', [BundleController::class, 'create'])->name('products.bundles.create');
+    Route::get('/products/bundles/variants', [BundleController::class, 'variants'])->name('products.bundles.variants');
+    Route::post('/products/bundles', [BundleController::class, 'store'])->name('products.bundles.store');
+    Route::put('/products/{product}/bundle', [BundleController::class, 'update'])->name('products.bundles.update');
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
 
     // S5 · Tedarikçi XML kaynakları (ADR-012). Örnek okuma POST'tur (dışarı

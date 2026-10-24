@@ -8,6 +8,7 @@ use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Inventory\Exceptions\InsufficientStockException;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Models\InventoryMovement;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,11 @@ use InvalidArgumentException;
  * kilit sıralaması doğar ve deadlock riski geri gelirdi. Bu ön koşul testle
  * doğrulanır (apply_movement_does_not_acquire_its_own_lock).
  *
+ * SETİN KENDİ STOĞU YOKTUR (`variants.kind = 'bundle'`): set varyantına
+ * hareket YAZILMAZ — bileşenlerine yazılır (`SellableStock::targetsOf`).
+ * Burada son kapı: set için açılmış bir seviye satırı ikinci bir stok
+ * gerçeği olur ve türetilmiş değerle sessizce ayrışırdı.
+ *
  * KIRPMA YOK.
  * on_hand ve available negatife düşebilir; negatif available fazla satılan
  * miktarın kendisidir. GREATEST/LEAST/clamp bu sınıfta YASAKTIR. Kırpma
@@ -37,6 +43,12 @@ use InvalidArgumentException;
  */
 final class ApplyMovement
 {
+    /** Set satırından bileşene yazılan hareketin kaynak türü. */
+    public const SOURCE_BUNDLE_COMPONENT = 'order_line_component';
+
+    /** Set satırının iptal/iadesinde bileşene yazılan hareketin kaynak türü. */
+    public const SOURCE_BUNDLE_EVENT_COMPONENT = 'order_event_component';
+
     /**
      * @param  int  $quantity  Daima POZİTİF. Yön hareket türünden gelir —
      *                         çağıranın işaret hesaplaması gerekmez, böylece
@@ -64,6 +76,12 @@ final class ApplyMovement
         }
 
         $tenantId = TenantContext::idOrFail();
+
+        if (SellableStock::isBundle($tenantId, $variantId)) {
+            throw new InvalidArgumentException(
+                "Varyant {$variantId} bir set; setin kendi stoğu yok, hareket bileşenlerine yazılır."
+            );
+        }
 
         return DB::transaction(function () use (
             $tenantId, $warehouseId, $variantId, $type, $quantity,
@@ -259,7 +277,12 @@ final class ApplyMovement
                 // Yankı bastırma çıpası — bir ENİYİLEME, doğruluk kuralı
                 // değil: kanal otorite dışına ÇIKARILMAZ, mutabakat onu da
                 // kontrol eder ve gerçek sürüklenmede onarım açar (§10).
-                'origin_connection_id' => $movement->channel_connection_id,
+                //
+                // SETTEN GELEN BİLEŞEN HAREKETİNDE KAYNAK YOKTUR: kanal kendi
+                // tarafında SET ilanını düşürdü, bileşenin kendi ilanını DEĞİL.
+                // Kaynak yazılsaydı bileşenin o kanaldaki ilanına gönderim
+                // bastırılır ve orada fazla stok kalırdı.
+                'origin_connection_id' => in_array($movement->source_type, [self::SOURCE_BUNDLE_COMPONENT, self::SOURCE_BUNDLE_EVENT_COMPONENT], true) ? null : $movement->channel_connection_id,
             ],
             tenantId: $level->tenant_id,
         );

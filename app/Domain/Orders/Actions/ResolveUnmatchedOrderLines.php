@@ -8,7 +8,9 @@ use App\Domain\Catalog\Models\Variant;
 use App\Domain\Inventory\Actions\ApplyMovement;
 use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
+use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Support\MovementKey;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Orders\Enums\OrderEventType;
 use App\Domain\Orders\Enums\StockStatus;
 use App\Domain\Orders\Models\Order;
@@ -148,18 +150,19 @@ final class ResolveUnmatchedOrderLines
             if ($toDeduct !== []) {
                 $warehouseId = $this->defaultWarehouseId($tenantId);
 
-                // (2) TÜM varyantlar TEK sorguda, variant_id sırasıyla.
-                $levels = $this->lockInventoryRows->run(
-                    $warehouseId,
-                    array_map(static fn (array $pair): string => $pair[1], $toDeduct),
-                );
+                // (2) TÜM varyantlar TEK sorguda, variant_id sırasıyla. Set
+                //     bileşenlerine açılır (`IngestChannelOrder` ile aynı kural).
+                $targets = SellableStock::targetsOf($tenantId, array_map(static fn (array $pair): string => $pair[1], $toDeduct));
+                $levels = $this->lockInventoryRows->run($warehouseId, IngestChannelOrder::stockBearing($targets));
 
                 foreach ($toDeduct as [$line, $variantId]) {
-                    $this->deduct($order, $line, $variantId, $levels[$variantId]->available, $warehouseId);
+                    $this->deduct($order, $line, $variantId, $targets[$variantId] ?? [], $levels, $warehouseId);
 
                     // Aynı varyantta ikinci satır KİLİTLİ satırın güncel
                     // bakiyesini görmeli; önbellekteki model eskidir.
-                    $levels[$variantId]->refresh();
+                    foreach ($targets[$variantId] ?? [] as $target) {
+                        $levels[$target['variant_id']]->refresh();
+                    }
                 }
             }
 
@@ -203,20 +206,38 @@ final class ResolveUnmatchedOrderLines
         ];
     }
 
-    private function deduct(Order $order, OrderLine $line, string $variantId, int $availableBefore, string $warehouseId): void
+    /**
+     * @param  list<array{variant_id: string, quantity: int}>  $targets
+     * @param  array<string, InventoryLevel>  $levels
+     */
+    private function deduct(Order $order, OrderLine $line, string $variantId, array $targets, array $levels, string $warehouseId): void
     {
         $quantity = $line->effectiveQuantity();
 
-        $this->applyMovement->run(
-            warehouseId: $warehouseId,
-            variantId: $variantId,
-            type: MovementType::SALE,
-            quantity: $quantity,
-            idempotencyKey: MovementKey::sale($line->id),
-            sourceType: 'order_line',
-            sourceId: $line->id,
-            channelConnectionId: $order->channel_connection_id,
-        );
+        if ($targets === []) {
+            return;                         // bileşensiz set — PENDING kalır
+        }
+
+        $bundle = $targets !== [['variant_id' => $variantId, 'quantity' => 1]];
+        $availableBefore = null;
+
+        foreach ($targets as $target) {
+            $sets = (int) floor($levels[$target['variant_id']]->available / $target['quantity']);
+            $availableBefore = $availableBefore === null ? $sets : min($availableBefore, $sets);
+        }
+
+        foreach ($targets as $target) {
+            $this->applyMovement->run(
+                warehouseId: $warehouseId,
+                variantId: $target['variant_id'],
+                type: MovementType::SALE,
+                quantity: $quantity * $target['quantity'],
+                idempotencyKey: $bundle ? MovementKey::component(MovementKey::sale($line->id), $target['variant_id']) : MovementKey::sale($line->id),
+                sourceType: $bundle ? ApplyMovement::SOURCE_BUNDLE_COMPONENT : 'order_line',
+                sourceId: $line->id,
+                channelConnectionId: $order->channel_connection_id,
+            );
+        }
 
         $status = StockStatus::forAvailability($availableBefore, $quantity);
 
@@ -224,6 +245,8 @@ final class ResolveUnmatchedOrderLines
             'variant_id' => $variantId,
             'stock_status' => $status->value,
             'stock_applied_at' => now(),
+            // Satış anı set görüntüsü — iptal/iade bunu okur.
+            'bundle_components' => $bundle ? $targets : null,
             ...$this->costSnapshot($line, $variantId),
         ])->save();
 

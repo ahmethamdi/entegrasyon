@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Support;
 
-use App\Domain\Inventory\Models\InventoryLevel;
-use App\Domain\Inventory\Support\OutboundQuantity;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Sync\Models\Listing;
 use Illuminate\Support\Facades\DB;
 
@@ -33,12 +32,8 @@ final class ListingProjection
             return 0;
         }
 
-        $level = InventoryLevel::query()
-            ->where('warehouse_id', $warehouseId)
-            ->where('variant_id', $listing->variant_id)
-            ->first();
-
-        return $level === null ? 0 : OutboundQuantity::forChannel($level);
+        // Set ilanında bileşenlerden türetilir (`SellableStock`).
+        return SellableStock::forVariant($listing->tenant_id, $listing->variant_id, (string) $warehouseId)?->outbound() ?? 0;
     }
 
     public static function salePrice(Listing $listing): string

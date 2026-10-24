@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Messaging\Consumers;
 
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Actions\OpenSyncOperation;
 use App\Domain\Sync\Enums\SyncDomain;
@@ -97,6 +98,30 @@ final class InventoryLevelChangedConsumer
             }
         }
 
+        // (3b) SETLER — bu varyant bir setin bileşeniyse setin stoğu da
+        //      değişmiştir (türetilir, kendi olayı yoktur). Setin canlı
+        //      listing'lerine AYRI operasyon açılır; sürüm SETİN sürümüdür
+        //      (bileşen sürümleri toplamı + tanım sürümü, `SellableStock`).
+        //      Bileşenin kendi sürümü verilseydi iki bileşenli sette küçük
+        //      sürümlü bileşenin değişimi kapıda "eski" sayılıp elenirdi.
+        //
+        //      Yankı bastırma YOK: kanal kendi tarafında yalnız satılan ilanı
+        //      düşürür, aynı bileşeni içeren diğer setlerin ilanını değil.
+        //      Mutlak değer gider; tekrar zararsızdır.
+        foreach ($this->bundleListings($event, $payload) as [$listing, $version]) {
+            $operation = $this->openSyncOperation->run(
+                listing: $listing,
+                domain: SyncDomain::INVENTORY,
+                eventVersion: $version,
+                intent: SyncIntent::NORMAL_SYNC,
+                sourceEvent: $event,
+            );
+
+            if ($operation !== null) {
+                $pending[] = $operation->id;
+            }
+        }
+
         // (4) PLANLAMA bitti. Downstream başarısını BEKLEMEZ.
         //
         //     consumed_at senkronun başarısını göstermez. Bir bağlantının
@@ -162,6 +187,46 @@ final class InventoryLevelChangedConsumer
             ->where(static fn ($q) => $q->whereNull('channel_connection_id')
                 ->orWhere('channel_connection_id', '<>', $origin))
             ->exists();
+    }
+
+    /**
+     * Bileşeni içeren setlerin canlı listing'leri ve setin GÜNCEL sürümü.
+     *
+     * Sürüm olay anında değil okuma anında hesaplanır: aynı anda iki
+     * bileşen değiştiyse ikinci olay daha büyük toplamı görür ve kapıdan
+     * geçer; birincisi aynı toplamla gelirse kapı onu eler — ikisi de
+     * kanala güncel değeri götüreceği için kayıp yoktur.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return list<array{0: Listing, 1: int}>
+     */
+    private function bundleListings(OutboxEvent $event, array $payload): array
+    {
+        $bundleIds = SellableStock::bundlesContaining($event->tenant_id, (string) $payload['variant_id']);
+
+        if ($bundleIds === []) {
+            return [];
+        }
+
+        $listings = Listing::query()
+            ->where('tenant_id', $event->tenant_id)
+            ->whereIn('variant_id', $bundleIds)
+            ->live()
+            ->whereIn('channel_connection_id', static fn ($q) => $q->select('id')
+                ->from('channel_connections')
+                ->where('stock_sync_enabled', true))
+            ->get();
+
+        if ($listings->isEmpty()) {
+            return [];
+        }
+
+        $views = SellableStock::forVariants($event->tenant_id, $bundleIds, $payload['warehouse_id'] ?? null);
+
+        return $listings
+            ->map(static fn (Listing $listing): array => [$listing, $views[$listing->variant_id]->version ?? 0])
+            ->values()
+            ->all();
     }
 
     /**

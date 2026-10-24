@@ -85,6 +85,9 @@ enum SupplierReason: string
     /** Stok alanı boş/yok — stok değişmedi (bilinmeyen ≠ sıfır). */
     case SUPPLIER_STOCK_MISSING = 'SUPPLIER_STOCK_MISSING';
 
+    /** Eşleşen ürün bir SET — stoğu bileşenlerden türetilir, dosyadan yazılmaz. */
+    case SUPPLIER_STOCK_BUNDLE = 'SUPPLIER_STOCK_BUNDLE';
+
     /** Stok tam sayı değil ya da negatif — stok değişmedi. */
     case SUPPLIER_STOCK_INVALID = 'SUPPLIER_STOCK_INVALID';
 
@@ -127,6 +130,7 @@ enum SupplierReason: string
             self::SUPPLIER_COST_ZERO => 'Alış fiyatı 0',
             self::SUPPLIER_CURRENCY_MISMATCH => 'Para birimi ürünle aynı değil',
             self::SUPPLIER_STOCK_MISSING => 'Stok bilgisi yok',
+            self::SUPPLIER_STOCK_BUNDLE => 'Set ürün: stoğu bileşenlerinden hesaplanır',
             self::SUPPLIER_STOCK_INVALID => 'Stok geçersiz',
             self::SUPPLIER_RECORD_MISSING => 'Akışta artık yok',
             self::SUPPLIER_SYNC_INCOMPLETE => 'Güncelleme yarıda kaldı',

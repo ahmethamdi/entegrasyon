@@ -26,6 +26,20 @@ final class MovementKey
         return "sale:{$orderLineId}";
     }
 
+    /**
+     * Set satırının bir BİLEŞENİNE yazılan hareket — taban anahtar + bileşen.
+     *
+     * Set satırı tek bir sipariş kalemidir ama N bileşene N hareket yazar.
+     * Anahtar yalnız satıra bağlansaydı ikinci bileşenin hareketi
+     * ON CONFLICT DO NOTHING ile yutulur ve o bileşenin stoğu hiç düşmezdi
+     * (denetim · 03-DOMAIN-MODEL-AUDIT § E: `sale:{line}:{component}`).
+     * Standart satırın anahtarı DEĞİŞMEZ — canlı verideki anahtarlarla aynı.
+     */
+    public static function component(string $baseKey, string $componentVariantId): string
+    {
+        return "{$baseKey}:{$componentVariantId}";
+    }
+
     /** İptal: olay kimliğine bağlı — kısmi iptaller ayrışsın. */
     public static function cancellation(string $orderEventId): string
     {

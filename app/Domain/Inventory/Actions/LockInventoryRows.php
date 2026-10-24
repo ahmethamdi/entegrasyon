@@ -7,6 +7,7 @@ namespace App\Domain\Inventory\Actions;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -56,6 +57,20 @@ final class LockInventoryRows
 
         if ($variantIds === []) {
             return [];
+        }
+
+        // SETİN SEVİYE SATIRI AÇILMAZ: set stoğu bileşenlerden türetilir;
+        // açılan satır ikinci bir stok gerçeği olurdu. Çağıran set satırını
+        // bileşenlerine açmalıdır (`SellableStock::targetsOf`).
+        $bundles = DB::table('variants')
+            ->where('tenant_id', $tenantId)
+            ->whereIn('id', $variantIds)
+            ->where('kind', 'bundle')
+            ->pluck('id')
+            ->all();
+
+        if ($bundles !== []) {
+            throw new InvalidArgumentException('Set varyantının stok satırı yoktur, kilit bileşenlerine alınır: '.implode(', ', $bundles));
         }
 
         // Eksik satırlar önce yaratılır: FOR UPDATE var olmayan satırı

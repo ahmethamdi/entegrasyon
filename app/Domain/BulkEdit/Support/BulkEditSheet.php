@@ -73,6 +73,8 @@ final class BulkEditSheet
 
         Variant::query()
             ->with(['product:id,title', 'options.definition', 'options.value'])
+            // Setin kendi stoğu yok; satırı dosyada yanıltıcı olurdu.
+            ->where('kind', Variant::KIND_STANDARD)
             ->orderBy('product_id')
             ->orderBy('sku')
             ->chunk(500, function ($variants) use ($writer, $warehouseId): void {

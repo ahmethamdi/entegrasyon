@@ -53,6 +53,11 @@ final class InventoryController extends Controller
         // Kiracı scope'u altında aranır: başka kiracının varyantı 404.
         $variant = Variant::query()->findOrFail($validated['variant_id']);
 
+        // Setin kendi stoğu yok — bileşenlerinden hesaplanır.
+        if ($variant->isBundle()) {
+            return back()->withErrors(['target' => __('Set ürünün stoğu bileşenlerinden hesaplanır; bileşenlerin stoğunu düzeltin.')]);
+        }
+
         $warehouseId = $this->defaultWarehouseId($request);
 
         if (isset($validated['target'])) {

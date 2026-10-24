@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Sync\Actions;
 
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Models\Listing;
@@ -166,10 +167,8 @@ final class RequestResync
     private function currentVersionFor(Listing $listing, SyncDomain $domain): int
     {
         if ($domain === SyncDomain::INVENTORY) {
-            return (int) (DB::table('inventory_levels')
-                ->where('tenant_id', $listing->tenant_id)
-                ->where('variant_id', $listing->variant_id)
-                ->value('version') ?? 0);
+            // Set: bileşen sürümleri toplamı + tanım sürümü (`SellableStock`).
+            return SellableStock::forVariant($listing->tenant_id, $listing->variant_id)->version ?? 0;
         }
 
         if ($domain === SyncDomain::PRICE) {

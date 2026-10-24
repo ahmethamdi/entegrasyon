@@ -186,6 +186,15 @@ final class ParseBulkEdit
                 }
             }
 
+            // SET satırı dosyadan yazılmaz: stoğu bileşenlerden türetilir
+            // (kilidi de alınamaz — `LockInventoryRows`). Dışa aktarımda
+            // zaten yoktur; elle eklenmişse sebebiyle reddedilir.
+            if ($variant->isBundle()) {
+                $out[] = ['reason_code' => BulkEditReason::BULK_BUNDLE->value, 'sku' => $variant->sku] + $entry;
+
+                continue;
+            }
+
             $entry['variant_id'] = $variant->id;
             $entry['sku'] = $variant->sku;
             $entry['label'] = $entry['label'] ?? mb_substr((string) $variant->product?->title, 0, 500);

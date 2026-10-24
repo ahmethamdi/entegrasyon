@@ -10,6 +10,7 @@ use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Inventory\Support\MovementKey;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Orders\Enums\OrderEventType;
 use App\Domain\Orders\Enums\StockStatus;
 use App\Domain\Orders\Models\Order;
@@ -78,7 +79,12 @@ final class IngestChannelOrder
                 return $order;              // hiçbir satır eşleşmedi, stok yok
             }
 
-            $levels = $this->lockInventoryRows->run($warehouseId, $variantIds);
+            // SET satırı stok taşımaz: kilit ve hareket BİLEŞENLERİNE gider.
+            // Kilit listesi bileşenlerle genişler ve yine tek sorguda, aynı
+            // sırayla alınır — setin bileşeni ile ayrı satırdaki aynı ürün
+            // tek satır kilidiyle korunur.
+            $targets = SellableStock::targetsOf($tenantId, $variantIds);
+            $levels = $this->lockInventoryRows->run($warehouseId, self::stockBearing($targets));
 
             // (3) Satır başına hareket. Kilit zaten alınmış durumda.
             foreach ($lines as $line) {
@@ -86,7 +92,7 @@ final class IngestChannelOrder
                     continue;               // eşleşmemiş SKU — PENDING kalır
                 }
 
-                $this->applyLine($order, $line, $levels[$line->variant_id], $warehouseId, $incoming);
+                $this->applyLine($order, $line, $targets[$line->variant_id] ?? [], $levels, $warehouseId, $incoming);
             }
 
             return $order->refresh();
@@ -227,30 +233,70 @@ final class IngestChannelOrder
     }
 
     /**
+     * Hedeflerin stok taşıyan varyantları — kilit listesi.
+     *
+     * @param  array<string, list<array{variant_id: string, quantity: int}>>  $targets
+     * @return list<string>
+     */
+    public static function stockBearing(array $targets): array
+    {
+        $ids = [];
+
+        foreach ($targets as $list) {
+            foreach ($list as $target) {
+                $ids[] = $target['variant_id'];
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
      * Tek satırın stoğunu düşürür ve sonucu işaretler.
      *
      * available_before KİLİTLİ satırdan okunur; kilit alınmadan okunsaydı
      * OVERSOLD kararı yarış durumunda yanlış verilirdi.
+     *
+     * SET SATIRI: her bileşene (satır adedi × bileşen adedi) kadar SALE,
+     * anahtar `sale:{satır}:{bileşen}`; "önce" stoğu bileşenlerden türetilen
+     * set stoğudur (min ⌊available / adet⌋).
+     *
+     * @param  list<array{variant_id: string, quantity: int}>  $targets
+     * @param  array<string, InventoryLevel>  $levels
      */
     private function applyLine(
         Order $order,
         OrderLine $line,
-        InventoryLevel $level,
+        array $targets,
+        array $levels,
         string $warehouseId,
         IncomingOrder $incoming,
     ): void {
-        $availableBefore = $level->available;
+        $bundle = ! ($targets === [['variant_id' => $line->variant_id, 'quantity' => 1]]);
 
-        $this->applyMovement->run(
-            warehouseId: $warehouseId,
-            variantId: $line->variant_id,
-            type: MovementType::SALE,
-            quantity: $line->quantity,
-            idempotencyKey: MovementKey::sale($line->id),
-            sourceType: 'order_line',
-            sourceId: $line->id,
-            channelConnectionId: $incoming->channelConnectionId,
-        );
+        if ($targets === []) {
+            return;                         // bileşensiz set — stok yok, PENDING kalır
+        }
+
+        $availableBefore = null;
+
+        foreach ($targets as $target) {
+            $sets = (int) floor($levels[$target['variant_id']]->available / $target['quantity']);
+            $availableBefore = $availableBefore === null ? $sets : min($availableBefore, $sets);
+        }
+
+        foreach ($targets as $target) {
+            $this->applyMovement->run(
+                warehouseId: $warehouseId,
+                variantId: $target['variant_id'],
+                type: MovementType::SALE,
+                quantity: $line->quantity * $target['quantity'],
+                idempotencyKey: $bundle ? MovementKey::component(MovementKey::sale($line->id), $target['variant_id']) : MovementKey::sale($line->id),
+                sourceType: $bundle ? ApplyMovement::SOURCE_BUNDLE_COMPONENT : 'order_line',
+                sourceId: $line->id,
+                channelConnectionId: $incoming->channelConnectionId,
+            );
+        }
 
         // Sipariş satırı işaretlenir. SİPARİŞ ASLA GERİ ALINMAZ.
         $status = StockStatus::forAvailability($availableBefore, $line->quantity);
@@ -258,6 +304,8 @@ final class IngestChannelOrder
         $line->forceFill([
             'stock_status' => $status->value,
             'stock_applied_at' => now(),
+            // Satış anı set görüntüsü — iptal/iade bunu okur.
+            'bundle_components' => $bundle ? $targets : null,
         ])->save();
 
         // Fazla satışta AYRICA denetim olayı. Bu olay bizim ürettiğimizdir ve

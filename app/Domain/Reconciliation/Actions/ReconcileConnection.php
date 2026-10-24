@@ -8,8 +8,7 @@ use App\Domain\Channels\Contracts\SupportsInventory;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
-use App\Domain\Inventory\Models\InventoryLevel;
-use App\Domain\Inventory\Support\OutboundQuantity;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Reconciliation\Enums\ItemStatus;
 use App\Domain\Reconciliation\Enums\ReconciliationScope;
 use App\Domain\Reconciliation\Models\ReconciliationItem;
@@ -331,12 +330,11 @@ final class ReconcileConnection
      */
     private function compareInventory(Listing $listing, RemoteInventorySnapshot $snapshot, ReconciliationRun $run): array
     {
-        $level = InventoryLevel::query()
-            ->where('variant_id', $listing->variant_id)
-            ->first();
-
-        // KARŞILAŞTIRMA TABANI — kırpılmış giden değer.
-        $expectedRemote = $level === null ? 0 : OutboundQuantity::forChannel($level);
+        // KARŞILAŞTIRMA TABANI — kırpılmış giden değer. Set ilanında
+        // bileşenlerden türetilir; eskiden seviye satırı olmadığı için 0
+        // beklenir ve her turda sahte sürüklenme bulunurdu.
+        $level = SellableStock::forVariant($listing->tenant_id, $listing->variant_id);
+        $expectedRemote = $level?->outbound() ?? 0;
 
         $observedRemote = $listing->external_id === null
             ? null
