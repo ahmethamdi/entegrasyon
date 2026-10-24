@@ -11,13 +11,10 @@
 
 @php
     $email = config('site.contact_email');
-    $phone = config('site.phone');
-    // tel: bağlantısında boşluk olmaz; görünen metin okunaklı kalır.
-    $phoneHref = 'tel:'.preg_replace('/[^\d+]/', '', $phone);
 @endphp
 
 @section('title', 'İletişim')
-@section('description', '34Pazar ile ilgili sorun ya da öneri için bize e-postayla veya telefonla ulaş. 34Devs, Korschenbroich, Almanya.')
+@section('description', '34Pazar ile ilgili sorun ya da öneri için bize e-postayla ya da WhatsApp üzerinden ulaş. 34Devs, Korschenbroich, Almanya.')
 
 @push('jsonld')
     @include('site.partials.seo.breadcrumb', ['items' => [
@@ -47,10 +44,11 @@
                     <a href="mailto:{{ $email }}" class="link mt-3 inline-block [overflow-wrap:anywhere]">{{ $email }}</a>
                 </li>
                 <li class="card">
+                    {{-- Fiyat sayfasının destek sözüyle aynı: WhatsApp + e-posta, her gün (24 Eki kararı). --}}
                     <span class="icon-box">@include('site.partials.icon', ['name' => 'call'])</span>
-                    <h2 class="heading-3 mt-4">Telefon</h2>
-                    <p class="mt-1 text-sm muted">Almanya numarası.</p>
-                    <a href="{{ $phoneHref }}" class="link mt-3 inline-block">{{ $phone }}</a>
+                    <h2 class="heading-3 mt-4">WhatsApp</h2>
+                    <p class="mt-1 text-sm muted">Her gün {{ config('site.support_hours') }} (Türkiye saati).</p>
+                    <a href="https://wa.me/{{ config('site.whatsapp') }}" class="link mt-3 inline-block">{{ config('site.whatsapp_display') }}</a>
                 </li>
                 <li class="card">
                     <span class="icon-box">@include('site.partials.icon', ['name' => 'pin'])</span>

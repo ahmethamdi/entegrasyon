@@ -13,8 +13,6 @@
     $channelList = $channels ?? [];
     $legal = $legalPages ?? [];
     $email = config('site.contact_email');
-    $phone = config('site.phone');
-    $phoneHref = 'tel:'.preg_replace('/[^\d+]/', '', $phone);
 @endphp
 <footer class="on-dark">
     <div class="wrap grid gap-12 pt-16 pb-12 lg:grid-cols-12 lg:pt-20">
@@ -27,7 +25,7 @@
                 <span class="block font-semibold text-white">{{ config('site.operator') }}</span>
                 <span class="block">{{ config('site.street') }}, {{ config('site.postal_code') }} {{ config('site.city') }}, {{ config('site.country') }}</span>
                 <a class="footer-link block" href="mailto:{{ $email }}">{{ $email }}</a>
-                <a class="footer-link block" href="{{ $phoneHref }}">{{ $phone }}</a>
+                <a class="footer-link block" href="https://wa.me/{{ config('site.whatsapp') }}">WhatsApp {{ config('site.whatsapp_display') }}</a>
             </address>
         </div>
 
