@@ -195,7 +195,16 @@ Belirti: müşteri "ödedim, paket açılmadı"; Stripe Dashboard → Developers
    - **Zaman aşımı/bağlantı yok**: 3.1.
 2. Olay düzelince Stripe Dashboard → olay → **Resend** (abonelik eşlemesi `external_ref` ile idempotenttir; çift abonelik açmaz).
 3. Acil: müşteriyi beklettirme — admin panel → kiracı → **plan ata** (elle), sonra webhook düzelince senkron.
-4. Dinlenen olaylar: `checkout.session.completed`, `customer.subscription.created|updated|deleted`.
+4. Dinlenen olaylar (S14): `checkout.session.completed`, `customer.subscription.created|updated|deleted`, `invoice.payment_failed`, `invoice.paid`, `charge.refunded`. Dashboard'daki uç nokta bu yedi olayı içermeli (`StripeWebhookController::HANDLED_EVENTS`, test kilitli).
+5. Olay tekilliği: aynı `evt_…` ikinci kez işlenmez (`billing_webhook_events`); işlenirken düşen olay damgalanmaz, Stripe'ın yeniden denemesiyle işlenir. "Resend" güvenlidir.
+6. Çift posta olmasın: Stripe Dashboard → Settings → Billing → Subscriptions and emails → **"Send emails when card payments fail" KAPALI** (Türkçe postayı biz gönderiyoruz; API'den okunamıyor, elle kontrol).
+
+### 3.6 İade (14 gün güvencesi ve diğerleri)
+
+- **14 gün güvencesi:** admin → Müşteriler → kiracı → "14 gün iade güvencesi" → **Son ödemeyi iade et ve ücretsize düşür**. Uygunluk ekranda yazar: ilk ücretli abonelik, ilk ödemeden 14 gün içinde, hesap başına bir kez, Stripe ile ödenmiş. Düğme Stripe'ta iade + abonelik iptali (alacaksız) + hemen ücretsiz plan + kayıt yapar.
+- **Stripe Dashboard'dan elle iade:** `charge.refunded` olayı gelir; **tam** iade → abonelik hemen kesilir ve plan ücretsize düşer, **kısmi** iade yalnız kaydedilir. Güvence sayılmaz (güvence yalnız admin düğmesiyle işaretlenir).
+- **Shopify ile ödeyen:** iade Shopify Partner panelinden; bizde düğme yok.
+- Veri hiçbir iadede silinmez; ücretsiz planın üstündeki kullanımda yalnız yeni ekleme engellenir.
 
 ---
 
