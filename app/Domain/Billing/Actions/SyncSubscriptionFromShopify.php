@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Actions;
 
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Identity\Actions\RecordAuditLog;
+use App\Domain\Identity\Enums\AuditAction;
+use App\Domain\Identity\Models\Tenant;
 use App\Support\Tenancy\TenantContext;
 use DateTimeInterface;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +30,8 @@ use Illuminate\Support\Facades\Log;
  */
 final class SyncSubscriptionFromShopify
 {
+    public function __construct(private readonly RecordAuditLog $audit) {}
+
     /** Shopify AppSubscriptionStatus → yerel durum (TEK kaynak). */
     public const STATUS_MAP = [
         'PENDING' => 'pending',
@@ -91,6 +96,8 @@ final class SyncSubscriptionFromShopify
                     ->update(['status' => 'cancelled', 'cancelled_at' => now()]);
             }
 
+            $before = $subscription->status;
+
             $subscription->forceFill([
                 'status' => $status,
                 'started_at' => $status === 'active' ? ($subscription->started_at ?? now()) : $subscription->started_at,
@@ -100,17 +107,60 @@ final class SyncSubscriptionFromShopify
                     : null,
             ])->save();
 
+            // S14 · kiracının plan kolonu da güncellenir (Stripe yolunun aynısı):
+            // panel başlığı ve raporlar onu okur; kota yine abonelikten okunur.
+            $this->syncTenantPlan($subscription->tenant_id, $status === 'active' ? $subscription->plan_code : null);
+
+            if ($before !== $status && in_array($status, ['active', 'cancelled', 'expired'], true)) {
+                $this->audit->run(
+                    action: $status === 'active' ? AuditAction::SUBSCRIPTION_ACTIVATED : AuditAction::SUBSCRIPTION_CANCELLED,
+                    subjectType: 'subscription',
+                    subjectId: $subscription->id,
+                    changes: ['provider' => 'shopify', 'plan' => $subscription->plan_code, 'old_status' => $before, 'ref' => $subscription->external_ref],
+                    tenantId: $subscription->tenant_id,
+                );
+            }
+
             return $subscription;
         }));
+    }
+
+    /** Aktifse planı yazar; değilse kiracının yaşayan aboneliği kalmadıysa ücretsize döner. */
+    private function syncTenantPlan(string $tenantId, ?string $activePlan): void
+    {
+        if ($activePlan !== null) {
+            Tenant::query()->whereKey($tenantId)->update(['plan_code' => $activePlan]);
+
+            return;
+        }
+
+        $stillLive = Subscription::query()->where('tenant_id', $tenantId)->whereIn('status', Subscription::ACTIVE_STATUSES)->exists();
+        if (! $stillLive) {
+            Tenant::query()->whereKey($tenantId)->update(['plan_code' => EnforceQuota::DEFAULT_PLAN_CODE]);
+        }
     }
 
     /** Uygulama kaldırıldı: Shopify o mağazadaki aboneliği bitirir. */
     public function cancelForConnection(string $connectionId): int
     {
-        return TenantContext::runAsSystem(fn (): int => Subscription::query()
-            ->where('provider', 'shopify')
-            ->where('channel_connection_id', $connectionId)
-            ->whereIn('status', [...Subscription::LIVE_STATUSES, 'pending'])
-            ->update(['status' => 'cancelled', 'cancelled_at' => now()]));
+        return TenantContext::runAsSystem(function () use ($connectionId): int {
+            $tenantIds = Subscription::query()
+                ->where('provider', 'shopify')
+                ->where('channel_connection_id', $connectionId)
+                ->whereIn('status', [...Subscription::LIVE_STATUSES, 'pending'])
+                ->pluck('tenant_id')->unique();
+
+            $closed = Subscription::query()
+                ->where('provider', 'shopify')
+                ->where('channel_connection_id', $connectionId)
+                ->whereIn('status', [...Subscription::LIVE_STATUSES, 'pending'])
+                ->update(['status' => 'cancelled', 'cancelled_at' => now()]);
+
+            foreach ($tenantIds as $tenantId) {
+                $this->syncTenantPlan((string) $tenantId, null);
+            }
+
+            return $closed;
+        });
     }
 }

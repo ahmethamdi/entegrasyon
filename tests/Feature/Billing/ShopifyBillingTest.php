@@ -11,6 +11,7 @@ use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Identity\Actions\CreateTenant;
+use App\Domain\Identity\Models\AuditLog;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Messaging\Actions\IngestInboxMessage;
@@ -288,6 +289,39 @@ final class ShopifyBillingTest extends TestCase
         $this->assertSame('cancelled', $this->subscriptions($tenant)->sole()->status);
         $this->assertSame('free', $this->planOf($tenant));
         $this->assertNotSame('active', TenantContext::runAsSystem(fn () => $connection->fresh()->status));
+    }
+
+    /** S14 · kiracı satırındaki plan da Shopify durumunu izler (panel başlığı onu okur). */
+    #[Test]
+    public function the_tenant_plan_column_follows_shopify_activation_and_uninstall(): void
+    {
+        [$tenant, $user, $connection] = $this->shopifyTenant();
+        $this->fakeShopify();
+        $this->buy($user, 'starter');
+        $this->remoteStatus[self::SUB_1] = 'ACTIVE';
+        $this->actingAs($user)->get('/billing/shopify/return?charge_id=111');
+
+        $column = fn () => TenantContext::runAsSystem(fn () => Tenant::query()->whereKey($tenant->id)->value('plan_code'));
+        $this->assertSame('starter', $column());
+        $this->assertTrue(TenantContext::runAsSystem(fn () => AuditLog::withoutGlobalScopes()->where('tenant_id', $tenant->id)->where('action', 'billing.subscription_activated')->exists()));
+
+        $this->webhook($tenant, $connection, 'app/uninstalled', 'evt-u2', ['id' => 1, 'domain' => 'magaza.myshopify.com']);
+        $this->assertSame('free', $column());
+    }
+
+    /** S14 · kartla yaşayan abonelik varken Shopify aboneliği açılmaz (çift fatura + aktivasyon geri alınırdı). */
+    #[Test]
+    public function a_live_card_subscription_blocks_a_second_shopify_subscription(): void
+    {
+        [$tenant, $user] = $this->shopifyTenant();
+        $this->fakeShopify();
+        TenantContext::runAsSystem(fn () => Subscription::withoutGlobalScopes()->create([
+            'tenant_id' => $tenant->id, 'plan_code' => 'pro', 'provider' => 'stripe', 'status' => 'active', 'external_ref' => 'sub_kart', 'started_at' => now(),
+        ]));
+
+        $this->buy($user, 'starter')->assertSessionHasErrors('plan_code');
+
+        $this->assertSame(1, $this->subscriptions($tenant)->count(), 'Shopify aboneliği açıldı');
     }
 
     // ═════════════════════════════════════════════════════ Stripe tarafı
