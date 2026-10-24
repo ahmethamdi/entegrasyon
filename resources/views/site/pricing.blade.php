@@ -76,6 +76,7 @@
         ],
         $t('Ürün ve listeleme', 'Products and listings') => array_values(array_filter([
             [$t('Kanaldan ve CSV dosyasından ürün içe aktarma', 'Import products from a channel or a CSV file'), null],
+            [$t('Set / paket ürün: stok içindeki ürünlerden hesaplanır, satışta onlardan düşer', 'Bundles: stock calculated from the products inside, deducted from them on sale'), null],
             [$t('Excel ile toplu fiyat ve stok düzenleme', 'Bulk price and stock editing in Excel'), null],
             [$t('Tedarikçi XML listesinden ürün, stok ve fiyat', 'Products, stock and prices from a supplier XML feed'), null],
             [$t('Pazaryerine ürün gönderme, kategori eşleme ve onay takibi', 'Publish products, map categories and track approval'), null],

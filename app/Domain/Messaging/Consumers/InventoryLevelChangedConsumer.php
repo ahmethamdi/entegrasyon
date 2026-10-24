@@ -208,6 +208,10 @@ final class InventoryLevelChangedConsumer
             return [];
         }
 
+        // SABİT SIRA (kimlik): aynı setin ilanlarına iki ayrı bileşenin olayı
+        // aynı anda operasyon açar; sırasız okunsaydı iki tüketici durum
+        // satırlarını ters sırada kilitler ve deadlock olurdu (yük testi,
+        // 24 Ekim 2026: 10 setle 2 deadlock).
         $listings = Listing::query()
             ->where('tenant_id', $event->tenant_id)
             ->whereIn('variant_id', $bundleIds)
@@ -215,6 +219,7 @@ final class InventoryLevelChangedConsumer
             ->whereIn('channel_connection_id', static fn ($q) => $q->select('id')
                 ->from('channel_connections')
                 ->where('stock_sync_enabled', true))
+            ->orderBy('id')
             ->get();
 
         if ($listings->isEmpty()) {

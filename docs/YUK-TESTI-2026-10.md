@@ -122,6 +122,29 @@ ortalama süre / işçi); ölçülen gerçek gecikme en kötü 21 sn. `ops:watch
 tahmine bakar — gerçek bir kur dalgasında `price:high` için bir kez yanlış alarm
 verebilir.
 
+## 5. tur — set / paket ürün (`--bundles=10`, 24 Ekim 2026)
+
+10 set, her biri 2 × A + 1 × B kampanya ürününden; satırların ~%20'si set. Aynı
+bileşenler hem tek başına hem sette satılır. Pazaryeri set satışında yalnız SET ilanını
+düşürür — bileşen ilanları bizim gönderimimizle düzelmeli. Son durumda set ilanı
+türetilmiş stokla (`SellableStock`) karşılaştırılır.
+
+| Ölçüm | 1. koşu | Sıra düzeltmesi sonrası |
+|---|---|---|
+| Sipariş (set satırı) | 700 (434 set) | 700 (415 set) |
+| Düşülmesi beklenen / düşülen bileşen adedi | 2.992 / 2.992 | 2.982 / 2.982 |
+| Defter ↔ projeksiyon uyumsuz | 0 | 0 |
+| Sonda kanalda yanlış stok / yanlış set ilanı | 0 / 0 | 0 / 0 |
+| Sipariş → stok tüm kanallarda p50 / p95 / en kötü | 4,9 / 7,3 / 8,8 sn | 4,7 / 7,2 / 8,5 sn |
+| **Postgres deadlock** | **2** | **0** |
+| Başarısız deneme / ölü işlem | 0 / 0 | 0 / 0 |
+| Yük bitince kuyruğun boşalması | 10,1 sn | 11,1 sn |
+
+İlk koşudaki 2 deadlock: aynı setin ilanlarına iki ayrı bileşenin olayı aynı anda operasyon
+açıyor, ilanlar sırasız okunduğu için durum satırları ters sırada kilitleniyordu. Set ilanları
+artık kimlik sırasıyla işlenir (`InventoryLevelChangedConsumer::bundleListings`); iş
+`attempts: 3` ile kurtarıldığı için ilk koşuda da kayıp yoktu.
+
 ## Kalan riskler
 
 1. **Mutabakatın onarma süresi ölçülmedi** (sahte kanal `fetchInventory` boş döner). Yankı

@@ -10,6 +10,10 @@ declare(strict_types=1);
  *   docker compose exec app php tests/Load/black-friday.php [--minutes=5] [--per-minute=100]
  *       [--burst-per-minute=300] [--variants=2000] [--channels=5] [--latency-ms=150]
  *       [--price-variants=0]   (patlama dakikasında bu kadar varyantın fiyatı değişir)
+ *       [--bundles=0]          (set senaryosu: N set, her biri 2 × A + 1 × B kampanya
+ *                               ürününden; satırların ~%20'si set. Pazaryeri set
+ *                               satışında yalnız SET ilanını düşürür — bileşen
+ *                               ilanları bizim gönderimimizle düzelmeli)
  *       [--fx-channels=0]      (S9: ilk N kanalda TL→USD kur çevirisi açık; patlama
  *                               dakikasının başında USD kuru %1 oynar → o kanalların
  *                               BÜTÜN ilanları yeniden fiyatlanır)
@@ -30,6 +34,7 @@ declare(strict_types=1);
  */
 
 use App\Domain\Catalog\Actions\FetchExchangeRates;
+use App\Domain\Catalog\Actions\SaveBundle;
 use App\Domain\Catalog\Actions\SetVariantPrice;
 use App\Domain\Catalog\Models\ChannelPriceRule;
 use App\Domain\Catalog\Models\Product;
@@ -44,6 +49,7 @@ use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Inventory\Models\Warehouse;
 use App\Domain\Inventory\Support\MovementKey;
+use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Sync\Models\Listing;
 use App\Support\Observability\OpsWatch;
 use App\Support\Tenancy\TenantContext;
@@ -64,7 +70,7 @@ if (! app()->environment('local')) {
     exit(1);
 }
 
-$opt = getopt('', ['minutes::', 'per-minute::', 'burst-per-minute::', 'variants::', 'channels::', 'latency-ms::', 'webhook-base::', 'price-variants::', 'fx-channels::', 'keep']);
+$opt = getopt('', ['minutes::', 'per-minute::', 'burst-per-minute::', 'variants::', 'channels::', 'latency-ms::', 'webhook-base::', 'price-variants::', 'fx-channels::', 'bundles::', 'keep']);
 $minutes = (int) ($opt['minutes'] ?? 5);
 $perMinute = (int) ($opt['per-minute'] ?? 100);
 $burstPerMinute = (int) ($opt['burst-per-minute'] ?? 300);
@@ -73,6 +79,7 @@ $channelCount = (int) ($opt['channels'] ?? 5);
 $latencyMs = (int) ($opt['latency-ms'] ?? 150);
 $priceVariants = (int) ($opt['price-variants'] ?? 0);
 $fxChannels = (int) ($opt['fx-channels'] ?? 0);
+$bundleCount = (int) ($opt['bundles'] ?? 0);
 $webhookBase = rtrim((string) ($opt['webhook-base'] ?? 'http://nginx'), '/');
 
 const OPENING_STOCK = 100_000;
@@ -197,6 +204,41 @@ try {
         return [$warehouseId, $connections, $skus];
     });
 
+    // SETLER — kampanya ürünlerinden: aynı bileşen hem tek başına hem sette
+    // satılır, kilit ve fan-out gerçekten yarışır.
+    $bundles = [];   // set sku → [[bileşen sku, adet], …]
+    if ($bundleCount > 0) {
+        $bundles = TenantContext::runFor($tenantId, function () use ($tenantId, $connections, $skus, $bundleCount): array {
+            $hotSkus = array_slice($skus, 0, max(2, min(HOT_SKUS, count($skus))));
+            $ids = Variant::query()->whereIn('sku', $hotSkus)->pluck('id', 'sku');
+            $out = [];
+            for ($n = 0; $n < $bundleCount; $n++) {
+                $a = $hotSkus[$n % count($hotSkus)];
+                $b = $hotSkus[($n + 1) % count($hotSkus)];
+                $sku = sprintf('BF-SET-%03d', $n);
+                $product = app(SaveBundle::class)->create($sku, "Yük seti {$n}", 250.0, [
+                    ['variant_id' => $ids[$a], 'quantity' => 2],
+                    ['variant_id' => $ids[$b], 'quantity' => 1],
+                ]);
+                $variantId = $product->variants()->value('id');
+                foreach ($connections as $connectionId) {
+                    Listing::query()->create([
+                        'tenant_id' => $tenantId,
+                        'channel_connection_id' => $connectionId,
+                        'variant_id' => $variantId,
+                        'external_id' => "bf-{$connectionId}-set-{$n}",
+                        'lifecycle_status' => 'live',
+                        'listed_at' => now(),
+                    ]);
+                }
+                $out[$sku] = [[$a, 2], [$b, 1]];
+            }
+
+            return $out;
+        });
+        $say('Set: '.count($bundles).' set (2 × A + 1 × B, kampanya ürünlerinden), satırların ~%20\'si set');
+    }
+
     if ($fxChannels > 0) {
         // Kur dünkü bültenle kurulur; açılış gönderimi çevrilmiş fiyatla gider.
         DB::table('fx_pricing_rates')->where('currency', 'USD')->delete();
@@ -239,6 +281,10 @@ try {
     foreach ($connections as $connectionId) {
         foreach ($skus as $sku) {
             Redis::hset(LoadTestChannelAdapter::REMOTE_KEY, "{$connectionId}|{$sku}", OPENING_STOCK);
+        }
+        // Set ilanı açılışta türetilmiş değerle (⌊100000 / 2⌋).
+        foreach (array_keys($bundles) as $sku) {
+            Redis::hset(LoadTestChannelAdapter::REMOTE_KEY, "{$connectionId}|{$sku}", intdiv(OPENING_STOCK, 2));
         }
     }
 
@@ -315,14 +361,24 @@ try {
             $lines = [];
             $lineCount = random_int(1, 3);
             for ($l = 0; $l < $lineCount; $l++) {
-                $sku = random_int(1, 100) <= 30 ? $skus[random_int(0, $hot - 1)] : $skus[random_int($hot, count($skus) - 1)];
+                $sku = $bundles !== [] && random_int(1, 100) <= 20
+                    ? array_keys($bundles)[random_int(0, count($bundles) - 1)]
+                    : (random_int(1, 100) <= 30 ? $skus[random_int(0, $hot - 1)] : $skus[random_int($hot, count($skus) - 1)]);
                 $qty = random_int(1, 2);
                 $lines[$sku] = ($lines[$sku] ?? 0) + $qty;
             }
+            // Bileşenin "o siparişe kadar satılan"ı set satırlarını da içerir
+            // (adet × bileşen adedi); set satırı uçtan uca ölçüme girmez —
+            // son durum karşılaştırması (türetilmiş değer) onu ölçer.
             $through = [];
             foreach ($lines as $sku => $qty) {
-                $soldThrough[$sku] = ($soldThrough[$sku] ?? 0) + $qty;
-                $through[$sku] = $soldThrough[$sku];
+                foreach ($bundles[$sku] ?? [[$sku, 1]] as [$componentSku, $per]) {
+                    $soldThrough[$componentSku] = ($soldThrough[$componentSku] ?? 0) + $qty * $per;
+                    $through[$componentSku] = $soldThrough[$componentSku];
+                }
+                if (isset($bundles[$sku])) {
+                    $soldThrough[$sku] = ($soldThrough[$sku] ?? 0) + $qty;
+                }
             }
 
             $connectionId = $connections[$orderNo % count($connections)];
@@ -340,6 +396,7 @@ try {
             ];
 
             // Pazaryeri satışı ANINDA kendi stoğundan düşer — webhook'tan önce.
+            // Set satışında YALNIZ set ilanı düşer; bileşen ilanları değil.
             foreach ($lines as $sku => $qty) {
                 Redis::hincrby(LoadTestChannelAdapter::REMOTE_KEY, "{$connectionId}|{$sku}", -$qty);
             }
@@ -424,6 +481,15 @@ try {
         ->where('il.tenant_id', $tenantId)
         ->pluck('il.available', 'v.sku')
         ->all());
+    // Set ilanının beklenen değeri TÜRETİLMİŞ stoktur (`SellableStock`).
+    $bundleWrong = 0;
+    if ($bundles !== []) {
+        $bundleIds = TenantContext::runAsSystem(fn () => DB::table('variants')->where('tenant_id', $tenantId)->whereIn('sku', array_keys($bundles))->pluck('id', 'sku')->all());
+        $views = TenantContext::runFor($tenantId, fn () => SellableStock::forVariants($tenantId, array_values($bundleIds)));
+        foreach ($bundleIds as $sku => $id) {
+            $local[$sku] = $views[$id]->available;
+        }
+    }
     $remote = Redis::hgetall(LoadTestChannelAdapter::REMOTE_KEY);
     $wrongAtEnd = 0;
     $overselling = 0;
@@ -433,6 +499,7 @@ try {
             $diff = (int) ($remote["{$connectionId}|{$sku}"] ?? 0) - (int) $local[$sku];
             if ($diff !== 0) {
                 $wrongAtEnd++;
+                $bundleWrong += isset($bundles[$sku]) ? 1 : 0;
                 $overselling += $diff > 0 ? 1 : 0;
                 if (count($wrongExamples) < 5) {
                     $wrongExamples[] = "{$sku}: kanal ".($remote["{$connectionId}|{$sku}"] ?? '?').' · yerel '.$local[$sku];
@@ -527,7 +594,8 @@ try {
 
     $orders = TenantContext::runAsSystem(fn () => DB::table('orders')->where('tenant_id', $tenantId)->count());
     $saleMovements = TenantContext::runAsSystem(fn () => DB::table('inventory_movements')->where('tenant_id', $tenantId)->where('type', 'SALE')->count());
-    $expectedSold = array_sum($soldThrough);
+    // Düşülmesi beklenen adet = bileşen adetleri (set satırının kendisi stok taşımaz).
+    $expectedSold = array_sum(array_diff_key($soldThrough, $bundles));
     $actualSold = (int) TenantContext::runAsSystem(fn () => DB::table('inventory_movements')->where('tenant_id', $tenantId)->where('type', 'SALE')->sum(DB::raw('-on_hand_delta')));
     $integrity = (int) TenantContext::runAsSystem(fn () => DB::selectOne(<<<'SQL'
         SELECT COUNT(*) AS c FROM inventory_levels il
@@ -580,6 +648,9 @@ try {
             'ledger_projeksiyon_uyumsuz' => $integrity,
             'sonda_kanalda_yanlis_stok' => $wrongAtEnd,
             'sonda_kanalda_fazla_gorunen' => $overselling,
+            'set_sayisi' => count($bundles),
+            'set_satilan' => array_sum(array_intersect_key($soldThrough, $bundles)),
+            'sonda_yanlis_set_ilani' => $bundleWrong,
             'yanlis_ornek' => $wrongExamples,
         ],
         'hatalar' => [
