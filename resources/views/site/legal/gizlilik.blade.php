@@ -16,6 +16,8 @@
 --}}
 @extends('site.legal.layout')
 
+@section('updated', '2026-10-24')
+
 @section('description', '34Pazar gizlilik politikası ve KVKK aydınlatma metni: hangi kişisel verileri, hangi amaçla ve hukuki sebeple işliyoruz, kimlere aktarıyoruz ve haklarınız.')
 
 @section('legal_body')

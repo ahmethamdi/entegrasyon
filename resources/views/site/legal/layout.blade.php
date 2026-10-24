@@ -27,10 +27,12 @@
         <div class="wrap pt-10 pb-10 lg:pt-14 lg:pb-12">
             <p class="eyebrow">{{ $english ? 'Legal' : 'Yasal' }}</p>
             <h1 class="h-page mt-3">{{ $legalTitle }}</h1>
+            {{-- Tarih SAYFA BAŞINA: tek ortak tarih, 24 Eki'de metni değişen dört sayfada "20 Ekim" gösteriyordu. --}}
+            @php($updated = \Illuminate\Support\Carbon::parse(trim($__env->yieldContent('updated')) ?: '2026-10-20'))
             @if ($english)
-                <p class="mt-4 text-sm muted">Last updated: <time datetime="2026-10-20">20 October 2026</time></p>
+                <p class="mt-4 text-sm muted">Last updated: <time datetime="{{ $updated->toDateString() }}">{{ $updated->locale('en')->translatedFormat('j F Y') }}</time></p>
             @else
-                <p class="mt-4 text-sm muted">Son güncelleme: <time datetime="2026-10-20">20 Ekim 2026</time></p>
+                <p class="mt-4 text-sm muted">Son güncelleme: <time datetime="{{ $updated->toDateString() }}">{{ $updated->locale('tr')->translatedFormat('j F Y') }}</time></p>
             @endif
         </div>
     </header>

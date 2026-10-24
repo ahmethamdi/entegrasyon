@@ -8,6 +8,8 @@
 --}}
 @extends('site.legal.layout')
 
+@section('updated', '2026-10-24')
+
 @section('lang', 'en')
 @section('og_locale', 'en_GB')
 @section('description', '34Pazar privacy policy: which personal data we process, why, on what legal basis, who we share it with, and your rights.')

@@ -15,6 +15,8 @@
 --}}
 @extends('site.legal.layout')
 
+@section('updated', '2026-10-24')
+
 @section('description', '34Pazar ücretli abonelikleri için mesafeli hizmet sözleşmesi: taraflar, hizmetin konusu, ücret ve ödeme, ifa, cayma hakkı ve uyuşmazlık çözümü.')
 
 @section('legal_body')

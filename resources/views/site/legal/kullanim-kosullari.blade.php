@@ -11,6 +11,8 @@
 --}}
 @extends('site.legal.layout')
 
+@section('updated', '2026-10-24')
+
 @section('description', '34Pazar kullanım koşulları: hizmetin kapsamı, hesap, satıcının sorumlulukları, planlar ve ücretler, iptal, sorumluluğun sınırları ve uygulanacak hukuk.')
 
 @section('legal_body')
