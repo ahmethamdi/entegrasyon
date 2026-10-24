@@ -306,6 +306,47 @@ final class CarrierShipmentFlowTest extends TestCase
         $this->assertSame([], $this->carrierCalls);
     }
 
+    /**
+     * ⚠️ TELEFON İZNİ YOKSA GÖNDERİ YİNE AÇILIR.
+     *
+     * Korumalı veri başvurusu telefonsuz yapılacak; telefon sorgusu Shopify'da
+     * TÜM sorguyu reddeder. Telefonsuz ikinci sorgu adresi alır, firmaya
+     * telefon alanı boş gider.
+     */
+    #[Test]
+    public function a_denied_phone_field_falls_back_to_an_address_without_phone(): void
+    {
+        Queue::fake();
+        [$tenant, , $order] = $this->shopifyOrder();
+        $this->account($tenant, 'yurtici');
+        $shipment = $this->openShipment($tenant, $order, 'yurtici');
+
+        $queries = [];
+        $this->channelResponder = function (HttpRequest $request) use (&$queries) {
+            $query = (string) ($request->data()['query'] ?? '');
+            $queries[] = $query;
+
+            if (str_contains($query, 'phone')) {
+                return Http::response([
+                    'data' => ['order' => null],
+                    'errors' => [['message' => 'This app is not approved to access the phone field.', 'extensions' => ['code' => 'ACCESS_DENIED']]],
+                ]);
+            }
+
+            $order = $this->shopifyShippingOrder();
+            unset($order['phone'], $order['shippingAddress']['phone']);
+
+            return Http::response(['data' => ['order' => $order]]);
+        };
+        $this->replyWith('createShipment', 'yurtici-create-ok');
+        $this->runCreate($tenant, $shipment);
+
+        $this->assertSame(CarrierShipment::STATUS_CREATED, $this->shipment($tenant)->status);
+        $this->assertCount(2, $queries, 'Telefonlu sorgu reddedilince telefonsuz bir kez daha sorulur.');
+        $this->assertStringNotContainsString('phone', $queries[1]);
+        $this->assertStringNotContainsString('<receiverPhone1>0', $this->callsTo('createShipment')[0]);
+    }
+
     #[Test]
     public function marketplace_orders_other_tenants_and_missing_accounts_are_refused(): void
     {

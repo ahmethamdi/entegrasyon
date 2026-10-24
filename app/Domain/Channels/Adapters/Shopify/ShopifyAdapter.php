@@ -649,30 +649,54 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
 
     // ------------------------------------------------------------- fatura
 
+    private const SHIPPING_RECIPIENT_QUERY = <<<'GQL'
+        query ShippingRecipient($id: ID!) {
+          order(id: $id) {
+            cancelledAt email phone
+            shippingAddress { name company address1 address2 city province phone countryCodeV2 }
+          }
+        }
+        GQL;
+
+    /** Telefon izni yoksa — `fetchShippingRecipient` notu. */
+    private const SHIPPING_RECIPIENT_QUERY_WITHOUT_PHONE = <<<'GQL'
+        query ShippingRecipient($id: ID!) {
+          order(id: $id) {
+            cancelledAt email
+            shippingAddress { name company address1 address2 city province countryCodeV2 }
+          }
+        }
+        GQL;
+
     /**
      * Teslimat adresi — kargo gönderisi açılırken ANLIK okunur (§ S6 Kargo II).
      *
      * Türkiye'de Shopify adresinde `province` il, `city` ilçedir. Korumalı
      * müşteri verisi izni yoksa (ACCESS_DENIED) gönderi açılamaz — fatura
      * taslağıyla aynı kalıcı ret.
+     *
+     * ⚠️ TELEFON AYRI İZİNDİR ve İSTEĞE BAĞLIDIR. Korumalı veri başvurusu
+     * Ad + Adres + E-posta ile yapılacak (telefon yok, 21 Eki kararı);
+     * telefon alanı sorguda kalsaydı Shopify TÜM sorguyu ACCESS_DENIED ile
+     * reddeder ve izin onaylansa bile hiçbir Shopify siparişine gönderi
+     * açılamazdı. Yurtiçi ve Aras telefonsuz gönderi kabul eder; ret
+     * gelirse sorgu telefonsuz bir kez daha sorulur.
      */
     public function fetchShippingRecipient(Order $order): ShipmentRecipient
     {
         $id = (string) $order->external_id;
+        $variables = ['id' => str_starts_with($id, 'gid://') ? $id : 'gid://shopify/Order/'.$id];
 
         try {
-            $data = $this->gql(
-                <<<'GQL'
-                query ShippingRecipient($id: ID!) {
-                  order(id: $id) {
-                    cancelledAt email phone
-                    shippingAddress { name company address1 address2 city province phone countryCodeV2 }
-                  }
+            try {
+                $data = $this->gql(self::SHIPPING_RECIPIENT_QUERY, variables: $variables, operation: 'shippingRecipient');
+            } catch (ShopifyGraphqlException $e) {
+                if (! $e->hasCode('ACCESS_DENIED')) {
+                    throw $e;
                 }
-                GQL,
-                variables: ['id' => str_starts_with($id, 'gid://') ? $id : 'gid://shopify/Order/'.$id],
-                operation: 'shippingRecipient',
-            );
+
+                $data = $this->gql(self::SHIPPING_RECIPIENT_QUERY_WITHOUT_PHONE, variables: $variables, operation: 'shippingRecipient');
+            }
         } catch (ShopifyGraphqlException $e) {
             if ($e->hasCode('ACCESS_DENIED')) {
                 throw new RecipientUnavailable('Shopify alıcının adresini vermedi: 34Pazar uygulamasının korumalı müşteri verisi izni yok.');
