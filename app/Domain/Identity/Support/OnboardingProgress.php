@@ -6,14 +6,25 @@ namespace App\Domain\Identity\Support;
 
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Orders\Models\Order;
+use App\Domain\Sync\Enums\SyncDomain;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\SyncOperation;
 
 /**
- * Onboarding ilerlemesi — dokümanın dört adımı, VERİDEN türetilir.
+ * Onboarding ilerlemesi — beş adım, VERİDEN türetilir.
  *
  * Mimari Karar Dokümanı v2.2 · §13 · Faz 4 · "Onboarding: kayıt → kanal
- * bağla → ürün aktar → ilk senkron — 20 sa".
+ * bağla → ürün aktar → ilk senkron — 20 sa". S11 (24 Eki 2026, yol
+ * haritası kartı) adımları beşe çıkardı: kanal bağla → ürün çek → stok →
+ * fatura → ilk sipariş. "Kayıt" adımı düştü — paneldeki kullanıcının
+ * kaydı tanım gereği bitmiştir ve şeritte yer kaplıyordu. "İlk senkron"
+ * stok adımının içinde yaşar: stok kanala ULAŞMADAN adım kapanmaz.
+ *
+ * FATURA İSTEĞE BAĞLIDIR: e-fatura kesmeyen satıcı (yurt dışı, şahıs)
+ * kurulumu hiç bitiremezdi. Adım gösterilir ama görünürlüğü ve
+ * "sıradaki adım"ı etkilemez.
  *
  * Doküman adımları SAYAR ama saklama biçimini söylemez; karar burada
  * alındı ve gerekçesi aşağıdadır.
@@ -54,33 +65,44 @@ final class OnboardingProgress
      * türer. Sıra doküman cümlesinin sırasıdır:
      * kayıt → kanal bağla → ürün aktar → ilk senkron.
      */
-    public const STEPS = ['account', 'channel', 'product', 'sync'];
+    public const STEPS = ['channel', 'product', 'stock', 'invoice', 'order'];
+
+    /** Görünürlüğü ve sıradaki adımı ETKİLEMEYEN adımlar. */
+    public const OPTIONAL = ['invoice'];
 
     /**
-     * Dört adımın durumu + görünürlük + sıradaki adım.
+     * Beş adımın durumu + görünürlük + sıradaki adım.
      *
-     * @return array{steps: array<string, bool>, visible: bool, next: ?string}
+     * @return array{steps: array<string, bool>, optional: list<string>, visible: bool, next: ?string}
      */
     public function forCurrentTenant(): array
     {
         $steps = [
-            // Kullanıcı paneldeyse kiracısı vardır — bağlam kurulmadan
-            // bu kod hiç çalışmaz. Adım tanım gereği kapalıdır.
-            'account' => true,
             'channel' => $this->hasActiveConnection(),
             'product' => $this->hasProduct(),
-            'sync' => $this->hasCompletedSync(),
+            'stock' => $this->hasCompletedStockSync(),
+            'invoice' => $this->hasUsableInvoiceAccount(),
+            'order' => $this->hasOrder(),
         ];
 
-        $pending = array_search(false, $steps, strict: true);
+        $pending = null;
+
+        foreach ($steps as $key => $done) {
+            if (! $done && ! in_array($key, self::OPTIONAL, true)) {
+                $pending = $key;
+
+                break;
+            }
+        }
 
         return [
             'steps' => $steps,
-            // Dört adım bitince şerit KAYBOLUR (kullanıcı kararı). Veri
-            // sonradan giderse geri gelir; bu türetilmiş durumun doğal
-            // sonucu ve KASITLI davranıştır.
-            'visible' => $pending !== false,
-            'next' => $pending === false ? null : (string) $pending,
+            'optional' => self::OPTIONAL,
+            // Zorunlu adımlar bitince şerit KAYBOLUR (kullanıcı kararı).
+            // Veri sonradan giderse geri gelir; bu türetilmiş durumun
+            // doğal sonucu ve KASITLI davranıştır.
+            'visible' => $pending !== null,
+            'next' => $pending,
         ];
     }
 
@@ -102,16 +124,34 @@ final class OnboardingProgress
     }
 
     /**
-     * TAMAMLANMIŞ bir senkron operasyonu var mı?
+     * Stok bir kanala ULAŞTI mı — TAMAMLANMIŞ stok gönderimi var mı?
      *
      * `superseded` de terminaldir ama BAŞARI DEĞİLDİR: daha yeni bir sürüm
      * istendiği için o operasyon hiç gönderilmedi (§8). Sayılsaydı hiç
-     * kanala ulaşmamış bir satır "ilk senkron tamam" derdi.
+     * kanala ulaşmamış bir satır "stok tamam" derdi. İçerik gönderimi de
+     * sayılmaz: ürün kanalda açılmış ama stoğu hiç gitmemiş olabilir —
+     * ürünün temel iddiası tam olarak stoktur.
      */
-    private function hasCompletedSync(): bool
+    private function hasCompletedStockSync(): bool
     {
         return SyncOperation::query()
+            ->where('operation_type', SyncDomain::INVENTORY->operationType())
             ->where('status', SyncOperationStatus::COMPLETED)
             ->exists();
+    }
+
+    /** Kullanılabilir e-fatura hesabı — bağlı VE firma seçilmiş. */
+    private function hasUsableInvoiceAccount(): bool
+    {
+        return InvoiceAccount::query()
+            ->where('status', InvoiceAccount::STATUS_CONNECTED)
+            ->whereNotNull('company_id')
+            ->exists();
+    }
+
+    /** İlk sipariş 34Pazar'a düştü mü — kartın "bitti" ölçütü. */
+    private function hasOrder(): bool
+    {
+        return Order::query()->exists();
     }
 }

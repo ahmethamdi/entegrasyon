@@ -204,29 +204,50 @@ onBeforeUnmount(() => {
 });
 
 /*
- * Onboarding şeridi (§13 · Faz 4) — dokümanın dört adımı.
+ * Onboarding şeridi (§13 · Faz 4; S11 ile beş adım) — kanal bağla → ürün
+ * çek → stok → fatura (isteğe bağlı) → ilk sipariş.
  *
  * İlerleme VERİDEN türetilir ve `HandleInertiaRequests` ile her panel
  * ekranında paylaşılır; şerit bu yüzden layout'ta yaşar, tek bir ekranda
  * değil. Kullanıcı kurulumun ortasında herhangi bir ekrana gidebilir.
  *
- * DÖRT ADIM BİTİNCE ŞERİT KAYBOLUR — kullanıcı kararı. Kapatma butonu
- * YOKTUR: tercih saklansaydı ilerlemenin İKİ gerçek kaynağı olurdu
- * (veri + kapatma tercihi) ve türetilmiş durum kararı bozulurdu.
+ * ZORUNLU ADIMLAR BİTİNCE ŞERİT KAYBOLUR — kullanıcı kararı. KAPATMA YOK,
+ * KATLAMA VAR: katlanan şerit tek satır ilerleme çubuğu olarak kalır ve
+ * bir tıkla açılır. Katlama yalnız GÖRÜNÜM tercihidir (tarayıcıda, kiracı
+ * başına); ilerlemenin kaynağı yine veridir — kapatma saklansaydı
+ * ilerlemenin iki gerçek kaynağı olurdu.
+ *
+ * Şerit yalnız kanal bağlayabilen üyeye (sahip/yönetici) görünür: depo
+ * ya da salt okunur üye adımların hiçbirini yapamaz.
  */
 const onboarding = computed(() => page.props.onboarding ?? null);
 
-const showOnboarding = computed(() => onboarding.value?.visible === true);
+const showOnboarding = computed(() => onboarding.value?.visible === true && permissions.value.includes('channels.manage'));
+
+const collapseKey = computed(() => `34p:kurulum-katli:${page.props.tenant?.id ?? ''}`);
+const onboardingCollapsed = ref(false);
+
+function readCollapsed() {
+    try {
+        onboardingCollapsed.value = window.localStorage.getItem(collapseKey.value) === '1';
+    } catch {
+        onboardingCollapsed.value = false;
+    }
+}
+
+function toggleOnboarding() {
+    onboardingCollapsed.value = !onboardingCollapsed.value;
+    try {
+        window.localStorage.setItem(collapseKey.value, onboardingCollapsed.value ? '1' : '0');
+    } catch {
+        /* Gizli pencere: tercih yalnız bu sayfada geçerli. */
+    }
+}
+
+onMounted(readCollapsed);
+watch(collapseKey, readCollapsed);
 
 const onboardingSteps = [
-    {
-        key: 'account',
-        label: k('Hesap oluştur'),
-        done: k('Hesabın hazır.'),
-        todo: k('Hesabını oluştur.'),
-        href: null,
-        action: null,
-    },
     {
         key: 'channel',
         label: k('Kanal bağla'),
@@ -237,19 +258,35 @@ const onboardingSteps = [
     },
     {
         key: 'product',
-        label: k('Ürün aktar'),
+        label: k('Ürün çek'),
         done: k('Ürünlerin sistemde.'),
-        todo: k('Ürünlerini ekle ya da mağazandan / CSV dosyasından çek.'),
+        todo: k('Ürünlerini mağazandan, tedarikçi XML\'inden ya da Excel/CSV dosyasından çek.'),
         href: '/products/import',
-        action: k('Ürün aktar'),
+        action: k('Ürün çek'),
     },
     {
-        key: 'sync',
-        label: k('İlk gönderim'),
-        done: k('İlk ürünün kanala ulaştı.'),
-        todo: k('Bir ürünü kanala gönder. Kanala ulaşınca kurulum biter.'),
+        key: 'stock',
+        label: k('Stok'),
+        done: k('Stoğun bir kanala ulaştı.'),
+        todo: k('Ana depodaki stok sayılarını kontrol et. Stok bir kanala ulaşınca adım kapanır.'),
         href: '/products',
-        action: k('Ürüne git'),
+        action: k('Stoğu kontrol et'),
+    },
+    {
+        key: 'invoice',
+        label: k('Fatura'),
+        done: k('E-fatura hesabın bağlı.'),
+        todo: k('Paraşüt\'ü bağla, siparişlerin e-faturası buradan kesilsin.'),
+        href: '/settings/invoicing',
+        action: k('Faturayı bağla'),
+    },
+    {
+        key: 'order',
+        label: k('İlk sipariş'),
+        done: k('İlk siparişin 34Pazar\'da.'),
+        todo: k('Kanalından ilk sipariş gelince burada görünür; stok diğer kanallarda kendiliğinden düşer.'),
+        href: '/orders',
+        action: k('Siparişlere git'),
     },
 ];
 
@@ -259,6 +296,7 @@ const steps = computed(() =>
         ...step,
         isDone: onboarding.value?.steps?.[step.key] === true,
         isNext: onboarding.value?.next === step.key,
+        isOptional: (onboarding.value?.optional ?? []).includes(step.key),
     })),
 );
 
@@ -503,63 +541,97 @@ function logout() {
                 class="border-b border-amber-200 bg-amber-50"
                 :aria-label="t('Kurulum adımları')"
             >
-                <div class="mx-auto max-w-5xl px-6 py-5 lg:px-8">
-                    <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <div class="mx-auto max-w-5xl px-6 lg:px-8" :class="onboardingCollapsed ? 'py-3' : 'py-5'">
+                    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <h2 class="text-sm font-semibold text-amber-900">
                             {{ t('Kurulumu tamamla') }}
                         </h2>
-                        <p class="text-sm tabular-nums text-amber-800">
-                            {{ t(':done/:total adım', { done: doneCount, total: steps.length }) }}
-                        </p>
-                    </div>
-
-                    <ol class="mt-4 grid gap-px overflow-hidden rounded-lg border border-amber-200 bg-amber-200 sm:grid-cols-4">
-                        <li
-                            v-for="(step, index) in steps"
-                            :key="step.key"
-                            class="bg-white p-3"
-                            :class="step.isNext ? 'ring-1 ring-inset ring-amber-500' : ''"
-                        >
-                            <div class="flex items-center gap-2">
-                                <span
-                                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-[10px] tabular-nums"
-                                    :class="step.isDone
-                                        ? 'bg-emerald-600 text-white'
-                                        : step.isNext
-                                            ? 'bg-amber-500 text-white'
-                                            : 'bg-stone-200 text-stone-600'"
-                                >
-                                    <span v-if="step.isDone" aria-hidden="true">✓</span>
-                                    <span v-else>{{ index + 1 }}</span>
-                                </span>
-
-                                <p
-                                    class="text-sm font-medium"
-                                    :class="step.isDone ? 'text-stone-500' : 'text-stone-900'"
-                                >
-                                    {{ t(step.label) }}
-                                </p>
-                            </div>
-
-                            <p class="mt-1.5 text-xs leading-relaxed text-stone-600">
-                                {{ t(step.isDone ? step.done : step.todo) }}
+                        <div class="flex items-center gap-3">
+                            <p class="text-sm tabular-nums text-amber-800">
+                                {{ t(':done/:total adım', { done: doneCount, total: steps.length }) }}
                             </p>
-                        </li>
-                    </ol>
-
-                    <!--
-                        Tek çağrı düğmesi: SIRADAKİ adım. Dört düğme birden
-                        göstermek kullanıcıya hangisinden başlayacağını
-                        sordurur; onboarding'in işi tam olarak bunu söylemektir.
-                    -->
-                    <div v-if="nextStep?.href" class="mt-4">
-                        <Link
-                            :href="nextStep.href"
-                            class="inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
-                        >
-                            {{ t(nextStep.action) }} →
-                        </Link>
+                            <button
+                                type="button"
+                                class="rounded text-sm font-medium text-amber-900 underline underline-offset-2 hover:text-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+                                :aria-expanded="onboardingCollapsed ? 'false' : 'true'"
+                                @click="toggleOnboarding"
+                            >
+                                {{ onboardingCollapsed ? t('Adımları göster') : t('Şimdilik gizle') }}
+                            </button>
+                        </div>
                     </div>
+
+                    <!-- İlerleme çubuğu: katlıyken de görünür, kurulum unutulmaz. -->
+                    <div
+                        class="mt-3 h-1.5 overflow-hidden rounded-full bg-amber-200"
+                        role="progressbar"
+                        :aria-valuenow="doneCount"
+                        aria-valuemin="0"
+                        :aria-valuemax="steps.length"
+                        :aria-label="t('Kurulum ilerlemesi')"
+                    >
+                        <div class="h-full rounded-full bg-amber-600 transition-[width]" :style="{ width: `${(doneCount / steps.length) * 100}%` }" />
+                    </div>
+
+                    <template v-if="!onboardingCollapsed">
+                        <ol class="mt-4 grid gap-px overflow-hidden rounded-lg border border-amber-200 bg-amber-200 sm:grid-cols-3 lg:grid-cols-5">
+                            <li
+                                v-for="(step, index) in steps"
+                                :key="step.key"
+                                class="bg-white p-3"
+                                :class="step.isNext ? 'ring-1 ring-inset ring-amber-500' : ''"
+                            >
+                                <div class="flex items-center gap-2">
+                                    <span
+                                        class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full font-mono text-[10px] tabular-nums"
+                                        :class="step.isDone
+                                            ? 'bg-emerald-600 text-white'
+                                            : step.isNext
+                                                ? 'bg-amber-500 text-white'
+                                                : 'bg-stone-200 text-stone-600'"
+                                    >
+                                        <span v-if="step.isDone" aria-hidden="true">✓</span>
+                                        <span v-else>{{ index + 1 }}</span>
+                                    </span>
+
+                                    <p
+                                        class="text-sm font-medium"
+                                        :class="step.isDone ? 'text-stone-500' : 'text-stone-900'"
+                                    >
+                                        {{ t(step.label) }}
+                                        <span v-if="step.isOptional && !step.isDone" class="font-normal text-stone-500">· {{ t('isteğe bağlı') }}</span>
+                                    </p>
+                                </div>
+
+                                <p class="mt-1.5 text-xs leading-relaxed text-stone-600">
+                                    {{ t(step.isDone ? step.done : step.todo) }}
+                                </p>
+
+                                <!-- İsteğe bağlı adımın kendi bağlantısı: sıradaki düğme ona hiç gelmez. -->
+                                <Link
+                                    v-if="step.isOptional && !step.isDone"
+                                    :href="step.href"
+                                    class="mt-2 inline-block text-xs font-medium text-amber-800 underline underline-offset-2 hover:text-amber-900"
+                                >
+                                    {{ t(step.action) }}
+                                </Link>
+                            </li>
+                        </ol>
+
+                        <!--
+                            Tek çağrı düğmesi: SIRADAKİ zorunlu adım. Beş düğme
+                            birden göstermek kullanıcıya hangisinden başlayacağını
+                            sordurur; onboarding'in işi tam olarak bunu söylemektir.
+                        -->
+                        <div v-if="nextStep?.href" class="mt-4">
+                            <Link
+                                :href="nextStep.href"
+                                class="inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+                            >
+                                {{ t(nextStep.action) }} →
+                            </Link>
+                        </div>
+                    </template>
                 </div>
             </section>
 

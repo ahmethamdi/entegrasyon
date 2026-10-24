@@ -1785,5 +1785,21 @@
     "Bu dönemde birden fazla kanalda satışta olan bir ürünün satışı yok; süre ve tükenme koruması ilk böyle satışta ölçülür.": "No product listed on more than one channel was sold in this period; update time and sell-out protection are measured on the first such sale.",
     ":total kanal satışının :multi tanesinde ürün başka kanalda da satıştaydı; :reached tanesinde yeni stok diğer kanalların hepsine ulaştı.": "In :multi of :total channel sales the product was also on sale elsewhere; in :reached of them the new stock reached every other channel.",
     ":count satışta en az bir kanala henüz ulaşmadı ya da gönderim başarısız oldu.": "In :count sales the update has not reached at least one channel yet, or sending failed.",
-    "Satışların %95'inde bu süre ya da daha kısa.": "95% of sales took this long or less."
+    "Satışların %95'inde bu süre ya da daha kısa.": "95% of sales took this long or less.",
+    "Ürün çek": "Pull products",
+    "Ürünlerini mağazandan, tedarikçi XML'inden ya da Excel/CSV dosyasından çek.": "Pull your products from your store, a supplier XML feed or an Excel/CSV file.",
+    "Stoğun bir kanala ulaştı.": "Your stock reached a channel.",
+    "Ana depodaki stok sayılarını kontrol et. Stok bir kanala ulaşınca adım kapanır.": "Check the stock counts in your main warehouse. The step completes once stock reaches a channel.",
+    "Stoğu kontrol et": "Check stock",
+    "E-fatura hesabın bağlı.": "Your e-invoice account is connected.",
+    "Faturayı bağla": "Connect invoicing",
+    "İlk sipariş": "First order",
+    "İlk siparişin 34Pazar'da.": "Your first order is in 34Pazar.",
+    "Kanalından ilk sipariş gelince burada görünür; stok diğer kanallarda kendiliğinden düşer.": "Your first order from a channel shows up here, and stock drops on your other channels automatically.",
+    "Siparişlere git": "Go to orders",
+    "Adımları göster": "Show steps",
+    "Şimdilik gizle": "Hide for now",
+    "Kurulum ilerlemesi": "Setup progress",
+    "isteğe bağlı": "optional",
+    "Paraşüt'ü bağla, siparişlerin e-faturası buradan kesilsin.": "Connect Paraşüt so e-invoices for your orders are issued from here."
 }

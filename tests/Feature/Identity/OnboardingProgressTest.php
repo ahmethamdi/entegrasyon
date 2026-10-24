@@ -11,18 +11,21 @@ use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
+use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Sync\Enums\SyncIntent;
 use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\SyncOperation;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
- * Onboarding ilerlemesi — dokümanın dört adımı.
+ * Onboarding ilerlemesi — S11'den beri beş adım (kanal → ürün → stok →
+ * fatura (isteğe bağlı) → ilk sipariş).
  *
  * Mimari Karar Dokümanı v2.2 · §13 · Faz 4 · "Onboarding: kayıt → kanal
  * bağla → ürün aktar → ilk senkron — 20 sa".
@@ -62,22 +65,24 @@ final class OnboardingProgressTest extends TestCase
     // ---------------------------------------------------------------- adımlar
 
     /**
-     * YENİ KİRACIDA YALNIZCA KAYIT ADIMI BİTMİŞTİR.
+     * YENİ KİRACIDA HİÇBİR ADIM BİTMEMİŞTİR — S11 sırasıyla beş adım.
      *
-     * Kullanıcı paneldeyse kiracısı vardır — o adım tanım gereği kapalı.
+     * "Kayıt" adımı S11'de düştü: paneldeki kullanıcı için tanım gereği
+     * bitmiştir ve bilgi taşımıyordu.
      */
     #[Test]
-    public function a_fresh_tenant_has_only_the_registration_step_done(): void
+    public function a_fresh_tenant_has_five_open_steps_in_order(): void
     {
         [, $user] = $this->makeTenant();
 
-        $steps = $this->steps($this->actingAs($user)->get('/panel'));
+        $onboarding = $this->onboarding($this->actingAs($user)->get('/panel'));
 
         $this->assertSame(
-            ['account' => true, 'channel' => false, 'product' => false, 'sync' => false],
-            $steps,
-            'Yeni kiracıda yalnızca kayıt adımı bitmiş olmalı.',
+            ['channel' => false, 'product' => false, 'stock' => false, 'invoice' => false, 'order' => false],
+            $onboarding['steps'],
         );
+        $this->assertSame(['invoice'], $onboarding['optional']);
+        $this->assertSame('channel', $onboarding['next']);
     }
 
     /** Aktif bağlantı kanal adımını kapatır. */
@@ -128,9 +133,9 @@ final class OnboardingProgressTest extends TestCase
         $this->assertTrue($steps['product'], 'Ürün varsa ürün adımı kapanmalı.');
     }
 
-    /** Tamamlanmış senkron operasyonu son adımı kapatır. */
+    /** Tamamlanmış stok gönderimi stok adımını kapatır. */
     #[Test]
-    public function a_completed_operation_completes_the_sync_step(): void
+    public function a_completed_operation_completes_the_stock_step(): void
     {
         [$tenant, $user] = $this->makeTenant();
 
@@ -140,7 +145,7 @@ final class OnboardingProgressTest extends TestCase
 
         $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
-        $this->assertTrue($steps['sync'], 'Tamamlanan operasyon senkron adımını kapatmalı.');
+        $this->assertTrue($steps['stock'], 'Tamamlanan stok gönderimi stok adımını kapatmalı.');
     }
 
     /**
@@ -150,7 +155,7 @@ final class OnboardingProgressTest extends TestCase
      * bekliyor olabilir.
      */
     #[Test]
-    public function a_pending_operation_does_not_complete_the_sync_step(): void
+    public function a_pending_operation_does_not_complete_the_stock_step(): void
     {
         [$tenant, $user] = $this->makeTenant();
 
@@ -160,7 +165,7 @@ final class OnboardingProgressTest extends TestCase
 
         $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
-        $this->assertFalse($steps['sync'], 'Bekleyen operasyon senkron adımını kapatmamalı.');
+        $this->assertFalse($steps['stock'], 'Bekleyen operasyon stok adımını kapatmamalı.');
     }
 
     /**
@@ -170,7 +175,7 @@ final class OnboardingProgressTest extends TestCase
      * kullanıcıya, senkronun çalışmadığı anda "kurulum tamam" denirdi.
      */
     #[Test]
-    public function a_dead_operation_does_not_complete_the_sync_step(): void
+    public function a_dead_operation_does_not_complete_the_stock_step(): void
     {
         [$tenant, $user] = $this->makeTenant();
 
@@ -180,14 +185,86 @@ final class OnboardingProgressTest extends TestCase
 
         $steps = $this->steps($this->actingAs($user)->get('/panel'));
 
-        $this->assertFalse($steps['sync'], 'Ölü operasyon senkron adımını kapatmamalı.');
+        $this->assertFalse($steps['stock'], 'Ölü operasyon stok adımını kapatmamalı.');
+    }
+
+    /**
+     * İÇERİK GÖNDERİMİ STOK ADIMINI KAPATMAZ.
+     *
+     * Ürün kanalda açılmış ama stoğu hiç gitmemiş olabilir; ürünün temel
+     * iddiası stoktur.
+     */
+    #[Test]
+    public function a_completed_content_push_does_not_complete_the_stock_step(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+
+        $connection = $this->connectionFor($tenant, status: 'active');
+
+        $this->operationFor($tenant, $connection, SyncOperationStatus::COMPLETED, type: 'CONTENT_PUSH');
+
+        $this->assertFalse($this->steps($this->actingAs($user)->get('/panel'))['stock']);
+    }
+
+    /** İlk sipariş son adımı kapatır — kartın "bitti" ölçütü. */
+    #[Test]
+    public function an_order_completes_the_order_step(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+
+        $this->orderFor($tenant, $this->connectionFor($tenant, status: 'active'));
+
+        $this->assertTrue($this->steps($this->actingAs($user)->get('/panel'))['order']);
+    }
+
+    /**
+     * FATURA ADIMI ANCAK KULLANILABİLİR HESAPLA KAPANIR — firma seçilmemiş
+     * Paraşüt bağlantısı fatura kesemez.
+     */
+    #[Test]
+    public function only_a_usable_invoice_account_completes_the_invoice_step(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+
+        $this->invoiceAccountFor($tenant, companyId: null);
+        $this->assertFalse($this->steps($this->actingAs($user)->get('/panel'))['invoice']);
+
+        $this->invoiceAccountFor($tenant, companyId: '12345');
+        $this->assertTrue($this->steps($this->actingAs($user)->get('/panel'))['invoice']);
     }
 
     // ---------------------------------------------------------------- görünürlük
 
-    /** Dört adım da bitince şerit KAYBOLUR — kullanıcının kararı budur. */
+    /**
+     * Zorunlu adımlar bitince şerit KAYBOLUR — kullanıcının kararı budur.
+     * İsteğe bağlı fatura adımı açık kalsa bile.
+     */
     #[Test]
-    public function the_banner_disappears_once_every_step_is_done(): void
+    public function the_banner_disappears_once_every_required_step_is_done(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+
+        $connection = $this->connectionFor($tenant, status: 'active');
+        $this->productFor($tenant);
+        $this->operationFor($tenant, $connection, SyncOperationStatus::COMPLETED);
+        $this->orderFor($tenant, $connection);
+
+        $onboarding = $this->onboarding($this->actingAs($user)->get('/panel'));
+
+        $this->assertFalse($onboarding['steps']['invoice']);
+        $this->assertFalse(
+            $onboarding['visible'],
+            'Zorunlu adımlar bitince şerit görünmemeli; fatura isteğe bağlı.',
+        );
+        $this->assertNull($onboarding['next']);
+    }
+
+    /**
+     * İSTEĞE BAĞLI ADIM "SIRADAKİ" OLMAZ — fatura kesmeyen satıcı ilk
+     * siparişe yönlendirilir.
+     */
+    #[Test]
+    public function the_optional_step_is_never_the_next_step(): void
     {
         [$tenant, $user] = $this->makeTenant();
 
@@ -195,12 +272,7 @@ final class OnboardingProgressTest extends TestCase
         $this->productFor($tenant);
         $this->operationFor($tenant, $connection, SyncOperationStatus::COMPLETED);
 
-        $onboarding = $this->onboarding($this->actingAs($user)->get('/panel'));
-
-        $this->assertFalse(
-            $onboarding['visible'],
-            'Dört adım bitince şerit görünmemeli.',
-        );
+        $this->assertSame('order', $this->onboarding($this->actingAs($user)->get('/panel'))['next']);
     }
 
     /** Tek adım bile eksikse şerit görünür. */
@@ -230,6 +302,7 @@ final class OnboardingProgressTest extends TestCase
         $connection = $this->connectionFor($tenant, status: 'active');
         $this->productFor($tenant);
         $this->operationFor($tenant, $connection, SyncOperationStatus::COMPLETED);
+        $this->orderFor($tenant, $connection);
 
         $this->assertFalse($this->onboarding($this->actingAs($user)->get('/panel'))['visible']);
 
@@ -282,11 +355,13 @@ final class OnboardingProgressTest extends TestCase
         $connectionB = $this->connectionFor($tenantB, status: 'active');
         $this->productFor($tenantB);
         $this->operationFor($tenantB, $connectionB, SyncOperationStatus::COMPLETED);
+        $this->orderFor($tenantB, $connectionB);
+        $this->invoiceAccountFor($tenantB, companyId: '777');
 
         $steps = $this->steps($this->actingAs($userA)->get('/panel'));
 
         $this->assertSame(
-            ['account' => true, 'channel' => false, 'product' => false, 'sync' => false],
+            ['channel' => false, 'product' => false, 'stock' => false, 'invoice' => false, 'order' => false],
             $steps,
             'Başka kiracının verisi adımları kapatmamalı.',
         );
@@ -352,11 +427,12 @@ final class OnboardingProgressTest extends TestCase
         Tenant $tenant,
         ChannelConnection $connection,
         SyncOperationStatus $status,
+        string $type = 'INVENTORY_PUSH',
     ): SyncOperation {
         return TenantContext::runAsSystem(fn (): SyncOperation => SyncOperation::create([
             'tenant_id' => $tenant->id,
             'channel_connection_id' => $connection->id,
-            'operation_type' => 'INVENTORY_PUSH',
+            'operation_type' => $type,
             'intent' => SyncIntent::NORMAL_SYNC,
             'entity_type' => 'listing',
             'entity_id' => Str::uuid7()->toString(),
@@ -366,6 +442,26 @@ final class OnboardingProgressTest extends TestCase
             'attempt_count' => $status === SyncOperationStatus::COMPLETED ? 1 : 0,
             'priority' => 100,
         ]));
+    }
+
+    private function orderFor(Tenant $tenant, ChannelConnection $connection): void
+    {
+        DB::table('orders')->insert([
+            'id' => Str::uuid7()->toString(),
+            'tenant_id' => $tenant->id,
+            'channel_connection_id' => $connection->id,
+            'external_id' => 'onboarding-'.Str::random(8),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function invoiceAccountFor(Tenant $tenant, ?string $companyId): void
+    {
+        TenantContext::runAsSystem(fn () => InvoiceAccount::query()->updateOrCreate(
+            ['tenant_id' => $tenant->id, 'provider' => 'parasut'],
+            ['status' => InvoiceAccount::STATUS_CONNECTED, 'company_id' => $companyId, 'credentials' => ['access_token' => 'x']],
+        ));
     }
 
     // ------------------------------------------------ paylaşılan kiracı prop'u
