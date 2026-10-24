@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>34Pazar — Durum Özeti · Ekim 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  @page :first { margin: 0; }
+  :root { --navy:#0b1b33; --orange:#ce310d; --ink:#111827; --muted:#5b6474; --line:#d9dee6; --soft:#f4f6f9; --ok:#1d7a46; --warn:#9a5b00; --bad:#b42318; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body { font-family: Inter, system-ui, sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1, h2, h3 { color: var(--navy); line-height: 1.2; margin: 0; }
+  h2 { font-size: 17pt; font-weight: 800; margin: 0 0 4mm; padding-bottom: 2.5mm; border-bottom: 2px solid var(--navy); }
+  h2 .no { color: var(--orange); margin-right: 2mm; }
+  h3 { font-size: 11pt; font-weight: 700; margin: 5mm 0 2mm; }
+  p { margin: 0 0 2.5mm; }
+  .muted { color: var(--muted); }
+  .small { font-size: 8.4pt; }
+  section { break-before: page; }
+  section.first { break-before: auto; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 8.8pt; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th, td { border-bottom: 1px solid var(--line); padding: 1.6mm 2mm; text-align: left; vertical-align: top; }
+  th { background: var(--soft); color: var(--navy); font-weight: 700; border-top: 1px solid var(--line); }
+  td.c, th.c { text-align: center; }
+  td.r, th.r { text-align: right; }
+  .y { color: var(--ok); font-weight: 700; }
+  .n { color: #a3aab5; }
+  .tag { display:inline-block; font-size: 7.6pt; font-weight:700; padding: 0.3mm 1.6mm; border:1px solid var(--line); border-radius: 1mm; color: var(--navy); background:#fff; }
+  .tag.bad { color: var(--bad); border-color:#f0c4bf; }
+  .tag.warn { color: var(--warn); border-color:#ecd3a6; }
+  .tag.ok { color: var(--ok); border-color:#bfe0cb; }
+  ul { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin: 0 0 1.2mm; }
+  .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .grid3 { display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm; }
+  .box { border:1px solid var(--line); border-radius: 1.5mm; padding: 3mm 3.5mm; break-inside: avoid; }
+  .box h3 { margin-top: 0; }
+  .kpi { border:1px solid var(--line); border-radius:1.5mm; padding: 3mm; break-inside: avoid; }
+  .kpi b { display:block; font-size: 15pt; color: var(--navy); font-weight: 800; }
+  .kpi span { font-size: 8.2pt; color: var(--muted); }
+  .accent { border-left: 3px solid var(--orange); padding: 1mm 0 1mm 3.5mm; margin: 2mm 0 3mm; }
+  .note { font-size: 8.2pt; color: var(--muted); border-top:1px solid var(--line); padding-top: 2mm; margin-top: 3mm; }
+  /* kapak */
+  .cover { height: 297mm; background: var(--navy); color:#fff; margin: 0; padding: 30mm 22mm; display:flex; flex-direction:column; justify-content: space-between; }
+  .cover img { height: 13mm; }
+  .cover h1 { color:#fff; font-size: 34pt; font-weight: 800; margin-top: 22mm; }
+  .cover .sub { font-size: 13pt; color:#c9d3e3; margin-top: 4mm; max-width: 150mm; }
+  .cover .bar { width: 26mm; height: 2.2mm; background: var(--orange); margin-top: 10mm; }
+  .cover .meta { font-size: 9.5pt; color:#c9d3e3; border-top: 1px solid #2a3b57; padding-top: 5mm; display:grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+  .cover .meta b { color:#fff; display:block; font-weight:600; }
+  .toc { list-style:none; padding:0; margin: 2mm 0 0; }
+  .toc li { display:flex; border-bottom: 1px dotted var(--line); padding: 2.2mm 0; font-size: 10.5pt; margin:0; }
+  .toc li span:first-child { color: var(--orange); font-weight: 800; width: 10mm; }
+  .toc li span:last-child { margin-left:auto; color: var(--muted); }
+  .legend { font-size: 8pt; color: var(--muted); margin-top: 1mm; }
+</style>
+</head>
+<body>
+
+<!-- KAPAK -->
+<div class="cover">
+  <div><img src="34pazar-logo-beyaz.png" alt="34Pazar"></div>
+  <div>
+    <h1>Durum Özeti</h1>
+    <div class="sub">Ürün, paketler, rakip konumu, teknik altyapı, zaman çizelgesi ve açık işler — 34pazar.com'un bugünkü hâli.</div>
+    <div class="bar"></div>
+  </div>
+  <div class="meta">
+    <div><b>Tarih</b>25 Ekim 2026</div>
+    <div><b>Hazırlayan</b>34Devs · Ahmet Hamdi Kilic</div>
+    <div><b>Kapsam</b>Canlı sürüm <code>ded39a7</code> (24 Eki 2026)</div>
+    <div><b>Gizlilik</b>İç belge · anahtar, şifre ve müşteri verisi içermez</div>
+  </div>
+</div>
+
+<!-- İÇİNDEKİLER -->
+<section>
+  <h2>İçindekiler</h2>
+  <ul class="toc">
+    <li><span>1</span><span>Yönetici özeti</span><span>Tek sayfada durum</span></li>
+    <li><span>2</span><span>Ürün</span><span>Kanallar, özellikler, panel</span></li>
+    <li><span>3</span><span>Paketler ve fiyat</span><span>Sınırlar, sözler, ödeme</span></li>
+    <li><span>4</span><span>Rakip konumu</span><span>12 rakip, fark ve açıklar</span></li>
+    <li><span>5</span><span>Teknik mimari</span><span>Yığın, veri akışı, işletim</span></li>
+    <li><span>6</span><span>Zaman çizelgesi</span><span>15 Ağustos → bugün</span></li>
+    <li><span>7</span><span>Durum ve riskler</span><span>Canlı / doğrulanmamış / risk</span></li>
+    <li><span>8</span><span>Yapılacaklar</span><span>Bekleyenler ve sıradaki işler</span></li>
+    <li><span>9</span><span>Ek</span><span>Adresler ve belgeler</span></li>
+  </ul>
+  <p class="note">Bu belgedeki rakamlar ölçümdür: canlı sunucu (yalnız okuma), depo (git, kod, <code>docs/</code>) ve 23–24 Ekim denetim raporları. Ölçülmeyen yerler “tahmin” ya da “doğrulanmadı” diye işaretlidir. Rakip bilgileri 24.10.2026'da rakiplerin kendi fiyat sayfalarından okunmuştur.</p>
+</section>
+
+<!-- 1. YÖNETİCİ ÖZETİ -->
+<section>
+  <h2><span class="no">1</span>Yönetici özeti</h2>
+  <div class="accent"><b>34Pazar</b>, pazaryeri ve e-ticaret sitesinde satan Türk satıcılar için <b>tek stok, tek sipariş listesi</b> sunan bir SaaS'tır. Bir kanalda satış olunca stok bütün kanallarda düşer; fazla satış, iptal ve kötü yorum önlenir. <b>34pazar.com</b> 24 Ekim 2026'da müşterilere açıldı.</div>
+
+  <div class="grid3" style="margin:3mm 0 4mm">
+    <div class="kpi"><b>12 + 3</b><span>bağlanabilen kanal + kayıt bekleyen 3 kanal</span></div>
+    <div class="kpi"><b>499 ₺ / ay'dan</b><span>aylık, taahhütsüz; ücretsiz paket kartsız</span></div>
+    <div class="kpi"><b>2.839 test</b><span>son tam koşu (24 Eki), hepsi yeşil</span></div>
+  </div>
+
+  <div class="grid2">
+    <div class="box">
+      <h3>Kimin için</h3>
+      <p>Trendyol, Hepsiburada, N11 gibi pazaryerlerinde ve Shopify/WooCommerce/ikas/Ticimax sitesinde aynı ürünü satan küçük ve orta ölçekli satıcılar; yurt dışına (eBay, Kaufland) açılmak isteyenler.</p>
+      <h3>Fark</h3>
+      <ul>
+        <li><b>Aylık plan, yıllık peşin yok</b> — 12 rakipten yalnız 2'si aylık sunuyor.</li>
+        <li><b>Her pakette bütün kanallar</b> — rakipler pazaryeri sayısıyla paketliyor.</li>
+        <li>Şeffaf sınırlar, 14 gün iade, ücretli pakette ücretsiz kurulum.</li>
+        <li>eBay + Kaufland, TCMB kuruyla otomatik fiyat çevirisi.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Durum</h3>
+      <ul>
+        <li>Yol haritasının 12 sprinti (S1–S12) bitti ve canlıda.</li>
+        <li>Canlı altyapı: kesintisiz deploy, gece yedeği, 5 dakikada bir izleme alarmı.</li>
+        <li>Black Friday için yük testi: 700 siparişte sıfır kilitlenme, sıfır yanlış stok.</li>
+        <li><b>Henüz ücretli abonelik yok</b>; gerçek kartla ödeme akışı uçtan uca denenmedi.</li>
+        <li>Çoğu kanal gerçek satıcı hesabıyla denenmedi (Trendyol uçtan uca denendi).</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>En kritik 5 açık iş</h3>
+  <table>
+    <thead><tr><th style="width:6mm">#</th><th>İş</th><th style="width:28mm">Kimde</th><th>Neden önemli</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><b>Gerçek ödeme testi</b> (499 ₺ al → paket açılıyor mu → iade)</td><td>Ahmet</td><td>Para alma akışı gerçek kartla hiç sürülmedi; Türk kartları yurt dışı çekimi reddedebiliyor.</td></tr>
+      <tr><td>2</td><td><b><code>entegrasyon</code> deposunu private yap</b></td><td>Ahmet</td><td>Depo herkese açık; içinde sır bulunmadı ama tüm kod görünür.</td></tr>
+      <tr><td>3</td><td><b>Amazon, OTTO uygulama kaydı · Etsy uygulamasını aktifleştir</b></td><td>Ahmet</td><td>Bu üç kanal kayıt olmadığı için sitede gizli.</td></tr>
+      <tr><td>4</td><td><b>İlk 2–3 pilot satıcı</b> ile gerçek hesap denemesi</td><td>Ahmet + 34Devs</td><td>Kanal, e-fatura (Nilvera) ve kargo gerçek hesapta doğrulanmadı.</td></tr>
+      <tr><td>5</td><td><b>Sunucu dışı yedek + DKIM</b></td><td>Ahmet / 34Devs</td><td>Yedekler aynı sunucuda; posta DKIM'siz (spam riski).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 2. ÜRÜN -->
+<section>
+  <h2><span class="no">2</span>Ürün</h2>
+  <h3>Kanallar ve yetenekler</h3>
+  <p class="small muted">Her hücre, kanal adaptörünün kodda gerçekten uyguladığı yetenekten okundu (24 Eki). ✓ var · — yok.</p>
+  <table>
+    <thead><tr><th>Kanal</th><th>Tür</th><th class="c">Ürün çekme</th><th class="c">Stok</th><th class="c">Fiyat</th><th class="c">Sipariş</th><th class="c">Ürün gönderme</th><th class="c">İade</th><th class="c">Kargo takip</th><th class="c">Fatura</th></tr></thead>
+    <tbody>
+      <tr><td><b>Trendyol</b></td><td>TR pazaryeri</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c">ortak etiket</td><td class="c y">✓ yükleme</td></tr>
+      <tr><td><b>Hepsiburada</b></td><td>TR pazaryeri</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c y">✓ bağlantı</td></tr>
+      <tr><td><b>N11</b></td><td>TR pazaryeri</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓ bağlantı</td></tr>
+      <tr><td><b>Çiçeksepeti</b></td><td>TR pazaryeri</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td></tr>
+      <tr><td><b>Pazarama</b></td><td>TR pazaryeri</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓ yeni ürün</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td></tr>
+      <tr><td><b>İdefix</b></td><td>TR pazaryeri</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c n">— (bilerek)</td><td class="c n">—</td></tr>
+      <tr><td><b>eBay</b></td><td>Yurt dışı</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c y">✓</td><td class="c n">—</td></tr>
+      <tr><td><b>Kaufland</b></td><td>Yurt dışı</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c n">—</td></tr>
+      <tr><td><b>Shopify</b></td><td>E-ticaret sitesi</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓ veri</td></tr>
+      <tr><td><b>WooCommerce</b></td><td>E-ticaret sitesi</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c y">✓</td><td class="c n">—</td></tr>
+      <tr><td><b>ikas</b></td><td>E-ticaret sitesi</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c n">—</td></tr>
+      <tr><td><b>Ticimax</b></td><td>E-ticaret sitesi</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c n">—</td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Trendyol'da ayrıca soru-cevap, ortak kargo etiketi ve hakediş (finans) okuma var. İdefix'te kargo bildirimi bilerek kapalı: takip no göndermek satıcıyı İdefix'in kargo anlaşmasından çıkarıyor. Pazarama'da belgede güncelleme ucu olmadığı için yalnız yeni ürün açılır. İade sütunu "iade kararı/kaydı kanaldan okunur" demektir; iptal ve iadede stok geri ekleme her kanalda sipariş akışından gelir.</p>
+
+  <h3>Kayıt bekleyen 3 kanal (sitede gizli)</h3>
+  <table>
+    <thead><tr><th>Kanal</th><th>Kodda hazır olan</th><th>Neden gizli</th><th>Açılması için</th></tr></thead>
+    <tbody>
+      <tr><td><b>Amazon</b></td><td>Ürün çekme, stok, fiyat, sipariş, kargo onayı (SP-API)</td><td>Sunucuda uygulama kimliği yok; bağlanma 500 veriyordu</td><td>Amazon Solution Provider kaydı (metinler <code>docs/AMAZON-BASVURU.md</code>)</td></tr>
+      <tr><td><b>OTTO</b></td><td>Ürün çekme, stok, fiyat, sipariş</td><td>Uygulama kimliği yok</td><td>OTTO servicepartner kaydı</td></tr>
+      <tr><td><b>Etsy</b></td><td>Ürün çekme/gönderme, stok, fiyat, sipariş, kargo</td><td>Etsy anahtarı “not active” dönüyor</td><td>Etsy geliştirici panelinde uygulamayı aktifleştir</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Kayıt tamamlanınca kanallar kendiliğinden geri gelir; mevcut bağlantılar etkilenmez.</p>
+</section>
+
+<section>
+  <h3 style="margin-top:0">Özellikler</h3>
+  <div class="grid2">
+    <div class="box"><h3>Stok ve senkron</h3><ul>
+      <li>Tek stok; satış, iptal, iade, elle sayım ve içe aktarma aynı hareket defterinden geçer.</li>
+      <li>Satış olunca stok bütün kanallara gider (yük testinde p95 ~7 sn).</li>
+      <li>Mutabakat: kanaldaki stok/fiyat düzenli karşılaştırılır, fark onarılır.</li>
+      <li>Tedarikçi XML (saatlik), CSV ve Excel ile toplu stok/fiyat.</li>
+      <li><b>Set / paket ürün:</b> setin stoğu içindeki ürünlerden hesaplanır; satılınca bileşenlerden düşer.</li>
+    </ul></div>
+    <div class="box"><h3>Sipariş, iade, kargo</h3><ul>
+      <li>Bütün kanalların siparişi tek listede; toplu işlem, toplama listesi.</li>
+      <li>İptal ve iade stoğa doğru miktarla geri döner (kısmi iade dahil).</li>
+      <li>Kargo takip numarası destekleyen kanala bildirilir.</li>
+      <li>Yurtiçi ve Aras gönderisi satıcının kendi sözleşmesiyle (Woo; Shopify izin bekliyor).</li>
+      <li>Trendyol soru-cevap ve iade kararı panelden.</li>
+    </ul></div>
+    <div class="box"><h3>Fiyat</h3><ul>
+      <li>Kanal başına fiyat ve fiyat kuralları, zarar koruması.</li>
+      <li>Süreli kampanyalar.</li>
+      <li><b>Otomatik kur çevirisi:</b> TCMB döviz alış kuru, kur payı, yuvarlama, en düşük fiyat; kur 4 günden eskiyse fiyat gönderilmez.</li>
+    </ul></div>
+    <div class="box"><h3>Listeleme ve fatura</h3><ul>
+      <li><b>AI listeleme</b> (Claude): kanala göre başlık/açıklama, öznitelik ve kategori önerisi; satıcı onaylar. <span class="tag warn">Anthropic anahtarı bekliyor — kapalı</span></li>
+      <li><b>E-fatura / e-arşiv (Nilvera):</b> satıcı kendi API anahtarını girer; iptal/iade kaydı, kalıcı PDF bağlantısı, HB/N11/Trendyol'a iletim. Paraşüt kodu da duruyor (anahtar yok).</li>
+    </ul></div>
+    <div class="box"><h3>Ekip, raporlar, kanıt</h3><ul>
+      <li>Roller: sahip, yönetici, depo, salt okunur; e-postayla davet; yetki sunucuda tek kapıdan.</li>
+      <li>Kâr/katkı raporu, Trendyol hakediş.</li>
+      <li><b>“Fazla satış koruması”</b> kanıt ekranı: son 30 günün ölçülmüş rakamları.</li>
+    </ul></div>
+    <div class="box"><h3>Satış ve destek yüzü</h3><ul>
+      <li>Kurumsal site, mega menü, 8 çözüm sayfası (TR+EN), fiyat sayfası (TR+EN).</li>
+      <li><b>/demo</b>: tek tık salt okunur demo, her gece baştan kurulur.</li>
+      <li><b>/yardim</b>: her açık kanal için bağlama rehberi.</li>
+      <li>5 adımlı kurulum şeridi; Türkçe hata sayfaları.</li>
+    </ul></div>
+  </div>
+
+  <h3>Panel ekranları</h3>
+  <p>Ana sayfa (kurulum şeridi) · Ürünler ve stok (set oluşturma, toplu düzenleme, içe aktarma) · Ürün → Kanallar (kanal başına içerik, görsel, AI önerisi, kur dökümü) · Siparişler ve sipariş ayrıntısı (fatura, kargo gönderisi) · Toplama/toplu kargo · Kanallar (bağlama, ayarlar, fiyat kuralı, kur) · Tedarikçiler (XML) · Onaylar · Mutabakat · Hatalar (ölü işler, yeniden dene) · Raporlar (katkı, fazla satış koruması) · Ayarlar (ekip, fatura, kargo) · Abonelik · Süper admin (kiracılar, paketler) · Horizon (kuyruk).</p>
+</section>
+
+<!-- 3. PAKETLER -->
+<section>
+  <h2><span class="no">3</span>Paketler ve fiyat</h2>
+  <p class="small muted">Sınırlar <code>PlanSeeder</code> ve canlı veritabanından (24 Eki). Fiyatlar aylık. Bütün özellikler ve bütün kanallar her pakette; paketler yalnız sayılarla ayrılır.</p>
+  <table>
+    <thead><tr><th></th><th class="r">Ücretsiz</th><th class="r">Başlangıç</th><th class="r">Profesyonel</th><th class="r">Kurumsal</th></tr></thead>
+    <tbody>
+      <tr><td><b>Aylık fiyat (Stripe)</b></td><td class="r">0 ₺</td><td class="r">499 ₺</td><td class="r">1.499 ₺</td><td class="r">3.999 ₺</td></tr>
+      <tr><td>Shopify App Store fiyatı</td><td class="r">—</td><td class="r">9,99 $</td><td class="r">29,99 $</td><td class="r">79,99 $</td></tr>
+      <tr><td>Ürün</td><td class="r">25</td><td class="r">500</td><td class="r">5.000</td><td class="r">Sınırsız</td></tr>
+      <tr><td>Kanal (mağaza)</td><td class="r">1</td><td class="r">2</td><td class="r">5</td><td class="r">Sınırsız</td></tr>
+      <tr><td>Kullanıcı</td><td class="r">1</td><td class="r">3</td><td class="r">10</td><td class="r">Sınırsız</td></tr>
+      <tr><td>E-fatura / ay</td><td class="r">20</td><td class="r">300</td><td class="r">2.000</td><td class="r">Sınırsız</td></tr>
+      <tr><td>AI önerisi / ay <span class="muted">(anahtar girilince görünür)</span></td><td class="r">20</td><td class="r">300</td><td class="r">2.000</td><td class="r">10.000</td></tr>
+      <tr><td>Sipariş</td><td class="r" colspan="4">Sınır yok</td></tr>
+      <tr><td>Ücretsiz kurulum + ilk aktarım</td><td class="r n">—</td><td class="r y">✓</td><td class="r y">✓</td><td class="r y">✓</td></tr>
+      <tr><td>İlk ödemeden 14 gün içinde tam iade</td><td class="r n">—</td><td class="r y">✓</td><td class="r y">✓</td><td class="r y">✓</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2">
+    <div class="box">
+      <h3>Sayfadaki güven sözleri</h3>
+      <ul>
+        <li>Destek: WhatsApp (+49 176 76798125) ve info@34devs.com, <b>her gün 09–18</b> (TR saati).</li>
+        <li>Aylık ödeme, taahhüt yok, istediğin zaman iptal (dönem sonuna kadar kullanım).</li>
+        <li>14 gün iade: hesap başına bir kez, ilk ücretli abonelikte; kullanım koşulları §6 ve mesafeli satış md. 6'da.</li>
+        <li>Veri: fiyat/stok Excel'i indirilebilir; abonelik bitince hesap ücretsiz pakete düşer, veri silinmez.</li>
+        <li>Barındırma: IONOS, Almanya; her gece 03:30 yedek, 14 gün saklama.</li>
+        <li>KDV hakkında sayfada ifade yok (vergi durumu netleşene kadar bilinçli karar).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Ödeme altyapısı</h3>
+      <ul>
+        <li><b>Stripe Checkout</b> (canlı mod): kart bilgisi bizim sunucumuza gelmez, 3D Secure Stripe'ta. Hesap Almanya'da, tahsilat ve ödeme alma açık.</li>
+        <li>Stripe olayları (checkout tamamlandı, abonelik oluştu/değişti/bitti) imzalı alınır; imzasız istek reddedilir.</li>
+        <li>Fatura altbilgisi: 34Devs künyesi + § 19 UStG notu.</li>
+        <li><b>Shopify Billing</b>: App Store'dan gelen satıcı Shopify üzerinden öder (hibrit model).</li>
+      </ul>
+      <h3>Bilinen ödeme notları</h3>
+      <ul>
+        <li><b>Henüz 0 ücretli abonelik</b>; akış gerçek kartla denenmedi.</li>
+        <li>Türk kartları yurt dışı çekimi ilk denemede reddedebilir (Stripe hesabında ölçüldü); müşteri bankasından yurt dışı/internet alışverişini açmalı.</li>
+        <li>Taksit yok (tek çekim). İadeler elle: Stripe panelinden ya da Shopify Partner panelinden.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 4. RAKİP -->
+<section>
+  <h2><span class="no">4</span>Rakip konumu</h2>
+  <p class="small muted">Kaynak: rakiplerin kendi paket/fiyat sayfaları, erişim 24.10.2026. Yazmayan bilgi “—”.</p>
+  <table>
+    <thead><tr><th style="width:22mm">Rakip</th><th style="width:28mm">Ödeme modeli</th><th>Giriş → üst paket</th><th>Öne çıkan</th></tr></thead>
+    <tbody>
+      <tr><td><b>Entegra</b></td><td>Yıllık, KDV dahil, peşin/3 taksit</td><td>24.750 ₺ (3 pazaryeri) → 125.000 ₺</td><td>En geniş kanal ve modül seti; kontör ayrıca</td></tr>
+      <tr><td><b>Platin360</b></td><td>Yıllık, KDV %0, 3 taksit</td><td>29.990 ₺ → 59.990 ₺ (+ teklif)</td><td>“22. yıl”, 7 gün deneme; ek ücretler fiyatsız</td></tr>
+      <tr><td><b>Sentos</b></td><td>Yıllık lisans, 3 taksit</td><td>9.500 ₺ → 89.000 ₺</td><td>“2.500+ marka”; taahhüt içinde iade yok</td></tr>
+      <tr><td><b>Dopigo</b></td><td>Yıllık, 3 taksit</td><td>24.999 ₺ → 74.999 ₺</td><td>“4000+ satıcı”, mobil uygulama, buybox</td></tr>
+      <tr><td><b>StockMount</b></td><td>Yıllık / 6 aylık, KDV dahil</td><td>10.000 ₺ → 25.000 ₺ (kampanya)</td><td>Süre bitince hesap durur, veri silinebilir</td></tr>
+      <tr><td><b>BirFatura</b></td><td>Aylık var</td><td>Ücretsiz → 790 ₺/ay</td><td>E-fatura odaklı; 15 gün iade</td></tr>
+      <tr><td><b>Yengeç</b></td><td>Aylık var, KDV dahil</td><td>600 ₺/ay → 3.600 ₺/ay</td><td>Modül başına ek ücret</td></tr>
+      <tr><td><b>Sopyo</b></td><td>Yıllık, 3 taksit</td><td>25.000 ₺ → 99.000 ₺</td><td>Sınırsız ürün/sipariş</td></tr>
+      <tr><td><b>ikas</b></td><td>Yıllık</td><td>55.927 ₺ → 139.423 ₺</td><td>Altyapı; pazaryeri üst pakette</td></tr>
+      <tr><td><b>Ticimax</b></td><td>Yıllık</td><td>46.000 ₺ → 119.900 ₺</td><td>Altyapı; 7/24 telefon</td></tr>
+      <tr><td><b>Akınsoft</b></td><td>Yıllık, KDV hariç</td><td>18.550 ₺ → 71.925 ₺</td><td>Pazaryerleri çoğunlukla opsiyonel</td></tr>
+      <tr><td><b>34Pazar</b></td><td><b>Aylık, taahhütsüz</b></td><td><b>Ücretsiz → 3.999 ₺/ay</b></td><td><b>Her pakette bütün kanallar</b></td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Hepsiburada ve Pazarama'nın resmî entegratör listesi bulunamadı. Fiyatlar yıllık/aylık ve KDV açısından farklı olduğundan doğrudan kıyas için dikkatli kullanılmalı; satış metninde rakip adı kullanmadan önce avukata danışılmalı.</p>
+
+  <div class="grid2">
+    <div class="box">
+      <h3>Farkımız</h3>
+      <ul>
+        <li>Aylık ve taahhütsüz giriş (yalnız Yengeç ve BirFatura'da var).</li>
+        <li>Pazaryeri sayısıyla paketleme yok; açık sınırlar, gizli ek ücret yok.</li>
+        <li>14 gün iade ve ücretsiz kurulum (rakiplerde çoğunlukla yazmıyor).</li>
+        <li>Hafta sonu dahil destek (rakiplerde çoğunlukla hafta içi 09–18).</li>
+        <li>eBay + Kaufland ve TCMB kur çevirisi.</li>
+        <li>Ölçülmüş kanıt: fazla satış koruması ekranı, yük testi.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Açıklarımız</h3>
+      <ul>
+        <li>Muhasebe/ERP aktarımı, buybox, rakibe göre otomatik fiyat yok.</li>
+        <li>Kargo yalnız Yurtiçi + Aras (Entegra'da 13 firma).</li>
+        <li>Açık API, mobil depo uygulaması, XML çıktısı yok.</li>
+        <li>Çoklu depo, B2B, Temu/Ozon yok.</li>
+        <li>Referans müşteri, logo, yorum yok (henüz müşteri yok).</li>
+        <li>Telefon desteği yok (WhatsApp var).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 5. TEKNİK -->
+<section>
+  <h2><span class="no">5</span>Teknik mimari</h2>
+  <div class="grid2">
+    <div class="box">
+      <h3>Yığın</h3>
+      <ul>
+        <li>Laravel 12 · PHP 8.3 · PostgreSQL 16 · Redis + Horizon (kuyruk)</li>
+        <li>Panel: Inertia + Vue 3 · Site: Blade, ayrı hafif CSS/JS</li>
+        <li>Modüler monolit, mimari belgesi V2.2 + V3.0 (<code>docs/ENTEGRASYON-V3.0.md</code>)</li>
+        <li>Docker Compose (app, web, horizon, scheduler, relay, postgres, redis); Caddy; önde Plesk/Apache</li>
+        <li>Sunucu: IONOS VPS, Almanya; disk %27 dolu (24 Eki)</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Modüller (<code>app/Domain</code>)</h3>
+      <p>Ai · Billing · BulkEdit · Catalog · Channels (15 adaptör) · Finance · Fulfillment · Identity · Inventory · Invoicing · Messaging · Orders · Questions · Reconciliation · Returns · Shipping · Suppliers · Sync</p>
+    </div>
+  </div>
+
+  <h3>Veri akışı</h3>
+  <table>
+    <thead><tr><th style="width:34mm">Adım</th><th>Ne olur</th></tr></thead>
+    <tbody>
+      <tr><td><b>1 · Gelen kutusu</b></td><td>Webhook ya da yoklamayla gelen her kanal olayı önce <i>inbox</i>'a yazılır, tekilleştirilir; hata alırsa yeniden denenir, kaybolmaz.</td></tr>
+      <tr><td><b>2 · Stok defteri</b></td><td>Satış/iptal/iade stok hareketi olarak deftere yazılır (satır kilidi, sabit kilit sırası; aynı olay iki kez düşmez).</td></tr>
+      <tr><td><b>3 · Giden kutusu</b></td><td>Değişen stok/fiyat <i>outbox</i>'a düşer; relay bunu kuyruğa verir.</td></tr>
+      <tr><td><b>4 · Dağıtım (fan-out)</b></td><td>Ürünün listelendiği her kanala gönderim işi açılır; sürüm kapısı eski değerin yenisini ezmesini önler.</td></tr>
+      <tr><td><b>5 · Gönderici kilidi</b></td><td>Bağlantı başına aynı anda tek gönderici (Postgres advisory kilidi) — yük testinde 159 deadlock'u sıfıra indirdi.</td></tr>
+      <tr><td><b>6 · Mutabakat</b></td><td>Sıcak/ılık/soğuk katmanlarda kanaldaki değer okunur, fark varsa onarılır; 3 tur kuralı sonsuz onarımı önler.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid2">
+    <div class="box">
+      <h3>Deploy ve yedek</h3>
+      <ul>
+        <li>Kesintisiz deploy: süreçler sırayla yenilenir, Caddy 15 sn yeniden dener. Ölçülen kesinti: eski yöntem ~93 sn (211 × 503) → yeni 0–1,6 sn.</li>
+        <li>Her deploy öncesi veritabanı yedeği.</li>
+        <li>Her gece 03:30 yedek, 14 gün saklama; bir yedek ayrı veritabanına geri yüklenip doğrulandı.</li>
+        <li>Migration kuralı: bir deployda yalnız geriye uyumlu değişiklik.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>İzleme ve güvenlik</h3>
+      <ul>
+        <li><code>ops:watch</code> 5 dk'da bir: kuyruk beklemesi, devre kesici, 429 yoğunluğu, ölü işler, kur bayatlığı, AI hata oranı, 24 sa sağlıksız bağlantı → ntfy + e-posta (saatte en çok 1).</li>
+        <li>HSTS, güvenlik başlıkları, APP_DEBUG kapalı; <code>.env</code>/<code>.git</code>/<code>vendor</code> dışarıya 404; admin ve Horizon yalnız süper admin.</li>
+        <li>Giriş/kayıt/şifre sıfırlama hız sınırlı; Postgres ve Redis dışarı kapalı; SSRF koruması.</li>
+        <li>Kanal kimlik bilgileri şifreli saklanır, ekrana geri dönmez.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h3 style="margin-top:0">Test pratiği</h3>
+  <p><b>2.839 test</b> (24 Eki son tam koşu, hepsi yeşil) + kod biçimi denetimi (Pint) her push öncesi. Kritik kurallar <b>mutasyonla</b> sınanır: kod bilerek bozulur, testin bozulmayı yakalaması beklenir; yakalanmayan bozma, test eksik demektir. Sözleşme testleri yeni bir rotanın yetki kapısına, yeni bir kuyruğun Horizon'a bağlanmasını, sitede “Beta” yazmamasını, fiyat sayfasının veritabanıyla aynı olmasını garanti eder.</p>
+
+  <h3>Black Friday yük testi (yerel, sahte kanal)</h3>
+  <p class="small muted">1 kiracı, 5 kanal, 2.000 varyant / 10.000 ilan; 5 dakikada 700 sipariş (dakikada 100·100·<b>300</b>·100·100); kanal başına 150 ms gecikme ve 5 istek/sn sınırı. Gerçek webhook ucundan girildi. Kaynak <code>docs/YUK-TESTI-2026-10.md</code>.</p>
+  <table>
+    <thead><tr><th>Ölçüm</th><th class="r">1. tur (önce)</th><th class="r">Kilit düzeltmesi</th><th class="r">Kaynak kanala yazım</th><th class="r">+ 2.000 fiyat değişimi</th></tr></thead>
+    <tbody>
+      <tr><td>Sipariş → stok tüm kanallarda, p95</td><td class="r">42,5 sn</td><td class="r">7,5 sn</td><td class="r">7,4 sn</td><td class="r">6,9 sn</td></tr>
+      <tr><td>En kötü</td><td class="r">57,2 sn</td><td class="r">8,6 sn</td><td class="r">8,9 sn</td><td class="r">8,5 sn</td></tr>
+      <tr><td>Postgres deadlock</td><td class="r">159</td><td class="r">0</td><td class="r">0</td><td class="r">0</td></tr>
+      <tr><td>Başarısız deneme / ölü işlem</td><td class="r">2.038 / 110</td><td class="r">0 / 0</td><td class="r">0 / 0</td><td class="r">0 / 0</td></tr>
+      <tr><td>Yük bitince kanalda yanlış stok</td><td class="r">6 satır</td><td class="r">7 satır</td><td class="r">0</td><td class="r">0</td></tr>
+      <tr><td>Kuyruğun erimesi</td><td class="r">123,5 sn</td><td class="r">7,1 sn</td><td class="r">—</td><td class="r">10,1 sn</td></tr>
+      <tr><td>Fiyat değişimi → tüm kanallarda, p95</td><td class="r">—</td><td class="r">—</td><td class="r">—</td><td class="r">5,8 sn</td></tr>
+    </tbody>
+  </table>
+  <p class="small">Sonraki turlarda: TCMB kuru %1 oynayınca 4.000 ilanın yeni USD fiyatı p95 19,4 sn'de, yanlış fiyat 0. Set ürün senaryosunda 415 set satışı, yanlış stok 0, deadlock 0 (ilk koşudaki 2 deadlock düzeltildi). <span class="muted">Rakamlar yerel Docker'da ölçüldü, canlı sunucuda değil.</span></p>
+</section>
+
+<!-- 6. ZAMAN ÇİZELGESİ -->
+<section>
+  <h2><span class="no">6</span>Zaman çizelgesi</h2>
+  <p class="small muted">Depoda 15 Ağu – 24 Eki arasında 383 commit (Ağustos 155, Ekim 228; Eylül'de commit yok). Tarihler git geçmişinden.</p>
+  <table>
+    <thead><tr><th style="width:22mm">Tarih</th><th>Kilometre taşı</th></tr></thead>
+    <tbody>
+      <tr><td>15–18 Ağu</td><td>Temel: stok çekirdeği, outbox/fan-out, sipariş alımı; Trendyol istemcisi, stok/fiyat itme, sipariş yoklaması</td></tr>
+      <tr><td>19–24 Ağu</td><td>Mutabakat (3 katman), ölü iş ekranı, CSV içe aktarma, metrikler, uyarı postaları, onboarding, Stripe abonelik ve kota, Türkçe panel</td></tr>
+      <tr><td>25–29 Ağu</td><td>Mimari V3.0 onayı; Shopify (Faz 1), Etsy, eBay (slice 4.6'ya kadar)</td></tr>
+      <tr><td>4 Eki</td><td>Derin denetim: “sessiz başarı” hataları (A1–A15), Trendyol V2 göçü, görsel hattı, SSRF koruması, üretim altyapısı</td></tr>
+      <tr><td>6 Eki</td><td>Trendyol gerçek hesapta uçtan uca: ürün gönderme → onay → stok → gerçek sipariş → iptal</td></tr>
+      <tr><td>11 Eki</td><td>12 haftalık sprint planı. S1 hakediş/katkı · S2 ortak etiket · S3 HB ve N11'e ürün açma</td></tr>
+      <tr><td>13–14 Eki</td><td>S4 iade + soru-cevap · S5 tedarikçi XML, Excel toplu düzenleme, Woo kurulum sihirbazı</td></tr>
+      <tr><td>16–18 Eki</td><td>Shopify App Store: ret, düzeltme, yeniden gönderim (sonuç bekleniyor)</td></tr>
+      <tr><td>20 Eki</td><td>S6 e-fatura kotası, iptal/iade, kalıcı fatura bağlantısı, HB/N11/Shopify'a fatura</td></tr>
+      <tr><td>21 Eki</td><td>Amazon, OTTO, Kaufland, eBay siparişleri; kurumsal site, mega menü, çözüm sayfaları; php2shell güvenlik yaması</td></tr>
+      <tr><td>23 Eki</td><td>Yurtiçi + Aras kargo · S7 roller, izleme, yük testi ve kilit düzeltmesi · S8 AI listeleme · S9 TCMB kur</td></tr>
+      <tr><td>24 Eki</td><td>S10 İdefix, Pazarama/Çiçeksepeti ürün açma · S11 kanıt ekranı, kurulum şeridi · S12 fiyat sayfası, demo, rehberler · kesintisiz deploy · Beta kaldırıldı · Nilvera e-fatura · set ürün · açılış denetimi · <b>müşterilere açıldı</b></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 7. DURUM -->
+<section>
+  <h2><span class="no">7</span>Durum ve riskler</h2>
+  <div class="grid2">
+    <div class="box">
+      <h3>Canlıda çalışan <span class="tag ok">ölçüldü</span></h3>
+      <ul>
+        <li>Site: 66 sitemap adresi, 70 sayfa + 70 dosya, kırık 0; 390/1440 px taşma yok.</li>
+        <li>Kayıt → e-posta doğrulama → giriş → panel (deneme hesabıyla, sonra silindi).</li>
+        <li>Stripe canlı mod, checkout açılıyor, olay imzası doğrulanıyor.</li>
+        <li>12 kanalın bağlanma formu; demo; yardım rehberleri.</li>
+        <li>Yedek geri yükleme, ntfy alarmı, zamanlanmış işler, Horizon.</li>
+        <li>Trendyol: gerçek hesapta ürün → stok → sipariş → iptal (6 Eki).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Gerçek hesapla doğrulanmamış <span class="tag warn">dürüst liste</span></h3>
+      <ul>
+        <li>Ücretli abonelik ve gerçek kart ödemesi (0 abonelik).</li>
+        <li>HB, N11, Çiçeksepeti, Pazarama, İdefix, eBay, Kaufland, ikas, Ticimax gerçek satıcı hesabında.</li>
+        <li>Shopify gerçek mağazada (App Store onayı ve korumalı müşteri verisi izni bekleniyor).</li>
+        <li>Nilvera ile gerçek fatura; Yurtiçi/Aras gerçek gönderi.</li>
+        <li>AI önerilerinin kalitesi (anahtar yok).</li>
+        <li>Mutabakatın sürüklenmeyi kaç dakikada onardığı.</li>
+        <li>Yük rakamları canlı sunucuda.</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Bilinen riskler</h3>
+  <table>
+    <thead><tr><th style="width:44mm">Risk</th><th>Etki</th><th style="width:48mm">Önlem / durum</th></tr></thead>
+    <tbody>
+      <tr><td>Doğrulanmamış kanalda hata</td><td>İlk müşteride yanlış stok/fiyat</td><td>Yazma izni kapalı doğar; ilk bağlantı ve ilk hata 34Devs'e bildirilir</td></tr>
+      <tr><td>Türk kartı reddi</td><td>“Site çalışmıyor” algısı, kayıp satış</td><td>Ödeme sayfasına/SSS'ye not önerildi</td></tr>
+      <tr><td>Yedek tek sunucuda</td><td>Sunucu kaybında veri kaybı</td><td>Sunucu dışı kopya gerekli</td></tr>
+      <tr><td>Depo herkese açık</td><td>Kod görünür, saldırı yüzeyi</td><td>Sır bulunmadı; private yapılmalı</td></tr>
+      <tr><td>DKIM yok</td><td>Doğrulama postası spam'a düşebilir</td><td>Google Workspace'te DKIM açılmalı</td></tr>
+      <tr><td>Uzun bayram</td><td>TCMB 4+ gün bülten yayımlamazsa çevrilmiş fiyat durur</td><td><code>FX_MAX_AGE_DAYS</code> büyütülebilir</td></tr>
+      <tr><td>KDV / fatura biçimi</td><td>Türk şirket müşterisi e-fatura isteyebilir</td><td>Muhasebeciye sorulmalı</td></tr>
+      <tr><td>Etsy test bağlantısı</td><td>Günlük gereksiz alarm</td><td>Etsy aktifleşince ya da bağlantı silinince biter</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 8. YAPILACAKLAR -->
+<section>
+  <h2><span class="no">8</span>Yapılacaklar</h2>
+  <h3>Ahmet'te bekleyenler</h3>
+  <table>
+    <thead><tr><th style="width:6mm">#</th><th>İş</th><th>Sonuç</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Gerçek ödeme testi: 499 ₺ al, paketi kontrol et, Stripe'tan iade et</td><td>Para akışı kanıtlanır</td></tr>
+      <tr><td>2</td><td><code>entegrasyon</code> deposunu private yap</td><td>Kod gizlenir</td></tr>
+      <tr><td>3</td><td>Amazon Solution Provider + OTTO servicepartner kaydı</td><td>2 kanal açılır</td></tr>
+      <tr><td>4</td><td>Etsy uygulamasını aktifleştir (ya da test bağlantısını sildir)</td><td>Etsy açılır, alarm biter</td></tr>
+      <tr><td>5</td><td>Google Workspace'te DKIM</td><td>Posta teslimi iyileşir</td></tr>
+      <tr><td>6</td><td>Avukat: Nilvera/Yurtiçi/Aras'a giden alıcı verisi + WhatsApp kanalı yasal metinlere</td><td>KVKK uyumu</td></tr>
+      <tr><td>7</td><td>Sunucu dışı yedek kopyası (yer seçimi)</td><td>Felaket kurtarma</td></tr>
+      <tr><td>8</td><td>Anthropic API anahtarı (ücretli)</td><td>AI listeleme açılır</td></tr>
+      <tr><td>9</td><td>Shopify App Store sonucu → onayda korumalı veri izni başvurusu (Ad, Adres, E-posta; Telefon yok)</td><td>Shopify kargo/fatura tam çalışır</td></tr>
+      <tr><td>10</td><td>İlk 2–3 pilot satıcı ve sonra 3 referans + vaka yazısı</td><td>Gerçek hesap doğrulaması, güven</td></tr>
+      <tr><td>11</td><td>Muhasebeci: KDV cümlesi ve Türk şirketlerine fatura biçimi</td><td>Fiyat sayfası tamamlanır</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Sıradaki ürün işleri (özellik önerileri raporundan)</h3>
+  <table>
+    <thead><tr><th style="width:6mm">#</th><th>İş</th><th>Durum / zaman</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Çalışan e-fatura</td><td><span class="tag ok">Nilvera ile canlı</span> — gerçek hesap denemesi kaldı</td></tr>
+      <tr><td>2</td><td>Set / paket ürün</td><td><span class="tag ok">canlı</span> — seçenekli set ve CSV ile set tanımı yok</td></tr>
+      <tr><td>3</td><td>Güven paketi: tam veri dışa aktarımı, canlı durum sayfası</td><td>Sırada</td></tr>
+      <tr><td>4</td><td>Ek kargo firması (HepsiJet ya da MNG)</td><td>Black Friday sonrası</td></tr>
+      <tr><td>5</td><td>Buybox ve rakibe göre otomatik fiyat</td><td>Aralık</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Paket farkı önerisi: bugünkü özellikler her pakette kalsın; üst paketleri yeni gelecek özellikler (buybox, açık API, ajans paneli, daha fazla AI hakkı) ayırsın. Ek gelir kalemleri: ek kanal, ek kullanıcı, e-fatura kontörü, ücretsiz pakete ücretli kurulum. (Kaynak <code>docs/OZELLIK-ONERILERI-2026-10.md</code>.)</p>
+
+  <h3>Takvim</h3>
+  <table>
+    <thead><tr><th style="width:34mm">Tarih</th><th>Ne</th></tr></thead>
+    <tbody>
+      <tr><td>Şimdi – 20 Kas</td><td>Pilot satıcılar, gerçek hesap doğrulamaları, açık iş listesi</td></tr>
+      <tr><td>23 – 27 Kas</td><td><b>Black Friday dondurma haftası</b>: yeni özellik canlıya çıkmaz, yalnız acil düzeltme; izleme alarmları açık</td></tr>
+      <tr><td>27 Kas</td><td>Black Friday</td></tr>
+      <tr><td>Aralık</td><td>Ek kargo firması, buybox/otomatik fiyat, reklam</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- 9. EK -->
+<section>
+  <h2><span class="no">9</span>Ek</h2>
+  <h3>Önemli adresler</h3>
+  <table>
+    <thead><tr><th style="width:62mm">Adres</th><th>Ne</th></tr></thead>
+    <tbody>
+      <tr><td>34pazar.com · /en</td><td>Ana sayfa (TR / EN)</td></tr>
+      <tr><td>/fiyatlar · /en/pricing</td><td>Paketler ve karşılaştırma</td></tr>
+      <tr><td>/entegrasyonlar</td><td>Kanal listesi ve kanal sayfaları</td></tr>
+      <tr><td>/cozumler</td><td>8 çözüm sayfası</td></tr>
+      <tr><td>/yardim</td><td>Kanal bağlama rehberleri</td></tr>
+      <tr><td>/demo</td><td>Salt okunur demo (arama motorlarına kapalı)</td></tr>
+      <tr><td>/iletisim · /yasal/*</td><td>İletişim, gizlilik/KVKK, kullanım koşulları, mesafeli satış</td></tr>
+      <tr><td>/sitemap.xml</td><td>Site haritası (Search Console'a gönderilecek)</td></tr>
+      <tr><td>/admin</td><td>Süper admin (yalnız sunucudaki e-posta listesi)</td></tr>
+      <tr><td>/horizon</td><td>Kuyruk paneli (yalnız süper admin)</td></tr>
+    </tbody>
+  </table>
+  <p class="small muted">Giriş bilgileri bu belgede yoktur.</p>
+
+  <h3>Depodaki belgeler (<code>docs/</code>)</h3>
+  <table>
+    <thead><tr><th style="width:62mm">Dosya</th><th>İçerik</th></tr></thead>
+    <tbody>
+      <tr><td>ENTEGRASYON-V3.0.md</td><td>Mimari belge (onaylı); kod ile çelişirse belge esas</td></tr>
+      <tr><td>RAKIP-YOL-HARITASI.md · pdf/34Pazar-Yol-Haritasi-Ekim-2026.pdf</td><td>Rakip analizi ve 12 sprintlik plan</td></tr>
+      <tr><td>OZELLIK-ONERILERI-2026-10.md</td><td>Rakiplere göre eksikler, açıklar, ilk 5 iş</td></tr>
+      <tr><td>YUK-TESTI-2026-10.md</td><td>Black Friday yük testi</td></tr>
+      <tr><td>E-FATURA-SAGLAYICI-SECIMI.md</td><td>9 e-fatura sağlayıcısının karşılaştırması, Nilvera kararı</td></tr>
+      <tr><td>URETIM-KURULUM.md · URETIM-PLESK.md · YEDEK-GERI-YUKLEME.md</td><td>Sunucu kurulumu, Plesk, yedekten dönüş</td></tr>
+      <tr><td>GUVENLIK-KONTROL-LISTESI.md</td><td>Güvenlik kontrol listesi</td></tr>
+      <tr><td>AMAZON-BASVURU.md</td><td>Amazon başvuru metinleri</td></tr>
+      <tr><td>*-API-NOTLARI.md</td><td>Aras, Yurtiçi, Hepsiburada, İdefix, Kaufland, OTTO, yeni kanallar, Zalando notları</td></tr>
+      <tr><td>architecture-review/ · hepsiburada-openapi/</td><td>Mimari inceleme, HB API şeması</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</body>
+</html>
