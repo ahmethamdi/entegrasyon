@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Ai\Support\AiFeature;
 use App\Domain\Billing\Actions\EnforceQuota;
 use App\Domain\Billing\Actions\SyncSubscriptionFromShopify;
 use App\Domain\Billing\Contracts\PaymentGateway;
@@ -362,6 +363,12 @@ final class BillingController extends Controller
         $usage = [];
 
         foreach (QuotaMetric::cases() as $metric) {
+            // AI anahtarı yokken özellik her yerde gizli; abonelik ekranında
+            // "0 / 20 AI önerisi" görünmesi olmayan bir hakkı vaat ederdi.
+            if ($metric === QuotaMetric::AI_SUGGESTIONS && ! AiFeature::enabled()) {
+                continue;
+            }
+
             $usage[$metric->value] = [
                 'current' => $quota->currentUsage($metric),
                 // SINIRSIZ `null` TAŞINIR, sıfır DEĞİL: sıfır gösterilse

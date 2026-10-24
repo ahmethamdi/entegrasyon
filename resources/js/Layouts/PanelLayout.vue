@@ -276,7 +276,7 @@ const onboardingSteps = [
         key: 'invoice',
         label: k('Fatura'),
         done: k('E-fatura hesabın bağlı.'),
-        todo: k('e-Fatura entegratörünü (Nilvera ya da Paraşüt) bağla, siparişlerin e-faturası buradan kesilsin.'),
+        todo: k('e-Fatura entegratörünü (Nilvera) bağla, siparişlerin e-faturası buradan kesilsin.'),
         href: '/settings/invoicing',
         action: k('Faturayı bağla'),
     },

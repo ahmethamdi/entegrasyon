@@ -123,6 +123,23 @@ final class BillingScreenTest extends TestCase
         $this->assertSame(1, $usage['channels']['limit']);
     }
 
+    /**
+     * AI anahtarı yokken AI hakkı abonelik ekranında da görünmez (24 Eki
+     * açılış denetimi: canlıda "0 / 20 AI önerisi" görünüyordu).
+     */
+    #[Test]
+    public function the_ai_allowance_is_shown_only_when_ai_is_on(): void
+    {
+        [, $user] = $this->context();
+        Plan::create(['code' => 'free', 'name' => 'Ücretsiz', 'price_monthly' => 0, 'limits' => ['products' => 25, 'ai_suggestions_monthly' => 20]]);
+
+        config(['entegrasyon.ai.enabled' => true, 'entegrasyon.ai.api_key' => '']);
+        $this->assertArrayNotHasKey('ai_suggestions_monthly', $this->props($this->actingAs($user)->get('/billing'))['usage']);
+
+        config(['entegrasyon.ai.api_key' => 'sk-ant-test']);
+        $this->assertSame(20, $this->props($this->actingAs($user)->get('/billing'))['usage']['ai_suggestions_monthly']['limit']);
+    }
+
     /** Sınırsız limit `null` olarak taşınır — sıfır DEĞİL. */
     #[Test]
     public function an_unlimited_plan_reports_a_null_limit(): void

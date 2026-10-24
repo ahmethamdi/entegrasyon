@@ -1793,7 +1793,7 @@
     "Şimdilik gizle": "Hide for now",
     "Kurulum ilerlemesi": "Setup progress",
     "isteğe bağlı": "optional",
-    "e-Fatura entegratörünü (Nilvera ya da Paraşüt) bağla, siparişlerin e-faturası buradan kesilsin.": "Connect your e-invoice provider (Nilvera or Paraşüt) so e-invoices for your orders are issued from here.",
+    "e-Fatura entegratörünü (Nilvera) bağla, siparişlerin e-faturası buradan kesilsin.": "Connect your e-invoice provider (Nilvera) so e-invoices for your orders are issued from here.",
     "e-Fatura bağlantısı kaldırılsın mı? Kesilmiş faturalar :provider hesabınızda kalır.": "Disconnect e-invoicing? Invoices already issued stay in your :provider account.",
     "Siparişin faturası kendi e-fatura entegratörü hesabınızdan kesilir: alıcı e-fatura mükellefiyse e-fatura, değilse e-arşiv. Alıcının adı, adresi ve kimlik numarası fatura anında kanaldan okunur ve 34Pazar'da saklanmaz.": "Invoices are issued from your own e-invoice provider account: an e-invoice if the buyer is registered for e-invoicing, otherwise an e-archive invoice. The buyer's name, address and ID number are read from the channel at invoicing time and are not stored in 34Pazar.",
     "Nilvera portalında API Tanımları → Yeni Anahtar ile bir anahtar üretip buraya yapıştırın. Anahtar şifreli saklanır ve ekrana geri gelmez. Kontörünüz Nilvera hesabınızdan düşer.": "In the Nilvera portal, create a key under API Definitions → New Key and paste it here. The key is stored encrypted and never shown again. Credits are deducted from your Nilvera account.",
@@ -1853,5 +1853,6 @@
     "Seçilen ürünlerden biri bulunamadı.": "One of the selected products wasn't found.",
     "Bir set başka bir sete eklenemez.": "A set can't be added to another set.",
     "Set ürün: stoğu bileşenlerinden hesaplanır, fiyatı ürün ekranından değiştirin": "Set: its stock is calculated from its products; change its price on the product screen",
-    "Set ürün: stoğu bileşenlerinden hesaplanır": "Set: its stock is calculated from its products"
+    "Set ürün: stoğu bileşenlerinden hesaplanır": "Set: its stock is calculated from its products",
+    "Bu kanal şu an yeni bağlantıya kapalı. Bize WhatsApp ya da e-postayla yazın, birlikte bakalım.": "This channel is not open to new connections right now. Message us on WhatsApp or by email and we'll look at it together."
 }
