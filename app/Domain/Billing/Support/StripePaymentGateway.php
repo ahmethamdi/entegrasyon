@@ -6,6 +6,7 @@ namespace App\Domain\Billing\Support;
 
 use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Billing\Models\Plan;
+use App\Domain\Identity\Models\Tenant;
 use Stripe\StripeClient;
 
 /**
@@ -30,10 +31,20 @@ final class StripePaymentGateway implements PaymentGateway
         // UStG notu) müşterinin `invoice_settings.footer`'ından gelir. Checkout
         // abonelik kipinde altbilgi alanı yok; müşteriyi Stripe açsaydı ilk
         // fatura notsuz kesilirdi.
-        $customer = $this->client()->customers->create([
+        //
+        // E-POSTA VE AD MÜŞTERİYE YAZILIR (24 Eki açılış denetimi): canlıda
+        // müşteri adsız ve e-postasız açılıyordu; Stripe faturası alıcısız
+        // kesilir, makbuz postası gidecek adres bulamazdı.
+        $tenant = Tenant::query()->find($tenantId);
+        $owner = $tenant?->users()->wherePivot('role', 'owner')->orderBy('tenant_users.created_at')->first();
+
+        $customer = $this->client()->customers->create(array_filter([
+            'email' => $owner?->email,
+            'name' => $tenant?->name,
+            'preferred_locales' => ['tr'],
             'metadata' => ['tenant_id' => $tenantId],
             'invoice_settings' => ['footer' => (string) config('entegrasyon.stripe.invoice_footer')],
-        ]);
+        ], fn (mixed $value): bool => $value !== null && $value !== ''));
 
         $session = $this->client()->checkout->sessions->create([
             'mode' => 'subscription',
