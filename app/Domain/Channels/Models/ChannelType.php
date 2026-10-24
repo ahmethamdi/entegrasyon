@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App\Domain\Channels\Models;
 
+use App\Domain\Channels\Adapters\Amazon\AmazonApp;
+use App\Domain\Channels\Adapters\Etsy\EtsyApp;
+use App\Domain\Channels\Adapters\Otto\OttoApp;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -77,5 +80,39 @@ class ChannelType extends Model
     public function isMarketplace(): bool
     {
         return $this->kind === 'marketplace';
+    }
+
+    /**
+     * Kanal YENİ bir satıcıya sunulabilir mi? (24 Eki 2026 açılış denetimi)
+     *
+     * `is_active` kodun hazır olduğunu söyler; bazı kanallar ayrıca
+     * 34Pazar'ın KENDİ uygulama kaydını ister (Amazon SP-API, OTTO
+     * servicepartner, Etsy uygulaması). Kayıt yoksa bağlanma isteği
+     * `RuntimeException` ile 500'e düşüyordu ve site o kanalı "her
+     * pakette" diye satıyordu. Böyle kanal sitede ve bağlanma formunda
+     * GÖRÜNMEZ; kayıt girilince kendiliğinden geri gelir. Uygulama
+     * anahtarı dolu ama kanal tarafında etkin değilse (Etsy: "API key not
+     * active") elle `CHANNELS_WITHHELD` ile saklanır.
+     *
+     * MEVCUT bağlantılar etkilenmez: bu yalnız yeni bağlanmayı ve vitrini
+     * kapatır, çalışan senkronu değil.
+     */
+    public function isOffered(): bool
+    {
+        return $this->is_active && ! self::isWithheld($this->code);
+    }
+
+    public static function isWithheld(string $code): bool
+    {
+        if (in_array($code, (array) config('entegrasyon.channels_withheld', []), true)) {
+            return true;
+        }
+
+        return match ($code) {
+            'amazon' => ! AmazonApp::configured(),
+            'otto' => ! OttoApp::configured(),
+            'etsy' => ! EtsyApp::configured(),
+            default => false,
+        };
     }
 }

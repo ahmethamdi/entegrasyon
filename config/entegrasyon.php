@@ -78,6 +78,14 @@ return [
     ],
 
     /*
+    | Yeni satıcıya SUNULMAYAN kanallar (virgüllü kod listesi). Uygulama
+    | kaydı eksik kanallar (Amazon, OTTO, Etsy) zaten kendiliğinden
+    | saklanır — `ChannelType::isOffered()`. Bu liste, anahtarı dolu ama
+    | kanal tarafında etkin olmayan uygulamalar içindir (24 Eki: Etsy).
+    */
+    'channels_withheld' => array_values(array_filter(array_map('trim', explode(',', (string) env('CHANNELS_WITHHELD', ''))))),
+
+    /*
     | Stok fan-out · yankı bastırma penceresi (dk). Varyantta bu süre içinde
     | kaynak dışı hareket varsa siparişin geldiği kanala da stok yazılır
     | (S7 yük testi yarışı). 0 = kaynak kanal hep atlanır (eski davranış).

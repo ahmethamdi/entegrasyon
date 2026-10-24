@@ -76,8 +76,12 @@ final class Solutions
         return ChannelType::query()
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['code', 'name', 'adapter_class'])
+            ->get(['code', 'name', 'adapter_class', 'is_active'])
             ->filter(function (ChannelType $type) use ($rule): bool {
+                if (! $type->isOffered()) {
+                    return false;
+                }
+
                 if (is_array($rule)) {
                     return in_array($type->code, $rule, true);
                 }

@@ -89,7 +89,9 @@ final class SiteController extends Controller
     {
         $type = ChannelType::query()->where('code', $channel)->first(['code', 'name', 'kind', 'adapter_class', 'is_active']);
 
-        abort_if($type === null, 404);
+        // Uygulama kaydı eksik kanal (`isOffered`) vitrinde YOK: sayfası
+        // olsaydı satıcı bağlanamayacağı bir kanalı arayıp bulurdu.
+        abort_if($type === null || ($type->is_active && ! $type->isOffered()), 404);
 
         return $this->page('site.channel', $request, [
             'channel' => $this->presentChannel($type),
@@ -218,7 +220,8 @@ final class SiteController extends Controller
     private function hasGuide(string $code): bool
     {
         return ChannelConnectForm::isDefined($code)
-            && (bool) ChannelType::query()->where('code', $code)->value('is_active');
+            && (bool) ChannelType::query()->where('code', $code)->value('is_active')
+            && ! ChannelType::isWithheld($code);
     }
 
     public function sitemap(Blog $blog): Response
@@ -324,7 +327,11 @@ final class SiteController extends Controller
             ->orderByDesc('is_active')
             ->orderBy('name')
             ->get(['code', 'name', 'kind', 'adapter_class', 'is_active'])
+            // Açık ama sunulamayan kanal listede "Yakında" da görünmez:
+            // tamamen çıkar (24 Eki kararı: "yakında" denmez).
+            ->reject(fn (ChannelType $type): bool => $type->is_active && ! $type->isOffered())
             ->map(fn (ChannelType $type): array => $this->presentChannel($type))
+            ->values()
             ->all();
     }
 

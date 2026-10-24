@@ -21,7 +21,7 @@
     [$cx, $cy] = [320, 210];
     $source = ['trendyol', 'Trendyol', 90, 90];
     $targets = [
-        ['amazon', 'Amazon', 550, 90],
+        ['ebay', 'eBay', 550, 90],
         ['hepsiburada', 'Hepsiburada', 90, 330],
         ['shopify', 'Shopify', 550, 330],
         ['n11', 'n11', 320, 40],
@@ -30,8 +30,8 @@
     $all = [$source, ...$targets];
     $dur = '8s';
     $label = $t(
-        "Örnek ürün: Trendyol'dan gelen bir sipariş seramik kupanın stoğunu 12'den 11'e düşürür; yeni sayı Amazon, Hepsiburada, Shopify, n11 ve Kaufland'a gönderilir.",
-        'Example product: an order from Trendyol reduces the ceramic mug\'s stock from 12 to 11; the new number is sent to Amazon, Hepsiburada, Shopify, n11 and Kaufland.',
+        "Örnek ürün: Trendyol'dan gelen bir sipariş seramik kupanın stoğunu 12'den 11'e düşürür; yeni sayı eBay, Hepsiburada, Shopify, n11 ve Kaufland'a gönderilir.",
+        'Example product: an order from Trendyol reduces the ceramic mug\'s stock from 12 to 11; the new number is sent to eBay, Hepsiburada, Shopify, n11 and Kaufland.',
     );
 @endphp
 <svg class="dg" viewBox="0 0 640 450" role="img" aria-labelledby="dg-title dg-desc">

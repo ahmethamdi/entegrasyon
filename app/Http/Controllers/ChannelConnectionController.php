@@ -124,6 +124,13 @@ final class ChannelConnectionController extends Controller
                 // satıcı bağlantıyı "kurulmuş" sanar ve her çağrı 401
                 // alır — anahtar yanlış değil, HİÇ SORULMAMIŞTIR.
                 function (string $attribute, mixed $value, \Closure $fail): void {
+                    // Uygulama kaydı eksik kanal (Amazon/OTTO/Etsy) yetki
+                    // adımında 500'e düşerdi — kapıda Türkçe reddedilir.
+                    if (is_string($value) && $value !== '' && ChannelType::isWithheld($value)) {
+                        $fail(__('Bu kanal şu an yeni bağlantıya kapalı. Bize WhatsApp ya da e-postayla yazın, birlikte bakalım.'));
+
+                        return;
+                    }
                     if (is_string($value) && $value !== '' && ! ChannelConnectForm::isDefined($value)) {
                         $fail(__('Bu kanalın kimlik biçimi panelde tanımlı değil; şu an bağlanamıyor.'));
                     }
@@ -640,7 +647,9 @@ final class ChannelConnectionController extends Controller
         return ChannelType::query()
             ->where('is_active', true)
             ->orderBy('name')
-            ->get(['code', 'name', 'kind'])
+            ->get(['code', 'name', 'kind', 'is_active'])
+            ->filter(fn (ChannelType $type): bool => $type->isOffered())
+            ->values()
             ->map(fn (ChannelType $type): array => [
                 'code' => $type->code,
                 'name' => $type->name,

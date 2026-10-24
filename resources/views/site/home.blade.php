@@ -132,7 +132,7 @@
             <div>
                 <h1 id="hero-baslik" class="home-hero__title">{{ $t("Trendyol'da satıldı, her kanalda stok düştü.", 'Sold on Trendyol, stock dropped on every channel.') }}</h1>
                 <p class="home-hero__lead mt-5">
-                    {{ $t("Amazon'da, Hepsiburada'da, Shopify'da da. 34Pazar pazaryerlerini ve e-ticaret siteni tek stoğa bağlar: siparişi alır, stoğu bir kez düşer, yeni sayıyı bütün kanallara gönderir.", 'On Amazon, Hepsiburada and Shopify too. 34Pazar ties your marketplaces and online store to one stock count: it takes the order, deducts stock once and sends the new number to every channel.') }}
+                    {{ $t("Hepsiburada'da, eBay'de, Shopify'da da. 34Pazar pazaryerlerini ve e-ticaret siteni tek stoğa bağlar: siparişi alır, stoğu bir kez düşer, yeni sayıyı bütün kanallara gönderir.", 'On Hepsiburada, eBay and Shopify too. 34Pazar ties your marketplaces and online store to one stock count: it takes the order, deducts stock once and sends the new number to every channel.') }}
                 </p>
                 <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
                     <a href="{{ $signupUrl }}" class="btn btn-primary btn-lg">{{ $signupLabel }}</a>

@@ -13,7 +13,10 @@ const props = defineProps({
 
 // Varsayılan seçim BAĞLANABİLİR bir kanaldır. İlk sıradaki alınsaydı
 // ekran, tanımı olmayan bir kanalla açılıp "bağlanamazsın" diyebilirdi.
-const firstConnectable = props.channelTypes.find((type) => type.connectable);
+// Varsayılan Trendyol: yeni satıcıların çoğu oradan gelir; alfabetik ilk
+// kanal (eskiden Etsy) ilk ekranda yanlış izlenim veriyordu (24 Eki).
+const firstConnectable = props.channelTypes.find((type) => type.connectable && type.code === 'trendyol')
+    ?? props.channelTypes.find((type) => type.connectable);
 
 // ⚠️ HER KANALIN HER ALANI BAŞTAN TANIMLANIR — SONRADAN EKLENMEZ.
 //
