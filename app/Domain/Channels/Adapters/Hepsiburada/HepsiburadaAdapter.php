@@ -10,6 +10,7 @@ use App\Domain\Channels\Adapters\Hepsiburada\Catalog\HepsiburadaCatalog;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
+use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\HealthResult;
@@ -31,6 +32,7 @@ use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
+use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
@@ -138,7 +140,7 @@ use Throwable;
  * `instanceof` ile okunur ve ilan edilen ama çalışmayan bir yetenek,
  * panelde çalışmayan bir sekme demektir.
  */
-final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceLink, SupportsOrders, SupportsPricing, SupportsReturns, SupportsTaxonomy, ValidatesPublication
+final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceLink, SupportsOrders, SupportsPricing, SupportsReturns, SupportsTaxonomy, ValidatesPublication
 {
     use ReadsClaims;
 
@@ -565,6 +567,36 @@ final class HepsiburadaAdapter implements ChannelAdapter, DeclaresChannelCurrenc
     }
 
     // ------------------------------------------------------- katalog (S3)
+
+    /**
+     * KDV oranı — ürün açmanın ön şartı (`HepsiburadaCatalog::publicationIssues`).
+     * 24 Eki'ye kadar panelde girilemiyordu; HB'ye ürün açma fiilen kapalıydı.
+     * Varsayılan YOK: KDV ürünün vergisidir, satıcı seçer.
+     *
+     * @return list<ConnectionSettingField>
+     */
+    public function connectionSettingFields(): array
+    {
+        $raw = ($this->connection->settings ?? [])[HepsiburadaCatalog::SETTING_VAT_RATE] ?? null;
+
+        return [
+            new ConnectionSettingField(
+                key: HepsiburadaCatalog::SETTING_VAT_RATE,
+                label: __('KDV oranı'),
+                options: array_map(static fn (int $rate): array => ['value' => (string) $rate, 'label' => '%'.$rate, 'usable' => true], HepsiburadaCatalog::VAT_RATES),
+                value: $raw === null ? null : (string) $raw,
+                hint: __('Hepsiburada\'ya açılan yeni ürünler bu KDV oranıyla gönderilir.'),
+            ),
+        ];
+    }
+
+    /** @return list<string> */
+    public function missingConnectionSettings(): array
+    {
+        $raw = ($this->connection->settings ?? [])[HepsiburadaCatalog::SETTING_VAT_RATE] ?? null;
+
+        return is_numeric($raw) && in_array((int) $raw, HepsiburadaCatalog::VAT_RATES, true) ? [] : [HepsiburadaCatalog::SETTING_VAT_RATE];
+    }
 
     private function catalog(): HepsiburadaCatalog
     {

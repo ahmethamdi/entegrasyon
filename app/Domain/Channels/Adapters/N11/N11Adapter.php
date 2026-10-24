@@ -10,6 +10,7 @@ use App\Domain\Channels\Adapters\N11\Catalog\N11Catalog;
 use App\Domain\Channels\Contracts\AdapterResult;
 use App\Domain\Channels\Contracts\ChannelAdapter;
 use App\Domain\Channels\Contracts\DeclaresChannelCurrency;
+use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresRequestQuota;
 use App\Domain\Channels\Contracts\GuardsAmbiguousCreate;
 use App\Domain\Channels\Contracts\HealthResult;
@@ -30,6 +31,7 @@ use App\Domain\Channels\Exceptions\ListingNotPublishable;
 use App\Domain\Channels\Models\ChannelCategory;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Support\ChannelHttpClient;
+use App\Domain\Channels\Support\ConnectionSettingField;
 use App\Domain\Channels\Support\CredentialVault;
 use App\Domain\Channels\Support\MapsOrderStateFromTable;
 use App\Domain\Invoicing\Exceptions\InvoiceDataUnavailable;
@@ -165,7 +167,7 @@ use Throwable;
  * kalmaz). Satıcı onayı N11'e otomatiğe de bağlatabilir
  * (`sellerintegration@n11.com`).
  */
-final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceLink, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
+final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, DeclaresConnectionSettings, GuardsAmbiguousCreate, MapsOrderState, SupportsApprovalWorkflow, SupportsBatchStatus, SupportsCatalog, SupportsCatalogImport, SupportsInventory, SupportsInvoiceData, SupportsInvoiceLink, SupportsOrders, SupportsPricing, SupportsTaxonomy, ValidatesPublication
 {
     use DeclaresRequestQuota;
     use MapsOrderStateFromTable;
@@ -830,6 +832,106 @@ final class N11Adapter implements ChannelAdapter, DeclaresChannelCurrency, Guard
     private function catalog(): N11Catalog
     {
         return new N11Catalog((array) ($this->connection->settings ?? []));
+    }
+
+    // ------------------------------------------------- bağlantı ayarları
+
+    /** Hazırlık günü seçenekleri — N11 mağazanın asgarisinden küçüğünü reddeder. */
+    private const PREPARING_DAYS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 14, 15, 20, 30];
+
+    /**
+     * KDV, teslimat şablonu, hazırlık günü — üçü de ürün açmanın ön şartı
+     * (`N11Catalog::publicationIssues`). 24 Eki'ye kadar panelde girilemiyordu:
+     * N11'e ürün açma fiilen kapalıydı.
+     *
+     * ⚠️ VARSAYILAN YOK. KDV ürünün vergisidir, hazırlık günü müşteriye
+     * verilen sözdür; ikisini de satıcı seçer.
+     *
+     * @return list<ConnectionSettingField>
+     */
+    public function connectionSettingFields(): array
+    {
+        $settings = (array) ($this->connection->settings ?? []);
+        [$templates, $templatesError] = $this->shipmentTemplates();
+        $current = isset($settings[N11Catalog::SETTING_SHIPMENT_TEMPLATE]) ? (string) $settings[N11Catalog::SETTING_SHIPMENT_TEMPLATE] : null;
+
+        return [
+            new ConnectionSettingField(
+                key: N11Catalog::SETTING_VAT_RATE,
+                label: __('KDV oranı'),
+                options: array_map(static fn (int $rate): array => ['value' => (string) $rate, 'label' => '%'.$rate, 'usable' => true], N11Catalog::VAT_RATES),
+                value: isset($settings[N11Catalog::SETTING_VAT_RATE]) ? (string) $settings[N11Catalog::SETTING_VAT_RATE] : null,
+                hint: __('N11\'e açılan ve güncellenen ürünler bu KDV oranıyla gönderilir.'),
+            ),
+            new ConnectionSettingField(
+                key: N11Catalog::SETTING_SHIPMENT_TEMPLATE,
+                label: __('Teslimat şablonu'),
+                options: array_map(static fn (array $t): array => [
+                    'value' => $t['name'],
+                    'label' => $t['default'] ? $t['name'].' · '.__('varsayılan') : $t['name'],
+                    'usable' => true,
+                ], $templates),
+                value: $current,
+                hint: __('Şablonlar N11 Satıcı Ofisi\'nde Hesabım → Teslimat Bilgileri\'nden yönetilir; listede yoksa önce orada oluştur.'),
+                optionsError: $templatesError ?? ($templates === [] ? __('N11 mağazanda teslimat şablonu yok. Satıcı Ofisi → Hesabım → Teslimat Bilgileri\'nden bir şablon oluşturup sayfayı yenile.') : null),
+            ),
+            new ConnectionSettingField(
+                key: N11Catalog::SETTING_PREPARING_DAY,
+                label: __('Hazırlık süresi (gün)'),
+                options: array_map(static fn (int $day): array => ['value' => (string) $day, 'label' => __(':count gün', ['count' => $day]), 'usable' => true], self::PREPARING_DAYS),
+                value: isset($settings[N11Catalog::SETTING_PREPARING_DAY]) ? (string) $settings[N11Catalog::SETTING_PREPARING_DAY] : null,
+                hint: __('Siparişi kargoya verme sözün. N11 mağaza ayarındaki asgari süreden kısa değeri reddeder.'),
+            ),
+        ];
+    }
+
+    /** @return list<string> */
+    public function missingConnectionSettings(): array
+    {
+        $settings = (array) ($this->connection->settings ?? []);
+        $vat = $settings[N11Catalog::SETTING_VAT_RATE] ?? null;
+        $day = $settings[N11Catalog::SETTING_PREPARING_DAY] ?? null;
+
+        return array_values(array_filter([
+            is_numeric($vat) && in_array((int) $vat, N11Catalog::VAT_RATES, true) ? null : N11Catalog::SETTING_VAT_RATE,
+            trim((string) ($settings[N11Catalog::SETTING_SHIPMENT_TEMPLATE] ?? '')) !== '' ? null : N11Catalog::SETTING_SHIPMENT_TEMPLATE,
+            is_numeric($day) && (int) $day >= 1 ? null : N11Catalog::SETTING_PREPARING_DAY,
+        ]));
+    }
+
+    /**
+     * Mağazanın teslimat şablonları: [şablonlar, hata metni].
+     *
+     * ⚠️ HATA BOŞ LİSTEYE DÖNÜŞMEZ (Etsy kargo profiliyle aynı kural):
+     * "şablon yok" ile "N11'e ulaşılamadı" ayrı şeylerdir.
+     *
+     * @return array{0: list<array{name: string, default: bool}>, 1: string|null}
+     */
+    private function shipmentTemplates(): array
+    {
+        try {
+            [$key, $secret] = $this->credentials();
+
+            $response = $this->client->postRaw(
+                N11Soap::SHIPMENT_SERVICE_URL,
+                N11Soap::getShipmentTemplateList($key, $secret),
+                'text/xml; charset=utf-8',
+                ['SOAPAction' => '""', 'Accept' => 'text/xml'],
+            );
+
+            // Fault/`failure` gövdesi HTTP 200 ile de gelir — önce gövde okunur.
+            $templates = N11Soap::parseShipmentTemplateList($response->body());
+            $response->throw();
+        } catch (Throwable $e) {
+            Log::warning('n11.settings_options_unavailable', [
+                'connection' => $this->connection->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return [[], __('Teslimat şablonları N11\'den okunamadı. API anahtarının geçerli olduğundan emin ol ve sayfayı yenile.')];
+        }
+
+        return [$templates, null];
     }
 
     /** Belge: tüm ağaç tek istekte; `/cdn/` uçları da key + secret ister. */

@@ -16,6 +16,10 @@ use DOMXPath;
  * statüleri REST'te `Delivered` döner (`docs/YENI-KANALLAR-API-NOTLARI.md`
  * §4 · Sipariş, tuzak 5). Stok geri yükleme için tek kaynak bu liste.
  *
+ * Ayrıca `ShipmentService.GetShipmentTemplateList` (teslimat şablonları,
+ * 24 Eki): REST'te şablon listeleme ucu yok, ürün açarken şablonun ADI
+ * gönderilir — satıcı adı elle yazsaydı yazım hatası ilk ilanda 400 olurdu.
+ *
  * Şema: canlı WSDL (`https://api.n11.com/ws/ReturnService.wsdl`, 8 Eki 2026
  * okundu) + developer.n11.com "İade Talepleri Servisi" örnek isteği.
  *   - İstek kökü `sch:ClaimReturnListRequest` (`http://www.n11.com/ws/schemas`),
@@ -36,6 +40,8 @@ final class N11Soap
     public const RETURN_SERVICE_URL = 'https://api.n11.com/ws/returnService/';
 
     public const INVOICE_SERVICE_URL = 'https://api.n11.com/ws/sellerInvoiceService/';
+
+    public const SHIPMENT_SERVICE_URL = 'https://api.n11.com/ws/shipmentService/';
 
     private const NS_ENVELOPE = 'http://schemas.xmlsoap.org/soap/envelope/';
 
@@ -136,6 +142,59 @@ final class N11Soap
     public static function parseSaveLinkSellerInvoice(string $xml): void
     {
         self::successResponse($xml, 'SaveLinkSellerInvoiceResponse');
+    }
+
+    /**
+     * `ShipmentService.GetShipmentTemplateList` zarfı.
+     *
+     * Şema: canlı WSDL (`https://api.n11.com/ws/ShipmentService.wsdl`, 24 Eki
+     * 2026 okundu): istek `auth` + `pagingData` (currentPage, pageSize);
+     * yanıt `result` + `shipmentTemplates/shipmentTemplate[]`, yanıtta
+     * sayfa bilgisi YOK. developer.n11.com'da bu servisin sayfası yok
+     * [gerçek mağazada doğrulanmadı].
+     */
+    public static function getShipmentTemplateList(string $appKey, string $appSecret, int $pageSize = 100): string
+    {
+        $e = static fn (string $v): string => htmlspecialchars($v, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+
+        return '<?xml version="1.0" encoding="utf-8"?>'
+            .'<soapenv:Envelope xmlns:soapenv="'.self::NS_ENVELOPE.'" xmlns:sch="'.self::NS_SCHEMA.'">'
+            .'<soapenv:Header/><soapenv:Body><sch:GetShipmentTemplateListRequest>'
+            .'<auth><appKey>'.$e($appKey).'</appKey><appSecret>'.$e($appSecret).'</appSecret></auth>'
+            .'<pagingData><currentPage>0</currentPage><pageSize>'.$pageSize.'</pageSize></pagingData>'
+            .'</sch:GetShipmentTemplateListRequest></soapenv:Body></soapenv:Envelope>';
+    }
+
+    /**
+     * Şablon adları — `templateName` boş olan öğe atlanır (adı olmayan
+     * şablon ürün açarken gönderilemez).
+     *
+     * @return list<array{name: string, default: bool}>
+     */
+    public static function parseShipmentTemplateList(string $xml): array
+    {
+        [$xpath, $response] = self::successResponse($xml, 'GetShipmentTemplateListResponse');
+
+        $templates = [];
+
+        foreach ($xpath->query('./*[local-name()="shipmentTemplates"]/*[local-name()="shipmentTemplate"]', $response) as $node) {
+            if (! $node instanceof DOMElement) {
+                continue;
+            }
+
+            $name = trim((string) $xpath->evaluate('string(./*[local-name()="templateName"])', $node));
+
+            if ($name === '') {
+                continue;
+            }
+
+            $templates[] = [
+                'name' => $name,
+                'default' => strtolower(trim((string) $xpath->evaluate('string(./*[local-name()="defaultTemplate"])', $node))) === 'true',
+            ];
+        }
+
+        return $templates;
     }
 
     /**

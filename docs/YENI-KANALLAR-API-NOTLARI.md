@@ -718,7 +718,10 @@ Tuzaklar bölümünde.
 - Partner veya uygulama onayı **yok**. Mağaza bazlı key + secret yeterli.
 - Ürün açmak için satıcının panelde en az bir **teslimat (kargo)
   şablonu** olmalı: Hesabım > Teslimat Bilgileri. Şablonun **adı** API'de
-  `shipmentTemplate` olarak gönderilir.
+  `shipmentTemplate` olarak gönderilir. REST'te şablon listeleme ucu yok;
+  panel listeyi SOAP `ShipmentService.GetShipmentTemplateList`'ten okur
+  (`https://api.n11.com/ws/shipmentService/`, canlı WSDL 24 Eki 2026;
+  developer.n11.com'da sayfası yok, gerçek mağazada **[doğrulanmadı]**).
   ([Ürün yükleme](https://developer.n11.com/documentation/n11-marketplace-entegrasyonu/urun-yukleme/))
 - Sipariş onayını API yerine otomatiğe bağlatmak isteyen satıcı
   `sellerintegration@n11.com` adresine yazar.

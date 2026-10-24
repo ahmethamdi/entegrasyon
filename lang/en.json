@@ -1753,5 +1753,15 @@
     "1–5 gün": "1–5 days",
     "1–7 gün": "1–7 days",
     "3–5 gün": "3–5 days",
-    "1–10 iş günü": "1–10 business days"
+    "1–10 iş günü": "1–10 business days",
+    "N11'e açılan ve güncellenen ürünler bu KDV oranıyla gönderilir.": "New and updated N11 products are sent with this VAT rate.",
+    "Teslimat şablonu": "Delivery template",
+    "varsayılan": "default",
+    "Şablonlar N11 Satıcı Ofisi'nde Hesabım → Teslimat Bilgileri'nden yönetilir; listede yoksa önce orada oluştur.": "Templates are managed in N11 Seller Office under My Account → Delivery Information; if one is missing, create it there first.",
+    "N11 mağazanda teslimat şablonu yok. Satıcı Ofisi → Hesabım → Teslimat Bilgileri'nden bir şablon oluşturup sayfayı yenile.": "Your N11 store has no delivery template. Create one in Seller Office → My Account → Delivery Information, then refresh this page.",
+    "Hazırlık süresi (gün)": "Handling time (days)",
+    ":count gün": ":count days",
+    "Siparişi kargoya verme sözün. N11 mağaza ayarındaki asgari süreden kısa değeri reddeder.": "Your promise for handing the order to the carrier. N11 rejects values shorter than your store's minimum.",
+    "Teslimat şablonları N11'den okunamadı. API anahtarının geçerli olduğundan emin ol ve sayfayı yenile.": "Delivery templates could not be read from N11. Make sure your API key is valid and refresh the page.",
+    "Hepsiburada'ya açılan yeni ürünler bu KDV oranıyla gönderilir.": "New Hepsiburada products are sent with this VAT rate."
 }
