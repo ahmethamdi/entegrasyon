@@ -17,6 +17,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title') · 34Pazar</title>
     <meta name="description" content="@yield('description')">
+    <meta name="google-site-verification" content="ZdqZyhjTplIROutinsk_NYi2f2J5i1VHpybCIQxoHUQ" />
     <link rel="canonical" href="@hasSection('canonical')@yield('canonical')@else{{ url()->current() }}@endif">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="@yield('og_locale', 'tr_TR')">
