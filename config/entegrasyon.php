@@ -98,6 +98,35 @@ return [
     | S7 · işletme izleme turu (`ops:watch`, 5 dk) — Black Friday hazırlığı.
     | Alarm 34Devs'e gider (yukarıdaki ntfy + posta), aynı alarm saatte 1.
     */
+    /*
+    | S13 · OFF-SİTE YEDEK (IONOS S3) ve dead-man ping'leri (healthchecks.io).
+    |
+    | Bucket/anahtar ya da age kimlik dosyası eksikse gece işi ÇALIŞMAZ ve
+    | 34Devs'e "yapılandırılmadı" alarmı gider. Kimlik dosyası .env'de DEĞİL:
+    | sunucuda /opt/34pazar/secrets/backup-age.key, scheduler konteynerine
+    | salt okunur bağlanır (docker-compose.prod.yml). Kurulum: docs/RUNBOOK.md.
+    */
+    'backup' => [
+        's3' => [
+            'endpoint' => env('BACKUP_S3_ENDPOINT'),
+            'region' => env('BACKUP_S3_REGION'),
+            'bucket' => env('BACKUP_S3_BUCKET'),
+            'key' => env('BACKUP_S3_KEY'),
+            'secret' => env('BACKUP_S3_SECRET'),
+            'timeout_seconds' => (int) env('BACKUP_S3_TIMEOUT_SECONDS', 300),
+        ],
+        'prefix' => env('BACKUP_S3_PREFIX', '34pazar'),
+        'age_identity_file' => env('BACKUP_AGE_IDENTITY_FILE', '/run/secrets/34pazar/backup-age.key'),
+        'work_dir' => env('BACKUP_WORK_DIR', storage_path('app/backup-tmp')),
+        // Gece yedeğinin dead-man ping'i (start / başarı / fail).
+        'healthcheck_url' => env('HEALTHCHECKS_BACKUP_URL'),
+    ],
+
+    'heartbeat' => [
+        // Zamanlayıcı nabzı (5 dk). Boşsa ping atılmaz.
+        'url' => env('HEALTHCHECKS_HEARTBEAT_URL'),
+    ],
+
     'ops' => [
         // Horizon kuyruğunda en eski işin bekleme süresi (sn).
         'queue_wait_seconds' => (int) env('OPS_QUEUE_WAIT_SECONDS', 120),
