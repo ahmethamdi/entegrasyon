@@ -28,9 +28,9 @@ Sistem sağlığını aç
     sanabilir.
 --}}
 <small>Bu uyarı günde en fazla bir kez gönderilir. Durum düzelene kadar
-sistem sağlığı ekranından takip edebilirsiniz.</small>
+sistem sağlığı ekranından takip edebilirsin.</small>
 
 <x-mail::subcopy>
-Bu e-postayı 34Pazar hesabınızın sistem uyarıları kapsamında aldınız.
+Bu e-postayı 34Pazar hesabının sistem uyarıları kapsamında aldın.
 </x-mail::subcopy>
 </x-mail::message>

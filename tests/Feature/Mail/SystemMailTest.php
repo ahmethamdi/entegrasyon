@@ -43,9 +43,9 @@ final class SystemMailTest extends TestCase
     /** @return iterable<string, array{0: string, 1: string, 2: string}> */
     public static function notifications(): iterable
     {
-        yield 'doğrulama' => ['verify', 'E-posta adresinizi doğrulayın', 'E-postamı doğrula'];
+        yield 'doğrulama' => ['verify', 'E-posta adresini doğrula', 'E-postamı doğrula'];
         yield 'şifre sıfırlama' => ['reset', 'Parola sıfırlama isteği', 'Parolamı sıfırla'];
-        yield 'ekip daveti' => ['invite', "Atölye Nur sizi 34Pazar'a davet etti", 'Daveti kabul et'];
+        yield 'ekip daveti' => ['invite', "Atölye Nur seni 34Pazar'a davet etti", 'Daveti kabul et'];
         yield 'hoş geldin' => ['welcome', "34Pazar'a hoş geldin", 'Panele git'];
     }
 
@@ -53,8 +53,11 @@ final class SystemMailTest extends TestCase
     #[DataProvider('notifications')]
     public function notification_mails_use_the_34pazar_layout(string $kind, string $subject, string $button): void
     {
-        $user = User::factory()->create(['email' => 'ayse@example.com']);
+        $user = User::factory()->create(['email' => 'ayse@example.com', 'name' => 'Ayşe Yılmaz']);
         $message = $this->notification($kind)->toMail($user);
+
+        // Selamlama ilk adla, virgül ancak ad varsa.
+        $this->assertContains($message->greeting, ['Merhaba Ayşe,', 'Hoş geldin Ayşe,']);
 
         $this->assertInstanceOf(MailMessage::class, $message);
         $this->assertSame($subject, $message->subject);
@@ -92,6 +95,18 @@ final class SystemMailTest extends TestCase
         $this->assertStringContainsString('Germany', $html);
     }
 
+    /** Adı bilinmeyen alıcı (davet, adsız kayıt) yarım virgülle selamlanmaz. */
+    #[Test]
+    public function a_recipient_without_a_name_is_greeted_without_a_dangling_comma(): void
+    {
+        $nameless = User::factory()->create(['name' => '']);
+
+        $this->assertSame('Merhaba!', $this->notification('invite')->toMail($nameless)->greeting);
+        $this->assertSame('Merhaba!', $this->notification('reset')->toMail($nameless)->greeting);
+        $this->assertSame('Hoş geldin!', $this->notification('verify')->toMail($nameless)->greeting);
+        $this->assertSame('Hoş geldin!', $this->notification('welcome')->toMail($nameless)->greeting);
+    }
+
     private function assertBranded(string $html): void
     {
         $this->assertStringContainsString('src="https://34pazar.com/images/34pazar-logo.png"', $html, 'logo mutlak adresle');
@@ -105,6 +120,23 @@ final class SystemMailTest extends TestCase
         foreach (self::ENGLISH_LEFTOVERS as $leftover) {
             $this->assertStringNotContainsString($leftover, $html, "İngilizce kalıntı: {$leftover}");
         }
+
+        $this->assertNoFormalAddress($html);
+    }
+
+    /**
+     * Postalar "sen" diliyle yazılır (site ve panelle aynı). Görünen metinde
+     * "siz" ekleri kalırsa ton karışır: "Hesabınız … yapıştırın".
+     */
+    private function assertNoFormalAddress(string $html): void
+    {
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5);
+
+        $this->assertDoesNotMatchRegularExpression(
+            '/\b(siz|sizi|size|sizin)\b|\p{L}+(ınız|iniz|unuz|ünüz|sınız|siniz|sunuz|sünüz|yın|yin|yun|yün)\b|yapıştırın|edin\b/iu',
+            $text,
+            '"siz" dili kalıntısı',
+        );
     }
 
     private function notification(string $kind): object

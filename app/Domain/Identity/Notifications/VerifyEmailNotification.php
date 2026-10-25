@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Identity\Notifications;
 
+use App\Support\Mail\MailGreeting;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Notifications\Messages\MailMessage;
 
@@ -22,12 +23,12 @@ final class VerifyEmailNotification extends VerifyEmail
 
         // Metin `__()` ile; dil alıcının tercihidir (`User::preferredLocale`).
         return (new MailMessage)
-            ->subject(__('E-posta adresinizi doğrulayın'))
-            ->greeting(__('Hoş geldiniz,'))
-            ->line(__('Hesabınızı kullanmaya başlamak için e-posta adresinizi doğrulayın.'))
+            ->subject(__('E-posta adresini doğrula'))
+            ->greeting(MailGreeting::welcome($notifiable))
+            ->line(__('Hesabını kullanmaya başlamak için e-posta adresini doğrula.'))
             ->action(__('E-postamı doğrula'), $this->verificationUrl($notifiable))
             ->line(__('Bu bağlantı :minutes dakika geçerlidir.', ['minutes' => $minutes]))
-            ->line(__('Bu hesabı siz açmadıysanız bu e-postayı yok sayabilirsiniz.'))
+            ->line(__('Bu hesabı sen açmadıysan bu e-postayı yok sayabilirsin.'))
             ->salutation('34Pazar');
     }
 }

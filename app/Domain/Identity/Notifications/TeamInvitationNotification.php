@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Identity\Notifications;
 
 use App\Domain\Identity\Enums\TenantRole;
+use App\Support\Mail\MailGreeting;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -53,19 +54,19 @@ final class TeamInvitationNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject(__(':tenant sizi 34Pazar\'a davet etti', ['tenant' => $this->tenantName]))
-            ->greeting(__('Merhaba,'))
-            ->line(__(':inviter sizi :tenant ekibine :role rolüyle davet etti.', [
+            ->subject(__(':tenant seni 34Pazar\'a davet etti', ['tenant' => $this->tenantName]))
+            ->greeting(MailGreeting::hello($notifiable))
+            ->line(__(':inviter seni :tenant ekibine :role rolüyle davet etti.', [
                 'inviter' => $this->inviterName,
                 'tenant' => $this->tenantName,
                 'role' => $this->role->label(),
             ]))
             ->line($this->role->description())
             ->action(__('Daveti kabul et'), $this->acceptUrl())
-            ->line(__('Bu bağlantı :days gün geçerlidir. Hesabınız yoksa açılır, varsa giriş yapmanız yeterli.', [
+            ->line(__('Bu bağlantı :days gün geçerli. Hesabın yoksa açılır, varsa giriş yapman yeterli.', [
                 'days' => (int) round(now()->diffInDays($this->expiresAt, true)),
             ]))
-            ->line(__('Bu daveti beklemiyorsanız e-postayı yok sayabilirsiniz.'))
+            ->line(__('Bu daveti beklemiyorsan e-postayı yok sayabilirsin.'))
             ->salutation('34Pazar');
     }
 }

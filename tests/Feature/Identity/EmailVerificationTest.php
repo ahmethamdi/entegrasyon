@@ -37,7 +37,7 @@ final class EmailVerificationTest extends TestCase
         $user = User::query()->where('email', 'yeni@example.com')->firstOrFail();
 
         Notification::assertSentTo($user, VerifyEmailNotification::class, function (VerifyEmailNotification $n) use ($user): bool {
-            return $n->toMail($user)->subject === 'E-posta adresinizi doğrulayın';
+            return $n->toMail($user)->subject === 'E-posta adresini doğrula';
         });
 
         $this->get('/panel')->assertRedirect('/email/verify');

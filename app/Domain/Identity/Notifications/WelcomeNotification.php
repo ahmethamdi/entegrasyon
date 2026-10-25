@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Identity\Notifications;
 
+use App\Support\Mail\MailGreeting;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -26,7 +27,7 @@ final class WelcomeNotification extends Notification
     {
         return (new MailMessage)
             ->subject(__('34Pazar\'a hoş geldin'))
-            ->greeting(__('Hoş geldin,'))
+            ->greeting(MailGreeting::welcome($notifiable))
             ->line(__('Hesabın hazır. Stoğunu tek yerden yönetmeye üç adımda başlarsın:'))
             ->line(__('1. **Kanalını bağla:** Kanallar → Kanal ekle. Mağazanın API bilgilerini girersin, bağlantı denenip açılır.'))
             ->line(__('2. **Ürünlerini çek:** ürünler bağladığın kanaldan ya da CSV ile gelir, stok tek yerde toplanır.'))

@@ -89,7 +89,7 @@ final class MetricAlertMail extends Mailable
     private function scopeText(): string
     {
         return match ($this->metric->scopeKind()) {
-            MetricScopeKind::TENANT => 'Hesabınız',
+            MetricScopeKind::TENANT => 'Hesabın',
             MetricScopeKind::CONNECTION => $this->connectionText(),
             MetricScopeKind::SYSTEM => 'Sistem geneli',
         };
@@ -140,17 +140,17 @@ final class MetricAlertMail extends Mailable
     {
         return match ($this->metric) {
             Metric::OVERSOLD_UNITS,
-            Metric::OVERSOLD_VARIANTS => 'Stok ekranında negatif bakiyeli ürünleri inceleyin; '
+            Metric::OVERSOLD_VARIANTS => 'Stok ekranında negatif bakiyeli ürünleri incele; '
                 .'satış gerçekleşmiş ve stok eksiye düşmüştür.',
 
             Metric::DEAD_OPERATIONS => 'Başarısız işlemler ekranından hataları inceleyip '
-                .'tek tıkla yeniden deneyebilirsiniz.',
+                .'tek tıkla yeniden deneyebilirsin.',
 
-            Metric::DRIFT_RATE => 'Mutabakat ekranında sürüklenen listelemeleri inceleyin; '
+            Metric::DRIFT_RATE => 'Mutabakat ekranında sürüklenen listelemeleri incele; '
                 .'elle inceleme bekleyenler en üstte listelenir.',
 
             Metric::API_LATENCY_P95,
-            Metric::RATE_LIMIT_HITS => 'Kanallar ekranından bağlantı sağlığını kontrol edin.',
+            Metric::RATE_LIMIT_HITS => 'Kanallar ekranından bağlantı sağlığını kontrol et.',
 
             // ⚠️ §25 · TOKEN TAVSİYESİ EYLEM SÖYLER, EKRAN DEĞİL.
             //
@@ -161,10 +161,10 @@ final class MetricAlertMail extends Mailable
             // bunu yalnızca satıcı yapabilir (uyarının ona gitmesinin
             // sebebi de budur).
             Metric::TOKEN_EXPIRING_SOON => 'Kanallar ekranından bu mağazayı yeniden '
-                .'bağlayın; yetki süresi dolduğunda senkron SESSİZCE durur.',
+                .'bağla; yetki süresi dolduğunda senkron SESSİZCE durur.',
 
             Metric::TOKEN_REFRESH_FAILURES => 'Yetki yenileme tekrar tekrar başarısız oluyor. '
-                .'Kanallar ekranından mağazayı yeniden bağlayın; kanal '
+                .'Kanallar ekranından mağazayı yeniden bağla; kanal '
                 .'tarafında izin iptal edilmiş olabilir.',
 
             // Kota YÖNETİCİYE gider ve tavsiye de ona göredir: satıcının
@@ -173,7 +173,7 @@ final class MetricAlertMail extends Mailable
                 .'Stok itme sıklığı düşürülmeli veya varyantlar tek çağrıda '
                 .'gruplanmalı (§21).',
 
-            default => 'Sistem sağlığı ekranından ayrıntıları görebilirsiniz.',
+            default => 'Sistem sağlığı ekranından ayrıntıları görebilirsin.',
         };
     }
 }

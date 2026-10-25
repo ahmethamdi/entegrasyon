@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Identity\Notifications;
 
+use App\Support\Mail\MailGreeting;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Notifications\Messages\MailMessage;
 
@@ -33,11 +34,11 @@ final class ResetPasswordNotification extends ResetPassword
         // Laravel bildirimi göndermeden önce o dile geçer.
         return (new MailMessage)
             ->subject(__('Parola sıfırlama isteği'))
-            ->greeting(__('Merhaba,'))
-            ->line(__('Hesabınız için bir parola sıfırlama isteği aldık.'))
+            ->greeting(MailGreeting::hello($notifiable))
+            ->line(__('Hesabın için bir parola sıfırlama isteği aldık.'))
             ->action(__('Parolamı sıfırla'), $url)
             ->line(__('Bu bağlantı :minutes dakika geçerlidir.', ['minutes' => $minutes]))
-            ->line(__('Bu isteği siz yapmadıysanız bu e-postayı yok sayabilirsiniz; parolanız değişmez.'))
+            ->line(__('Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin; parolan değişmez.'))
             ->salutation('34Pazar');
     }
 }
