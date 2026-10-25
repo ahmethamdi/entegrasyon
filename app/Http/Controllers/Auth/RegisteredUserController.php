@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Domain\Identity\Actions\AcceptInvitation;
 use App\Domain\Identity\Actions\CreateTenant;
+use App\Domain\Identity\Actions\SendWelcomeMail;
 use App\Domain\Identity\Models\User;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\InvitationController;
@@ -119,6 +120,10 @@ final class RegisteredUserController extends Controller
         });
 
         event(new Registered($user));
+
+        // Shopify'ın doğruladığı adresle gelen sahip `Verified` olayı
+        // görmez (markEmailAsVerified olay atmaz); hoş geldini burada alır.
+        app(SendWelcomeMail::class)($user);
 
         Auth::login($user);
 

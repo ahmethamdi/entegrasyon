@@ -12,15 +12,18 @@ use App\Domain\Catalog\Support\ActiveCampaigns;
 use App\Domain\Catalog\Support\ChannelPriceRules;
 use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Identity\Actions\SendWelcomeMail;
 use App\Domain\Identity\Models\User;
 use App\Domain\Identity\Support\SuperAdmin;
 use App\Support\Backup\DatabaseSnapshot;
 use App\Support\Backup\PostgresSnapshot;
 use App\Support\Logging\PayloadRedactor;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
@@ -48,6 +51,13 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Hoş geldin postası doğrulama anında bir kez (SendWelcomeMail).
+        Event::listen(Verified::class, static function (Verified $event): void {
+            if ($event->user instanceof User) {
+                app(SendWelcomeMail::class)($event->user);
+            }
+        });
+
         // Modüler monolit: modeller app/Domain/* altında, factory'ler ise
         // database/factories altında düz namespace kullanır. Varsayılan
         // çözümleyici App\Models\* varsayar; eşlemeyi burada kuruyoruz.
