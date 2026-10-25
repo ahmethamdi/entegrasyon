@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Catalog\Console\FetchExchangeRatesCommand;
 use App\Domain\Catalog\Console\TickPriceCampaignsCommand;
+use App\Domain\Channels\Certification\ScanTestCoverageCommand;
 use App\Domain\Channels\Console\CheckChannelsHealthCommand;
 use App\Domain\Channels\Console\PruneApiCallsCommand;
 use App\Domain\Channels\Console\RefreshExpiringTokensCommand;
@@ -121,6 +122,8 @@ return Application::configure(basePath: dirname(__DIR__))
         BackupOffsiteCommand::class,
         BackupVerifyCommand::class,
         HeartbeatCommand::class,
+        // S15 · kanal sertifikasyonu test taraması.
+        ScanTestCoverageCommand::class,
         // §11 · yük testi. ZAMANLANMAZ ve bu bilinçlidir: ölçüm aracıdır,
         // bakım turu değil — zamanlansaydı her gece kendiliğinden veri
         // üretir ve kuyruğu meşgul ederdi. Elle çalıştırılır.

@@ -1,0 +1,549 @@
+{
+    "amazon": {
+        "cancellation": [
+            "tests/Feature/Channels/AmazonAdapterTest.php::orders_are_polled_with_status_in_the_event_id"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/AmazonAdapterTest.php::inventory_is_patched_with_the_access_token_header"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/AmazonAdapterTest.php::orders_are_polled_with_status_in_the_event_id"
+        ],
+        "shipment": [
+            "tests/Feature/Channels/AmazonAdapterTest.php::shipment_confirmation_sends_open_quantities"
+        ]
+    },
+    "ciceksepeti": {
+        "auth": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::every_request_carries_the_api_key_and_the_integrator_user_agent",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_sandbox_environment_uses_the_sandbox_host",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::consecutive_health_checks_never_repeat_the_same_query",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::without_a_key_nothing_is_sent",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::a_non_json_or_shapeless_answer_is_not_healthy"
+        ],
+        "cancellation": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::order_windows_respect_two_weeks_and_returns_one_month",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_cancellation_stage_looks_back_twelve_days",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_return_stage_looks_back_almost_a_month"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::an_html_403_is_an_access_block_with_an_explanatory_message",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::http_errors_are_classified_by_shape_and_status",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::a_429_releases_the_same_body_gate"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::an_html_403_is_an_access_block_with_an_explanatory_message",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_stock_payload_carries_no_price_fields",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_same_stock_body_is_not_sent_twice_within_thirty_minutes",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_same_body_gate_is_per_connection",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::a_429_releases_the_same_body_gate"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::order_windows_respect_two_weeks_and_returns_one_month",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_cancellation_stage_looks_back_twelve_days",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_return_stage_looks_back_almost_a_month"
+        ],
+        "price": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::the_price_payload_has_no_stock_and_a_list_price_only_for_a_valid_discount",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::a_zero_price_is_never_sent",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::stock_and_price_requests_are_a_second_apart"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::products_are_imported_by_stock_code_with_both_field_spellings",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::product_list_requests_are_five_seconds_apart"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::it_declares_only_the_capabilities_it_implements",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::http_errors_are_classified_by_shape_and_status",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::a_429_releases_the_same_body_gate"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::listings_without_an_identity_cause_no_call",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::remote_stock_is_read_by_stock_code_and_failures_raise",
+            "tests/Feature/Channels/CiceksepetiAdapterTest.php::a_blank_identity_is_never_queried"
+        ]
+    },
+    "ebay": {
+        "auth": [
+            "tests/Feature/Channels/ChannelConnectFormTest.php::etsy_asks_for_nothing_the_app_and_shop_come_from_oauth",
+            "tests/Feature/Channels/EbayAdapterTest.php::a_missing_policy_triple_makes_the_connection_unhealthy",
+            "tests/Feature/Channels/EbayAdapterTest.php::the_health_message_names_every_missing_setting",
+            "tests/Feature/Channels/EbayAdapterTest.php::no_request_is_sent_while_configuration_is_missing",
+            "tests/Feature/Channels/EbayAdapterTest.php::a_fully_configured_connection_is_healthy"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::inventory_targets_the_offer_id_from_channel_metadata",
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::the_inventory_payload_never_carries_a_price",
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::a_batch_without_any_offer_id_fails_instead_of_succeeding",
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::a_failed_item_inside_a_two_hundred_is_reported_as_partial",
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::results_are_matched_by_offer_id_not_by_position"
+        ],
+        "price": [
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::the_price_payload_never_carries_a_quantity",
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::the_price_currency_comes_from_the_marketplace",
+            "tests/Feature/Channels/EbayInventoryPricingTest.php::an_unknown_marketplace_fails_instead_of_guessing_a_currency"
+        ],
+        "publishing": [
+            "tests/Feature/Channels/EbayOfferLifecycleTest.php::creating_an_offer_returns_the_offer_id_as_metadata",
+            "tests/Feature/Channels/EbayOfferLifecycleTest.php::an_existing_offer_is_updated_with_put_not_recreated",
+            "tests/Feature/Channels/EbayOfferLifecycleTest.php::the_offer_is_addressed_by_offer_id_not_by_external_id",
+            "tests/Feature/Channels/EbayOfferLifecycleTest.php::the_offer_body_carries_the_location_marketplace_and_policy_triple",
+            "tests/Feature/Channels/EbayOfferLifecycleTest.php::the_price_currency_comes_from_the_marketplace_not_the_variant"
+        ]
+    },
+    "etsy": {
+        "auth": [
+            "tests/Feature/Channels/EtsyAdapterTest.php::both_identity_headers_are_sent",
+            "tests/Feature/Channels/EtsyAdapterTest.php::no_request_is_sent_without_the_app_keystring",
+            "tests/Feature/Channels/EtsyAdapterTest.php::a_valid_account_is_healthy",
+            "tests/Feature/Channels/EtsyAdapterTest.php::a_connection_without_a_shop_is_unhealthy",
+            "tests/Feature/Channels/EtsyAdapterTest.php::a_response_without_a_user_is_unhealthy"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/EtsyInventoryTest.php::an_empty_batch_never_calls_the_channel",
+            "tests/Feature/Channels/EtsyInventoryTest.php::a_batch_without_parent_ids_fails_loudly",
+            "tests/Feature/Channels/EtsyInventoryTest.php::a_variant_without_a_channel_sku_is_matched_by_product_id",
+            "tests/Feature/Channels/EtsyInventoryTest.php::an_unmatched_batch_is_not_written_and_fails"
+        ],
+        "price": [
+            "tests/Feature/Channels/EtsyPricingTest.php::an_empty_batch_never_calls_the_channel",
+            "tests/Feature/Channels/EtsyPricingTest.php::a_batch_without_parent_ids_fails_loudly",
+            "tests/Feature/Channels/EtsyPricingTest.php::only_the_mismatched_item_is_held_back",
+            "tests/Feature/Channels/EtsyPricingTest.php::an_unknown_shop_currency_holds_every_price"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/EtsyCatalogImportTest.php::each_etsy_product_becomes_a_variant_linked_to_its_listing",
+            "tests/Feature/Channels/EtsyCatalogImportTest.php::active_sold_out_inactive_and_expired_listings_are_walked"
+        ],
+        "publishing": [
+            "tests/Feature/Channels/EtsyCatalogTest.php::a_response_without_a_listing_id_fails",
+            "tests/Feature/Channels/EtsyCatalogTest.php::updating_targets_the_listing_id",
+            "tests/Feature/Channels/EtsyCatalogTest.php::updating_without_a_parent_id_fails_without_calling",
+            "tests/Feature/Channels/EtsyImageUploadTest.php::only_images_not_yet_on_the_listing_are_uploaded",
+            "tests/Feature/Channels/EtsyImageUploadTest.php::a_full_listing_receives_no_upload"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/EtsyAdapterTest.php::the_rate_limit_matches_the_document"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/EtsyInventoryTest.php::remote_stock_is_read_once_per_listing",
+            "tests/Feature/Channels/EtsyInventoryTest.php::a_deleted_listing_does_not_crash_the_scan"
+        ]
+    },
+    "hepsiburada": {
+        "auth": [
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::every_request_carries_basic_auth_and_the_integrator_user_agent",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::a_missing_service_key_or_integrator_sends_nothing",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::the_environment_selects_the_host",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::a_missing_merchant_id_fails_loudly_instead_of_sending_a_broken_header",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::a_successful_call_reports_healthy"
+        ],
+        "cancellation": [
+            "tests/Feature/Orders/HepsiburadaOrderSliceTest.php::the_package_list_is_walked_in_windows_of_at_most_24_hours"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::http_statuses_map_to_error_classes",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::a_connection_failure_is_a_network_error"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::stock_goes_to_stock_uploads_without_a_price",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::a_failed_upload_throws"
+        ],
+        "order_import": [
+            "tests/Feature/Orders/HepsiburadaOrderSliceTest.php::an_order_split_across_pages_is_created_with_all_lines",
+            "tests/Feature/Orders/HepsiburadaOrderSliceTest.php::the_package_list_is_walked_in_windows_of_at_most_24_hours",
+            "tests/Feature/Orders/HepsiburadaOrderSliceTest.php::the_query_window_is_widened_for_the_undocumented_timezone"
+        ],
+        "price": [
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::price_goes_to_price_uploads_without_stock"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::a_listing_page_is_imported_with_catalog_details",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::a_listing_is_kept_when_the_catalog_lookup_fails"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::http_statuses_map_to_error_classes",
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::the_rate_limit_falls_back_to_the_conservative_profile"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/HepsiburadaAdapterTest.php::remote_stock_and_price_are_read_by_hb_sku"
+        ]
+    },
+    "idefix": {
+        "auth": [
+            "tests/Feature/Channels/IdefixAdapterTest.php::errors_are_classified_and_server_errors_raised"
+        ],
+        "cancellation": [
+            "tests/Feature/Channels/IdefixAdapterTest.php::shipments_become_orders_grouped_by_barcode_without_personal_data",
+            "tests/Feature/Channels/IdefixAdapterTest.php::a_split_or_cancelled_shipment_cancels_a_known_order_and_ignores_an_unknown_one"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/IdefixAdapterTest.php::errors_are_classified_and_server_errors_raised"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/IdefixAdapterTest.php::requests_carry_the_vendor_token_and_vendor_id_in_the_path",
+            "tests/Feature/Channels/IdefixAdapterTest.php::stock_and_price_payloads_never_carry_each_others_fields",
+            "tests/Feature/Channels/IdefixAdapterTest.php::an_upload_without_batch_id_is_not_a_success",
+            "tests/Feature/Channels/IdefixAdapterTest.php::errors_are_classified_and_server_errors_raised"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/IdefixAdapterTest.php::shipments_become_orders_grouped_by_barcode_without_personal_data",
+            "tests/Feature/Channels/IdefixAdapterTest.php::a_split_or_cancelled_shipment_cancels_a_known_order_and_ignores_an_unknown_one",
+            "tests/Feature/Channels/IdefixAdapterTest.php::approved_claims_are_mapped_back_to_their_shipment"
+        ],
+        "price": [
+            "tests/Feature/Channels/IdefixAdapterTest.php::stock_and_price_payloads_never_carry_each_others_fields"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/IdefixAdapterTest.php::import_takes_sellable_products_and_reads_until_an_empty_page"
+        ]
+    },
+    "ikas": {
+        "auth": [
+            "tests/Feature/Channels/IkasAdapterTest.php::requests_go_to_the_v2_endpoint_with_the_bearer_token",
+            "tests/Feature/Channels/IkasAdapterTest.php::without_an_access_token_nothing_is_sent",
+            "tests/Feature/Channels/IkasAdapterTest.php::credentials_of_another_store_are_unhealthy"
+        ],
+        "cancellation": [
+            "tests/Feature/Channels/IkasAdapterTest.php::orders_are_polled_by_update_time_and_split_per_line"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/IkasAdapterTest.php::graphql_errors_inside_a_200_are_permanent_failures"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/IkasAdapterTest.php::stock_is_written_to_the_chosen_location",
+            "tests/Feature/Channels/IkasAdapterTest.php::a_single_location_store_needs_no_choice",
+            "tests/Feature/Channels/IkasAdapterTest.php::several_locations_without_a_choice_write_nothing",
+            "tests/Feature/Channels/IkasAdapterTest.php::a_rejected_variant_fails_only_its_own_operation",
+            "tests/Feature/Channels/IkasAdapterTest.php::a_listing_without_a_product_id_is_not_sent"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/IkasAdapterTest.php::orders_are_polled_by_update_time_and_split_per_line"
+        ],
+        "price": [
+            "tests/Feature/Channels/IkasAdapterTest.php::prices_map_to_sell_and_discount_price"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/IkasAdapterTest.php::graphql_errors_inside_a_200_are_permanent_failures",
+            "tests/Feature/Channels/IkasAdapterTest.php::variants_are_imported_as_products",
+            "tests/Feature/Channels/IkasAdapterTest.php::without_a_chosen_location_the_imported_stock_is_the_total"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/IkasAdapterTest.php::remote_stock_and_price_are_read_by_product_id"
+        ]
+    },
+    "kaufland": {
+        "cancellation": [
+            "tests/Feature/Channels/KauflandAdapterTest.php::order_units_are_grouped_and_cancellations_are_separate_events"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/KauflandAdapterTest.php::inventory_is_patched_per_unit_and_rejections_are_partial",
+            "tests/Feature/Channels/KauflandAdapterTest.php::a_server_error_is_raised_not_swallowed"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/KauflandAdapterTest.php::order_units_are_grouped_and_cancellations_are_separate_events"
+        ],
+        "price": [
+            "tests/Feature/Channels/KauflandAdapterTest.php::every_request_is_signed_over_the_exact_uri_and_body"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/KauflandAdapterTest.php::units_are_imported_with_offer_as_sku_and_cents_as_price"
+        ],
+        "shipment": [
+            "tests/Feature/Channels/KauflandAdapterTest.php::fulfillment_is_sent_for_open_units_only"
+        ]
+    },
+    "n11": {
+        "auth": [
+            "tests/Feature/Channels/N11AdapterTest.php::the_health_check_sends_the_key_pair_as_headers",
+            "tests/Feature/Channels/N11AdapterTest.php::without_the_key_pair_nothing_is_sent",
+            "tests/Feature/Channels/N11AdapterTest.php::a_non_json_success_is_not_healthy"
+        ],
+        "cancellation": [
+            "tests/Feature/Channels/N11AdapterTest.php::a_long_order_window_is_split_into_slices_of_at_most_fifteen_days"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/N11AdapterTest.php::every_shape_of_a_wrong_key_is_an_authentication_error",
+            "tests/Feature/Channels/N11AdapterTest.php::other_http_errors_are_classified_by_status"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/N11AdapterTest.php::the_stock_payload_carries_no_price_fields",
+            "tests/Feature/Channels/N11AdapterTest.php::a_rejected_task_is_a_validation_failure"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/N11AdapterTest.php::every_shape_of_a_wrong_key_is_an_authentication_error",
+            "tests/Feature/Channels/N11AdapterTest.php::a_long_order_window_is_split_into_slices_of_at_most_fifteen_days",
+            "tests/Feature/Channels/N11AdapterTest.php::the_soap_envelope_follows_the_schema_and_the_secret_is_masked"
+        ],
+        "price": [
+            "tests/Feature/Channels/N11AdapterTest.php::the_price_payload_has_two_decimals_and_no_stock",
+            "tests/Feature/Channels/N11AdapterTest.php::a_foreign_currency_product_is_not_priced"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/N11AdapterTest.php::every_shape_of_a_wrong_key_is_an_authentication_error",
+            "tests/Feature/Channels/N11AdapterTest.php::products_are_imported_by_stock_code_with_the_model_code_as_parent"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/N11AdapterTest.php::other_http_errors_are_classified_by_status"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/N11AdapterTest.php::listings_without_an_identity_cause_no_call",
+            "tests/Feature/Channels/N11AdapterTest.php::remote_stock_is_read_by_stock_code_and_failures_raise"
+        ]
+    },
+    "otto": {
+        "auth": [
+            "tests/Feature/Channels/OttoAdapterTest.php::the_installation_token_is_minted_once_and_cached",
+            "tests/Feature/Channels/OttoAdapterTest.php::nothing_is_sent_without_an_installation"
+        ],
+        "cancellation": [
+            "tests/Feature/Channels/OttoAdapterTest.php::orders_are_grouped_with_item_level_cancellations_and_cursor"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/OttoAdapterTest.php::quantities_are_posted_and_multi_status_is_partial"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/OttoAdapterTest.php::orders_are_grouped_with_item_level_cancellations_and_cursor"
+        ],
+        "price": [
+            "tests/Feature/Channels/OttoAdapterTest.php::prices_are_posted_as_standard_price"
+        ]
+    },
+    "pazarama": {
+        "auth": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::without_credentials_nothing_is_sent",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::the_health_check_sends_the_bearer_token",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::a_non_json_or_unsuccessful_answer_is_not_healthy"
+        ],
+        "cancellation": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::a_long_order_window_is_split_into_slices_of_at_most_one_month"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::both_shapes_of_a_wrong_key_are_authentication_errors",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::other_http_errors_are_classified_by_status"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::the_stock_payload_carries_no_price_fields",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::stock_and_price_requests_are_ten_seconds_apart",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::a_rejected_or_idless_answer_is_not_a_success"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::a_long_order_window_is_split_into_slices_of_at_most_one_month",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::every_poll_looks_back_thirty_days_and_pages_until_a_short_page"
+        ],
+        "price": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::the_price_payload_has_both_prices_and_no_stock",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::stock_and_price_requests_are_ten_seconds_apart"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::both_shapes_of_a_wrong_key_are_authentication_errors",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::products_are_imported_by_barcode_with_the_group_as_parent",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::a_null_cursor_ends_the_import"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::it_declares_only_the_capabilities_it_implements",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::other_http_errors_are_classified_by_status"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/PazaramaAdapterTest.php::listings_without_an_identity_cause_no_call",
+            "tests/Feature/Channels/PazaramaAdapterTest.php::remote_stock_is_read_by_barcode_and_failures_raise"
+        ]
+    },
+    "shopify": {
+        "auth": [
+            "tests/Feature/Channels/ShopifyAdapterTest.php::health_check_passes_when_the_shop_answers_and_a_location_is_set",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::health_check_fails_when_no_location_is_selected"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/ShopifyAdapterTest.php::user_errors_are_classified_as_permanent",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::network_failures_are_classified_as_network",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::a_throttled_200_response_is_rate_limited_with_a_computed_wait",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::an_internal_server_error_in_the_body_is_transient",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::other_transport_errors_and_user_errors_stay_permanent"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/ShopifyInventoryTest.php::inventory_is_written_with_the_absolute_value_mutation",
+            "tests/Feature/Channels/ShopifyInventoryTest.php::the_payload_carries_the_absolute_quantity",
+            "tests/Feature/Channels/ShopifyInventoryTest.php::the_target_is_the_inventory_item_gid_not_the_variant_gid",
+            "tests/Feature/Channels/ShopifyInventoryTest.php::the_payload_carries_the_location",
+            "tests/Feature/Channels/ShopifyInventoryTest.php::pushing_without_a_location_throws_instead_of_guessing"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/ShopifyOrderTest.php::the_adapter_declares_the_orders_capability",
+            "tests/Feature/Channels/ShopifyOrderTest.php::polling_is_not_supported_and_says_so_loudly"
+        ],
+        "price": [
+            "tests/Feature/Channels/ShopifyPricingTest.php::prices_are_written_with_the_variant_bulk_update_mutation",
+            "tests/Feature/Channels/ShopifyPricingTest.php::the_price_is_carried_as_a_string_never_a_float",
+            "tests/Feature/Channels/ShopifyPricingTest.php::the_compare_at_price_is_never_touched",
+            "tests/Feature/Channels/ShopifyPricingTest.php::the_mutation_targets_the_product_gid_with_variant_ids_beneath_it",
+            "tests/Feature/Channels/ShopifyPricingTest.php::variants_of_the_same_product_are_sent_in_one_call"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/ShopifyCatalogImportTest.php::a_page_of_variants_is_mapped_to_importable_products",
+            "tests/Feature/Channels/ShopifyCatalogImportTest.php::selected_options_become_variant_options_without_the_default_title",
+            "tests/Feature/Channels/ShopifyCatalogImportTest.php::the_price_is_carried_as_a_string",
+            "tests/Feature/Channels/ShopifyCatalogImportTest.php::a_variant_without_a_sku_carries_its_channel_identity",
+            "tests/Feature/Channels/ShopifyCatalogImportTest.php::the_opaque_cursor_is_carried_verbatim"
+        ],
+        "publishing": [
+            "tests/Feature/Channels/ShopifyCatalogTest.php::creating_a_listing_returns_all_three_persistent_identifiers",
+            "tests/Feature/Channels/ShopifyCatalogTest.php::a_create_with_user_errors_does_not_report_success",
+            "tests/Feature/Channels/ShopifyCatalogTest.php::a_response_without_a_product_is_a_failure",
+            "tests/Feature/Channels/ShopifyCatalogTest.php::a_product_without_a_variant_id_is_a_failure",
+            "tests/Feature/Channels/ShopifyCatalogTest.php::the_payload_carries_sku_and_a_string_price"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/ShopifyAdapterTest.php::network_failures_are_classified_as_network",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::a_throttled_200_response_is_rate_limited_with_a_computed_wait",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::other_transport_errors_and_user_errors_stay_permanent",
+            "tests/Feature/Channels/ShopifyAdapterTest.php::a_long_wait_releases_the_job_instead_of_sleeping"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/ShopifyInventoryTest.php::remote_inventory_is_keyed_by_the_variant_gid",
+            "tests/Feature/Channels/ShopifyInventoryTest.php::a_deleted_variant_is_skipped_not_read_as_zero",
+            "tests/Feature/Channels/ShopifyInventoryTest.php::a_variant_with_untracked_inventory_is_skipped_not_read_as_zero",
+            "tests/Feature/Channels/ShopifyInventoryTest.php::fetching_with_no_external_ids_sends_nothing"
+        ],
+        "shipment": [
+            "tests/Feature/Channels/ShopifyFulfillmentTest.php::pushing_a_fulfillment_uses_the_fulfillment_order",
+            "tests/Feature/Channels/ShopifyFulfillmentTest.php::the_tracking_info_is_carried_in_the_push",
+            "tests/Feature/Channels/ShopifyFulfillmentTest.php::nothing_to_fulfill_is_not_an_error",
+            "tests/Feature/Channels/ShopifyFulfillmentTest.php::a_fulfillment_without_an_order_identity_fails_without_calling"
+        ]
+    },
+    "ticimax": {
+        "auth": [
+            "tests/Feature/Channels/TicimaxAdapterTest.php::the_envelope_carries_the_auth_code_and_all_filters",
+            "tests/Feature/Channels/TicimaxAdapterTest.php::without_an_auth_code_nothing_is_sent",
+            "tests/Feature/Channels/TicimaxAdapterTest.php::a_web_service_error_response_is_a_validation_failure",
+            "tests/Feature/Channels/TicimaxAdapterTest.php::the_auth_code_is_masked_in_the_call_log"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/TicimaxAdapterTest.php::a_fault_keeps_its_message_and_auth_faults_are_classified",
+            "tests/Feature/Channels/TicimaxAdapterTest.php::a_web_service_error_response_is_a_validation_failure"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/TicimaxAdapterTest.php::stock_is_written_in_bulk_by_variation_id"
+        ],
+        "price": [
+            "tests/Feature/Channels/TicimaxAdapterTest.php::price_is_written_net_with_only_price_flags",
+            "tests/Feature/Channels/TicimaxAdapterTest.php::a_foreign_currency_variation_is_not_priced"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/TicimaxAdapterTest.php::a_fault_keeps_its_message_and_auth_faults_are_classified",
+            "tests/Feature/Channels/TicimaxAdapterTest.php::variations_are_imported_with_gross_prices"
+        ]
+    },
+    "trendyol": {
+        "auth": [
+            "tests/Feature/Channels/TrendyolAdapterTest.php::requests_carry_basic_auth_and_supplier_id",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::the_base_url_setting_is_ignored_and_paths_follow_apigw",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::every_request_carries_the_trendyol_user_agent",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::a_registered_integrator_name_replaces_the_default",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::credentials_are_sent_even_without_tenant_context"
+        ],
+        "cancellation": [
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::a_v2_package_body_is_read_with_its_new_field_names",
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::a_cancelled_order_is_normalized_as_a_cancellation",
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::a_returned_order_is_normalized_as_a_return",
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::the_event_ref_distinguishes_status_changes_of_one_order",
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::a_body_without_an_order_number_is_not_an_order_event"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/TrendyolAdapterTest.php::classifies_authentication_errors_as_permanent",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::classifies_rate_limit_as_its_own_class",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::classifies_validation_errors_as_permanent",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::classifies_server_errors_as_transient",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::classifies_connection_failure_as_network"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::inventory_is_pushed_as_absolute_quantity_keyed_by_barcode",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::alphanumeric_barcode_is_not_cast_to_integer",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::inventory_payload_carries_no_price_fields",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::empty_inventory_batch_makes_no_call",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::failed_inventory_push_raises_instead_of_returning_failure"
+        ],
+        "order_import": [
+            "tests/Feature/Channels/TrendyolAdapterTest.php::the_base_url_setting_is_ignored_and_paths_follow_apigw",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::every_request_carries_the_trendyol_user_agent",
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::orders_are_fetched_with_a_millisecond_date_window",
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::fetched_orders_carry_the_raw_channel_body",
+            "tests/Feature/Channels/TrendyolOrderPollingTest.php::pagination_is_reported_through_the_cursor"
+        ],
+        "price": [
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::prices_are_pushed_as_absolute_values_without_quantity",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::missing_compare_at_price_falls_back_to_sale_price",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::empty_price_batch_makes_no_call",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::failed_price_push_raises_instead_of_returning_failure"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/TrendyolCatalogImportTest.php::variants_become_products_keyed_by_barcode_and_archived_ones_are_skipped",
+            "tests/Feature/Channels/TrendyolCatalogImportTest.php::variant_attributes_become_options_and_siblings_share_the_content_id",
+            "tests/Feature/Channels/TrendyolCatalogImportTest.php::the_sellers_own_stock_code_wins_over_the_barcode",
+            "tests/Feature/Channels/TrendyolCatalogImportTest.php::pages_are_walked_by_page_number_until_the_last_one"
+        ],
+        "publishing": [
+            "tests/Feature/Channels/TrendyolCatalogTest.php::the_payload_is_mapped_to_the_channel_format",
+            "tests/Feature/Channels/TrendyolCatalogTest.php::required_attributes_are_translated_from_the_mappings",
+            "tests/Feature/Channels/TrendyolCatalogTest.php::product_level_attribute_values_are_sent_after_variant_ones",
+            "tests/Feature/Channels/TrendyolCatalogTest.php::an_image_excluded_from_trendyol_is_not_sent",
+            "tests/Feature/Channels/TrendyolCatalogTest.php::an_unapproved_product_is_updated_through_its_own_endpoint"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/TrendyolAdapterTest.php::rate_limit_profile_falls_back_to_channel_type",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::rate_limit_profile_is_learned_from_response_headers",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::learned_rate_limit_is_cached_on_the_connection",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::malformed_rate_limit_header_is_ignored",
+            "tests/Feature/Channels/TrendyolAdapterTest.php::classifies_rate_limit_as_its_own_class"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::remote_inventory_is_read_in_one_batched_call",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::remote_reads_are_chunked_by_fifty_barcodes",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::fetch_inventory_makes_no_call_without_external_ids",
+            "tests/Feature/Channels/TrendyolInventoryPricingTest.php::failed_fetch_inventory_raises_instead_of_returning_empty"
+        ]
+    },
+    "woocommerce": {
+        "auth": [
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::credentials_are_sent_even_without_tenant_context"
+        ],
+        "error_recovery": [
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::error_classification_maps_woo_responses_to_core_classes",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::rate_limit_is_transient_but_auth_is_permanent",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::failed_push_throws_so_the_job_can_classify_it"
+        ],
+        "inventory": [
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::push_inventory_sends_absolute_quantities_to_batch_endpoint",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::an_item_error_in_a_200_batch_response_fails_only_that_operation",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::adapter_does_not_clamp_quantities_itself",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::adapter_writes_no_domain_state",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::empty_batch_makes_no_http_call"
+        ],
+        "price": [
+            "tests/Feature/Channels/WooVariationsAndRecoveryTest.php::price_for_variations_goes_to_the_parent_variations_batch"
+        ],
+        "product_import": [
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::fetching_a_product_page_derives_the_cursor_from_the_page_header",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::the_last_page_reports_no_more_results",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::the_list_price_is_read_not_the_discounted_price",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::a_product_without_a_sku_comes_back_marked_not_dropped",
+            "tests/Feature/Channels/WooVariationsAndRecoveryTest.php::variations_are_read_across_pages_and_a_failure_does_not_import_half"
+        ],
+        "publishing": [
+            "tests/Feature/Channels/WooImagesTest.php::images_are_sent_on_create_and_their_hash_is_kept",
+            "tests/Feature/Channels/WooImagesTest.php::unchanged_images_are_not_resent",
+            "tests/Feature/Channels/WooImagesTest.php::images_imported_from_this_store_are_not_sent_back",
+            "tests/Feature/Channels/WooImagesTest.php::a_non_numeric_category_is_not_sent"
+        ],
+        "rate_limit": [
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::error_classification_maps_woo_responses_to_core_classes",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::rate_limit_is_transient_but_auth_is_permanent",
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::failed_push_throws_so_the_job_can_classify_it"
+        ],
+        "reconciliation": [
+            "tests/Feature/Channels/WooCommerceAdapterTest.php::fetch_inventory_reads_remote_quantities",
+            "tests/Feature/Channels/WooVariationsAndRecoveryTest.php::stock_and_price_are_read_back_from_the_variation_endpoint"
+        ]
+    }
+}
