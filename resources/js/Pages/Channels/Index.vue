@@ -278,6 +278,12 @@ function formatDate(iso) {
                             <p v-if="connection.priceRule" class="mt-1 text-xs text-stone-600">
                                 {{ t('Fiyat') }}: {{ connection.priceRule }}
                             </p>
+                            <details v-if="connection.works?.length" class="mt-2 text-xs text-stone-600">
+                                <summary class="cursor-pointer select-none text-stone-700">{{ t('Bu kanalda çalışanlar') }}</summary>
+                                <ul class="mt-1 list-disc space-y-0.5 pl-5">
+                                    <li v-for="item in connection.works" :key="item">{{ item }}</li>
+                                </ul>
+                            </details>
                         </div>
 
                         <div class="flex shrink-0 items-center gap-2">

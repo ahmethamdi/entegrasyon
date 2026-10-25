@@ -44,6 +44,7 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
                 <div class="flex gap-2">
                     <Link href="/admin/tenants" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Müşteriler') }}</Link>
                     <Link href="/admin/plans" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Planlar') }}</Link>
+                    <Link href="/admin/certification" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Kanal sertifikasyonu') }}</Link>
                 </div>
             </template>
         </PageHeader>

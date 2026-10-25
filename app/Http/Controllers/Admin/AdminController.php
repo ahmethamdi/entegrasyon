@@ -11,6 +11,10 @@ use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Models\BillingRefund;
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Channels\Certification\CertificationEvidence;
+use App\Domain\Channels\Certification\CertificationStatus;
+use App\Domain\Channels\Certification\ChannelCapability;
+use App\Domain\Channels\Certification\ChannelCertification;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Support\PlatformStats;
 use App\Http\Controllers\Controller;
@@ -224,6 +228,38 @@ final class AdminController extends Controller
             'plan' => $plan->name,
             'tenant' => $model->name,
         ]));
+    }
+
+    /**
+     * S15 · kanal × yetenek sertifikasyon matrisi + son 24 saat hataları.
+     * Durum adları yalnız burada (yönetim) görünür; satıcı sade liste görür.
+     */
+    public function certification(ChannelCertification $certification): InertiaResponse
+    {
+        $names = $certification->names();
+        $errors = $certification->errorsLast24h();
+
+        $rows = [];
+        foreach ($certification->matrix() as $channel => $cells) {
+            $rows[] = [
+                'code' => $channel,
+                'name' => $names[$channel] ?? $channel,
+                'errors' => $errors[$channel] ?? ['api_errors' => 0, 'dead_operations' => 0],
+                'cells' => array_map(fn (array $cell): array => [
+                    'status' => $cell['status']->value,
+                    'tests' => $cell['tests'],
+                    'evidence' => $cell['evidence'],
+                    'note' => $cell['note'],
+                ], $cells),
+            ];
+        }
+
+        return Inertia::render('Admin/Certification', [
+            'capabilities' => array_map(fn (ChannelCapability $c): array => ['key' => $c->value, 'label' => $c->label()], ChannelCapability::cases()),
+            'statuses' => array_map(fn (CertificationStatus $s): array => ['key' => $s->value, 'label' => $s->label()], CertificationStatus::cases()),
+            'rows' => $rows,
+            'services' => array_map(fn (array $s): array => ['service' => $s['service'], 'status' => $s['status']->value, 'date' => $s['date'], 'evidence' => $s['evidence']], CertificationEvidence::services()),
+        ]);
     }
 
     public function plans(): InertiaResponse

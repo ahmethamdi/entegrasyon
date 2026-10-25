@@ -13,6 +13,8 @@ use App\Domain\Channels\Actions\ConnectChannel;
 use App\Domain\Channels\Actions\SetOutboundWrite;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
+use App\Domain\Channels\Certification\ChannelCapability;
+use App\Domain\Channels\Certification\ChannelCertification;
 use App\Domain\Channels\Contracts\DeclaresConnectionSettings;
 use App\Domain\Channels\Contracts\DeclaresMissingAuthorization;
 use App\Domain\Channels\Enums\OutboundWrite;
@@ -499,6 +501,12 @@ final class ChannelConnectionController extends Controller
             'lastError' => $connection->last_error,
             'connectedAt' => $connection->connected_at?->toIso8601String(),
             'capabilities' => $this->capabilitiesOrEmpty($connection),
+            // S15 · satıcıya sade "bu kanalda çalışanlar" — iç durum adı yok,
+            // sertifikasyon matrisinden (`ChannelCertification::workingFor`).
+            'works' => array_values(array_filter(array_map(
+                static fn (ChannelCapability $c): ?string => $c->sellerText() === null ? null : __($c->sellerText()),
+                app(ChannelCertification::class)->workingFor((string) $connection->channel_type_code),
+            ))),
 
             // ADR-010 · yazma izinleri — "bağlı" ile "yazabilir" AYRI
             // sorulardır. `writesLocked`: kanal canlı doğrulama kapısında,

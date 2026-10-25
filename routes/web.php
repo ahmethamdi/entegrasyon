@@ -179,6 +179,7 @@ Route::middleware(['auth', 'verified', 'can:superAdmin'])->prefix('admin')->grou
     Route::post('/tenants/{tenant}/plan', [AdminController::class, 'assignPlan'])->name('admin.tenants.plan');
     Route::post('/tenants/{tenant}/refund-guarantee', [AdminController::class, 'refundGuarantee'])->name('admin.tenants.refund');
     Route::get('/plans', [AdminController::class, 'plans'])->name('admin.plans');
+    Route::get('/certification', [AdminController::class, 'certification'])->name('admin.certification');
     Route::post('/plans', [AdminController::class, 'storePlan'])->name('admin.plans.store');
 });
 

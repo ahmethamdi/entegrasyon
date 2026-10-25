@@ -43,11 +43,22 @@
     $cargoOk = $channel['cargoPush'];
 
     // [başlık, açıklama, kanalda çalışıyor mu]
+    // S15 · "çalışır" rozeti sertifikasyon matrisinden (`$channel['works']`),
+    // elle true yazılmaz. Çalışmayan satırın metni de dürüst olmalı.
+    $w = $channel['works'] ?? [];
     $caps = [
-        ['Stok', "Başka bir kanalda satış olunca {$loc}ki stok da düşer. Adedi panelde düzeltirsen yeni sayı buraya da gider.", true],
-        ['Siparişler', "{$name} siparişleri diğer kanallarının siparişleriyle aynı listeye düşer.", true],
-        ['Ürün yayınlama', 'Ürünü panelden bu kanala gönderirsin. Kanal reddederse sebebi panelde yazar; düzeltip tekrar gönderirsin.', true],
-        ['Fiyat', "Panelde değiştirdiğin fiyat bu kanala da gider; kanal için fiyat kuralı tanımlayabilirsin. Fiyatı {$loc} kendin değiştirirsen sessizce üzerine yazmayız; hangisinin geçerli olacağına sen karar verirsin.", true],
+        ['Stok', ($w['inventory'] ?? false)
+            ? "Başka bir kanalda satış olunca {$loc}ki stok da düşer. Adedi panelde düzeltirsen yeni sayı buraya da gider."
+            : "Şimdilik stoğu {$loc}, kanalın kendi panelinde yönetirsin.", $w['inventory'] ?? false],
+        ['Siparişler', ($w['order_import'] ?? false)
+            ? "{$name} siparişleri diğer kanallarının siparişleriyle aynı listeye düşer."
+            : "Şimdilik {$name} siparişlerini kanalın kendi panelinde görürsün.", $w['order_import'] ?? false],
+        ['Ürün yayınlama', ($w['publishing'] ?? false)
+            ? 'Ürünü panelden bu kanala gönderirsin. Kanal reddederse sebebi panelde yazar; düzeltip tekrar gönderirsin.'
+            : "Yeni ürünü {$loc}, kanalın kendi panelinde açarsın; 34Pazar mevcut ilanlarının stok ve fiyatını yönetir.", $w['publishing'] ?? false],
+        ['Fiyat', ($w['price'] ?? false)
+            ? "Panelde değiştirdiğin fiyat bu kanala da gider; kanal için fiyat kuralı tanımlayabilirsin. Fiyatı {$loc} kendin değiştirirsen sessizce üzerine yazmayız; hangisinin geçerli olacağına sen karar verirsin."
+            : "Şimdilik fiyatı {$loc}, kanalın kendi panelinde değiştirirsin.", $w['price'] ?? false],
         ['Kargo takip numarası', $cargoOk
             ? 'Numarayı panelde siparişin içine yazarsın; numara bu kanala iletilir ve sipariş orada da kargolandı olarak işaretlenir.'
             : "Şimdilik numarayı {$loc}, kanalın kendi panelinde girersin. Panel bu siparişi yine de listede gösterir.", $cargoOk],

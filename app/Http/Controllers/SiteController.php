@@ -7,6 +7,8 @@ namespace App\Http\Controllers;
 use App\Domain\Ai\Support\AiFeature;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Models\Plan;
+use App\Domain\Channels\Certification\ChannelCapability;
+use App\Domain\Channels\Certification\ChannelCertification;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelConnectForm;
@@ -335,6 +337,15 @@ final class SiteController extends Controller
             ->all();
     }
 
+    /** Sitede kanal başına gösterilen yetenek satırları (kanal sayfası, ana sayfa tablosu). */
+    public const SITE_CAPABILITIES = [
+        ChannelCapability::INVENTORY,
+        ChannelCapability::ORDER_IMPORT,
+        ChannelCapability::PUBLISHING,
+        ChannelCapability::PRICE,
+        ChannelCapability::SHIPMENT,
+    ];
+
     /**
      * Kanalın sitede gösterilen hâli.
      *
@@ -348,6 +359,12 @@ final class SiteController extends Controller
      */
     private function presentChannel(ChannelType $type): array
     {
+        $certification = app(ChannelCertification::class);
+        $works = [];
+        foreach (self::SITE_CAPABILITIES as $capability) {
+            $works[$capability->value] = $certification->works($type->code, $capability);
+        }
+
         return [
             'code' => $type->code,
             'name' => $type->name,
@@ -356,7 +373,10 @@ final class SiteController extends Controller
             'wordmark' => ChannelLogo::isWordmark($type->code),
             'icon' => ChannelLogo::icon($type->code),
             'marketplace' => $type->kind === 'marketplace',
-            'cargoPush' => is_string($type->adapter_class) && is_a($type->adapter_class, SupportsFulfillment::class, true),
+            // S15 · sitede "çalışır" denen her satır sertifikasyon matrisinden
+            // (adaptör arayüzü + test + kanıt); elle yazılmaz.
+            'cargoPush' => $works[ChannelCapability::SHIPMENT->value],
+            'works' => $works,
         ];
     }
 }

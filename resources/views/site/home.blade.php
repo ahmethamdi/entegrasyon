@@ -249,8 +249,15 @@
                                                 {{ $ch['name'] }}
                                             </a>
                                         </th>
-                                        <td><span class="text-ok" aria-hidden="true">✓</span><span class="sr-only">{{ $t('Var', 'Yes') }}</span></td>
-                                        <td><span class="text-ok" aria-hidden="true">✓</span><span class="sr-only">{{ $t('Var', 'Yes') }}</span></td>
+                                        @foreach (['inventory', 'order_import'] as $cap)
+                                            <td>
+                                                @if ($ch['works'][$cap] ?? false)
+                                                    <span class="text-ok" aria-hidden="true">✓</span><span class="sr-only">{{ $t('Var', 'Yes') }}</span>
+                                                @else
+                                                    <span class="muted" aria-hidden="true">—</span><span class="sr-only">{{ $t('Yok', 'No') }}</span>
+                                                @endif
+                                            </td>
+                                        @endforeach
                                         <td>
                                             @if ($ch['cargoPush'])
                                                 <span class="text-ok" aria-hidden="true">✓</span><span class="sr-only">{{ $t('Var', 'Yes') }}</span>
