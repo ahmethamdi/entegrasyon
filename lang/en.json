@@ -1889,5 +1889,16 @@
     "Güvence yalnız İLK ücretli abonelikte geçerli.": "The guarantee applies only to the FIRST paid subscription.",
     "İlk ödemenin üzerinden 14 günden fazla geçti.": "More than 14 days have passed since the first payment.",
     "Kiracının ödeme sağlayıcısındaki müşterisi bilinmiyor.": "The tenant's customer at the payment provider is unknown.",
-    "Kartın reddedilirse: ödeme Almanya'daki hizmet sağlayıcımız üzerinden alınır. Bankanın mobil uygulamasından kartının yurt dışı ve internet alışverişi iznini açıp tekrar dene. Sorun sürerse WhatsApp'tan yaz: +49 176 76798125.": "If your card is declined: the payment is taken through our provider in Germany. Turn on foreign and online purchases for your card in your bank's app and try again. If it still fails, message us on WhatsApp: +49 176 76798125."
+    "Kartın reddedilirse: ödeme Almanya'daki hizmet sağlayıcımız üzerinden alınır. Bankanın mobil uygulamasından kartının yurt dışı ve internet alışverişi iznini açıp tekrar dene. Sorun sürerse WhatsApp'tan yaz: +49 176 76798125.": "If your card is declined: the payment is taken through our provider in Germany. Turn on foreign and online purchases for your card in your bank's app and try again. If it still fails, message us on WhatsApp: +49 176 76798125.",
+    "Destek: :email · WhatsApp :whatsapp (her gün :hours, Türkiye saati)": "Support: :email · WhatsApp :whatsapp (every day :hours, Turkey time)",
+    "Bu e-postayı 34Pazar hesabınla ya da sana gönderilen bir davetle ilgili bir işlem nedeniyle aldın.": "You received this email because of an action related to your 34Pazar account or an invitation sent to you.",
+    "Almanya": "Germany",
+    "34Pazar'a hoş geldin": "Welcome to 34Pazar",
+    "Hoş geldin,": "Welcome,",
+    "Hesabın hazır. Stoğunu tek yerden yönetmeye üç adımda başlarsın:": "Your account is ready. Three steps to manage your stock from one place:",
+    "1. **Kanalını bağla:** Kanallar → Kanal ekle. Mağazanın API bilgilerini girersin, bağlantı denenip açılır.": "1. **Connect a channel:** Channels → Add channel. Enter your store's API details; the connection is tested and opened.",
+    "2. **Ürünlerini çek:** ürünler bağladığın kanaldan ya da CSV ile gelir, stok tek yerde toplanır.": "2. **Import your products:** from the connected channel or a CSV file; stock is pooled in one place.",
+    "3. **İlk senkronu gör:** panelin üstündeki kurulum şeridi hangi adımda olduğunu gösterir.": "3. **See your first sync:** the setup strip at the top of the panel shows where you are.",
+    "Panele git": "Go to the panel",
+    "Ücretli pakette kurulumu ve ilk ürün aktarımını seninle birlikte, ücretsiz yapıyoruz.": "On paid plans we do the setup and the first product import together with you, free of charge."
 }

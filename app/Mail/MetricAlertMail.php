@@ -54,7 +54,7 @@ final class MetricAlertMail extends Mailable
     {
         return new Envelope(
             subject: sprintf(
-                '[Entegrasyon] %s eşiği aşıldı: %s',
+                '[34Pazar] %s eşiği aşıldı: %s',
                 $this->metric->label(),
                 $this->formattedValue(),
             ),

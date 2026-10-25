@@ -1,0 +1,270 @@
+/* 34Pazar posta teması — satır içine çevrilir (Laravel Markdown). Renkler
+   site token'larından: lacivert #0b1b33, marka #ce310d, koyu marka #a8280b,
+   mürekkep #15171c, gri #545a67, çizgi #e3e6eb, yumuşak zemin #f6f7f9.
+   Gölge yok. */
+
+body,
+body *:not(html):not(style):not(br):not(tr):not(code) {
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    position: relative;
+}
+
+body {
+    -webkit-text-size-adjust: none;
+    background-color: #f6f7f9;
+    color: #15171c;
+    height: 100%;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+    width: 100% !important;
+}
+
+p,
+ul,
+ol,
+blockquote {
+    line-height: 1.6;
+    text-align: left;
+}
+
+a {
+    color: #a8280b;
+}
+
+a img {
+    border: none;
+}
+
+h1 {
+    color: #15171c;
+    font-size: 22px;
+    font-weight: bold;
+    line-height: 1.3;
+    margin-top: 0;
+    text-align: left;
+}
+
+h2 {
+    color: #15171c;
+    font-size: 17px;
+    font-weight: bold;
+    margin-top: 0;
+    text-align: left;
+}
+
+h3 {
+    color: #15171c;
+    font-size: 15px;
+    font-weight: bold;
+    margin-top: 0;
+    text-align: left;
+}
+
+p {
+    color: #262a33;
+    font-size: 16px;
+    line-height: 1.6em;
+    margin-top: 0;
+    text-align: left;
+}
+
+p.sub {
+    font-size: 12px;
+}
+
+img {
+    max-width: 100%;
+}
+
+ul li,
+ol li {
+    color: #262a33;
+    font-size: 16px;
+    line-height: 1.6em;
+    margin-bottom: 4px;
+}
+
+.wrapper {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f6f7f9;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.content {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.header {
+    padding: 28px 0 20px;
+    text-align: center;
+}
+
+.header a {
+    display: inline-block;
+    text-decoration: none;
+}
+
+.logo {
+    height: auto;
+    max-height: 40px;
+    width: 140px;
+}
+
+.body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    background-color: #f6f7f9;
+    border-bottom: 1px solid #f6f7f9;
+    border-top: 1px solid #f6f7f9;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+.inner-body {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 600px;
+    background-color: #ffffff;
+    border: 1px solid #e3e6eb;
+    border-radius: 10px;
+    border-top: 4px solid #ce310d;
+    margin: 0 auto;
+    padding: 0;
+    width: 600px;
+}
+
+.subcopy {
+    border-top: 1px solid #e3e6eb;
+    margin-top: 25px;
+    padding-top: 22px;
+}
+
+.subcopy p {
+    color: #545a67;
+    font-size: 13px;
+}
+
+.footer {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 600px;
+    margin: 0 auto;
+    padding: 0;
+    text-align: center;
+    width: 600px;
+}
+
+.footer p {
+    color: #545a67;
+    font-size: 12px;
+    line-height: 1.5em;
+    text-align: center;
+}
+
+.footer a {
+    color: #545a67;
+    text-decoration: underline;
+}
+
+.table table {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 24px auto;
+    width: 100%;
+}
+
+.table th {
+    border-bottom: 1px solid #e3e6eb;
+    margin: 0;
+    padding-bottom: 8px;
+}
+
+.table td {
+    color: #262a33;
+    font-size: 15px;
+    line-height: 18px;
+    margin: 0;
+    padding: 10px 0;
+}
+
+.content-cell {
+    max-width: 100vw;
+    padding: 36px 40px;
+}
+
+.action {
+    -premailer-cellpadding: 0;
+    -premailer-cellspacing: 0;
+    -premailer-width: 100%;
+    margin: 28px auto;
+    padding: 0;
+    text-align: center;
+    width: 100%;
+    float: unset;
+}
+
+.button {
+    -webkit-text-size-adjust: none;
+    border-radius: 8px;
+    color: #ffffff;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: 600;
+    overflow: hidden;
+    text-decoration: none;
+}
+
+.button-blue,
+.button-primary,
+.button-success {
+    background-color: #ce310d;
+    border: 1px solid #ce310d;
+}
+
+.button-red,
+.button-error {
+    background-color: #a8280b;
+    border: 1px solid #a8280b;
+}
+
+.panel {
+    border-left: #ce310d solid 4px;
+    margin: 21px 0;
+}
+
+.panel-content {
+    background-color: #f6f7f9;
+    color: #262a33;
+    padding: 16px;
+}
+
+.panel-content p {
+    color: #262a33;
+}
+
+.panel-item {
+    padding: 0;
+}
+
+.panel-item p:last-of-type {
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.break-all {
+    word-break: break-all;
+}

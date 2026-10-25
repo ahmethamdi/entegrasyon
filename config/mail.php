@@ -115,4 +115,23 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Markdown posta teması
+    |--------------------------------------------------------------------------
+    |
+    | 34Pazar'ın bütün sistem postaları resources/views/vendor/mail altındaki
+    | tek düzenden ve '34pazar' temasından geçer (25 Ekim 2026). Laravel'in
+    | varsayılan teması kaldırıldı; yeni posta bu düzene uymazsa
+    | MailLayoutContractTest kırılır.
+    |
+    */
+
+    'markdown' => [
+        'theme' => '34pazar',
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
 ];
