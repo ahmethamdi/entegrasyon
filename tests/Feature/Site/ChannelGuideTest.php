@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Site;
 
+use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Support\ChannelConnectForm;
 use Database\Seeders\ChannelTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -58,19 +59,23 @@ final class ChannelGuideTest extends TestCase
     }
 
     /**
-     * Shopify App Store sayfası yayında değilken (24 Eki: 404) rehber o
-     * bağlantıyı vermez, bize yazmayı söyler.
+     * Shopify rehberi App Store bağlantısı VERMEZ (Ref 140131 reddi; ADR-012):
+     * satıcı kendi uygulamasını açar. Rehber adımları ve formun istediği
+     * izin listesini aynen gösterir — listing bayrağı ne olursa olsun.
      */
     #[Test]
-    public function the_shopify_guide_does_not_link_to_an_unpublished_app_listing(): void
+    public function the_shopify_guide_shows_the_own_app_steps_and_no_app_store_link(): void
     {
-        config(['services.shopify.listing_public' => false]);
-        $this->get('/yardim/shopify')->assertOk()
-            ->assertDontSee('apps.shopify.com', false)
-            ->assertSee('incelemesinde');
+        foreach ([false, true] as $public) {
+            config(['services.shopify.listing_public' => $public]);
 
-        config(['services.shopify.listing_public' => true]);
-        $this->get('/yardim/shopify')->assertSee('apps.shopify.com', false);
+            $this->get('/yardim/shopify')->assertOk()
+                ->assertDontSee('apps.shopify.com', false)
+                ->assertSee('Dev Dashboard')
+                ->assertSee(ShopifyAuth::DEFAULT_SCOPES)
+                ->assertSee('Client secret')
+                ->assertSee('stok ve fiyat gönderimi açık başlar');
+        }
     }
 
     #[Test]

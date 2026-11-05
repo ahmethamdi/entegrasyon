@@ -260,6 +260,19 @@ function submit() {
                 <p v-if="selected?.help" class="mt-1 text-xs text-stone-600">
                     {{ selected.help }}
                 </p>
+                <!--
+                    Adım adım hazırlık (Shopify satıcı uygulaması). Metin
+                    sunucudaki tanımdan gelir; /yardim rehberi de aynısını
+                    gösterir — iki yerde ayrı yazılsaydı biri eski kalırdı.
+                -->
+                <ol v-if="selected?.steps?.length" class="mt-3 list-decimal space-y-1 pl-5 text-xs text-stone-700">
+                    <li v-for="(step, i) in selected.steps" :key="i" class="[overflow-wrap:anywhere]">
+                        {{ step }}
+                    </li>
+                </ol>
+                <p v-if="selected?.writesOnConnect" class="mt-3 text-xs text-stone-600">
+                    {{ t('Bağlantı kurulunca stok ve fiyat gönderimi açık başlar; ürün yayını kapalı kalır. İzinleri Kanallar ekranından değiştirebilirsin.') }}
+                </p>
 
                 <div class="mt-4 space-y-4">
                     <div v-for="field in allFields" :key="field.name">

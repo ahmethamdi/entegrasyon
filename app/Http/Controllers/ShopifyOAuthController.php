@@ -13,6 +13,7 @@ use App\Domain\Channels\Enums\OutboundWrite;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Channels\Support\TokenRefresher;
 use App\Domain\Identity\Actions\RecordAuditLog;
 use App\Domain\Identity\Enums\AuditAction;
 use Illuminate\Http\RedirectResponse;
@@ -56,6 +57,7 @@ final class ShopifyOAuthController extends Controller
         private readonly RecordAuditLog $audit,
         private readonly RegisterChannelWebhooks $registerWebhooks,
         private readonly SetOutboundWrite $writes,
+        private readonly TokenRefresher $tokens,
     ) {}
 
     public function redirect(Request $request, string $connectionId): Response|RedirectResponse
@@ -64,6 +66,19 @@ final class ShopifyOAuthController extends Controller
 
         if ($connection === null) {
             return redirect()->route('channels.index')->with('success', __('Bağlantı bulunamadı.'));
+        }
+
+        // SATICININ KENDİ UYGULAMASIYLA kurulmuş bağlantı 34Pazar uygulamasının
+        // izin ekranına GÖNDERİLMEZ: orada onay verse bile anahtar başka bir
+        // uygulamanın olur ve kasadaki çift ile ayrışırdı. Anahtarın yolu
+        // çifttir; çift bozulduysa satıcı formda yeniden girer.
+        if ($this->usesOwnApp($connection)) {
+            $target = route('channels.create');
+            $flash = __('Bu mağaza kendi Shopify uygulamanla bağlı. Client ID ve Client secret\'ı Mağaza bağla formunda aynı mağaza adresiyle yeniden gir.');
+
+            return $request->header('X-Inertia')
+                ? tap(Inertia::location($target), fn () => session()->flash('warning', $flash))
+                : redirect($target)->with('warning', $flash);
         }
 
         if (! ShopifyAuth::configured()) {
@@ -200,6 +215,56 @@ final class ShopifyOAuthController extends Controller
         $this->resolveLocation($connection);
 
         return $this->finish($connection);
+    }
+
+    /**
+     * SATICININ KENDİ UYGULAMASI — formdan çift geldikten sonraki son adım
+     * (ADR-012). Çift kasada (`ConnectChannel` yazdı); burada:
+     *
+     *   1. İlk erişim anahtarı `client_credentials` ile alınır — taramanın
+     *      AYNI kilitli yolu (`TokenRefresher`). Alınamazsa bağlantı
+     *      `pending` kalır, sebebi (maskeli kanal cevabı) `last_error`'da
+     *      durur ve sonraki adımlar KOŞMAZ: kimliksiz giden sağlık kontrolü
+     *      sebebi "konum seçilmedi" gibi yanlış bir metinle ezerdi.
+     *   2. İlk kurulumsa stok + fiyat gönderimi açılır (ADR-010 istisnası,
+     *      gerekçe `grantInstallWrites`): satıcı izinleri kendi uygulamasında
+     *      KENDİSİ verdi.
+     *   3. Konum, sağlık, webhook — 34Pazar uygulamasının OAuth sonuyla AYNI
+     *      (`resolveLocation` + `finish`).
+     */
+    public function connectOwnApp(ChannelConnection $connection): RedirectResponse
+    {
+        // `connected_at`'i ilk başarılı sağlık kontrolü yazar — karar ondan ÖNCE.
+        $firstAuthorization = $connection->connected_at === null || $connection->status === 'inactive';
+
+        if ($this->tokens->refreshConnection($connection->id) !== 'refreshed') {
+            $connection->refresh();
+            $connection->forceFill(['status' => 'pending', 'health_status' => 'unhealthy'])->save();
+
+            return redirect()->route('channels.index')->with(
+                'warning',
+                __('Shopify erişim anahtarı vermedi. Client ID ve Client secret\'ı kontrol et; uygulamanın yayınlanmış ve mağazana kurulu olduğundan emin ol.'),
+            );
+        }
+
+        if ($firstAuthorization) {
+            $this->grantInstallWrites($connection);
+        }
+
+        $connection->refresh();
+        $this->resolveLocation($connection);
+
+        return $this->finish($connection);
+    }
+
+    /** Kasada satıcı uygulaması çifti var mı? */
+    private function usesOwnApp(ChannelConnection $connection): bool
+    {
+        try {
+            return ShopifyAuth::ownAppSecret($this->vault->read($connection)) !== null;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**

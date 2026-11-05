@@ -61,6 +61,13 @@
                             <p class="font-semibold text-ink">1. {{ $name }} tarafında hazırlık</p>
                             @if ($form['help'] ?? null)
                                 <p class="mt-2 muted">{{ $form['help'] }}</p>
+                                @if (($form['steps'] ?? []) !== [])
+                                    <ol class="mt-3 list-decimal space-y-1 pl-5 muted [overflow-wrap:anywhere]">
+                                        @foreach ($form['steps'] as $step)
+                                            <li>{{ $step }}</li>
+                                        @endforeach
+                                    </ol>
+                                @endif
                             @elseif ($installOnly)
                                 <p class="mt-2 muted">{{ $name }} mağazası 34Pazar panelinden değil, {{ $name }}'ın kendi uygulama kurulumundan bağlanır: 34Pazar uygulamasını mağazana kurup izinleri onaylarsın, bağlantı kendiliğinden açılır.</p>
                                 @if ($installPublic && ($form['installUrl'] ?? null))
@@ -88,7 +95,11 @@
                         @endunless
                         <li class="card">
                             <p class="font-semibold text-ink">{{ $installOnly ? '2' : '3' }}. Gönderim izinlerini aç</p>
-                            <p class="mt-2 muted">Yeni bağlantıda ürün yayını, fiyat ve stok gönderimi kapalı başlar; bağlantı kurmak kanala tek bir şey yazmaz. Hazır olduğunda <strong class="font-semibold text-ink">Kanallar</strong> ekranında bağlantının kartındaki "Kanala yazma izinleri" bölümünden istediğin izni açarsın.</p>
+                            @if ($form['writesOnConnect'] ?? false)
+                                <p class="mt-2 muted">{{ $name }} bağlantısında stok ve fiyat gönderimi açık başlar; ürün yayını kapalı kalır, içe aktardığın ürünler {{ $name }}'daki içeriği ezmez. İzinleri <strong class="font-semibold text-ink">Kanallar</strong> ekranında bağlantının kartındaki "Kanala yazma izinleri" bölümünden değiştirirsin.</p>
+                            @else
+                                <p class="mt-2 muted">Yeni bağlantıda ürün yayını, fiyat ve stok gönderimi kapalı başlar; bağlantı kurmak kanala tek bir şey yazmaz. Hazır olduğunda <strong class="font-semibold text-ink">Kanallar</strong> ekranında bağlantının kartındaki "Kanala yazma izinleri" bölümünden istediğin izni açarsın.</p>
+                            @endif
                         </li>
                     </ol>
                 </section>

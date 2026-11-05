@@ -137,10 +137,12 @@ final class ChannelConnectionController extends Controller
                         $fail(__('Bu kanalın kimlik biçimi panelde tanımlı değil; şu an bağlanamıyor.'));
                     }
 
-                    // Shopify panelden bağlanmaz (App Store 2.3.1) — ekran
-                    // formu göstermiyor; doğrudan POST da kabul edilmez.
+                    // Yalnız kendi platformundan kurulan kanal panelden
+                    // bağlanmaz — ekran formu göstermiyor; doğrudan POST da
+                    // kabul edilmez. (Shopify 5 Kas 2026'dan beri panelden
+                    // bağlanır: satıcının kendi uygulaması, ADR-012.)
                     if (is_string($value) && ChannelConnectForm::installOnly($value)) {
-                        $fail(__(':channel mağazası panelden değil, uygulama :channel üzerinden kurularak bağlanır.', ['channel' => 'Shopify']));
+                        $fail(__(':channel mağazası panelden değil, uygulama :channel üzerinden kurularak bağlanır.', ['channel' => ucfirst($value)]));
                     }
                 },
             ],
@@ -255,6 +257,11 @@ final class ChannelConnectionController extends Controller
         // bilgisi yoktur ve kontrol kimliksiz gider.
         $usesOauth = ChannelConnectForm::usesOauth($code);
 
+        // Kanala özgü son adımı olan kanalda (Shopify satıcı uygulaması)
+        // sağlık kontrolünü son adım koşar: ilk anahtar ve depo seçimi
+        // ondan ÖNCE gelmelidir, yoksa doğru çift "yanlış" görünürdü.
+        $postConnect = ChannelConnectForm::hasPostConnect($code);
+
         try {
             $connection = $connect->run(
                 channelTypeCode: $code,
@@ -262,7 +269,7 @@ final class ChannelConnectionController extends Controller
                 storeUrl: $storeUrl,
                 secrets: $secrets,
                 settings: $settings,
-                checkHealth: ! $usesOauth,
+                checkHealth: ! $usesOauth && ! $postConnect,
                 accountId: $accountId,
             );
         } catch (AccountAlreadyConnectedException $e) {
@@ -309,6 +316,10 @@ final class ChannelConnectionController extends Controller
         // adımda Etsy'ye gider.
         if ($usesOauth) {
             return $this->startOauthHandshake($request, $code, $connection);
+        }
+
+        if ($postConnect) {
+            return $this->finishPostConnect($code, $connection);
         }
 
         return redirect('/channels')->with(
@@ -449,6 +460,20 @@ final class ChannelConnectionController extends Controller
             default => throw new \LogicException(
                 "`{$channelTypeCode}` OAuth kullandığını bildiriyor ama "
                 .'yetkilendirme akışı tanımlı değil.'
+            ),
+        };
+    }
+
+    /**
+     * Kanala özgü son adım — işi sahibine devreder (`startOauthHandshake`
+     * gerekçesi). Tanımsız kanal AÇIKÇA reddedilir.
+     */
+    private function finishPostConnect(string $channelTypeCode, ChannelConnection $connection): RedirectResponse
+    {
+        return match ($channelTypeCode) {
+            'shopify' => app(ShopifyOAuthController::class)->connectOwnApp($connection),
+            default => throw new \LogicException(
+                "`{$channelTypeCode}` kayıt sonrası adım bildiriyor ama adım tanımlı değil."
             ),
         };
     }

@@ -1944,5 +1944,19 @@
     "test": "test",
     "sandbox": "sandbox",
     "canlı": "live",
-    "hata": "failed"
+    "hata": "failed",
+    "Bu mağaza kendi Shopify uygulamanla bağlı. Client ID ve Client secret'ı Mağaza bağla formunda aynı mağaza adresiyle yeniden gir.": "This store is connected through your own Shopify app. Re-enter the Client ID and Client secret in the Connect store form with the same store address.",
+    "Shopify erişim anahtarı vermedi. Client ID ve Client secret'ı kontrol et; uygulamanın yayınlanmış ve mağazana kurulu olduğundan emin ol.": "Shopify did not issue an access token. Check the Client ID and Client secret, and make sure the app is released and installed on your store.",
+    "Bağlantı kurulunca stok ve fiyat gönderimi açık başlar; ürün yayını kapalı kalır. İzinleri Kanallar ekranından değiştirebilirsin.": "Once connected, stock and price sync start switched on; product publishing stays off. You can change these permissions on the Channels screen.",
+    "Client secret": "Client secret",
+    "Dev Dashboard'da uygulamanın Ayarlar sekmesinde. Parola değildir ama Client secret ile birlikte saklanır.": "In the Dev Dashboard, on the app's Settings tab. It is not a password, but it is stored together with the Client secret.",
+    "Aynı sayfada. Kimseyle paylaşma; Shopify'da değiştirirsen burada da güncelle, yoksa bağlantı bir gün içinde durur.": "On the same page. Do not share it; if you rotate it in Shopify, update it here too, otherwise the connection stops within a day.",
+    "Shopify'da kendi mağazan için bir uygulama açıp 34Pazar'a bağlarsın. Kodlama gerekmez; 5 dakika sürer.": "You create an app for your own store in Shopify and connect it to 34Pazar. No coding needed; it takes about 5 minutes.",
+    "Shopify yönetiminde sol altta Ayarlar'a, sonra Uygulamalar'a gir.": "In your Shopify admin, open Settings at the bottom left, then Apps.",
+    "Uygulama geliştir'e, ardından Dev Dashboard'da uygulama oluştur'a bas.": "Click Develop apps, then Build apps in Dev Dashboard.",
+    "Uygulama oluştur'a bas, ad olarak \"34Pazar\" yaz ve Oluştur'a bas.": "Click Create app, name it \"34Pazar\" and click Create.",
+    "Açılan sürüm sayfasında Uygulama adresi alanını olduğu gibi bırak, Webhook API sürümü olarak 2026-01'i seç ve İzinler kutusuna şunu aynen yapıştır: write_products,write_inventory,read_locations,read_orders,write_merchant_managed_fulfillment_orders": "On the version page, leave the App URL as it is, select 2026-01 as the Webhooks API version and paste exactly this into the Scopes box: write_products,write_inventory,read_locations,read_orders,write_merchant_managed_fulfillment_orders",
+    "Yayınla'ya, açılan pencerede bir kez daha Yayınla'ya bas.": "Click Release, then Release again in the dialog.",
+    "Kurulumlar bölümünde Uygulamayı kur'a bas, mağazanı seç ve onayla.": "In the Installs section, click Install app, choose your store and confirm.",
+    "Ayarlar sekmesindeki Client ID ve Client secret'ı kopyala; mağaza adresinle (xxx.myshopify.com) birlikte aşağıdaki forma yapıştır.": "Copy the Client ID and Client secret from the Settings tab and paste them, together with your store address (xxx.myshopify.com), into the form below."
 }

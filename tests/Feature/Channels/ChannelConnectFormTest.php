@@ -8,6 +8,7 @@ use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Adapters\Ebay\EbayAdapter;
 use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
+use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use App\Domain\Channels\Adapters\WooCommerce\WooCommerceAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -53,18 +54,21 @@ final class ChannelConnectFormTest extends TestCase
     // ══════════════════════════════════════════ sözleşme · alan tanımları
 
     /**
-     * ⚠️ SHOPIFY FORMDAN HİÇBİR ANAHTAR İSTEMEZ — 34Pazar uygulaması (OAuth).
+     * ⚠️ SHOPIFY FORMU SATICININ KENDİ UYGULAMASININ ÇİFTİNİ SORAR (ADR-012).
      *
-     * 1 Ocak 2026'dan beri Shopify yeni "özel uygulama" açtırmıyor; formun
-     * istediği `shpat_` anahtarını YENİ bir mağaza alamıyordu. Form yeniden
-     * anahtar sorarsa satıcı Shopify'da olmayan bir değeri arar.
+     * App Store reddinden (Ref 140131) sonra satıcı kendi Dev Dashboard
+     * uygulamasını açar; anahtarı 34Pazar `client_credentials` ile alır.
+     * Form yine OAuth'a yönlendirseydi satıcı 34Pazar uygulamasının onay
+     * ekranına gider — o uygulama mağazaya kurulamaz.
      */
     #[Test]
-    public function the_shopify_form_asks_only_for_the_store_address(): void
+    public function the_shopify_form_asks_for_the_merchant_app_pair_and_the_store_address(): void
     {
-        $this->assertSame([], ChannelConnectForm::secretFields('shopify'));
+        $this->assertSame(['client_id', 'client_secret'], array_column(ChannelConnectForm::secretFields('shopify'), 'name'));
         $this->assertSame([], ChannelConnectForm::identityFields('shopify'));
-        $this->assertTrue(ChannelConnectForm::usesOauth('shopify'));
+        $this->assertFalse(ChannelConnectForm::usesOauth('shopify'));
+        $this->assertTrue(ChannelConnectForm::hasPostConnect('shopify'));
+        $this->assertFalse(ChannelConnectForm::installOnly('shopify'));
         $this->assertTrue(ChannelConnectForm::asksStoreUrl('shopify'));
     }
 
@@ -267,47 +271,26 @@ final class ChannelConnectFormTest extends TestCase
     // ══════════════════════════════════════════════ A1 · Shopify bağlama
 
     /**
-     * ⚠️ SHOPIFY PANELDEN BAĞLANMAZ — App Store kuralı 2.3.1.
-     *
-     * "Kurulum ya da yapılandırma akışında myshopify adresi elle
-     * istenemez." Ekran formu göstermiyor; doğrudan POST da reddedilir,
-     * bağlantı açılmaz ve Shopify'a istek gitmez. Mağaza yalnız
-     * Shopify'dan kurulumla bağlanır (`ShopifyInstallFlowTest`).
+     * Ekran Shopify için kurulum bağlantısı değil, alanları + adım adım
+     * yönergeyi alır. Yönergedeki izin listesi KODUN istediği listedir —
+     * ayrı yazılsaydı satıcı eksik izinle uygulama açar ve sipariş/kargo
+     * çağrıları sessizce 403 alırdı.
      */
     #[Test]
-    public function shopify_cannot_be_connected_by_typing_a_store_address(): void
-    {
-        [$user] = $this->tenantWithChannels();
-
-        config()->set('services.shopify.client_id', 'istemci-123');
-        config()->set('services.shopify.client_secret', 'sir-456');
-        Http::fake();
-
-        $this->actingAs($user)
-            ->post('/channels', [
-                'channel_type_code' => 'shopify',
-                'label' => 'Shopify Mağazam',
-                'store_url' => 'magaza.myshopify.com',
-            ])
-            ->assertSessionHasErrors('channel_type_code');
-
-        $this->assertNull($this->connectionFor('shopify'));
-        $this->assertNull(session('shopify.oauth.state'));
-        Http::assertNothingSent();
-    }
-
-    /** Ekran Shopify için alan değil, App Store kurulum bağlantısı alır. */
-    #[Test]
-    public function the_shopify_form_offers_the_install_link_instead_of_fields(): void
+    public function the_shopify_form_shows_fields_and_steps_instead_of_an_install_link(): void
     {
         config()->set('services.shopify.install_url', 'https://apps.shopify.com/34pazar');
 
         $shopify = ChannelConnectForm::present('shopify');
 
-        $this->assertSame('https://apps.shopify.com/34pazar', $shopify['installUrl']);
-        $this->assertSame([], $shopify['secretFields']);
-        $this->assertSame([], $shopify['identityFields']);
-        $this->assertNull(ChannelConnectForm::present('woocommerce')['installUrl']);
+        $this->assertNull($shopify['installUrl']);
+        $this->assertCount(2, $shopify['secretFields']);
+        $this->assertTrue($shopify['secretFields'][1]['masked']);
+        $this->assertCount(7, $shopify['steps']);
+        $this->assertStringContainsString(ShopifyAuth::DEFAULT_SCOPES, implode(' ', $shopify['steps']));
+        $this->assertTrue($shopify['writesOnConnect']);
+        $this->assertFalse(ChannelConnectForm::present('woocommerce')['writesOnConnect']);
+        $this->assertSame([], ChannelConnectForm::present('woocommerce')['steps']);
     }
 
     /**
@@ -780,9 +763,12 @@ final class ChannelConnectFormTest extends TestCase
 
                     return $shopify !== null
                         && $etsy !== null
-                        // İkisi de sır SORMAZ, OAuth'a yönlendirir.
-                        && $shopify['secretFields'] === []
-                        && $shopify['oauth'] === true
+                        // Shopify satıcı uygulamasının çiftini sorar ve
+                        // yönergeyi taşır (ADR-012); Etsy sır SORMAZ, OAuth'a
+                        // yönlendirir.
+                        && array_column($shopify['secretFields'], 'name') === ['client_id', 'client_secret']
+                        && $shopify['oauth'] === false
+                        && count($shopify['steps']) === 7
                         && $etsy['secretFields'] === []
                         && $etsy['oauth'] === true;
                 }),

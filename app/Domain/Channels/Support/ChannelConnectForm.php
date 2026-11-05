@@ -17,6 +17,7 @@ use App\Domain\Channels\Adapters\N11\N11Adapter;
 use App\Domain\Channels\Adapters\Otto\OttoApp;
 use App\Domain\Channels\Adapters\Pazarama\PazaramaAdapter;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
+use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Adapters\Ticimax\TicimaxAdapter;
 use App\Domain\Channels\Adapters\Trendyol\TrendyolAdapter;
 use InvalidArgumentException;
@@ -93,6 +94,9 @@ final class ChannelConnectForm
      *     account?: string,
      *     oauth: bool,
      *     help?: string,
+     *     steps?: list<string>,
+     *     post_connect?: bool,
+     *     writes_on_connect?: bool,
      *     install_only?: bool,
      *     wizard_route?: string,
      * }>
@@ -559,26 +563,54 @@ final class ChannelConnectForm
         ],
 
         'shopify' => [
-            // 34PAZAR UYGULAMASI ÜZERİNDEN (OAuth) — 5 Eki 2026.
+            // SATICININ KENDİ UYGULAMASI (5 Kas 2026, ADR-012).
             //
-            // Eskiden satıcı kendi "özel uygulamasını" açıp `shpat_`
-            // anahtarı, webhook imza anahtarı ve `gid://shopify/Location/…`
-            // değerini YAPIŞTIRIYORDU. 1 Ocak 2026'dan beri Shopify yeni
-            // özel uygulama açtırmıyor → yeni mağaza BAĞLANAMIYORDU. Artık
-            // satıcı yalnız mağaza adresini yazar, Shopify'da onaylar;
-            // anahtar (`ShopifyOAuthController`), konum ve webhook'lar
-            // bizim işimiz.
+            // 34Pazar uygulaması App Store'dan POLİTİKA gereği reddedildi
+            // (Ref 140131: "apps that connect to a marketplace system outside
+            // of Shopify"). App Store kuralı 2.3.1 (adres elle sorulmaz) artık
+            // bağlayıcı değil: satıcı Shopify yönetiminde kendi Dev Dashboard
+            // uygulamasını açar, mağazasına kurar ve Client ID / Client
+            // secret'ı burada verir. Erişim anahtarını 34Pazar
+            // `client_credentials` ile alır (24 saat, yenileme anahtarı yok);
+            // konum, webhook ve ilk izinler `ShopifyOAuthController::
+            // connectOwnApp()`'ta — 34Pazar uygulamasının OAuth sonu ile AYNI
+            // yoldan biter.
             //
-            // ⚠️ PANELDEN BAĞLANMAZ — YALNIZ SHOPIFY'DAN KURULUR (6 Eki 2026).
-            // App Store kuralı 2.3.1: "kurulum ya da yapılandırma akışında
-            // myshopify adresi veya mağaza alanı elle İSTENEMEZ". Adres
-            // soran bu form incelemede ret sebebiydi. Satıcı uygulamayı
-            // Shopify'dan kurar (`ShopifyInstallController`); mevcut
-            // bağlantının yeniden yetkilendirilmesi kayıtlı adresi kullanır.
-            'secrets' => [],
+            // 34Pazar uygulamasıyla kurulmuş eski bağlantılar (OAuth) aynen
+            // çalışır; kasalarında bu çift yoktur (`ShopifyAuth::ownAppSecret`).
+            'secrets' => [
+                [
+                    'name' => ShopifyAuth::OWN_CLIENT_ID,
+                    'label' => 'Client ID',
+                    'placeholder' => '',
+                    'hint' => 'Dev Dashboard\'da uygulamanın Ayarlar sekmesinde. Parola değildir ama Client secret ile birlikte saklanır.',
+                ],
+                [
+                    'name' => ShopifyAuth::OWN_CLIENT_SECRET,
+                    'label' => 'Client secret',
+                    'placeholder' => '',
+                    'masked' => true,
+                    'hint' => 'Aynı sayfada. Kimseyle paylaşma; Shopify\'da değiştirirsen burada da güncelle, yoksa bağlantı bir gün içinde durur.',
+                ],
+            ],
             'identity' => [],
-            'oauth' => true,
-            'install_only' => true,
+            'oauth' => false,
+            // Kayıttan sonra Shopify'a özgü son adım (anahtar, depo, izinler,
+            // webhook) — `ChannelConnectionController::finishPostConnect`.
+            'post_connect' => true,
+            // İlk bağlantıda stok ve fiyat gönderimi AÇIK doğar (ADR-010
+            // istisnası, `ShopifyOAuthController::grantInstallWrites`).
+            'writes_on_connect' => true,
+            'help' => 'Shopify\'da kendi mağazan için bir uygulama açıp 34Pazar\'a bağlarsın. Kodlama gerekmez; 5 dakika sürer.',
+            'steps' => [
+                'Shopify yönetiminde sol altta Ayarlar\'a, sonra Uygulamalar\'a gir.',
+                'Uygulama geliştir\'e, ardından Dev Dashboard\'da uygulama oluştur\'a bas.',
+                'Uygulama oluştur\'a bas, ad olarak "34Pazar" yaz ve Oluştur\'a bas.',
+                'Açılan sürüm sayfasında Uygulama adresi alanını olduğu gibi bırak, Webhook API sürümü olarak 2026-01\'i seç ve İzinler kutusuna şunu aynen yapıştır: '.ShopifyAuth::DEFAULT_SCOPES,
+                'Yayınla\'ya, açılan pencerede bir kez daha Yayınla\'ya bas.',
+                'Kurulumlar bölümünde Uygulamayı kur\'a bas, mağazanı seç ve onayla.',
+                'Ayarlar sekmesindeki Client ID ve Client secret\'ı kopyala; mağaza adresinle (xxx.myshopify.com) birlikte aşağıdaki forma yapıştır.',
+            ],
         ],
 
         'etsy' => [
@@ -751,6 +783,27 @@ final class ChannelConnectForm
             && (self::definition($channelTypeCode)['token_exchange'] ?? false) === true;
     }
 
+    /**
+     * Kayıttan sonra kanala özgü bir son adım var mı (Shopify satıcı
+     * uygulaması: anahtar + depo + izinler)? Varsa `ConnectChannel` sağlık
+     * kontrolünü koşmaz; son adım koşar.
+     */
+    public static function hasPostConnect(string $channelTypeCode): bool
+    {
+        return self::isDefined($channelTypeCode)
+            && (self::definition($channelTypeCode)['post_connect'] ?? false) === true;
+    }
+
+    /**
+     * Adım adım hazırlık yönergesi (bağlanma ekranı + /yardim — tek kaynak).
+     *
+     * @return list<string>
+     */
+    public static function steps(string $channelTypeCode): array
+    {
+        return self::isDefined($channelTypeCode) ? (self::definition($channelTypeCode)['steps'] ?? []) : [];
+    }
+
     /** Satıcıya gösterilecek yardım metni. */
     public static function help(string $channelTypeCode): ?string
     {
@@ -863,6 +916,8 @@ final class ChannelConnectForm
                 'identityFields' => [],
                 'oauth' => false,
                 'help' => null,
+                'steps' => [],
+                'writesOnConnect' => false,
                 'asksStoreUrl' => true,
                 'connectable' => false,
             ];
@@ -895,6 +950,8 @@ final class ChannelConnectForm
             'identityFields' => $forScreen(self::identityFields($channelTypeCode)),
             'oauth' => self::usesOauth($channelTypeCode),
             'help' => $help !== null ? __($help) : null,
+            'steps' => array_map(static fn (string $step): string => __($step), self::steps($channelTypeCode)),
+            'writesOnConnect' => (self::definition($channelTypeCode)['writes_on_connect'] ?? false) === true,
             'asksStoreUrl' => self::asksStoreUrl($channelTypeCode),
             // Uygulaması sunucuda tanımsız kanal formu göstermez; ekran
             // sebebini ayrıca yazar (`appMissing`).
