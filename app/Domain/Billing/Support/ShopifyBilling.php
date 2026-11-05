@@ -6,10 +6,13 @@ namespace App\Domain\Billing\Support;
 
 use App\Domain\Billing\Models\Plan;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAdapter;
+use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Channels\Support\CredentialVault;
 use DateTimeImmutable;
 use RuntimeException;
+use Throwable;
 
 /**
  * Shopify Billing — Shopify'dan faturalanan satıcının abonelik kapısı.
@@ -41,11 +44,28 @@ class ShopifyBilling
      */
     public function connectionForCurrentTenant(): ?ChannelConnection
     {
+        // SATICININ KENDİ UYGULAMASIYLA bağlı mağaza SAYILMAZ (ADR-012):
+        // custom dağıtım Shopify faturasını kullanamaz (shopify.dev ·
+        // distribution — "Can't charge merchants through Shopify's app billing
+        // system"). Sayılsaydı satıcı Stripe yerine çalışmayan bir Shopify
+        // onay ekranına gönderilir ve hiç ödeyemezdi. Kasa tek doğruluk
+        // kaynağıdır (`ShopifyAuth::ownAppSecret`); okunamayan kasa da
+        // satıcı uygulaması sayılmaz — 34Pazar uygulamasının eski yolu korunur.
         return ChannelConnection::query()
             ->where('channel_type_code', 'shopify')
             ->where('status', 'active')
             ->orderBy('created_at')
-            ->first();
+            ->get()
+            ->first(fn (ChannelConnection $connection): bool => ! $this->usesOwnApp($connection));
+    }
+
+    private function usesOwnApp(ChannelConnection $connection): bool
+    {
+        try {
+            return ShopifyAuth::ownAppSecret(app(CredentialVault::class)->read($connection)) !== null;
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     /**
