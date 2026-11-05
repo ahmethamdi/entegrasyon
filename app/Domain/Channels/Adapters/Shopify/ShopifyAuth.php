@@ -155,18 +155,73 @@ final class ShopifyAuth
      */
     public static function webhookHmacValid(string $raw, ?string $given): bool
     {
-        $secret = self::clientSecretOrNull();
-
-        if ($secret === null || ! is_string($given) || $given === '') {
-            return false;
-        }
-
-        return hash_equals(base64_encode(hash_hmac('sha256', $raw, $secret, true)), $given);
+        return self::webhookHmacValidWith($raw, $given, self::clientSecretOrNull());
     }
 
     public static function tokenUrl(string $shop): string
     {
         return 'https://'.$shop.'/admin/oauth/access_token';
+    }
+
+    // ───────────────────────────────────────── satıcının kendi uygulaması
+
+    /** Kasadaki satıcı uygulaması çiftinin adları (bağlanma formu alanları). */
+    public const OWN_CLIENT_ID = 'client_id';
+
+    public const OWN_CLIENT_SECRET = 'client_secret';
+
+    /**
+     * Bağlantı SATICININ KENDİ Dev Dashboard uygulamasıyla mı kurulmuş?
+     *
+     * App Store reddinden sonra (Ref 140131, ~28 Eki 2026 — pazaryeri
+     * politikası) her satıcı mağazasının organizasyonunda kendi uygulamasını
+     * açar ve Client ID/Secret'ı 34Pazar'a verir. Anahtar `client_credentials`
+     * ile alınır (24 saat, yenileme anahtarı YOK) ve webhook'lar O uygulamanın
+     * sırrıyla imzalanır.
+     *
+     * TEK DOĞRULUK KAYNAĞI KASADIR: ayrı bir `settings` bayrağı tutulsaydı
+     * kasa ile bayrak ayrışabilir, anahtar yanlış yoldan istenirdi. Çiftin
+     * İKİSİ de doluysa satıcı uygulamasıdır; 34Pazar uygulamasıyla (OAuth)
+     * kurulmuş bağlantının kasasında bu adlar hiç yoktur.
+     *
+     * @param  array<string, mixed>  $secrets
+     */
+    public static function ownAppSecret(array $secrets): ?string
+    {
+        $id = $secrets[self::OWN_CLIENT_ID] ?? null;
+        $secret = $secrets[self::OWN_CLIENT_SECRET] ?? null;
+
+        return is_string($id) && $id !== '' && is_string($secret) && $secret !== '' ? $secret : null;
+    }
+
+    /**
+     * Satıcı uygulamasının anahtar isteği — `scope` GÖNDERİLMEZ (Shopify yok
+     * sayar; anahtar mağazanın verdiği bütün izinleri taşır).
+     *
+     * @param  array<string, mixed>  $secrets
+     * @return array<string, string>
+     */
+    public static function clientCredentialsRequest(array $secrets): array
+    {
+        if (self::ownAppSecret($secrets) === null) {
+            throw new RuntimeException('Shopify uygulama çifti (Client ID / Client secret) eksik.');
+        }
+
+        return [
+            'grant_type' => 'client_credentials',
+            'client_id' => (string) $secrets[self::OWN_CLIENT_ID],
+            'client_secret' => (string) $secrets[self::OWN_CLIENT_SECRET],
+        ];
+    }
+
+    /** Webhook gövdesi imzası — verilen sırla (satıcı uygulaması). */
+    public static function webhookHmacValidWith(string $raw, ?string $given, ?string $secret): bool
+    {
+        if ($secret === null || $secret === '' || ! is_string($given) || $given === '') {
+            return false;
+        }
+
+        return hash_equals(base64_encode(hash_hmac('sha256', $raw, $secret, true)), $given);
     }
 
     /** @return array<string, string> */

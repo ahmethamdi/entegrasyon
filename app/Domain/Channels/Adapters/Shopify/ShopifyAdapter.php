@@ -412,6 +412,19 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
             return false;
         }
 
+        // SATICININ KENDİ UYGULAMASI: Shopify gövdeyi O uygulamanın sırrıyla
+        // imzalar ve YALNIZ o sır kabul edilir. 34Pazar uygulamasının sırrı
+        // burada geçseydi, sırrı bilen (ya da 34Pazar uygulamasını aynı
+        // mağazaya kurmuş) biri bu bağlantının adresine imzalı sipariş
+        // gönderebilirdi; satıcı uygulamasının bağlantısında o sır hiçbir
+        // meşru teslimi imzalamaz.
+        $secrets = $this->secrets();
+        $own = ShopifyAuth::ownAppSecret($secrets);
+
+        if ($own !== null) {
+            return ShopifyAuth::webhookHmacValidWith($raw, $provided, $own);
+        }
+
         // UYGULAMA ÜZERİNDEN bağlanan mağazada Shopify gövdeyi 34Pazar
         // uygulamasının İSTEMCİ SIRRIYLA imzalar — kasada mağazaya özel
         // sır yoktur.
@@ -421,15 +434,9 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
 
         // Eski yol: elle açılmış özel uygulama (`shpat_`) + formdan girilen
         // imza anahtarı. Uygulamaya geçmemiş bağlantılar için korunur.
-        $secret = $this->webhookSecret();
+        $secret = $secrets['webhook_secret'] ?? null;
 
-        if ($secret === null || $secret === '') {
-            return false;
-        }
-
-        $expected = base64_encode(hash_hmac('sha256', $raw, $secret, true));
-
-        return hash_equals($expected, $provided);
+        return ShopifyAuth::webhookHmacValidWith($raw, $provided, is_string($secret) ? $secret : null);
     }
 
     // ------------------------------------------------------------ uygulama (OAuth)
@@ -443,6 +450,32 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
     public function refreshCredentials(): RefreshedCredentials
     {
         $secrets = $this->secrets();
+
+        // SATICININ KENDİ UYGULAMASI: yenileme anahtarı YOKTUR; anahtar her
+        // seferinde çiftle yeniden istenir (`client_credentials`, 24 saat).
+        // Çift korunur, yalnız `access_token` değişir — `TokenRefresher`
+        // kasaya dönen dizinin TAMAMINI yazar; çift düşseydi bir sonraki
+        // yenileme kimliksiz kalırdı.
+        if (ShopifyAuth::ownAppSecret($secrets) !== null) {
+            $response = $this->client->post(
+                endpoint: ShopifyAuth::tokenUrl($this->shopDomain()),
+                body: ShopifyAuth::clientCredentialsRequest($secrets),
+                asForm: true,
+            );
+
+            $response->throw();
+
+            $fresh = ShopifyAuth::credentialsFrom((array) $response->json());
+            unset($fresh['secrets']['refresh_token']);
+
+            return new RefreshedCredentials(
+                secrets: [...$secrets, ...$fresh['secrets']],
+                expiresAt: $fresh['expires_at'],
+                scope: $fresh['scope'],
+                refreshExpiresAt: null,
+            );
+        }
+
         $refresh = $secrets['refresh_token'] ?? null;
 
         if (! is_string($refresh) || $refresh === '') {
@@ -522,7 +555,7 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
 
         $created = [];
         $failed = [];
-        foreach (self::WEBHOOK_TOPICS as $topic) {
+        foreach ($this->webhookTopics() as $topic) {
             if (isset($existing[$topic])) {
                 continue;
             }
@@ -2479,12 +2512,27 @@ final class ShopifyAdapter implements ChannelAdapter, DeclaresImageLimit, MapsOr
         return is_string($token) ? $token : null;
     }
 
-    /** Webhook sırrı kasadan okunur; bağlam beklenmez. */
-    private function webhookSecret(): ?string
+    /**
+     * Bu bağlantıda kurulacak konular. Satıcının kendi uygulamasında
+     * `APP_SUBSCRIPTIONS_UPDATE` YOK: custom dağıtım Shopify faturasını
+     * kullanamaz (shopify.dev · distribution), satıcı Stripe'la öder ve o
+     * konu hiçbir zaman anlamlı bir olay taşımaz.
+     *
+     * @return list<string>
+     */
+    public function webhookTopics(): array
     {
-        $secret = $this->secrets()['webhook_secret'] ?? null;
+        if (ShopifyAuth::ownAppSecret($this->secrets()) === null) {
+            return self::WEBHOOK_TOPICS;
+        }
 
-        return is_string($secret) ? $secret : null;
+        return array_values(array_diff(self::WEBHOOK_TOPICS, ['APP_SUBSCRIPTIONS_UPDATE']));
+    }
+
+    /** Bağlantı satıcının kendi uygulamasıyla mı kurulmuş (kasadan). */
+    public function usesOwnApp(): bool
+    {
+        return ShopifyAuth::ownAppSecret($this->secrets()) !== null;
     }
 
     /**
