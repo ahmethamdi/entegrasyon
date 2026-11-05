@@ -7,12 +7,15 @@ namespace App\Http\Controllers;
 use App\Domain\Channels\Actions\RevokeChannelAccess;
 use App\Domain\Channels\Adapters\Shopify\ShopifyAuth;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Channels\Support\CredentialVault;
 use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Shopify'ın ZORUNLU gizlilik webhook'ları — herkese açık uygulamada şart.
@@ -34,26 +37,39 @@ use Illuminate\Support\Facades\Log;
  */
 final class ShopifyComplianceController extends Controller
 {
+    public function __construct(private readonly CredentialVault $vault) {}
+
     public function __invoke(Request $request): Response
     {
         $raw = $request->getContent();
-
-        if (! ShopifyAuth::webhookHmacValid($raw, $request->header('X-Shopify-Hmac-Sha256'))) {
-            Log::warning('shopify.compliance.signature_invalid');
-
-            return response()->noContent(401);
-        }
+        $given = $request->header('X-Shopify-Hmac-Sha256');
+        $given = is_string($given) ? $given : null;
 
         $topic = (string) $request->header('X-Shopify-Topic');
         $body = json_decode($raw, true);
         $body = is_array($body) ? $body : [];
         $shop = (string) ($body['shop_domain'] ?? $request->header('X-Shopify-Shop-Domain'));
 
-        $connectionIds = TenantContext::runAsSystem(fn () => ChannelConnection::query()
+        $connections = TenantContext::runAsSystem(fn () => ChannelConnection::query()
             ->where('channel_type_code', 'shopify')
             ->where('external_account_id', $shop)
-            ->pluck('id')
-            ->all());
+            ->get());
+
+        // İMZA KARAR VERİR; MAĞAZA ADI YALNIZ HANGİ SIRRIN DENENECEĞİNİ SEÇER.
+        //
+        // İki imzacı olabilir: 34Pazar uygulaması (global sır) ya da
+        // SATICININ KENDİ UYGULAMASI (o mağazanın bağlantısındaki sır,
+        // ADR-012). Mağaza adı imzasız gövdeden okunur ama yalnız hangi
+        // sırların DENENECEĞİNİ seçer: başka mağazanın adını yazan biri o
+        // mağazanın sırrını bilmeden geçemez. Hiçbiri tutmazsa 401 —
+        // mağaza bizde yoksa da (imzayı doğrulayacak sır yok).
+        if (! $this->signedByKnownApp($raw, $given, $connections)) {
+            Log::warning('shopify.compliance.signature_invalid');
+
+            return response()->noContent(401);
+        }
+
+        $connectionIds = $connections->pluck('id')->all();
 
         Log::info('shopify.compliance.received', [
             'topic' => $topic,
@@ -77,6 +93,30 @@ final class ShopifyComplianceController extends Controller
         };
 
         return response()->noContent(200);
+    }
+
+    /** @param Collection<int, ChannelConnection> $connections */
+    private function signedByKnownApp(string $raw, ?string $given, Collection $connections): bool
+    {
+        if (ShopifyAuth::webhookHmacValid($raw, $given)) {
+            return true;
+        }
+
+        foreach ($connections as $connection) {
+            $own = TenantContext::runAsSystem(function () use ($connection): ?string {
+                try {
+                    return ShopifyAuth::ownAppSecret($this->vault->read($connection));
+                } catch (Throwable) {
+                    return null;   // kasa okunamadı: bu sır DENENMEZ, geçmiş sayılmaz
+                }
+            });
+
+            if (ShopifyAuth::webhookHmacValidWith($raw, $given, $own)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
