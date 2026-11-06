@@ -1972,5 +1972,9 @@
     "Dış kaynaktan gelen ziyaret yok.": "No visits from external sites.",
     "Çerezsiz sayılır, IP saklanmaz. Tekil ziyaretçi gün başınadır: iki gün gelen kişi iki kez sayılır. Botlar ve yönetici hesabı sayılmaz.": "Counted without cookies; IP addresses are not stored. Unique visitors are counted per day: someone who visits on two days is counted twice. Bots and the admin account are not counted.",
     "Lütfen formu yeniden gönder.": "Please submit the form again.",
-    "Hesabın oluşturuldu. Doğrulama bağlantısı için e-postanı kontrol et.": "Your account has been created. Check your email for the verification link."
+    "Hesabın oluşturuldu. Doğrulama bağlantısı için e-postanı kontrol et.": "Your account has been created. Check your email for the verification link.",
+    "İletişim mesajları": "Contact messages",
+    ":count mesaj": ":count messages",
+    "Henüz mesaj yok.": "No messages yet.",
+    "Posta gitmedi": "Email not sent"
 }

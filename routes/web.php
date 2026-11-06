@@ -18,6 +18,7 @@ use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\ChannelPricingController;
 use App\Http\Controllers\ChannelSettingsController;
+use App\Http\Controllers\ContactMessageController;
 use App\Http\Controllers\ContributionReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DemoLoginController;
@@ -130,6 +131,11 @@ Route::controller(SiteController::class)->withoutMiddleware(SetLocale::class)->g
     Route::get('/entegrasyonlar/{channel}', 'channel')->where('channel', '[a-z0-9-]+')->name('site.channel');
     Route::get('/hakkimizda', 'about')->name('site.about');
     Route::get('/iletisim', 'contact')->name('site.contact');
+    // Site sprint 1 (6 Kas 2026): hizmetler, SSS, güvenlik sayfaları.
+    Route::get('/hizmetler', 'services')->name('site.services');
+    Route::get('/hizmetler/{slug}', 'service')->where('slug', '[a-z0-9-]+')->name('site.service');
+    Route::get('/sss', 'faq')->name('site.faq');
+    Route::get('/guvenlik', 'security')->name('site.security');
     Route::get('/blog', 'blogIndex')->name('site.blog');
     Route::get('/blog/{slug}', 'blogShow')->where('slug', '[a-z0-9-]+')->name('site.blog.show');
     Route::get('/yasal/{page}', 'legal')->where('page', '[a-z0-9-]+')->name('site.legal');
@@ -143,6 +149,13 @@ Route::controller(SiteController::class)->withoutMiddleware(SetLocale::class)->g
     Route::get('/yardim/{channel}', 'helpChannel')->where('channel', '[a-z0-9-]+')->name('site.help.channel');
     Route::get('/sitemap.xml', 'sitemap')->name('site.sitemap');
 });
+
+// İletişim formu (site sprint 1). Dil ara katmanı yok: hata mesajları sitenin
+// dili olan Türkçe kalsın. Bot kalkanı denetleyicide (FormShield).
+Route::post('/iletisim', [ContactMessageController::class, 'store'])
+    ->withoutMiddleware(SetLocale::class)
+    ->middleware('throttle:contact')
+    ->name('site.contact.store');
 
 // ─────────────────────────────────────────────────────────── Shopify kurulumu
 //
@@ -180,6 +193,7 @@ Route::middleware(['auth', 'verified', 'can:superAdmin'])->prefix('admin')->grou
     Route::post('/tenants/{tenant}/refund-guarantee', [AdminController::class, 'refundGuarantee'])->name('admin.tenants.refund');
     Route::get('/plans', [AdminController::class, 'plans'])->name('admin.plans');
     Route::get('/certification', [AdminController::class, 'certification'])->name('admin.certification');
+    Route::get('/contact-messages', [AdminController::class, 'contactMessages'])->name('admin.contact-messages');
     Route::post('/plans', [AdminController::class, 'storePlan'])->name('admin.plans.store');
 });
 

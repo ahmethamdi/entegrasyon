@@ -1,7 +1,7 @@
 {{--
     /entegrasyonlar — bütün kanallar `$channels`'tan (channel_types).
-    Açık kanal "Aktif", kapalı kanal "Yakında"; ikisi de kendi sayfasına
-    bağlanır (kapalı kanalın sayfası "hazırlanıyor" der).
+    Açık kanal doğrulama düzeyini (S15 matrisi, site sprint 1), kapalı kanal
+    "Yakında" gösterir; ikisi de kendi sayfasına bağlanır.
 --}}
 @extends('site.layout')
 
@@ -32,7 +32,7 @@
             <p class="eyebrow">Entegrasyonlar</p>
             <h1 id="kanal-h1" class="h-page mt-3 max-w-[24ch]">Bir panel, bütün satış kanalların.</h1>
             <p class="lead mt-5 max-w-[56ch]">
-                Bugün bağlayabildiğin bütün kanallar. Her kanalın sayfasında orada neyin çalıştığını tek tek yazıyoruz.
+                Panelde bağlanabilen bütün kanallar. Her kartta kanalın ne kadar doğrulandığı yazar; ayrıntısı kanalın sayfasında satır satır.
             </p>
             <p class="mt-5 text-sm muted">
                 <span class="font-semibold text-ink">{{ count($available) }}</span> kanal
@@ -44,7 +44,7 @@
     @if (count($available))
         <section class="wrap pt-12 lg:pt-16" aria-labelledby="aktif-h2">
             <h2 id="aktif-h2" class="heading-3">Bağlanabilen kanallar</h2>
-            <p class="mt-1 text-[0.9875rem] muted">Hepsini bugün bağlayabilirsin.</p>
+            <p class="mt-1 text-[0.9875rem] muted">Hepsi panelde açık. "Canlıda doğrulandı" gerçek bir satıcı hesabında uçtan uca denendi demektir; "Test ediliyor" ise kodu yazıldı, gerçek hesapta henüz denenmedi.</p>
             <div class="mt-5">
                 @include('site.partials.channel-list', ['channels' => $available])
             </div>

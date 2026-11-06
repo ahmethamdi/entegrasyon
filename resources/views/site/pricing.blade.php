@@ -1,8 +1,10 @@
 {{--
     /fiyatlar (TR) ve /en/pricing (EN) — paketler `$plans`'tan (plans tablosu); elle fiyat yok.
 
-    KDV hakkında BİLEREK bir şey yazılmaz (kullanıcı kararı): vergi
-    durumu kesinleşmeden "KDV dahil/hariç" demek yanlış bilgi olurdu.
+    KDV hakkında "dahil/hariç" BİLEREK yazılmaz: hukuki nitelik muhasebeciyle
+    netleşmedi. Yazılan tek vergi cümlesi koddan doğrulanır (paketler
+    partial'ı): Stripe ödeme oturumunda vergi ayarı yok, karttan çekilen
+    tutar gösterilen tutardır (site sprint 1, 6 Kas 2026).
 
     Kota gerçeği (QuotaMetric, 24 Ekim 2026): paketler ürün, kanal,
     kullanıcı ve aylık e-fatura sayısıyla ayrılır; AI öneri hakkı yalnız
@@ -28,6 +30,15 @@
     $t = fn (string $tr, string $enText): string => $en ? $enText : $tr;
 
     $freePlan = collect($plans)->first(fn ($p) => (float) $p['priceMonthly'] === 0.0);
+    $proofSource = app(\App\Support\Site\SiteProof::class);
+    $statusSuffix = function (string $service) use ($proofSource, $t): string {
+        $status = $proofSource->service($service);
+        if ($status === null || $status === \App\Domain\Channels\Certification\CertificationStatus::PRODUCTION_VERIFIED) {
+            return '';
+        }
+
+        return $t(' — '.mb_strtolower($status->publicLabel()), $status->publicTone() === 'sandbox' ? ' — verified in sandbox' : ' — being tested');
+    };
     $limit = fn (?int $v, string $unit): string => $v === null ? $t('sınırsız', 'unlimited')." {$unit}" : number_format($v, 0, ',', '.')." {$unit}";
     $count = fn (?int $v): string => $v === null ? $t('Sınırsız', 'Unlimited') : number_format($v, 0, ',', '.');
     $price = function (array $p) use ($t): string {
@@ -82,12 +93,14 @@
             [$t('Pazaryerine ürün gönderme, kategori eşleme ve onay takibi', 'Publish products, map categories and track approval'), null],
             $anyAi ? [$t('AI ile başlık, açıklama, öznitelik ve kategori önerisi', 'AI suggestions for titles, descriptions, attributes and categories'), null] : null,
         ])),
+        // Site sprint 1 · kargo ve e-fatura satırına doğrulama düzeyi
+        // sertifikasyon kaydından eklenir (SiteProof), elle yazılmaz.
         $t('Kargo', 'Shipping') => [
             [$t('Takip numarasını kanala bildirme (destekleyen kanallarda)', 'Send tracking numbers to the channel (where supported)'), null],
-            [$t('Yurtiçi ve Aras gönderisi, kendi sözleşmenle (WooCommerce siparişlerinde)', 'Yurtiçi and Aras shipments on your own contract (WooCommerce orders)'), null],
+            [$t('Yurtiçi ve Aras gönderisi, kendi sözleşmenle (WooCommerce siparişlerinde)', 'Yurtiçi and Aras shipments on your own contract (WooCommerce orders)').$statusSuffix('Yurtiçi Kargo'), null],
         ],
         $t('E-fatura', 'E-invoices') => [
-            [$t('Kendi Nilvera hesabınla e-fatura ve e-arşiv', 'E-invoices and e-archive invoices with your own Nilvera account'), null],
+            [$t('Kendi Nilvera hesabınla e-fatura ve e-arşiv', 'E-invoices and e-archive invoices with your own Nilvera account').$statusSuffix('Nilvera e-fatura'), null],
             [$t('Fatura bilgisi Trendyol, Hepsiburada, n11 ve Shopify siparişinden okunur', 'Billing details read from Trendyol, Hepsiburada, n11 and Shopify orders'), null],
         ],
         $t('Ekip ve roller', 'Team and roles') => [
@@ -177,7 +190,9 @@
         </div>
         <div class="wrap pb-16 lg:pb-20" aria-label="{{ $t('Paketler', 'Plans') }}">
             @include('site.partials.plans', ['plans' => $plans, 'isLoggedIn' => $isLoggedIn, 'lang' => $lang ?? 'tr'])
-            <p class="mt-6 text-center text-sm muted">{{ $t('Ödeme Stripe üzerinden kartla alınır; Shopify uygulamasından gelen satıcılarda Shopify faturasına eklenir.', 'Payment is taken by card via Stripe; for sellers who come through the Shopify app it is added to the Shopify bill.') }}</p>
+            {{-- Site sprint 1: "Shopify faturasına eklenir" cümlesi KALKTI — App Store reddi
+                 sonrası satıcı kendi Shopify uygulamasını bağlar ve Stripe'la öder (ADR-012). --}}
+            <p class="mt-6 text-center text-sm muted">{{ $t('Ödeme Stripe üzerinden kartla alınır.', 'Payment is taken by card via Stripe.') }}</p>
         </div>
     </section>
 
@@ -292,12 +307,12 @@
                 <h2 id="guven-h2" class="heading-2">{{ $t('Yanında olduğumuzu bil', 'What you can count on') }}</h2>
                 <p class="lead">{{ $t('Yıllık peşin lisans yerine aylık abonelik; ücretli pakette kurulum ve iade güvencesi.', 'A monthly subscription instead of an annual upfront licence, with setup help and a refund promise on paid plans.') }}</p>
             </div>
-            <ul class="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {{-- Site sprint 1: ikonlu kart ızgarası yerine düz liste. --}}
+            <ul class="plain-list mt-8 grid md:grid-cols-2 md:gap-x-10">
                 @foreach ($trust as [$icon, $title, $desc])
-                    <li class="card">
-                        <span class="icon-box">@include('site.partials.icon', ['name' => $icon])</span>
-                        <h3 class="heading-3 mt-4">{{ $title }}</h3>
-                        <p class="mt-2 muted">{{ $desc }}</p>
+                    <li>
+                        <h3 class="heading-3">{{ $title }}</h3>
+                        <p class="mt-1 muted">{{ $desc }}</p>
                     </li>
                 @endforeach
             </ul>

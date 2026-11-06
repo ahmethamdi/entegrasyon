@@ -181,12 +181,17 @@ final class ChannelCertificationContractTest extends TestCase
             }
 
             $html = $this->get(route('site.channel', $type->code))->assertOk()->getContent();
-            preg_match_all('#<dt class="heading-3[^"]*">([^<]+)</dt>.*?<span class="badge badge--(active|soon)">#s', $html, $m, PREG_SET_ORDER);
+            // Site sprint 1: rozet "Çalışır" değil, hücrenin DURUMU (data-status)
+            // ve etiketi matrisin aynısı olmalı — sahte testli iş "canlı" geçmez.
+            preg_match_all('#<dt class="heading-3[^"]*">([^<]+)</dt>.*?<span class="badge badge--(\w+)" data-status="(\w+)">([^<]+)</span>#s', $html, $m, PREG_SET_ORDER);
 
             $this->assertCount(5, $m, "{$type->code}: yetenek satırları okunamadı");
-            foreach ($m as [, $title, $badge]) {
+            foreach ($m as [, $title, $tone, $status, $label]) {
                 $capability = ChannelCapability::from($rowTitles[trim($title)]);
-                $this->assertSame($c->works($type->code, $capability), $badge === 'active', "{$type->code} · {$title}: sitede ".($badge === 'active' ? '"Çalışır"' : '"Kanalda girilir"').' ama matris tersini söylüyor');
+                $cell = $c->cell($type->code, $capability)['status'];
+                $this->assertSame($cell->value, $status, "{$type->code} · {$title}: sitedeki durum matristen farklı");
+                $this->assertSame($cell->publicLabel(), trim($label), "{$type->code} · {$title}");
+                $this->assertSame($cell->publicTone(), $tone, "{$type->code} · {$title}");
             }
             $checked++;
         }
@@ -202,7 +207,7 @@ final class ChannelCertificationContractTest extends TestCase
 
         $html = $this->get(route('site.channel', 'idefix'))->assertOk()->getContent();
 
-        $this->assertMatchesRegularExpression('#Ürün yayınlama</dt>.*?badge--soon#s', $html);
+        $this->assertMatchesRegularExpression('#Ürün yayınlama</dt>.*?badge--off#s', $html);
         $this->assertStringContainsString('mevcut ilanlarının stok ve fiyatını yönetir', $html);
     }
 

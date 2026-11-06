@@ -160,8 +160,7 @@
             @php $flip = $i % 2 === 1; @endphp
             <section id="{{ $s['id'] }}" aria-labelledby="{{ $s['id'] }}-baslik" class="grid items-center gap-8 py-14 lg:grid-cols-12 lg:gap-14 lg:py-20">
                 <div class="{{ $s['shot'] ? 'lg:col-span-5' : 'lg:col-span-7' }} {{ $flip && $s['shot'] ? 'lg:order-2' : '' }}">
-                    <span class="icon-box">@include('site.partials.icon', ['name' => $s['icon']])</span>
-                    <p class="eyebrow mt-4 block">{{ $s['kicker'] }}</p>
+                    <p class="eyebrow block">{{ $s['kicker'] }}</p>
                     <h2 id="{{ $s['id'] }}-baslik" class="heading-2 mt-2">{{ $s['title'] }}</h2>
                     <p class="problem mt-4"><b>Sorun:</b> <span>{{ $s['problem'] }}</span></p>
                     <p class="mt-4 muted">{{ $s['body'] }}</p>
@@ -190,8 +189,10 @@
                                         <tr class="border-t border-line">
                                             <th scope="row" class="px-4 py-3 font-semibold">{{ $ch['name'] }}</th>
                                             <td class="px-4 py-3">
+                                                {{-- Site sprint 1: "iletilir" yerine doğrulama düzeyi (S15 matrisi). --}}
+                                                @php $cs = $ch['status']['shipment']; @endphp
                                                 @if ($ch['cargoPush'])
-                                                    <span class="badge badge--active">Kanala iletilir</span>
+                                                    <span class="badge badge--{{ $cs->publicTone() }}" data-status="{{ $cs->value }}">Kanala iletilir · {{ mb_strtolower($cs->publicLabel()) }}</span>
                                                 @else
                                                     <span class="muted">Şimdilik kanalın kendi panelinde girilir</span>
                                                 @endif
@@ -234,8 +235,7 @@
                     <div class="mt-8 grid gap-5 sm:grid-cols-2">
                         @foreach ($plain as [$id, $icon, $title, $body])
                             <article id="{{ $id }}" class="card" aria-labelledby="{{ $id }}-baslik">
-                                <span class="icon-box">@include('site.partials.icon', ['name' => $icon])</span>
-                                <h3 id="{{ $id }}-baslik" class="heading-3 mt-4">{{ $title }}</h3>
+                                <h3 id="{{ $id }}-baslik" class="heading-3">{{ $title }}</h3>
                                 <p class="mt-2 muted">{{ $body }}</p>
                             </article>
                         @endforeach

@@ -61,7 +61,7 @@
     <p>{{ config('site.brand') }}'ı Shopify uygulaması olarak kullanıyorsanız abonelik ücreti Shopify faturanıza eklenir ve Shopify tarafından tahsil edilir (Shopify Billing). Bu durumda ödeme bilgileriniz yalnızca Shopify'da işlenir; biz abonelik numarasını, planı ve durumunu saklarız.</p>
 
     <h3>2.5. Bizimle iletişime geçtiğinizde</h3>
-    <p>E-posta veya telefonla bize ulaştığınızda adınız, iletişim bilginiz ve mesajınızın içeriği, talebinizi yanıtlamak için işlenir.</p>
+    <p>E-posta, telefon veya sitedeki iletişim formuyla bize ulaştığınızda adınız, iletişim bilginiz (e-posta, isteğe bağlı telefon), seçtiğiniz konu ve mesajınızın içeriği talebinizi yanıtlamak için işlenir. İletişim formundan gelen mesajlar sunucumuzda kaydedilir ve 34Devs'in e-posta kutusuna iletilir; IP adresiniz bu kayda yazılmaz.</p>
 
     <h2>3. Amaçlar ve hukuki sebepler</h2>
     <table>

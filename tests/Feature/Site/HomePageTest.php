@@ -95,21 +95,23 @@ final class HomePageTest extends TestCase
     }
 
     /**
-     * Ana sayfa girişi: stok diyagramı erişilebilir adla ve "örnek ürün"
-     * notuyla gelir (12 → 11 uydurma veri sanılmasın); hareketsiz son kare
-     * şablonda durur. Üst çubukta telefon YOK (kullanıcı kararı).
+     * Site sprint 1 (6 Kas 2026): giriş AÇIK zeminde ve panelin GERÇEK
+     * ekranını gösterir (telefonda panelin kendi mobil görüntüsü); çizgili
+     * logo diyagramı ve "Nilvera ile e-fatura" şeridi YOK. Üst çubukta
+     * telefon YOK (kullanıcı kararı).
      */
     #[Test]
-    public function home_hero_diagram_is_labelled_as_an_example(): void
+    public function home_hero_is_light_and_shows_the_real_panel(): void
     {
         $this->seedChannels();
 
         $html = $this->get('/')->assertOk()->getContent();
 
-        $this->assertStringContainsString('aria-labelledby="dg-title dg-desc"', $html);
-        $this->assertStringContainsString('Örnek ürün ile stok akışı', $html);
-        $this->assertStringContainsString('örnek ürün', $html);
-        $this->assertStringContainsString('class="dg-final"', $html);
+        $this->assertStringContainsString('images/site/panel-ana-sayfa.png', $html);
+        $this->assertStringContainsString('images/site/panel-mobil.png', $html);
+        $this->assertStringNotContainsString('class="dg', $html);
+        $this->assertStringNotContainsString('Nilvera ile e-fatura', $html);
+        $this->assertStringNotContainsString('on-navy', $html);
         $this->assertStringContainsString('class="topbar"', $html);
         $this->assertStringNotContainsString('tel:', explode('<header', $html, 2)[0]);
     }
@@ -305,7 +307,8 @@ final class HomePageTest extends TestCase
             ->assertSee('neler çalışır.')
             // WooCommerce takip numarasını kanala geri gönderebilen kanallardan.
             ->assertSee('numara bu kanala iletilir')
-            ->assertSee('consumer key');
+            // Bağlantı alanları panelin formundan (ChannelConnectForm), elle değil.
+            ->assertSee('Consumer key');
     }
 
     /**
@@ -331,7 +334,7 @@ final class HomePageTest extends TestCase
         $this->get('/entegrasyonlar/site-test-kargosuz')
             ->assertOk()
             ->assertSee('neler çalışır.')
-            ->assertSee('Şimdilik numarayı')
+            ->assertSee('kanalın kendi panelinde girersin')
             ->assertDontSee('numara bu kanala iletilir');
     }
 

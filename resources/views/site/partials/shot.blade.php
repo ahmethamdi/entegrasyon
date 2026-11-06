@@ -13,6 +13,9 @@
       $crop   ['ratio' => '16 / 9', 'zoom' => '150%', 'x' => '-30%', 'y' => '-25%']
               geniş ekranda belirli bir bölgeyi büyütür
       $url    çerçevedeki adres; süs, ekran okuyucu atlar
+      $mobileSrc  telefonda gösterilecek panelin KENDİ mobil görüntüsü
+              (6 Kas 2026: küçültülmüş masaüstü ekranı telefonda okunmuyordu).
+              Verilirse geniş ekranda çerçeve, dar ekranda telefon görüntüsü.
 
     width/height her zaman verilir: görsel gelince sayfa kaymasın (CLS).
 --}}
@@ -23,7 +26,12 @@
         $style .= "--ratio: {$crop['ratio']}; --zoom: {$crop['zoom']}; --x: {$crop['x']}; --y: {$crop['y']};";
     }
 @endphp
-<figure class="shot {{ $crop ? 'shot--crop' : '' }} {{ $class ?? '' }}">
+@if ($mobileSrc ?? null)
+    <figure class="phone hero-shot--mobile">
+        <img src="{{ asset($mobileSrc) }}" alt="{{ $mobileAlt ?? $alt }}" width="390" height="844" @if ($eager ?? false) fetchpriority="high" @else loading="lazy" @endif decoding="async">
+    </figure>
+@endif
+<figure class="shot {{ $crop ? 'shot--crop' : '' }} {{ ($mobileSrc ?? null) ? 'hero-shot--desktop' : '' }} {{ $class ?? '' }}">
     <div class="shot__bar" aria-hidden="true">
         <i></i><i></i><i></i>
         <span>{{ $url ?? '34pazar.com/panel' }}</span>

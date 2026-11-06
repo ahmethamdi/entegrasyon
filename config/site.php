@@ -21,6 +21,11 @@ return [
     'phone' => '+49 176 76798125',
     'contact_email' => env('SITE_CONTACT_EMAIL', 'info@34devs.com'),
 
+    // İletişim formunun alıcısı (6 Kas 2026 · site sprint 1). AYRI ve AÇIK
+    // anahtar, bilerek: ALERT_ADMIN_EMAIL ve BETA_* canlıda bilinçli boş;
+    // form onlara bağlansaydı mesajlar sessizce hiçbir yere gitmezdi.
+    'contact_form_to' => env('CONTACT_FORM_TO', 'info@34devs.com'),
+
     // Destek sözü (kullanıcı kararı 24 Eki 2026): WhatsApp + e-posta,
     // hafta sonu dahil her gün, Türkiye saatiyle. Telefon araması vaadi YOK.
     'whatsapp' => '4917676798125',

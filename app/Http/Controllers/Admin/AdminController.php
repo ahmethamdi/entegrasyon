@@ -19,6 +19,8 @@ use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Support\PlatformStats;
 use App\Http\Controllers\Controller;
 use App\Support\Analytics\VisitStats;
+use App\Support\Site\ContactForm;
+use App\Support\Site\Services;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -265,6 +267,34 @@ final class AdminController extends Controller
             'statuses' => array_map(fn (CertificationStatus $s): array => ['key' => $s->value, 'label' => $s->label()], CertificationStatus::cases()),
             'rows' => $rows,
             'services' => array_map(fn (array $s): array => ['service' => $s['service'], 'status' => $s['status']->value, 'date' => $s['date'], 'evidence' => $s['evidence']], CertificationEvidence::services()),
+        ]);
+    }
+
+    /**
+     * Site sprint 1 · iletişim formu gönderimleri — en yeni üstte.
+     * Platform tablosu (kiracısız); `mailed_at` boşsa posta gitmemiştir.
+     */
+    public function contactMessages(): InertiaResponse
+    {
+        $page = DB::table('contact_messages')->orderByDesc('created_at')->paginate(50);
+
+        return Inertia::render('Admin/ContactMessages', [
+            'messages' => [
+                'data' => collect($page->items())->map(fn ($m): array => [
+                    'id' => $m->id,
+                    'name' => $m->name,
+                    'email' => $m->email,
+                    'phone' => $m->phone,
+                    'topic' => ContactForm::topicLabel($m->topic),
+                    'service' => $m->service === null ? null : (Services::find($m->service)['title'] ?? $m->service),
+                    'message' => $m->message,
+                    'mailed' => $m->mailed_at !== null,
+                    'createdAt' => Carbon::parse($m->created_at)->toIso8601String(),
+                ])->all(),
+                'total' => $page->total(),
+                'currentPage' => $page->currentPage(),
+                'lastPage' => $page->lastPage(),
+            ],
         ]);
     }
 

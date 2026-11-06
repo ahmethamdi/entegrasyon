@@ -115,6 +115,9 @@ class AppServiceProvider extends ServiceProvider
         // broker'ın kendi 60 sn'lik e-posta başına sınırı FARKLI adresleri
         // denemeyi durdurmaz.
         RateLimiter::for('register', static fn (Request $request): Limit => Limit::perHour(5)->by($request->ip()));
+        // İletişim formu (site sprint 1): her gönderim 34Devs'e posta
+        // atar. IP başına saatte 5; bot kalkanı (FormShield) ayrıca keser.
+        RateLimiter::for('contact', static fn (Request $request): Limit => Limit::perHour(5)->by($request->ip()));
         RateLimiter::for('password-reset', static fn (Request $request): Limit => Limit::perMinutes(15, 5)->by($request->ip()));
 
         // Fatura vekil bağlantısı (S6): her istek Paraşüt'e gider — token

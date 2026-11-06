@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Domain\Ai\Support\AiFeature;
 use App\Domain\Billing\Enums\QuotaMetric;
 use App\Domain\Billing\Models\Plan;
+use App\Domain\Channels\Certification\CertificationStatus;
 use App\Domain\Channels\Certification\ChannelCapability;
 use App\Domain\Channels\Certification\ChannelCertification;
 use App\Domain\Channels\Contracts\SupportsFulfillment;
@@ -14,7 +15,12 @@ use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Support\ChannelConnectForm;
 use App\Domain\Channels\Support\ChannelLogo;
 use App\Domain\Identity\Support\DemoAccount;
+use App\Support\Security\FormShield;
 use App\Support\Site\Blog;
+use App\Support\Site\ContactForm;
+use App\Support\Site\Faq;
+use App\Support\Site\Services;
+use App\Support\Site\SiteProof;
 use App\Support\Site\Solutions;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -95,8 +101,18 @@ final class SiteController extends Controller
         // olsaydı satıcı bağlanamayacağı bir kanalı arayıp bulurdu.
         abort_if($type === null || ($type->is_active && ! $type->isOffered()), 404);
 
+        // Site sprint 1 · bağlantı adımları panelin GERÇEK formundan
+        // (`ChannelConnectForm`, /yardim rehberiyle aynı kaynak); ortak
+        // sorular panel yardımından. Ayrı metin yazılmaz.
+        $defined = ChannelConnectForm::isDefined($type->code);
+
         return $this->page('site.channel', $request, [
             'channel' => $this->presentChannel($type),
+            'form' => $defined ? ChannelConnectForm::present($type->code) : null,
+            'installOnly' => $defined && ChannelConnectForm::installOnly($type->code),
+            'hasGuide' => $this->hasGuide($type->code),
+            'channelFaqs' => HelpController::channelQuestions(),
+            'legend' => SiteProof::legend(),
         ]);
     }
 
@@ -105,9 +121,54 @@ final class SiteController extends Controller
         return $this->page('site.about', $request);
     }
 
+    /**
+     * /iletisim — bilgiler + form (site sprint 1). `?konu=` ve `?hizmet=`
+     * formu ön seçili açar ("Görüşme planla", hizmetlerin "Teklif al"ı);
+     * tanınmayan değer sessizce yok sayılır.
+     */
     public function contact(Request $request): View
     {
-        return $this->page('site.contact', $request);
+        $topic = (string) $request->query('konu', '');
+        $service = (string) $request->query('hizmet', '');
+
+        return $this->page('site.contact', $request, [
+            'topics' => ContactForm::TOPICS,
+            'services' => Services::all(),
+            'presetTopic' => array_key_exists($topic, ContactForm::TOPICS) ? $topic : null,
+            'presetService' => array_key_exists($service, Services::all()) ? $service : null,
+            'formStamp' => FormShield::stamp(ContactForm::FORM),
+        ]);
+    }
+
+    /** /hizmetler — 34Devs'in 34Pazar çevresinde verdiği hizmetler. */
+    public function services(Request $request): View
+    {
+        return $this->page('site.services.index', $request, ['services' => Services::all()]);
+    }
+
+    /** /hizmetler/{slug} — yalnız ayrı sayfası olan hizmet; diğerleri 404. */
+    public function service(Request $request, string $slug): View
+    {
+        $service = Services::find($slug);
+
+        abort_if($service === null || ! $service['detail'], 404);
+
+        return $this->page("site.services.{$slug}", $request, ['service' => $service]);
+    }
+
+    /** /sss — genel sorular (ana sayfadaki kısa listenin tamamı, `Faq`). */
+    public function faq(Request $request): View
+    {
+        return $this->page('site.faq', $request, [
+            'faqs' => Faq::general($this->planList(), $this->channelList()),
+            'channelFaqs' => HelpController::channelQuestions(),
+        ]);
+    }
+
+    /** /guvenlik — yalnız kodda/altyapıda doğrulanan güvenlik ve KVKK olguları. */
+    public function security(Request $request): View
+    {
+        return $this->page('site.security', $request);
     }
 
     public function blogIndex(Request $request, Blog $blog): View
@@ -150,6 +211,19 @@ final class SiteController extends Controller
 
     private function solutionPage(Request $request, string $slug, string $lang): View
     {
+        // Site sprint 1 · iş sorununa göre sayfalar aynı adres alanında (yalnız TR).
+        $problem = $lang === 'tr' ? Solutions::findProblem($slug) : null;
+        if ($problem !== null) {
+            return $this->page('site.problem', $request, [
+                'problem' => $problem,
+                'proofRows' => $this->proofRows($problem['proof']),
+                'proofServices' => array_values(array_filter(
+                    app(SiteProof::class)->services(),
+                    fn (array $s): bool => in_array($s['name'], $problem['proof']['services'], true),
+                )),
+            ]);
+        }
+
         $solution = Solutions::find($slug, $lang);
 
         abort_if($solution === null, 404);
@@ -238,7 +312,20 @@ final class SiteController extends Controller
             ['loc' => route('site.about'), 'lastmod' => null],
             ['loc' => route('site.contact'), 'lastmod' => null],
             ['loc' => route('site.blog'), 'lastmod' => null],
+            ['loc' => route('site.services'), 'lastmod' => null],
+            ['loc' => route('site.faq'), 'lastmod' => null],
+            ['loc' => route('site.security'), 'lastmod' => null],
         ];
+
+        foreach (Services::all() as $slug => $service) {
+            if ($service['detail']) {
+                $urls[] = ['loc' => route('site.service', $slug), 'lastmod' => null];
+            }
+        }
+
+        foreach (array_keys(Solutions::problems()) as $slug) {
+            $urls[] = ['loc' => route('site.solution', $slug), 'lastmod' => null];
+        }
 
         foreach ($this->channelList() as $channel) {
             $urls[] = ['loc' => route('site.channel', $channel['code']), 'lastmod' => null];
@@ -269,6 +356,41 @@ final class SiteController extends Controller
             ->header('Content-Type', 'application/xml; charset=UTF-8');
     }
 
+    /**
+     * Çözüm sayfasının "kanıt" tablosu: kanal × yetenek, matristen.
+     *
+     * @param  array{capabilities: list<string>, channels: list<string>|null}  $proof
+     * @return list<array{code: string, name: string, available: bool, cells: array<string, CertificationStatus>}>
+     */
+    private function proofRows(array $proof): array
+    {
+        $proofSource = app(SiteProof::class);
+        $channels = collect($this->channelList())->keyBy('code');
+        $codes = $proof['channels'] ?? $channels->where('available', true)->keys()->all();
+
+        $rows = [];
+        foreach ($codes as $code) {
+            $channel = $channels->get($code);
+            if ($channel === null) {
+                continue;
+            }
+            $cells = [];
+            foreach ($proof['capabilities'] as $capability) {
+                $cells[$capability] = $proofSource->cell($code, ChannelCapability::from($capability));
+            }
+            $rows[] = ['code' => $code, 'name' => $channel['name'], 'available' => $channel['available'], 'cells' => $cells];
+        }
+
+        // En güçlü kanıt üstte; eşitlikte ada göre.
+        usort($rows, function (array $a, array $b): int {
+            $rank = fn (array $r): int => min(array_map(fn (CertificationStatus $s): int => $s->evidenceRank(), $r['cells']));
+
+            return [$rank($b), $a['available'] ? 0 : 1, $a['name']] <=> [$rank($a), $b['available'] ? 0 : 1, $b['name']];
+        });
+
+        return $rows;
+    }
+
     // ─────────────────────────────────────────────────── ortak veri
 
     /** @param array<string, mixed> $data */
@@ -284,6 +406,8 @@ final class SiteController extends Controller
             'legalPages' => self::LEGAL_PAGES,
             'lang' => 'tr',
             'solutionMenu' => Solutions::menu(($data['lang'] ?? 'tr') === 'en' ? 'en' : 'tr'),
+            'problemMenu' => Solutions::problemMenu(),
+            'serviceMenu' => Services::menu(),
             ...$data,
         ]);
     }
@@ -361,8 +485,11 @@ final class SiteController extends Controller
     {
         $certification = app(ChannelCertification::class);
         $works = [];
+        $status = [];
         foreach (self::SITE_CAPABILITIES as $capability) {
-            $works[$capability->value] = $certification->works($type->code, $capability);
+            $cell = $certification->cell($type->code, $capability)['status'];
+            $works[$capability->value] = $cell->works();
+            $status[$capability->value] = $cell;
         }
 
         return [
@@ -377,6 +504,10 @@ final class SiteController extends Controller
             // (adaptör arayüzü + test + kanıt); elle yazılmaz.
             'cargoPush' => $works[ChannelCapability::SHIPMENT->value],
             'works' => $works,
+            // Site sprint 1 · "çalışır" yerine doğrulama düzeyi (SiteProof):
+            // hücre başına durum ve kanalın özeti (stok + siparişin zayıfı).
+            'status' => $status,
+            'level' => app(SiteProof::class)->channelLevel($type->code),
         ];
     }
 }

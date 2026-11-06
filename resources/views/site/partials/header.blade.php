@@ -7,7 +7,13 @@
     bağlantılar alt bilgide de vardır. Mobilde gruplar <details> akordeonu.
 
     Kanallar veritabanından (`$channels`, logolu); çözümler
-    `resources/content/solutions.php`'den (`$solutionMenu`). Elle liste yok.
+    `resources/content/problems.php` (iş sorununa göre, `$problemMenu`) ve
+    `solutions.php`'den (özellikler, `$solutionMenu`); hizmetler
+    `services.php`'den (`$serviceMenu`). Elle liste yok.
+
+    6 Kas 2026 · site sprint 1: Çözümler iş sorununa göre; modül sayfaları
+    "Özellikler" sütununda. Hizmetler menüsü ve Kurumsal'da "Görüşme planla",
+    "Güvenlik ve KVKK". İngilizce sayfada yalnız İngilizcesi olan bölümler.
 --}}
 @php
     $en = ($lang ?? 'tr') === 'en';
@@ -39,8 +45,15 @@
         'cozumler' => [
             'label' => $t('Çözümler', 'Solutions'),
             'match' => ['site.solution', 'site.en.solution', 'site.features'],
+            'problems' => $en ? [] : ($problemMenu ?? []),
             'solutions' => $solutionMenu ?? [],
             'footer' => [$t('Bütün özellikler', 'All features'), route('site.features')],
+        ],
+        'hizmetler' => $en ? null : [
+            'label' => 'Hizmetler',
+            'match' => ['site.services', 'site.service'],
+            'links' => array_map(fn ($s) => [$s['label'], $s['url'], $s['hint']], $serviceMenu ?? []),
+            'footer' => ['Bütün hizmetler', route('site.services')],
         ],
         'kaynaklar' => [
             'label' => $t('Kaynaklar', 'Resources'),
@@ -48,19 +61,22 @@
             'links' => [
                 [$t('Blog', 'Blog'), route('site.blog'), $t('E-ticaret ve pazaryeri yazıları', 'Articles (Turkish)')],
                 [$t('Belgeler', 'Documentation'), route('site.en', 'docs'), $t('Panelin kullanımı (İngilizce)', 'How the panel works')],
-                [$t('Sık sorulanlar', 'FAQ'), $en ? route('site.en', 'faq') : route('home').'#sss', $t('Kısa cevaplar', 'Short answers')],
+                [$t('Sık sorulanlar', 'FAQ'), $en ? route('site.en', 'faq') : route('site.faq'), $t('Kısa cevaplar', 'Short answers')],
                 [$t('Sürüm notları', 'Changelog'), route('site.en', 'changelog'), $t('Yeni gelenler (İngilizce)', 'What\'s new')],
             ],
         ],
         'kurumsal' => [
             'label' => $t('Kurumsal', 'Company'),
-            'match' => ['site.about', 'site.contact'],
-            'links' => [
+            'match' => ['site.about', 'site.contact', 'site.security'],
+            'links' => array_values(array_filter([
                 [$t('Hakkımızda', 'About'), route('site.about'), $t('34Pazar\'ı kim yapıyor', 'Who builds 34Pazar')],
-                [$t('İletişim', 'Contact'), route('site.contact'), $t('Bize yaz', 'Get in touch')],
-            ],
+                [$t('İletişim', 'Contact'), route('site.contact'), $t('Form, e-posta ve WhatsApp', 'Get in touch')],
+                $en ? null : ['Görüşme planla', route('site.contact', ['konu' => 'gorusme']).'#form', 'Kısa bir görüşme iste'],
+                $en ? null : ['Güvenlik ve KVKK', route('site.security'), 'Verin nerede, nasıl korunuyor'],
+            ])),
         ],
     ];
+    $groups = array_filter($groups);
 @endphp
 <header class="site-header">
     <div class="wrap flex h-16 items-center justify-between gap-6">
@@ -97,19 +113,36 @@
                                         @endforeach
                                     </div>
                                 @elseif (isset($group['solutions']))
-                                    <ul class="grid grid-cols-2 gap-2 lg:grid-cols-4">
-                                        @foreach ($group['solutions'] as $item)
-                                            <li>
-                                                <a href="{{ $item['url'] }}" class="mega-link items-start">
-                                                    <span class="icon-box icon-box--sm">@include('site.partials.icon', ['name' => $item['icon']])</span>
-                                                    <span>
-                                                        <span class="block font-semibold text-ink">{{ $item['label'] }}</span>
-                                                        <span class="mt-0.5 block text-sm muted">{{ $item['hint'] }}</span>
-                                                    </span>
-                                                </a>
-                                            </li>
-                                        @endforeach
-                                    </ul>
+                                    <div class="grid gap-8 {{ $group['problems'] ? 'lg:grid-cols-[1fr_2fr]' : '' }}">
+                                        @if ($group['problems'])
+                                            <div>
+                                                <p class="mega-heading">İş sorununa göre</p>
+                                                <ul class="mt-3 grid gap-1">
+                                                    @foreach ($group['problems'] as $item)
+                                                        <li>
+                                                            <a href="{{ $item['url'] }}" class="mega-link flex-col items-start gap-0.5">
+                                                                <span class="font-semibold text-ink">{{ $item['label'] }}</span>
+                                                                <span class="text-sm muted">{{ $item['hint'] }}</span>
+                                                            </a>
+                                                        </li>
+                                                    @endforeach
+                                                </ul>
+                                            </div>
+                                        @endif
+                                        <div>
+                                            <p class="mega-heading">{{ $t('Özellikler', 'Features') }}</p>
+                                            <ul class="mt-3 grid grid-cols-2 gap-1">
+                                                @foreach ($group['solutions'] as $item)
+                                                    <li>
+                                                        <a href="{{ $item['url'] }}" class="mega-link flex-col items-start gap-0.5">
+                                                            <span class="font-semibold text-ink">{{ $item['label'] }}</span>
+                                                            <span class="text-sm muted">{{ $item['hint'] }}</span>
+                                                        </a>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    </div>
                                 @else
                                     <ul class="grid grid-cols-2 gap-2 lg:grid-cols-4">
                                         @foreach ($group['links'] as [$label, $url, $hint])
@@ -171,6 +204,13 @@
                                 @endforeach
                             @endforeach
                         @elseif (isset($group['solutions']))
+                            @if ($group['problems'])
+                                <li class="mega-heading mt-3">İş sorununa göre</li>
+                                @foreach ($group['problems'] as $item)
+                                    <li><a href="{{ $item['url'] }}" class="mobile-sub">{{ $item['label'] }}</a></li>
+                                @endforeach
+                            @endif
+                            <li class="mega-heading mt-3">{{ $t('Özellikler', 'Features') }}</li>
                             @foreach ($group['solutions'] as $item)
                                 <li><a href="{{ $item['url'] }}" class="mobile-sub">{{ $item['label'] }}</a></li>
                             @endforeach

@@ -1,13 +1,17 @@
 {{--
     Kanalın KARE ikonu, sabit boyutlu kutuda — bütün kartlarda aynı boyut.
-    İkon yoksa gri kutuda adın ilk harfi (harf rozeti; logo değil, uydurulmaz).
+
+    Resmî ikon dosyası yoksa (ör. Ticimax) harf ya da çizim YOK: boş,
+    kesik çizgili kutu kalır ve kanalın adı yanında düz metin olarak yazar
+    (6 Kas 2026; tek harf rozeti logo gibi okunuyordu). Başka sitelerden
+    logo indirilmez — kaynaklar `public/images/channels/KAYNAKLAR.md`.
     Değişkenler: $ch (code, name, icon), $size ('sm' 28px | 'md' 40px)
 --}}
 @php $px = ($size ?? 'md') === 'sm' ? 'size-7' : 'size-10'; @endphp
-<span class="channel-icon {{ $px }}" aria-hidden="true">
-    @if ($ch['icon'] ?? null)
+@if ($ch['icon'] ?? null)
+    <span class="channel-icon {{ $px }}" aria-hidden="true">
         <img src="{{ $ch['icon'] }}" alt="" class="size-full object-contain" loading="lazy" decoding="async">
-    @else
-        <span class="channel-icon__letter">{{ mb_strtoupper(mb_substr($ch['name'], 0, 1)) }}</span>
-    @endif
-</span>
+    </span>
+@else
+    <span class="channel-icon channel-icon--none {{ $px }}" aria-hidden="true"></span>
+@endif

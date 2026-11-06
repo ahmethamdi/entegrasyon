@@ -52,7 +52,7 @@
     <p>If you use {{ config('site.brand') }} as a Shopify app, the subscription fee is added to your Shopify bill and collected by Shopify (Shopify Billing). In that case your payment details are processed only by Shopify; we store the subscription ID, plan and status.</p>
 
     <h3>2.5. When you contact us</h3>
-    <p>When you reach us by email or phone, your name, contact details and the content of your message are processed to answer your request.</p>
+    <p>When you reach us by email, phone or the contact form on our website, your name, contact details (email, optional phone), the topic you chose and the content of your message are processed to answer your request. Contact form messages are stored on our server and forwarded to the 34Devs mailbox; your IP address is not written to that record.</p>
 
     <h2>3. Purposes and legal bases</h2>
     <table>

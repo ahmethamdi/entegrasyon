@@ -48,14 +48,8 @@
     --color-ok: #067647;
     --color-ok-soft: #ecfdf3;
 
-    /* Koyu alt bilgide ikincil yazı: #b4bac5 → #15171c üstünde 9.2:1 (ölçüldü). */
-    --color-muted-dark: #b4bac5;
-    --color-line-dark: #2c313b;
-
-    /* Lacivert — üst çubuk, ana sayfa girişi, son çağrı (B3, 21 Eki 2026).
-     * Beyaz yazı 17.4:1; #c7d0de ikincil yazı 11.3:1 (ölçüldü). */
-    --color-navy: #0b1b33;
-    --color-navy-line: #22324d;
+    /* 6 Kas 2026: koyu zemin tokenları (lacivert, koyu alt bilgi) kaldırıldı —
+     * tam genişlik koyu zemin yok; koyu yalnız yazı ve ince çizgide. */
 
     --font-display: 'Archivo Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
     --font-sans: 'Inter Tight Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -109,14 +103,6 @@
         border-radius: 4px;
     }
 
-    .on-dark :focus-visible,
-    .on-brand :focus-visible,
-    .on-navy :focus-visible,
-    .topbar :focus-visible,
-    .home-hero :focus-visible {
-        outline-color: #fff;
-    }
-
     img {
         max-width: 100%;
         height: auto;
@@ -142,26 +128,6 @@
 
     .section {
         padding-block: clamp(3.5rem, 2rem + 5vw, 6rem);
-    }
-
-    .on-dark {
-        background: var(--color-ink);
-        color: #fff;
-    }
-
-    .on-dark h1,
-    .on-dark h2,
-    .on-dark h3 {
-        color: #fff;
-    }
-
-    .on-brand {
-        background: var(--color-brand);
-        color: #fff;
-    }
-
-    .on-brand h2 {
-        color: #fff;
     }
 
     /* ── tipografi
@@ -211,22 +177,14 @@
         color: var(--color-muted);
     }
 
-    .on-dark .muted,
-    .on-dark .lead {
-        color: var(--color-muted-dark);
-    }
-
-    /* Bölüm üst etiketi: küçük, koyu marka tonunda (brand-700 beyazda 7.1:1). */
+    /* Bölüm üst etiketi: küçük, nötr gri (6 Kas 2026 · her bölümde tekrarlanan
+       kırmızı etiket kalıbı kaldırıldı; kırmızı yalnız ana düğmede kalır). */
     .eyebrow {
         display: inline-block;
         font-size: 0.875rem;
         font-weight: 600;
         letter-spacing: 0.01em;
-        color: var(--color-brand-700);
-    }
-
-    .on-dark .eyebrow {
-        color: #ffb39e;
+        color: var(--color-muted);
     }
 
     .section-head {
@@ -373,7 +331,42 @@
     .badge--soon {
         background: var(--color-soft);
         color: var(--color-muted);
-        box-shadow: inset 0 0 0 1px var(--color-line);
+        border: 1px solid var(--color-line);
+    }
+
+    /*
+     * Doğrulama düzeyi rozetleri (site sprint 1) — `CertificationStatus::publicTone()`.
+     * Yalnız "canlı" yeşil; test edilen nötr kalır ki "çalışıyor" gibi okunmasın.
+     */
+    .badge--live {
+        background: var(--color-ok-soft);
+        color: var(--color-ok);
+    }
+
+    .badge--live::before {
+        content: '';
+        width: 0.4375rem;
+        height: 0.4375rem;
+        border-radius: 999px;
+        background: currentColor;
+    }
+
+    .badge--sandbox {
+        background: #eff4ff;
+        color: #1d4ed8;
+        border: 1px solid #c7d7fe;
+    }
+
+    .badge--testing {
+        background: #fffaeb;
+        color: #93370d;
+        border: 1px solid #fedf89;
+    }
+
+    .badge--off {
+        background: var(--color-soft);
+        color: var(--color-muted);
+        border: 1px solid var(--color-line);
     }
 
     .badge--brand {
@@ -390,14 +383,11 @@
     }
 
     .card-link {
-        transition:
-            border-color 0.15s ease,
-            box-shadow 0.15s ease;
+        transition: border-color 0.15s ease;
     }
 
     .card-link:hover {
-        border-color: var(--color-line-strong);
-        box-shadow: 0 6px 20px -10px rgb(21 23 28 / 0.18);
+        border-color: var(--color-ink-2);
     }
 
     /* Kart içi küçük ikon kutusu. */
@@ -454,11 +444,6 @@
         background-size: 100% 100%;
     }
 
-    .on-dark .check-list > li::before {
-        background-color: rgb(255 255 255 / 0.1);
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M6 10.5l2.5 2.5L14 7.5' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    }
-
     /* Sorun satırı: çözümden önce gelen kısa, gri cümle. */
     .problem {
         display: flex;
@@ -485,9 +470,8 @@
         position: sticky;
         top: 0;
         z-index: 50;
-        background: rgb(255 255 255 / 0.96);
+        background: #fff;
         border-bottom: 1px solid var(--color-line);
-        backdrop-filter: saturate(1.4) blur(8px);
     }
 
     .nav-link {
@@ -514,7 +498,7 @@
         background: #fff;
         max-height: calc(100dvh - 4rem);
         overflow-y: auto;
-        box-shadow: 0 16px 24px -16px rgb(21 23 28 / 0.25);
+        border-bottom: 1px solid var(--color-line);
     }
 
     .mobile-menu a.menu-item {
@@ -561,7 +545,7 @@
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--color-muted-dark);
+        color: var(--color-muted);
     }
 
     .mega-link {
@@ -609,7 +593,7 @@
     .mobile-group > summary::after {
         content: '+';
         font-weight: 500;
-        color: var(--color-muted-dark);
+        color: var(--color-muted);
     }
 
     .mobile-group[open] > summary::after {
@@ -666,16 +650,11 @@
         overflow: hidden;
     }
 
-    .channel-icon__letter {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        border-radius: 0.25rem;
-        background: #e5e7eb;
-        color: var(--color-ink-2);
-        font-weight: 700;
+    /* Resmî logo dosyası olmayan kanal: harf/çizim YOK, boş kutu; ad yanında
+       düz metin olarak yazar (6 Kas 2026 · Ticimax'ta "T" logo gibi duruyordu). */
+    .channel-icon--none {
+        border-style: dashed;
+        background: var(--color-soft);
     }
 
     .logo-strip img {
@@ -687,12 +666,12 @@
 
     /* ── alt bilgi */
     .footer-link {
-        color: var(--color-muted-dark);
+        color: var(--color-muted);
         transition: color 0.15s ease;
     }
 
     .footer-link:hover {
-        color: #fff;
+        color: var(--color-ink);
         text-decoration: underline;
         text-underline-offset: 0.2em;
     }
@@ -703,21 +682,17 @@
         font-size: 0.875rem;
         font-weight: 600;
         letter-spacing: 0;
-        color: #fff;
+        color: var(--color-ink);
     }
 
     /* ── panel ekran görüntüsü
-     * Açık tarayıcı çerçevesi: kurumsal sayfada ağır siyah çerçeve
-     * yerine ince kenar ve yumuşak gölge.
+     * Açık tarayıcı çerçevesi: ince kenar, GÖLGESİZ (6 Kas 2026 tasarım kuralı).
      */
     .shot {
         overflow: hidden;
-        border: 1px solid var(--color-line);
+        border: 1px solid var(--color-line-strong);
         border-radius: 0.75rem;
         background: #fff;
-        box-shadow:
-            0 1px 2px rgb(21 23 28 / 0.06),
-            0 18px 40px -24px rgb(21 23 28 / 0.28);
     }
 
     .shot__bar {
@@ -787,10 +762,9 @@
     .phone {
         width: min(100%, 17rem);
         overflow: hidden;
-        border: 8px solid var(--color-ink);
-        border-radius: 2rem;
+        border: 1px solid var(--color-line-strong);
+        border-radius: 1.5rem;
         background: #fff;
-        box-shadow: 0 24px 48px -24px rgb(21 23 28 / 0.35);
     }
 
     .phone img {
@@ -843,8 +817,8 @@
     }
 
     .plan-card--hi {
-        border-color: var(--color-brand);
-        box-shadow: 0 0 0 1px var(--color-brand);
+        border: 2px solid var(--color-brand);
+        padding: calc(1.5rem - 1px);
     }
 
     /* Karşılaştırma tablosu: dar ekranda kendi içinde yatay kayar. */
@@ -884,7 +858,7 @@
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
-        color: var(--color-muted-dark);
+        color: var(--color-muted);
         background: var(--color-soft);
     }
 
@@ -1159,42 +1133,58 @@
 /* ───────────────────────────────────────────────────── ana sayfa (B3 · hero A) */
 
 @layer components {
+    /*
+     * 6 Kas 2026 · site sprint 1: tam genişlik lacivert/siyah zemin YOK
+     * (kullanıcının kesin kuralı). Üst çubuk, giriş, şerit ve alt bilgi açık
+     * zeminde; bölümler 1px çizgi + zemin tonuyla ayrılır.
+     */
     .topbar {
-        background: var(--color-navy);
-        color: #c7d0de;
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-soft);
+        color: var(--color-muted);
     }
 
-    .on-navy {
-        background: var(--color-navy);
-        color: #c7d0de;
+    .topbar a {
+        color: var(--color-ink);
+        font-weight: 600;
     }
 
-    .on-navy h2 {
-        color: #fff;
+    .topbar a:hover {
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
     }
 
-    .on-navy p {
-        color: #c7d0de;
+    .site-footer {
+        border-top: 1px solid var(--color-line);
+        background: var(--color-soft);
+        color: var(--color-ink-2);
+    }
+
+    /* Sayfa sonu çağrısı: açık zemin, üstte ince çizgi. */
+    .cta-band {
+        border-top: 1px solid var(--color-line);
+        background: var(--color-paper);
     }
 
     .home-hero {
-        background: var(--color-navy);
-        color: #c7d0de;
+        border-bottom: 1px solid var(--color-line);
+        background: var(--color-paper);
     }
 
     .home-hero__title {
         font-family: var(--font-display);
         font-weight: 800;
-        font-size: clamp(2rem, 1.3rem + 2vw, 2.75rem);
+        font-size: clamp(2rem, 1.3rem + 2vw, 2.875rem);
         line-height: 1.1;
         letter-spacing: -0.025em;
-        color: #fff;
+        color: var(--color-ink);
     }
 
     .home-hero__lead {
         font-size: clamp(1.0625rem, 1rem + 0.3vw, 1.1875rem);
         line-height: 1.6;
         max-width: 46ch;
+        color: var(--color-muted);
     }
 
     .home-hero__link {
@@ -1203,138 +1193,175 @@
         gap: 0.375rem;
         min-height: 2.75rem;
         font-weight: 600;
-        color: #fff;
+        color: var(--color-ink);
         text-decoration: underline;
-        text-decoration-color: rgb(255 255 255 / 0.45);
+        text-decoration-color: var(--color-line-strong);
         text-underline-offset: 0.3em;
     }
 
     .home-hero__link:hover {
-        text-decoration-color: #fff;
+        text-decoration-color: var(--color-ink);
     }
 
-    /* Yetenek şeridi: ikon yok, ince ayraçlar. */
+    /* Girişteki panel görüntüsü: masaüstünde geniş ekran, telefonda panelin
+       KENDİ mobil görüntüsü (küçültülmüş masaüstü okunmuyordu). */
+    .hero-shot--mobile {
+        display: none;
+    }
+
+    @media (max-width: 47.99rem) {
+        .hero-shot--desktop {
+            display: none;
+        }
+
+        .hero-shot--mobile {
+            display: block;
+            margin-inline: auto;
+        }
+    }
+
+    /* Doğru iddialar şeridi: ikon yok, ince ayraçlar, açık zemin. */
     .home-strip {
-        border-top: 1px solid var(--color-navy-line);
+        border-top: 1px solid var(--color-line);
+        background: var(--color-soft);
     }
 
     .home-strip ul {
         display: grid;
         grid-template-columns: repeat(4, auto);
         justify-content: space-between;
-        padding-block: 1.125rem;
+        padding-block: 1rem;
         font-weight: 600;
         font-size: 0.9375rem;
-        color: #e5e9f0;
+        color: var(--color-ink-2);
     }
 
     .home-strip li + li {
-        border-left: 1px solid var(--color-navy-line);
+        border-left: 1px solid var(--color-line-strong);
         padding-left: 1.25rem;
     }
 
     @media (max-width: 47.99rem) {
         .home-strip ul {
-            grid-template-columns: 1fr 1fr;
-            gap: 0.625rem 0;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
             justify-content: stretch;
         }
 
         .home-strip li + li {
-            padding-left: 0.75rem;
-        }
-
-        .home-strip li:nth-child(odd) {
             border-left: 0;
             padding-left: 0;
         }
     }
 
-    /* Stok diyagramı (site.partials.stock-diagram). */
-    .dg {
-        display: block;
-        width: 100%;
-        height: auto;
-        max-width: 40rem;
-        margin-inline: auto;
+    /* Düz liste: ikonsuz, satırlar ince çizgiyle ayrılır (kart yağmuru yerine). */
+    .plain-list > li {
+        padding-block: 1.25rem;
+        border-top: 1px solid var(--color-line);
     }
 
-    .dg-line {
-        stroke: #3a4a66;
-        stroke-width: 1;
+    .plain-list > li:last-child {
+        border-bottom: 1px solid var(--color-line);
     }
 
-    .dg-node {
-        fill: #fff;
-        stroke: #c9d1de;
-    }
-
-    .dg-accent {
-        fill: var(--color-brand);
-    }
-
-    .dg text {
-        font-family: var(--font-display);
-    }
-
-    .dg-name {
-        fill: #c7d0de;
-        font-size: 13px;
+    .plain-link {
         font-weight: 600;
+        color: var(--color-ink);
+        text-decoration: underline;
+        text-decoration-color: var(--color-line-strong);
+        text-underline-offset: 0.25em;
     }
 
-    .dg-title {
-        fill: #111827;
-        font-size: 15px;
-        font-weight: 700;
+    .plain-link:hover {
+        color: var(--color-brand-700);
+        text-decoration-color: currentColor;
     }
 
-    .dg-sku {
-        fill: #6b7280;
-        font-size: 12px;
-        font-weight: 500;
+    /* Durum tablosu (kanıt): kanal × iş, matristen. */
+    .proof-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9375rem;
     }
 
-    .dg-stock {
-        fill: #111827;
-        font-size: 22px;
-        font-weight: 800;
+    .proof-table th,
+    .proof-table td {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-top: 1px solid var(--color-line);
+        font-weight: 400;
+        vertical-align: middle;
     }
 
-    .dg-stock--new {
-        fill: var(--color-brand);
+    .proof-table thead th {
+        border-top: 0;
+        border-bottom: 1px solid var(--color-line-strong);
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--color-muted);
     }
 
-    .dg-note {
-        fill: #6b7280;
-        font-size: 11px;
-        font-weight: 500;
+    .proof-table tbody th {
+        font-weight: 600;
+        color: var(--color-ink);
     }
 
-    .dg-num {
-        fill: #111827;
-        font-size: 12px;
-        font-weight: 800;
+    /* İletişim formu. */
+    .field {
+        display: grid;
+        gap: 0.375rem;
     }
 
-    .dg-pill {
-        fill: #fff;
-        font-size: 12px;
-        font-weight: 700;
+    .field label {
+        font-weight: 600;
+        font-size: 0.9375rem;
+        color: var(--color-ink);
     }
 
-    .dg-final {
-        display: none;
+    .field input,
+    .field select,
+    .field textarea {
+        width: 100%;
+        min-height: 2.875rem;
+        padding: 0.625rem 0.875rem;
+        border: 1px solid var(--color-line-strong);
+        border-radius: 0.5rem;
+        background: #fff;
+        font: inherit;
+        color: var(--color-ink);
     }
 
-    @media (prefers-reduced-motion: reduce) {
-        .dg-anim {
-            display: none;
-        }
+    .field textarea {
+        min-height: 9rem;
+        resize: vertical;
+    }
 
-        .dg-final {
-            display: inline;
-        }
+    .field input:focus-visible,
+    .field select:focus-visible,
+    .field textarea:focus-visible {
+        outline: 2px solid var(--color-ink);
+        outline-offset: 1px;
+    }
+
+    .field [aria-invalid='true'] {
+        border-color: var(--color-brand-700);
+    }
+
+    .field-error {
+        font-size: 0.875rem;
+        color: var(--color-brand-700);
+    }
+
+    .notice {
+        padding: 1rem 1.25rem;
+        border: 1px solid var(--color-line-strong);
+        border-left: 3px solid var(--color-ink);
+        border-radius: 0.5rem;
+        background: #fff;
+    }
+
+    .notice--ok {
+        border-left-color: var(--color-ok);
     }
 
     /* Açık gri bölümlerin üst/alt çizgisi. */
@@ -1394,8 +1421,9 @@
     }
 
     .home-table thead th {
-        background: var(--color-navy);
-        color: #fff;
+        background: var(--color-soft);
+        color: var(--color-ink-2);
+        border-bottom: 1px solid var(--color-line-strong);
         font-size: 0.8125rem;
         font-weight: 700;
         letter-spacing: 0.04em;
@@ -1407,8 +1435,8 @@
     }
 
     .home-table__group th {
-        background: #eef0f4;
-        color: var(--color-navy);
+        background: #fff;
+        color: var(--color-muted);
         font-size: 0.8125rem;
         font-weight: 800 !important;
         letter-spacing: 0.05em;

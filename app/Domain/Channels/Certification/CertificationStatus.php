@@ -42,6 +42,63 @@ enum CertificationStatus: string
         };
     }
 
+    /**
+     * Tanıtım sitesinde gösterilen DÜRÜST etiket (6 Kas 2026 · site sprint 1).
+     *
+     * Sitede "çalışır" demek gerçek hesapta denenmemiş kanalı denenmiş gibi
+     * gösteriyordu. Ayrım üç basamaklıdır ve İÇ DURUM ADI satıcıya gitmez:
+     *   gerçek satıcı hesabında → "Canlıda doğrulandı"
+     *   kanalın test sunucusunda → "Test ortamında doğrulandı"
+     *   kod + sahte test         → "Test ediliyor" (gerçek hesapta denenmedi)
+     * Kod yoksa satır kanalın kendi panelinde yapılır; başarısız gerçek
+     * deneme "Şu an çalışmıyor" der.
+     */
+    public function publicLabel(): string
+    {
+        return match ($this) {
+            self::PRODUCTION_VERIFIED => 'Canlıda doğrulandı',
+            self::SANDBOX_VERIFIED => 'Test ortamında doğrulandı',
+            self::IMPLEMENTED, self::MOCK_TESTED => 'Test ediliyor',
+            self::FAILED => 'Şu an çalışmıyor',
+            self::NOT_SUPPORTED, self::NOT_IMPLEMENTED => 'Kanalın panelinde',
+        };
+    }
+
+    /** Etiketin tek cümlelik açıklaması — sitedeki "durumlar ne demek" listesi. */
+    public function publicNote(): string
+    {
+        return match ($this) {
+            self::PRODUCTION_VERIFIED => 'Gerçek bir satıcı hesabında uçtan uca denendi ve çalıştı.',
+            self::SANDBOX_VERIFIED => 'Kanalın resmî test sunucusunda gerçek isteklerle denendi; canlı hesapta henüz denenmedi.',
+            self::IMPLEMENTED, self::MOCK_TESTED => 'Kodu yazıldı ve kanalın belgesindeki örnek yanıtlarla sınandı; gerçek bir hesapta henüz denenmedi.',
+            self::FAILED => 'Gerçek denemede başarısız oldu; düzelene kadar bu işi kanalın kendi panelinden yaparsın.',
+            self::NOT_SUPPORTED, self::NOT_IMPLEMENTED => 'Bu iş 34Pazar\'dan yapılmıyor; kanalın kendi satıcı panelinden yaparsın.',
+        };
+    }
+
+    /** Rozet tonu (CSS `badge--{ton}`): live · sandbox · testing · off. */
+    public function publicTone(): string
+    {
+        return match ($this) {
+            self::PRODUCTION_VERIFIED => 'live',
+            self::SANDBOX_VERIFIED => 'sandbox',
+            self::IMPLEMENTED, self::MOCK_TESTED => 'testing',
+            self::FAILED, self::NOT_SUPPORTED, self::NOT_IMPLEMENTED => 'off',
+        };
+    }
+
+    /** Sitedeki sıralama: yüksek = daha güçlü kanıt. Kanal özeti en ZAYIF çekirdek hücreyi alır. */
+    public function evidenceRank(): int
+    {
+        return match ($this) {
+            self::PRODUCTION_VERIFIED => 4,
+            self::SANDBOX_VERIFIED => 3,
+            self::MOCK_TESTED, self::IMPLEMENTED => 2,
+            self::FAILED => 1,
+            self::NOT_SUPPORTED, self::NOT_IMPLEMENTED => 0,
+        };
+    }
+
     /** Satıcıya "çalışır" denebilir mi (kod + en az sahte test ya da gerçek doğrulama). */
     public function works(): bool
     {

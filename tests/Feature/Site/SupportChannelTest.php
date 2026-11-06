@@ -24,7 +24,7 @@ final class SupportChannelTest extends TestCase
         $wa = 'https://wa.me/'.config('site.whatsapp');
 
         $contact = $this->get('/iletisim')->assertOk();
-        $contact->assertSee('<h2 class="heading-3 mt-4">WhatsApp</h2>', false)->assertSee(config('site.support_hours'));
+        $contact->assertSee('<dt class="font-semibold text-ink">WhatsApp</dt>', false)->assertSee(config('site.support_hours'));
         $this->assertGreaterThanOrEqual(3, substr_count($contact->getContent(), $wa), 'İletişim kartı, alt bilgi ve üst çubuk');
         $contact->assertDontSee('href="tel:', false);
         // Tek tırnaklı @section metnindeki kesme işareti Blade'i kırıp yönergeyi sayfaya döküyordu.

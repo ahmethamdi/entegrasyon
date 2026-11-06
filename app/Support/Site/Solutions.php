@@ -19,6 +19,44 @@ final class Solutions
     /** @var array<string, array<string, mixed>>|null */
     private static ?array $cache = null;
 
+    /** @var array<string, array<string, mixed>>|null */
+    private static ?array $problems = null;
+
+    /**
+     * İş sorununa göre çözüm sayfaları (`resources/content/problems.php`).
+     * Modül sayfalarıyla aynı adres alanını (/cozumler/{slug}) paylaşır;
+     * iki dosyada aynı slug olamaz (SolutionsContentTest).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function problems(): array
+    {
+        return self::$problems ??= require resource_path('content/problems.php');
+    }
+
+    /** @return array<string, mixed>|null */
+    public static function findProblem(string $slug): ?array
+    {
+        $problem = self::problems()[$slug] ?? null;
+
+        return $problem === null ? null : ['slug' => $slug, ...$problem];
+    }
+
+    /**
+     * Menüdeki "İş sorununa göre" listesi (yalnız TR; İngilizce karşılığı yok).
+     *
+     * @return list<array{label: string, hint: string, url: string, slug: string}>
+     */
+    public static function problemMenu(): array
+    {
+        $items = [];
+        foreach (self::problems() as $slug => $problem) {
+            $items[] = ['label' => $problem['title'], 'hint' => $problem['hint'], 'url' => route('site.solution', $slug), 'slug' => $slug];
+        }
+
+        return $items;
+    }
+
     /** @return array<string, array<string, mixed>> */
     public static function all(): array
     {

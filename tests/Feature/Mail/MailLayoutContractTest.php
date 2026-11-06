@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Mail;
 
+use App\Mail\ContactMessageMail;
 use Illuminate\Mail\Mailable;
 use Illuminate\Notifications\Notification;
 use PHPUnit\Framework\Attributes\Test;
@@ -28,6 +29,15 @@ final class MailLayoutContractTest extends TestCase
         'app/Support/Observability/OpsNotifier.php',
     ];
 
+    /**
+     * 34Devs'in KENDİ kutusuna giden düz metin Mailable'lar — müşteri görmez.
+     * İletişim formu (site sprint 1): ziyaretçi metni biçimlenmeden okunsun
+     * diye bilerek `text:`; alıcı `site.contact_form_to`.
+     */
+    private const INTERNAL_PLAIN_MAILABLES = [
+        ContactMessageMail::class,
+    ];
+
     #[Test]
     public function every_mailable_renders_through_the_markdown_layout(): void
     {
@@ -35,6 +45,11 @@ final class MailLayoutContractTest extends TestCase
 
         foreach ($this->appClasses() as $class => $file) {
             if (! is_subclass_of($class, Mailable::class)) {
+                continue;
+            }
+            if (in_array($class, self::INTERNAL_PLAIN_MAILABLES, true)) {
+                $this->assertMatchesRegularExpression('/new Content\(\s*text:/', (string) file_get_contents($file), "{$class} iç posta: düz metin olmalı");
+
                 continue;
             }
             $checked++;

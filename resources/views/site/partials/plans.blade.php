@@ -120,4 +120,24 @@
             </li>
         @endforeach
     </ul>
+    {{--
+        Site sprint 1 · VERGİ: Stripe ödeme oturumunda vergi ayarı YOK
+        (`StripePaymentGateway::priceData` — tax_rates / automatic_tax
+        gönderilmez), yani karttan çekilen tutar gösterilen tutardır. "KDV
+        dahil/hariç" hukuki niteliği muhasebeciyle netleşmeden YAZILMAZ.
+        E-FATURA: hak satırı paket kotasıdır; Nilvera bağlantısının durumu
+        sertifikasyon kaydından (`SiteProof`), elle yazılmaz.
+    --}}
+    @php
+        $invoiceStatus = app(\App\Support\Site\SiteProof::class)->service('Nilvera e-fatura');
+        $showInvoiceNote = $invoiceStatus !== null
+            && $invoiceStatus !== \App\Domain\Channels\Certification\CertificationStatus::PRODUCTION_VERIFIED
+            && collect($plans)->contains(fn ($p) => $p['hasInvoiceLimit'] ?? false);
+    @endphp
+    <ul class="mt-5 grid gap-1 text-sm muted">
+        <li>{{ $t('Gösterilen tutar, kartından her ay çekilen tutarın tamamıdır; ödeme sırasında üzerine ayrıca vergi eklenmez.', 'The price shown is the full amount charged to your card each month; no tax is added at checkout.') }}</li>
+        @if ($showInvoiceNote)
+            <li>{{ $t('E-fatura hakkı: Nilvera bağlantısının durumu "'.$invoiceStatus->publicLabel().'" — '.$invoiceStatus->publicNote(), 'E-invoice allowance: the Nilvera connection is still being tested and has not been tried on a real account yet.') }}</li>
+        @endif
+    </ul>
 @endif
