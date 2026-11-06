@@ -6,6 +6,7 @@ use App\Domain\Catalog\Console\FetchExchangeRatesCommand;
 use App\Domain\Catalog\Console\TickPriceCampaignsCommand;
 use App\Domain\Channels\Certification\ScanTestCoverageCommand;
 use App\Domain\Channels\Console\CheckChannelsHealthCommand;
+use App\Domain\Channels\Console\PilotCheckCommand;
 use App\Domain\Channels\Console\PruneApiCallsCommand;
 use App\Domain\Channels\Console\RefreshExpiringTokensCommand;
 use App\Domain\Channels\Console\RegisterWebhooksCommand;
@@ -116,6 +117,7 @@ return Application::configure(basePath: dirname(__DIR__))
         RefreshExpiringTokensCommand::class,
         // Kanal sağlık taraması (8 Eki canlı olayı). Zamanlaması routes/console.php.
         CheckChannelsHealthCommand::class,
+        PilotCheckCommand::class,
         // §11 · metrik anlık görüntüleri. Zamanlaması routes/console.php.
         CaptureMetricsCommand::class,
         // §11 · §12 · eşik aşımı uyarıları. Zamanlaması routes/console.php.
