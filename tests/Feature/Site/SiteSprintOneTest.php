@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Site;
 
 use App\Domain\Channels\Certification\CertificationStatus;
-use App\Domain\Channels\Certification\ChannelCapability;
-use App\Domain\Channels\Certification\ChannelCertification;
 use App\Support\Site\Services;
 use App\Support\Site\SiteProof;
 use App\Support\Site\Solutions;
@@ -143,18 +141,14 @@ final class SiteSprintOneTest extends TestCase
         // Ana sayfa şeridi: canlı denilen kanal yalnız matristeki canlı kanal(lar).
         $home = $this->get('/')->getContent();
         $this->assertStringContainsString('Canlı hesapta doğrulandı: Trendyol', $home);
-        $table = substr($home, (int) strpos($home, 'class="home-table'));
-        $table = substr($table, 0, (int) strpos($table, '</table>'));
         $this->assertStringNotContainsString('Canlı hesapta doğrulandı: Trendyol, Hepsiburada', $home);
 
-        // Ana sayfa tablosundaki her rozet hücrenin durumu.
-        $c = app(ChannelCertification::class);
-        preg_match_all('#href="[^"]+/entegrasyonlar/([a-z0-9-]+)"[^>]*>.*?</th>\s*<td><span class="badge badge--\w+" data-status="(\w+)">.*?<td><span class="badge badge--\w+" data-status="(\w+)">#s', $table, $m, PREG_SET_ORDER);
-        $this->assertNotEmpty($m);
-        foreach ($m as [, $code, $inventory, $orders]) {
-            $this->assertSame($c->cell($code, ChannelCapability::INVENTORY)['status']->value, $inventory, $code);
-            $this->assertSame($c->cell($code, ChannelCapability::ORDER_IMPORT)['status']->value, $orders, $code);
-        }
+        // Ana sayfa kanal bölümü yalnız logo + ad: durum rozeti yok (6 Kas kararı).
+        $logos = substr($home, (int) strpos($home, 'class="home-logos'));
+        $logos = substr($logos, 0, (int) strpos($logos, '</ul>'));
+        $this->assertStringContainsString('/entegrasyonlar/hepsiburada', $logos);
+        $this->assertStringNotContainsString('badge', $logos);
+        $this->assertStringNotContainsString('home-table', $home);
     }
 
     #[Test]

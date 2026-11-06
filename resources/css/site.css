@@ -1399,80 +1399,28 @@
         color: var(--color-brand-700);
     }
 
-    /* Kanal tablosu: telefonda yatay kaydırma yerine satırlar bloklaşır. */
-    .home-table {
+    /* Kanal logoları: yalnız logo + ad, durum rozeti yok. */
+    .home-logos {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+        gap: 0.75rem;
+    }
+
+    .home-logos__item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.875rem 1rem;
         border: 1px solid var(--color-line);
         border-radius: 0.75rem;
-        overflow: hidden;
         background: #fff;
+        font-weight: 600;
+        color: var(--color-ink);
     }
 
-    .home-table table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.9375rem;
-    }
-
-    .home-table th,
-    .home-table td {
-        padding: 0.75rem 1.125rem;
-        text-align: left;
-        font-weight: 400;
-    }
-
-    .home-table thead th {
-        background: var(--color-soft);
-        color: var(--color-ink-2);
-        border-bottom: 1px solid var(--color-line-strong);
-        font-size: 0.8125rem;
-        font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-    }
-
-    .home-table tbody tr {
-        border-top: 1px solid var(--color-line);
-    }
-
-    .home-table__group th {
-        background: #fff;
-        color: var(--color-muted);
-        font-size: 0.8125rem;
-        font-weight: 800 !important;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        padding-block: 0.625rem;
-    }
-
-    @media (max-width: 47.99rem) {
-        .home-table thead {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            overflow: hidden;
-            clip-path: inset(50%);
-        }
-
-        .home-table tr:not(.home-table__group) {
-            display: grid;
-            grid-template-columns: 1fr auto;
-            align-items: center;
-            padding: 0.625rem 1rem;
-        }
-
-        .home-table tr:not(.home-table__group) > * {
-            padding: 0;
-        }
-
-        .home-table tr:not(.home-table__group) > td:nth-child(2),
-        .home-table tr:not(.home-table__group) > td:nth-child(3),
-        .home-table tr:not(.home-table__group) > td:nth-child(4) {
-            display: none;
-        }
-
-        .home-table__group th {
-            display: block;
-        }
+    .home-logos__item:hover {
+        border-color: var(--color-line-strong);
+        color: var(--color-brand-700);
     }
 
     /* Adım görseli: kırpılmış panel ekranı + tek turuncu numara işareti. */

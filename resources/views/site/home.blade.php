@@ -43,14 +43,6 @@
     $freePlan = collect($plans)->first(fn ($p) => (float) $p['priceMonthly'] === 0.0);
     $refundDays = (int) config('site.refund_days');
 
-    // Kanal tablosu grupları — yalnız AÇIK kanallar; başlıktaki mega menüyle aynı ayrım.
-    $turkeyCodes = ['trendyol', 'hepsiburada', 'n11', 'pazarama', 'ciceksepeti', 'idefix'];
-    $channelGroups = array_filter([
-        $t('Türkiye pazaryerleri', 'Turkish marketplaces') => array_values(array_filter($available, fn ($c) => $c['marketplace'] && in_array($c['code'], $turkeyCodes, true))),
-        $t('Yurtdışı pazaryerleri', 'International marketplaces') => array_values(array_filter($available, fn ($c) => $c['marketplace'] && ! in_array($c['code'], $turkeyCodes, true))),
-        $t('E-ticaret siteleri', 'Online stores') => array_values(array_filter($available, fn ($c) => ! $c['marketplace'])),
-    ]);
-
     // Şerit: YALNIZ doğrulanabilir iddialar. Canlı kanal adı matristen gelir;
     // iade süresi ve aylık ödeme config/kullanım koşullarından; sunucu yeri
     // ve gece yedeği /guvenlik sayfasındaki kaynaklardan (RUNBOOK, zamanlayıcı).
@@ -95,7 +87,6 @@
 
     $signupUrl = $isLoggedIn ? url('/panel') : route('register');
     $signupLabel = $isLoggedIn ? $t('Panele git', 'Open panel') : $t('Ücretsiz başla', 'Start free');
-    $statusCell = fn (\App\Domain\Channels\Certification\CertificationStatus $s): string => '<span class="badge badge--'.$s->publicTone().'" data-status="'.$s->value.'">'.e($en ? match ($s->publicTone()) { 'live' => 'Verified live', 'sandbox' => 'Verified in sandbox', 'testing' => 'Being tested', default => 'In channel panel' } : $s->publicLabel()).'</span>';
 @endphp
 
 @section('lang', $en ? 'en' : 'tr')
@@ -124,7 +115,7 @@
                     @if ($demoAvailable ?? false)
                         <a href="{{ route('demo') }}" class="home-hero__link" rel="nofollow">{{ $t('Demo hesabı incele', 'Explore the demo account') }} <span aria-hidden="true">→</span></a>
                     @else
-                        <a href="#kanallar" class="home-hero__link">{{ $t('Hangi kanalda ne çalışır', 'What works on each channel') }} <span aria-hidden="true">→</span></a>
+                        <a href="#kanallar" class="home-hero__link">{{ $t('Bağlanan kanallar', 'Supported channels') }} <span aria-hidden="true">→</span></a>
                     @endif
                 </div>
             </div>
@@ -169,50 +160,27 @@
         </section>
     @endunless
 
-    {{-- ═══════════════════════════════════════ KANAL TABLOSU (matristen) --}}
-    @if (count($channelGroups))
+    {{-- ═══════════════════════════════════════ KANAL LOGOLARI --}}
+    @if (count($available))
         <section id="kanallar" aria-labelledby="kanal-baslik" class="section bg-soft home-band">
             <div class="wrap">
                 <div class="flex flex-wrap items-end justify-between gap-6">
                     <div class="section-head">
-                        <h2 id="kanal-baslik" class="heading-2">{{ $t('Hangi kanalda ne doğrulandı', 'What is verified on each channel') }}</h2>
-                        <p class="lead">{{ $t('Paneldeki her kanal aşağıda. Gerçek hesapta denenmemiş olanı "çalışır" diye yazmıyoruz.', 'Every channel in the panel is listed. We never call something "working" before it was tried on a real account.') }}</p>
+                        <h2 id="kanal-baslik" class="heading-2">{{ $t('Bağlayabileceğin kanallar', 'Channels you can connect') }}</h2>
                     </div>
                     <a href="{{ route('site.channels') }}" class="plain-link">{{ $t('Tüm entegrasyonlar', 'All integrations') }}</a>
                 </div>
 
-                <div class="home-table mt-10">
-                    <table>
-                        <caption class="sr-only">{{ $t('Kanallara göre doğrulama durumu', 'Verification status by channel') }}</caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">{{ $t('Kanal', 'Channel') }}</th>
-                                <th scope="col">{{ $t('Stok', 'Stock') }}</th>
-                                <th scope="col">{{ $t('Sipariş', 'Orders') }}</th>
-                                <th scope="col">{{ $t('Kargo bildirimi', 'Tracking upload') }}</th>
-                            </tr>
-                        </thead>
-                        @foreach ($channelGroups as $group => $rows)
-                            <tbody>
-                                <tr class="home-table__group"><th scope="rowgroup" colspan="4">{{ $group }}</th></tr>
-                                @foreach ($rows as $ch)
-                                    <tr>
-                                        <th scope="row">
-                                            <a href="{{ route('site.channel', $ch['code']) }}" class="flex items-center gap-3 font-semibold text-ink hover:text-brand-700">
-                                                @include('site.partials.channel-icon', ['ch' => $ch, 'size' => 'sm'])
-                                                {{ $ch['name'] }}
-                                            </a>
-                                        </th>
-                                        @foreach (['inventory', 'order_import', 'shipment'] as $cap)
-                                            <td>{!! $statusCell($ch['status'][$cap]) !!}</td>
-                                        @endforeach
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        @endforeach
-                    </table>
-                </div>
-                @include('site.partials.proof-legend', ['en' => $en ?? false])
+                <ul class="home-logos mt-10">
+                    @foreach ($available as $ch)
+                        <li>
+                            <a href="{{ route('site.channel', $ch['code']) }}" class="home-logos__item">
+                                @include('site.partials.channel-icon', ['ch' => $ch, 'size' => 'md'])
+                                <span>{{ $ch['name'] }}</span>
+                            </a>
+                        </li>
+                    @endforeach
+                </ul>
             </div>
         </section>
     @endif
