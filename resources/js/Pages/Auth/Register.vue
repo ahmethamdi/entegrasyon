@@ -1,12 +1,15 @@
 <script setup>
 import BrandMark from '../../Components/BrandMark.vue';
 import { Link, useForm } from '@inertiajs/vue3';
+import { watch } from 'vue';
 
 const props = defineProps({
     // Shopify'dan kuruluyorsa mağaza adı ve sahibinin e-postası (anahtar yok).
     shopifyInstall: { type: Object, default: null },
     // Ekip daveti: { email, tenant } — firma sorulmaz, e-posta sabit.
     invitation: { type: Object, default: null },
+    // Bot kalkanı: form açılışının imzalı zaman damgası (FormShield).
+    formStamp: { type: String, default: '' },
 });
 
 const form = useForm({
@@ -15,6 +18,17 @@ const form = useForm({
     company: props.shopifyInstall?.name ?? '',
     password: '',
     password_confirmation: '',
+    website: '',
+    ft: props.formStamp,
+});
+
+/*
+ * Damga reddedilip (çok hızlı / eski) sayfa geri döndüğünde sunucu YENİ
+ * damga verir; form verisi korunduğu için eskisi kalırdı ve "yeniden
+ * gönder" denen kullanıcı aynı hatayı tekrar alırdı.
+ */
+watch(() => props.formStamp, (stamp) => {
+    form.ft = stamp;
 });
 
 function submit() {
@@ -53,6 +67,19 @@ function submit() {
             </div>
 
             <form class="mt-8 space-y-4" @submit.prevent="submit">
+                <!--
+                    BOT KALKANI (bkz. FormShield): ekranda olmayan tuzak alan.
+                    İnsan görmez ve sekmeyle de ulaşamaz; formu körlemesine
+                    dolduran bot doldurur ve kaydı sessizce düşer.
+                -->
+                <div style="position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden" aria-hidden="true">
+                    <label>Website<input v-model="form.website" name="website" type="text" tabindex="-1" autocomplete="off"></label>
+                </div>
+
+                <p v-if="form.errors.ft" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    {{ form.errors.ft }}
+                </p>
+
                 <div>
                     <label for="name" class="block text-sm font-medium text-stone-700">
                         {{ $t('Ad soyad') }}

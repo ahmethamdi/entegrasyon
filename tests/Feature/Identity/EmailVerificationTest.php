@@ -26,13 +26,13 @@ final class EmailVerificationTest extends TestCase
     {
         Notification::fake();
 
-        $this->post('/register', [
+        $this->post('/register', $this->shieldedForm('register', [
             'name' => 'Yeni Satıcı',
             'email' => 'yeni@example.com',
             'password' => 'cok-gizli-parola',
             'password_confirmation' => 'cok-gizli-parola',
             'company' => 'Yeni Şirket',
-        ]);
+        ]));
 
         $user = User::query()->where('email', 'yeni@example.com')->firstOrFail();
 

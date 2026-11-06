@@ -18,6 +18,7 @@ use App\Domain\Channels\Certification\ChannelCertification;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Support\PlatformStats;
 use App\Http\Controllers\Controller;
+use App\Support\Analytics\VisitStats;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -39,9 +40,14 @@ use Inertia\Response as InertiaResponse;
  */
 final class AdminController extends Controller
 {
-    public function dashboard(PlatformStats $stats): InertiaResponse
+    public function dashboard(PlatformStats $stats, VisitStats $visits): InertiaResponse
     {
-        return Inertia::render('Admin/Dashboard', ['stats' => $stats->summary()]);
+        return Inertia::render('Admin/Dashboard', [
+            'stats' => $stats->summary(),
+            // Çerezsiz ziyaret sayacı (6 Kas 2026) — tablo kiracısız, sistem
+            // bağlamı gerekmez. Ayrı prop: huni kayıttan başlar, ziyaret ondan önce.
+            'visits' => $visits->summary(),
+        ]);
     }
 
     public function tenants(Request $request): InertiaResponse

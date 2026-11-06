@@ -8,7 +8,7 @@
 --}}
 @extends('site.legal.layout')
 
-@section('updated', '2026-10-24')
+@section('updated', '2026-11-06')
 
 @section('lang', 'en')
 @section('og_locale', 'en_GB')
@@ -29,7 +29,8 @@
     <h2>2. What data we process</h2>
 
     <h3>2.1. When you visit the website</h3>
-    <p>To display the website and keep it secure, our server processes technical information with every request: IP address, date and time of the request, the requested address, and browser and operating system information (user agent). Only cookies that are strictly necessary for sessions and security are used; see the <a href="{{ route('site.legal', 'cerez') }}">cookie policy</a> (Turkish). No analytics, advertising or tracking tools are used on the website.</p>
+    <p>To display the website and keep it secure, our server processes technical information with every request: IP address, date and time of the request, the requested address, and browser and operating system information (user agent). Only cookies that are strictly necessary for sessions and security are used; see the <a href="{{ route('site.legal', 'cerez') }}">cookie policy</a> (Turkish). No third-party analytics, advertising or tracking tools are used on the website.</p>
+    <p>To see how many people visit the website, we keep only daily totals on our own server: how often each page was viewed, which site a visit came from (domain name only) and the daily number of unique visitors. No cookies are used for this and IP addresses are not stored; a unique visitor is counted using a one-way digest of the IP address and browser information combined with the date and a secret key; the digest changes every day, so the same visitor cannot be linked across days. These totals are not shared with third parties; the legal basis is our legitimate interest in operating the website (Art. 6(1)(f) GDPR; Art. 5(2)(f) KVKK).</p>
 
     <h3>2.2. When you create an account</h3>
     <ul>
@@ -93,6 +94,7 @@
         <li><strong>Channel connection details:</strong> deleted when your account is closed.</li>
         <li><strong>When you uninstall the Shopify app:</strong> your store's access token is revoked and the connection is closed. When Shopify's store data erasure request arrives (about 48 hours after uninstalling), customer references and raw notification content in orders from that store are deleted. Customer data access and erasure requests forwarded by Shopify are answered within 30 days.</li>
         <li><strong>Invoices and payment records:</strong> for the statutory retention periods under tax and commercial law.</li>
+        <li><strong>Daily visit totals:</strong> 90 days, then deleted automatically.</li>
         <li><strong>Server and session records:</strong> for a limited time for security purposes; session records expire when your session ends.</li>
         <li><strong>Support correspondence:</strong> for a reasonable time after your request is resolved, so that follow-up questions can be answered.</li>
     </ul>

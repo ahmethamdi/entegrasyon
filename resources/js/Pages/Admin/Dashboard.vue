@@ -9,6 +9,8 @@ import { intlLocale, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     stats: { type: Object, required: true },
+    // Çerezsiz ziyaret sayacı (VisitStats) — görüntüleme, gün başına tekil ziyaretçi.
+    visits: { type: Object, required: true },
 });
 
 const { t } = useI18n();
@@ -34,6 +36,9 @@ const funnel = computed(() => {
 const maxDaily = computed(() => Math.max(1, ...props.stats.dailySignups.map((d) => d.count)));
 const dayLabel = (iso) => new Date(iso).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short' });
 
+/* Ziyaret çubukları: görüntülemeye göre ölçeklenir, tekil ziyaretçi ipucunda. */
+const maxViews = computed(() => Math.max(1, ...props.visits.daily.map((d) => d.views)));
+
 const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
 </script>
 
@@ -55,6 +60,60 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
             <StatCard :label="t('Son 7 günde giriş yapan')" :value="stats.activeUsers7" />
             <StatCard :label="t('Son 30 günde sipariş')" :value="stats.orders30" />
         </div>
+
+        <!--
+            ZİYARET: çerezsiz, IP saklamayan günlük toplam. Tekil ziyaretçi GÜN
+            BAŞINADIR — yedi günlük sayı, üç gün gelen kişiyi üç kez sayar;
+            bunu açıkça yazmazsak rakam olduğundan büyük okunur.
+        -->
+        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <h2 class="text-sm font-semibold text-stone-900">{{ t('Ziyaret · son 7 / 30 gün') }}</h2>
+            <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatCard :label="t('Görüntüleme · 7 gün')" :value="visits.views7" />
+                <StatCard :label="t('Görüntüleme · 30 gün')" :value="visits.views30" />
+                <StatCard :label="t('Tekil ziyaretçi · 7 gün')" :value="visits.visitors7" />
+                <StatCard :label="t('Tekil ziyaretçi · 30 gün')" :value="visits.visitors30" />
+            </div>
+
+            <div class="mt-5 flex h-32 items-end gap-1" role="img" :aria-label="t('Günlük görüntüleme · son 30 gün')">
+                <div
+                    v-for="d in visits.daily"
+                    :key="d.date"
+                    class="group relative flex-1 rounded-t bg-stone-300 hover:bg-stone-700"
+                    :style="{ height: Math.max(2, (d.views / maxViews) * 100) + '%' }"
+                    :title="`${dayLabel(d.date)}: ${t(':views görüntüleme, :visitors ziyaretçi', { views: d.views, visitors: d.visitors })}`"
+                />
+            </div>
+            <div class="mt-1 flex justify-between text-xs text-stone-500">
+                <span>{{ dayLabel(visits.daily[0]?.date) }}</span>
+                <span>{{ dayLabel(visits.daily[visits.daily.length - 1]?.date) }}</span>
+            </div>
+
+            <div class="mt-5 grid gap-6 lg:grid-cols-2">
+                <div>
+                    <h3 class="text-xs font-semibold uppercase tracking-wide text-stone-500">{{ t('En çok bakılan sayfalar · 30 gün') }}</h3>
+                    <p v-if="!visits.topPages.length" class="mt-2 text-sm text-stone-500">{{ t('Henüz ziyaret yok.') }}</p>
+                    <ul v-else class="mt-2 divide-y divide-stone-100 text-sm">
+                        <li v-for="p in visits.topPages" :key="p.path" class="flex justify-between gap-3 py-1.5">
+                            <span class="truncate font-mono text-xs text-stone-700" :title="p.path">{{ p.path }}</span>
+                            <b class="tabular-nums text-stone-900">{{ p.views }}</b>
+                        </li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="text-xs font-semibold uppercase tracking-wide text-stone-500">{{ t('Kaynak siteler · 30 gün') }}</h3>
+                    <p v-if="!visits.topReferrers.length" class="mt-2 text-sm text-stone-500">{{ t('Dış kaynaktan gelen ziyaret yok.') }}</p>
+                    <ul v-else class="mt-2 divide-y divide-stone-100 text-sm">
+                        <li v-for="r in visits.topReferrers" :key="r.host" class="flex justify-between gap-3 py-1.5">
+                            <span class="truncate text-stone-700">{{ r.host }}</span>
+                            <b class="tabular-nums text-stone-900">{{ r.views }}</b>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <p class="mt-4 text-xs text-stone-500">{{ t('Çerezsiz sayılır, IP saklanmaz. Tekil ziyaretçi gün başınadır: iki gün gelen kişi iki kez sayılır. Botlar ve yönetici hesabı sayılmaz.') }}</p>
+        </section>
 
         <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Kayıttan ödemeye') }}</h2>

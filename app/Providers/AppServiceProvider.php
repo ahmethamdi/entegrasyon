@@ -18,16 +18,19 @@ use App\Domain\Identity\Support\SuperAdmin;
 use App\Support\Backup\DatabaseSnapshot;
 use App\Support\Backup\PostgresSnapshot;
 use App\Support\Logging\PayloadRedactor;
+use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
+use Throwable;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -55,6 +58,27 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Verified::class, static function (Verified $event): void {
             if ($event->user instanceof User) {
                 app(SendWelcomeMail::class)($event->user);
+            }
+        });
+
+        // SON GİRİŞ (6 Kas 2026). `users.last_login_at` admin panelinde ve
+        // "son 7 günde giriş yapan" sayısında OKUNUYORDU ama hiçbir kod
+        // YAZMIYORDU: canlıda tek satır dolu değildi ve panel her müşteriyi
+        // "hiç girmedi" gösteriyordu. `Login` olayı parolalı girişte, kayıt
+        // ve davet sonrası `Auth::login`'de ve "beni hatırla" çereziyle geri
+        // gelişte atılır — üçü de giriştir.
+        //
+        // DB::table ile TEK UPDATE: model `save()` `updated_at`'i de
+        // değiştirirdi ve "profil son ne zaman değişti" bilgisi her girişte
+        // ezilirdi. Hata girişi BOZMAZ: istatistik yazılamadı diye satıcı
+        // panele girememeli; hata raporlanır, giriş sürer.
+        Event::listen(Login::class, static function (Login $event): void {
+            try {
+                DB::table('users')
+                    ->where('id', $event->user->getAuthIdentifier())
+                    ->update(['last_login_at' => now()]);
+            } catch (Throwable $e) {
+                report($e);
             }
         });
 

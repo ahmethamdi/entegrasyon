@@ -29,7 +29,7 @@ final class PasswordResetTest extends TestCase
         Notification::fake();
         $user = User::factory()->create(['email' => 'satici@example.com']);
 
-        $this->post('/forgot-password', ['email' => 'Satici@Example.com'])
+        $this->post('/forgot-password', $this->shieldedForm('password-reset', ['email' => 'Satici@Example.com']))
             ->assertSessionHas('status');
 
         Notification::assertSentTo($user, ResetPasswordNotification::class, function (ResetPasswordNotification $n) use ($user): bool {
@@ -50,8 +50,8 @@ final class PasswordResetTest extends TestCase
         Notification::fake();
         User::factory()->create(['email' => 'var@example.com']);
 
-        $known = $this->post('/forgot-password', ['email' => 'var@example.com']);
-        $unknown = $this->post('/forgot-password', ['email' => 'yok@example.com']);
+        $known = $this->post('/forgot-password', $this->shieldedForm('password-reset', ['email' => 'var@example.com']));
+        $unknown = $this->post('/forgot-password', $this->shieldedForm('password-reset', ['email' => 'yok@example.com']));
 
         $known->assertSessionHasNoErrors();
         $unknown->assertSessionHasNoErrors();
@@ -59,7 +59,7 @@ final class PasswordResetTest extends TestCase
 
         // Kayıtlı adrese İKİNCİ istek broker'ca bekletilir — bu bile yanıta
         // yansımaz (bekletme yalnız kayıtlı adreste olur).
-        $this->post('/forgot-password', ['email' => 'var@example.com'])->assertSessionHasNoErrors();
+        $this->post('/forgot-password', $this->shieldedForm('password-reset', ['email' => 'var@example.com']))->assertSessionHasNoErrors();
     }
 
     /** Geçerli jetonla parola değişir, beni-hatırla jetonu yenilenir. */
@@ -121,10 +121,10 @@ final class PasswordResetTest extends TestCase
         Notification::fake();
 
         foreach (range(1, 5) as $i) {
-            $this->post('/forgot-password', ['email' => "kisi{$i}@example.com"])->assertRedirect();
+            $this->post('/forgot-password', $this->shieldedForm('password-reset', ['email' => "kisi{$i}@example.com"]))->assertRedirect();
         }
 
-        $this->post('/forgot-password', ['email' => 'kisi6@example.com'])->assertStatus(429);
+        $this->post('/forgot-password', $this->shieldedForm('password-reset', ['email' => 'kisi6@example.com']))->assertStatus(429);
     }
 
     /** Kayıt IP başına sınırlıdır (toplu sahte kiracı). */
@@ -132,23 +132,23 @@ final class PasswordResetTest extends TestCase
     public function registration_is_rate_limited(): void
     {
         foreach (range(1, 5) as $i) {
-            $this->post('/register', [
+            $this->post('/register', $this->shieldedForm('register', [
                 'name' => "Kişi {$i}",
                 'email' => "kayit{$i}@example.com",
                 'password' => 'cok-gizli-parola',
                 'password_confirmation' => 'cok-gizli-parola',
                 'company' => "Şirket {$i}",
-            ]);
+            ]));
             $this->post('/logout');
         }
 
-        $this->post('/register', [
+        $this->post('/register', $this->shieldedForm('register', [
             'name' => 'Altıncı',
             'email' => 'kayit6@example.com',
             'password' => 'cok-gizli-parola',
             'password_confirmation' => 'cok-gizli-parola',
             'company' => 'Altıncı Şirket',
-        ])->assertStatus(429);
+        ]))->assertStatus(429);
 
         $this->assertSame(5, User::query()->count());
     }

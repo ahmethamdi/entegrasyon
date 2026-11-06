@@ -283,6 +283,17 @@ Schedule::command('api-calls:prune')
     ->onOneServer()
     ->withoutOverlapping();
 
+// ZİYARET SAYAÇLARI SAKLAMA (6 Kas 2026) — 90 günden eski günler silinir.
+//
+// Gizlilik metni "en çok 90 gün" diyor; bu satır olmadan o söz tutulmaz ve
+// tablolar sınırsız büyür. Günlük yeter (saklama gün ölçeğinde). 04:10:
+// api-calls:prune ile aynı bakım penceresi, ondan hemen sonra; iki tablo da
+// gün başına birkaç yüz satır, tur saniyeler sürer.
+Schedule::command('visits:prune')
+    ->dailyAt('04:10')
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // §11 · METRİK ANLIK GÖRÜNTÜLERİ — saatlik (§15 tablosu birebir).
 //
 // SAATLİK YETER VE GEREKİR. Daha sık koşmak on üç ağır toplama sorgusunu

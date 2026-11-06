@@ -32,9 +32,11 @@ use App\Domain\Sync\Console\DetectStuckSyncOperationsCommand;
 use App\Domain\Sync\Console\PollChannelBatchesCommand;
 use App\Domain\Sync\Console\TrackApprovalStatusCommand;
 use App\Http\Middleware\AuthorizeTenantRoute;
+use App\Http\Middleware\CountPageView;
 use App\Http\Middleware\EstablishTenantContext;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SetLocale;
+use App\Support\Analytics\PruneVisitStatsCommand;
 use App\Support\Backup\BackupOffsiteCommand;
 use App\Support\Backup\BackupVerifyCommand;
 use App\Support\LoadTest\SyncLoadTestCommand;
@@ -108,6 +110,8 @@ return Application::configure(basePath: dirname(__DIR__))
         InstallDemoCommand::class,
         // §13 · Faz 3 · api_calls saklama. Zamanlaması routes/console.php.
         PruneApiCallsCommand::class,
+        // Ziyaret sayaçları saklama (6 Kas 2026). Zamanlaması routes/console.php.
+        PruneVisitStatsCommand::class,
         // V3.0 · §03 · Delta 3 · token yenileme. Zamanlaması routes/console.php.
         RefreshExpiringTokensCommand::class,
         // Kanal sağlık taraması (8 Eki canlı olayı). Zamanlaması routes/console.php.
@@ -136,6 +140,9 @@ return Application::configure(basePath: dirname(__DIR__))
             SetLocale::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            // Çerezsiz ziyaret sayacı (6 Kas 2026). Yanıt gittikten sonra
+            // `terminate()` ile yazar; neyi saydığı sınıf başlığında.
+            CountPageView::class,
         ]);
 
         // Kiracı bağlamı AYRI bir ara katmandır, web grubuna eklenmez:

@@ -7,8 +7,11 @@
     ve zamanla birbirinden ayrışırdı.
 
     YALNIZ GERÇEKTEN KULLANILAN HİZMETLER YAZILIR: barındırma IONOS
-    (Almanya), ödeme Stripe. Analitik, reklam, hata izleme aracı YOK —
-    eklenirse bu metin ve çerez politikası birlikte güncellenmeli.
+    (Almanya), ödeme Stripe. Üçüncü taraf analitik, reklam, hata izleme
+    aracı YOK — eklenirse bu metin ve çerez politikası birlikte güncellenmeli.
+    Kendi ziyaret sayacımız var (6 Kas 2026, `VisitStats`): çerezsiz, IP
+    saklamaz, yalnız günlük toplam, 90 gün. Sayaç değişirse 2.1 ve 6. bölüm
+    birlikte güncellenir.
     E-posta gönderimi Google Workspace (smtp.gmail.com). Shopify
     uygulaması (5 Eki 2026): Shopify Billing + kaldırma/gizlilik
     webhook'ları. İngilizce çevirisi `privacy.blade.php` — ikisi BİRLİKTE
@@ -16,7 +19,7 @@
 --}}
 @extends('site.legal.layout')
 
-@section('updated', '2026-10-24')
+@section('updated', '2026-11-06')
 
 @section('description', '34Pazar gizlilik politikası ve KVKK aydınlatma metni: hangi kişisel verileri, hangi amaçla ve hukuki sebeple işliyoruz, kimlere aktarıyoruz ve haklarınız.')
 
@@ -35,7 +38,8 @@
     <h2>2. Hangi verileri işliyoruz?</h2>
 
     <h3>2.1. Siteyi ziyaret ettiğinizde</h3>
-    <p>Sunucumuz, siteyi görüntüleyebilmeniz ve güvenliği sağlayabilmek için her istekte teknik bilgileri işler: IP adresi, isteğin tarih ve saati, istenen adres, tarayıcı ve işletim sistemi bilgisi (user agent). Ayrıca yalnızca oturum ve güvenlik için zorunlu çerezler kullanılır; ayrıntılar <a href="{{ route('site.legal', 'cerez') }}">çerez politikasında</a>. Sitede analitik, reklam veya izleme aracı kullanılmaz.</p>
+    <p>Sunucumuz, siteyi görüntüleyebilmeniz ve güvenliği sağlayabilmek için her istekte teknik bilgileri işler: IP adresi, isteğin tarih ve saati, istenen adres, tarayıcı ve işletim sistemi bilgisi (user agent). Ayrıca yalnızca oturum ve güvenlik için zorunlu çerezler kullanılır; ayrıntılar <a href="{{ route('site.legal', 'cerez') }}">çerez politikasında</a>. Sitede üçüncü taraf analitik, reklam veya izleme aracı kullanılmaz.</p>
+    <p>Kaç kişinin siteyi ziyaret ettiğini görmek için kendi sunucumuzda yalnızca günlük toplamlar tutarız: hangi sayfanın kaç kez görüntülendiği, ziyaretin hangi siteden geldiği (yalnızca alan adı) ve günlük tekil ziyaretçi sayısı. Bunun için çerez kullanılmaz ve IP adresi saklanmaz; tekil ziyaretçi, IP adresi ve tarayıcı bilgisinin gün ve gizli bir anahtarla birlikte tek yönlü özetlenmesiyle sayılır; bu özet her gün değişir, bu yüzden aynı ziyaretçi günler arasında eşleştirilemez. Bu toplamlar üçüncü taraflarla paylaşılmaz; hukuki sebep sitenin işletilmesine ilişkin meşru menfaatimizdir (KVKK m.5/2-f; GDPR md. 6/1-f).</p>
 
     <h3>2.2. Hesap oluşturduğunuzda</h3>
     <ul>
@@ -99,6 +103,7 @@
         <li><strong>Kanal bağlantı bilgileri:</strong> hesabınız kapatıldığında silinir.</li>
         <li><strong>Shopify uygulamasını kaldırdığınızda:</strong> mağazanızın erişim belirteci geçersiz kılınır ve bağlantı kapatılır. Shopify'ın mağaza verisi silme bildirimi (kaldırmadan yaklaşık 48 saat sonra gelir) ulaştığında o mağazadan gelen siparişlerdeki müşteri referansları ve ham bildirim içerikleri silinir. Shopify üzerinden iletilen müşteri verisi erişim ve silme talepleri 30 gün içinde yanıtlanır.</li>
         <li><strong>Fatura ve ödeme kayıtları:</strong> vergi ve ticaret mevzuatının öngördüğü yasal saklama süreleri boyunca.</li>
+        <li><strong>Günlük ziyaret toplamları:</strong> 90 gün; sonra kendiliğinden silinir.</li>
         <li><strong>Sunucu ve oturum kayıtları:</strong> güvenlik amacıyla sınırlı bir süre; oturum kayıtları oturumunuz sona erdiğinde geçerliliğini yitirir.</li>
         <li><strong>Destek yazışmaları:</strong> talebiniz sonuçlandıktan sonra, olası soruların yanıtlanabilmesi için makul bir süre.</li>
     </ul>

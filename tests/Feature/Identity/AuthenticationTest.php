@@ -46,13 +46,13 @@ final class AuthenticationTest extends TestCase
     #[Test]
     public function registration_creates_user_tenant_and_default_warehouse(): void
     {
-        $response = $this->post('/register', [
+        $response = $this->post('/register', $this->shieldedForm('register', [
             'name' => 'Ahmet Yılmaz',
             'email' => 'ahmet@example.com',
             'password' => 'cok-gizli-parola',
             'password_confirmation' => 'cok-gizli-parola',
             'company' => 'Yılmaz Ticaret',
-        ]);
+        ]));
 
         $response->assertRedirect('/panel');
 
@@ -84,13 +84,13 @@ final class AuthenticationTest extends TestCase
     {
         User::factory()->create(['email' => 'ahmet@example.com']);
 
-        $response = $this->post('/register', [
+        $response = $this->post('/register', $this->shieldedForm('register', [
             'name' => 'Başka Ahmet',
             'email' => 'ahmet@example.com',
             'password' => 'cok-gizli-parola',
             'password_confirmation' => 'cok-gizli-parola',
             'company' => 'Başka Şirket',
-        ]);
+        ]));
 
         $response->assertSessionHasErrors('email');
         $this->assertGuest();
@@ -103,13 +103,13 @@ final class AuthenticationTest extends TestCase
     #[Test]
     public function registration_requires_password_confirmation(): void
     {
-        $response = $this->post('/register', [
+        $response = $this->post('/register', $this->shieldedForm('register', [
             'name' => 'Ahmet',
             'email' => 'ahmet@example.com',
             'password' => 'cok-gizli-parola',
             'password_confirmation' => 'baska-parola',
             'company' => 'Şirket',
-        ]);
+        ]));
 
         $response->assertSessionHasErrors('password');
         $this->assertGuest();

@@ -26,7 +26,7 @@
     <p>Çerezler, bir sitenin tarayıcınıza kaydettiği küçük metin dosyalarıdır. Bu sayfa, {{ config('site.brand') }} sitesinde ve panelinde hangi çerezlerin neden kullanıldığını açıklar.</p>
 
     <h2>Kısaca</h2>
-    <p>Yalnızca sitenin ve panelin çalışması için <strong>kesinlikle gerekli</strong> çerezleri kullanırız. Analitik, reklam, sosyal medya veya izleme çerezi kullanılmaz; ziyaretinizle ilgili veri üçüncü taraf reklam ağlarına gönderilmez. Bu yüzden sitede çerez onay bandı gösterilmez: zorunlu çerezler için onay gerekmez.</p>
+    <p>Yalnızca sitenin ve panelin çalışması için <strong>kesinlikle gerekli</strong> çerezleri kullanırız. Analitik, reklam, sosyal medya veya izleme çerezi kullanılmaz; ziyaretinizle ilgili veri üçüncü taraf reklam ağlarına gönderilmez. Bu yüzden sitede çerez onay bandı gösterilmez: zorunlu çerezler için onay gerekmez. Ziyaret sayılarını çerez kullanmadan, yalnızca sunucumuzda günlük toplam olarak tutarız; ayrıntılar <a href="{{ route('site.legal', 'gizlilik') }}">gizlilik metninde</a>.</p>
 
     <h2>Kullanılan çerezler</h2>
     <table>

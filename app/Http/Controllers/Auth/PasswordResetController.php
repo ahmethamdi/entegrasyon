@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Domain\Identity\Models\User;
 use App\Http\Controllers\Controller;
+use App\Support\Security\FormShield;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,18 +33,28 @@ use Inertia\Response as InertiaResponse;
  *   Parolası çalınan satıcı sıfırlama yapar; saldırganın açık oturumu
  *   (ve "beni hatırla" çerezi) yaşamaya devam etseydi sıfırlama hiçbir
  *   şeyi korumazdı. `remember_token` yenilenir, veritabanı oturumları silinir.
+ *
+ * BOT KALKANI (Kasım 2026) YALNIZ BAĞLANTI İSTEĞİNDE: o form serbest bir
+ * adrese posta gönderir. Yeni parola formu posta göndermez ve zaten tek
+ * kullanımlık jetonla korunur. Bot da gerçek kullanıcıyla AYNI yanıtı
+ * alır (yukarıdaki sızdırmazlık kuralı). Gerekçe `FormShield`'da.
  */
 final class PasswordResetController extends Controller
 {
     public function request(): InertiaResponse
     {
         return Inertia::render('Auth/ForgotPassword', [
+            'formStamp' => FormShield::stamp('password-reset'),
             'status' => session('status'),
         ]);
     }
 
     public function email(Request $request): RedirectResponse
     {
+        if (! FormShield::admit('password-reset', $request)) {
+            return back()->with('status', __(Password::RESET_LINK_SENT));
+        }
+
         $validated = $request->validate([
             'email' => ['required', 'string', 'email', 'max:255'],
         ]);

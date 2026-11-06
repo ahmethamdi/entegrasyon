@@ -121,7 +121,7 @@ final class ShopifyInstallFlowTest extends TestCase
         $this->launch();
         $this->returnFromShopify();
 
-        $this->post('/register', $this->registration('sahip@atolye.example'))
+        $this->post('/register', $this->shieldedForm('register', $this->registration('sahip@atolye.example')))
             ->assertRedirect(route('shopify.install.finish'));
 
         $user = User::query()->where('email', 'sahip@atolye.example')->firstOrFail();
@@ -151,7 +151,7 @@ final class ShopifyInstallFlowTest extends TestCase
         $this->launch();
         $this->returnFromShopify();
 
-        $this->post('/register', $this->registration('baska@ornek.example'));
+        $this->post('/register', $this->shieldedForm('register', $this->registration('baska@ornek.example')));
 
         $user = User::query()->where('email', 'baska@ornek.example')->firstOrFail();
         $this->assertFalse($user->hasVerifiedEmail());

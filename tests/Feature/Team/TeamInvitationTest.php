@@ -61,12 +61,12 @@ final class TeamInvitationTest extends TestCase
         // kiracı bırakabiliyor (tam pakette ölçüldü).
         $tenantsBefore = Tenant::query()->count();
 
-        $this->post('/register', [
+        $this->post('/register', $this->shieldedForm('register', [
             'name' => 'Depo Ali',
             'email' => 'depo@ornek.com',
             'password' => 'Gizli-Parola-123',
             'password_confirmation' => 'Gizli-Parola-123',
-        ])->assertRedirect();
+        ]))->assertRedirect();
 
         $user = User::query()->where('email', 'depo@ornek.com')->firstOrFail();
 

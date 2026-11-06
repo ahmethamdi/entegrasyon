@@ -9,6 +9,7 @@ use App\Domain\Billing\Contracts\PaymentGateway;
 use App\Domain\Channels\Support\OutboundUrlGuard;
 use App\Domain\Identity\Models\Tenant;
 use App\Support\Privacy\SealedJson;
+use App\Support\Security\FormShield;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\QueryException;
@@ -133,6 +134,26 @@ abstract class TestCase extends BaseTestCase
                 }
             }
         }
+    }
+
+    /**
+     * Bot kalkanından GEÇEN form gövdesi: boş tuzak + 5 sn önce açılmış
+     * sayfanın geçerli damgası (`FormShield`).
+     *
+     * Kalkan test ortamında KAPATILMAZ — kapatılsaydı kayıt ve sıfırlama
+     * testleri kalkanın kırdığı bir akışı yeşil gösterirdi. İnsan gibi
+     * davranan istemci bu gövdeyi gönderir; kalkanın kendisini sınayan
+     * test (FormShieldTest) gövdeyi bilerek bozar.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function shieldedForm(string $form, array $data): array
+    {
+        return $data + [
+            FormShield::HONEYPOT => '',
+            FormShield::STAMP => FormShield::stamp($form, now()->subSeconds(5)->getTimestampMs()),
+        ];
     }
 
     /**

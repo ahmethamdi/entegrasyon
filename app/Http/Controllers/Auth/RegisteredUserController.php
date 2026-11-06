@@ -11,6 +11,7 @@ use App\Domain\Identity\Models\User;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\ShopifyInstallController;
+use App\Support\Security\FormShield;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +33,11 @@ use Inertia\Response as InertiaResponse;
  *
  * Varsayılan depoyu `CreateTenant` garanti eder — "en az bir varsayılan
  * depo" kuralı DB kısıtıyla zorlanmaz, o action ile sağlanır (§5).
+ *
+ * BOT KALKANI (Kasım 2026): kayıt, yazılan adrese doğrulama postası
+ * gönderir; botlar yabancıların adresiyle kayıt açıp postamızı onlara
+ * göndertiyordu. Davetle ve Shopify'dan gelen kayıt da AYNI formdan geçer,
+ * kalkan onları ayırmaz. Gerekçe ve katmanlar `FormShield`'da.
  */
 final class RegisteredUserController extends Controller
 {
@@ -40,6 +46,7 @@ final class RegisteredUserController extends Controller
         $invitation = InvitationController::pending($request);
 
         return Inertia::render('Auth/Register', [
+            'formStamp' => FormShield::stamp('register'),
             'shopifyInstall' => self::shopifyPrefill($request),
             // S7 · davetle gelen: e-posta sabit, firma SORULMAZ.
             'invitation' => $invitation === null ? null : [
@@ -68,6 +75,15 @@ final class RegisteredUserController extends Controller
 
     public function store(Request $request, AcceptInvitation $accept): RedirectResponse
     {
+        // Kalkan DOĞRULAMADAN ÖNCE: tuzağı dolduran bota "e-posta zaten
+        // kayıtlı" gibi bir hata dönseydi form kayıtlı adres sorgulama
+        // aracına dönerdi. Bot hiçbir şey yaratmaz, posta gitmez; yanıt
+        // gerçek kaydın ardından görülen "e-postanı kontrol et" durumudur.
+        if (! FormShield::admit('register', $request)) {
+            return redirect()->route('login')
+                ->with('success', __('Hesabın oluşturuldu. Doğrulama bağlantısı için e-postanı kontrol et.'));
+        }
+
         // S7 · DAVETLE KAYIT: oturumda geçerli davet varsa ve adres onunla
         // aynıysa yeni firma AÇILMAZ, kullanıcı davet eden ekibe katılır.
         // Firma açılsaydı her davetli boş bir "kendi firmasıyla" doğar ve
