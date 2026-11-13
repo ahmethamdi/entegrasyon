@@ -39,6 +39,24 @@ const channelNames = {
 };
 
 /** Kanal kodu → görünen ad ("woocommerce" → "WooCommerce"). */
+/*
+ * Firma kare ikonu — kanal, kargo, e-fatura/ERP. Dosyalar
+ * `public/images/channels/icon/` altında (kaynaklar KAYNAKLAR.md'de).
+ * Liste elle tutulur: tarayıcı olmayan dosyayı sormasın (404 yerine ikon yok).
+ */
+const brandIcons = {
+    amazon: 'png', ciceksepeti: 'png', ebay: 'png', etsy: 'svg', hepsiburada: 'png', idefix: 'png',
+    ikas: 'png', kaufland: 'svg', n11: 'png', otto: 'svg', pazarama: 'png', shopify: 'svg',
+    trendyol: 'png', woocommerce: 'svg',
+    yurtici: 'png', aras: 'png', hepsijet: 'png', mng: 'png',
+    nilvera: 'png', parasut: 'png', logo: 'png', mikro: 'png',
+};
+
+export function brandIcon(code) {
+    const ext = brandIcons[code];
+    return ext ? `/images/channels/icon/${code}.${ext}` : null;
+}
+
 export function channelName(code) {
     return channelNames[code] ?? code ?? '—';
 }

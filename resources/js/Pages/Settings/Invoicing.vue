@@ -1,4 +1,5 @@
 <script setup>
+import { brandIcon } from '../../lib/format.js';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
@@ -229,7 +230,8 @@ function disconnect() {
             <div v-if="account" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                        <p class="text-sm font-medium text-stone-900">
+                        <p class="flex items-center gap-2 text-sm font-medium text-stone-900">
+                            <img v-if="brandIcon(account.provider)" :src="brandIcon(account.provider)" alt="" class="size-6 rounded object-contain">
                             {{ account.providerName }}
                             <span v-if="account.environment === 'test'" class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">{{ t('Test ortamı') }}</span>
                         </p>

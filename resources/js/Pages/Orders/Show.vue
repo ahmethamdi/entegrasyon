@@ -3,7 +3,7 @@ import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
-import { channelName, money, orderState, toneClass } from '../../lib/format.js';
+import { brandIcon, channelName, money, orderState, toneClass } from '../../lib/format.js';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
 import { usePermissions } from '../../lib/permissions.js';
 
@@ -484,7 +484,8 @@ function stamp(value) {
                 <template v-if="order.carrierShipment && order.carrierShipment.status !== 'cancelled'">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <p class="text-sm text-stone-900">
+                            <p class="flex flex-wrap items-center gap-1.5 text-sm text-stone-900">
+                                <img v-if="brandIcon(order.carrierShipment.provider)" :src="brandIcon(order.carrierShipment.provider)" alt="" class="size-5 rounded object-contain">
                                 {{ order.carrierShipment.carrier }}
                                 <span class="font-mono text-xs text-stone-500">· {{ order.carrierShipment.cargoKey }}</span>
                                 <span v-if="order.carrierShipment.environment === 'test'" class="text-xs text-amber-800">· {{ t('test ortamı') }}</span>

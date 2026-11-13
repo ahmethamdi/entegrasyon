@@ -57,7 +57,7 @@ final class DashboardOverviewTest extends TestCase
 
         foreach ($props['recentOrders'] as $order) {
             $this->assertSame(
-                ['id', 'number', 'channel', 'status', 'state', 'hasShipment', 'currency', 'grandTotal', 'placedAt'],
+                ['id', 'number', 'channel', 'code', 'status', 'state', 'hasShipment', 'currency', 'grandTotal', 'placedAt'],
                 array_keys($order),
             );
         }

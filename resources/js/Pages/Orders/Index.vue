@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
-import { channelName, money, orderState, toneClass } from '../../lib/format.js';
+import { brandIcon, channelName, money, orderState, toneClass } from '../../lib/format.js';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
 import { usePermissions } from '../../lib/permissions.js';
 
@@ -248,7 +248,7 @@ function placedAt(row) {
                         </td>
 
                         <td class="px-4 py-3">
-                            <p class="text-stone-900">{{ channelName(row.channel.type) }}</p>
+                            <p class="flex items-center gap-1.5 text-stone-900"><img v-if="brandIcon(row.channel.type)" :src="brandIcon(row.channel.type)" alt="" class="size-4 rounded-sm object-contain">{{ channelName(row.channel.type) }}</p>
                             <p class="mt-0.5 text-xs text-stone-500">{{ row.channel.label ?? '' }}</p>
                         </td>
 

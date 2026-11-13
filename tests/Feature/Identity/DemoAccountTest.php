@@ -58,15 +58,16 @@ final class DemoAccountTest extends TestCase
         // 13 Kas 2026: demo kullanıcısı SAHİP — ziyaretçi bütün menüyü
         // görür; yazma rolden bağımsız kapalı (aşağıdaki testler), uyarı
         // postası demo adresine gitmez (the_demo_owner_gets_no_alert_mail).
-        $this->assertSame([TenantRole::OWNER->value], $roles);
+        // Tek sahip (demo hesabı); örnek ekip üyeleri sahip değildir.
+        sort($roles);
+        $this->assertSame([TenantRole::ADMIN->value, TenantRole::OWNER->value, TenantRole::WAREHOUSE->value], $roles);
 
         $connections = DB::table('channel_connections')->where('tenant_id', $tenant->id)->get();
         $this->assertCount(3, $connections);
+        // Bağlantı `inactive` kalır: yazma izinleri ekranda açık görünse de
+        // hiçbir iş kanala gitmez (a_demo_connection_never_reaches_the_network).
         foreach ($connections as $c) {
             $this->assertSame('inactive', $c->status);
-            $this->assertFalse((bool) $c->stock_sync_enabled);
-            $this->assertFalse((bool) $c->price_sync_enabled);
-            $this->assertFalse((bool) $c->product_publish_enabled);
         }
 
         $this->assertSame(12, DB::table('orders')->where('tenant_id', $tenant->id)->count());
@@ -83,8 +84,8 @@ final class DemoAccountTest extends TestCase
             $this->assertSame([], SealedJson::open($sealed) ?? []);
         }
 
-        // Kanıt ekranı uydurma sayı göstermesin: hiç senkron işi yok.
-        $this->assertSame(0, DB::table('sync_operations')->where('tenant_id', $tenant->id)->count());
+        // Kuyrukta bekleyen iş YOK: yalnız "gönderilemeyenler" örneği (dead).
+        $this->assertSame(0, DB::table('sync_operations')->where('tenant_id', $tenant->id)->where('status', '!=', 'dead')->count());
     }
 
     #[Test]
@@ -193,7 +194,7 @@ final class DemoAccountTest extends TestCase
 
         $this->assertSame(3, $t('supplier_sync_runs')->count());
         $this->assertSame(1, $t('price_campaigns')->whereNull('start_pushed_at')->count());
-        $this->assertSame(0, $t('sync_operations')->count());
+        $this->assertSame(0, $t('sync_operations')->where('status', '!=', 'dead')->count());
     }
 
     #[Test]

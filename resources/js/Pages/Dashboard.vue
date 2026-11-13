@@ -2,7 +2,7 @@
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PanelLayout from '../Layouts/PanelLayout.vue';
-import { money, orderState } from '../lib/format.js';
+import { brandIcon, money, orderState } from '../lib/format.js';
 import { intlLocale, k, useI18n } from '../lib/i18n';
 
 const props = defineProps({
@@ -254,7 +254,7 @@ function orderTime(iso) {
                 <ul v-else class="space-y-3">
                     <li v-for="connection in connections" :key="connection.id" class="flex items-center justify-between gap-3 text-sm">
                         <span class="min-w-0">
-                            <span class="block truncate text-stone-900">{{ connection.channel }}</span>
+                            <span class="flex items-center gap-2 truncate text-stone-900"><img v-if="brandIcon(connection.code)" :src="brandIcon(connection.code)" alt="" class="size-5 rounded object-contain">{{ connection.channel }}</span>
                             <span v-if="connection.label && connection.label !== connection.channel" class="block truncate text-xs text-stone-500">{{ connection.label }}</span>
                         </span>
                         <span class="shrink-0 font-medium" :class="channelStatus(connection).class">
@@ -294,7 +294,7 @@ function orderTime(iso) {
                             <td class="py-3 pr-4 font-medium">
                                 <Link :href="`/orders/${order.id}`" class="text-stone-900 underline-offset-4 hover:underline">{{ order.number }}</Link>
                             </td>
-                            <td class="py-3 pr-4 text-stone-900">{{ order.channel }}</td>
+                            <td class="py-3 pr-4 text-stone-900"><span class="inline-flex items-center gap-1.5"><img v-if="brandIcon(order.code)" :src="brandIcon(order.code)" alt="" class="size-4 rounded-sm object-contain">{{ order.channel }}</span></td>
                             <td class="py-3 pr-4 text-right tabular-nums text-stone-900">{{ money(order.grandTotal, order.currency) }}</td>
                             <td class="py-3 pr-4">
                                 <span class="rounded-md px-2 py-0.5 font-medium" :class="stateTone[orderState(order.status, order.hasShipment, order.state).tone]">

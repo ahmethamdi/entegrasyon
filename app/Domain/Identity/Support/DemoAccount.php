@@ -175,25 +175,32 @@ final class DemoAccount
         $channels = [];
 
         foreach ([
-            'trendyol' => ['Örnek Trendyol mağazası', 'demo-trendyol'],
-            'hepsiburada' => ['Örnek Hepsiburada mağazası', 'demo-hepsiburada'],
-            'shopify' => ['ornek-magaza.com', 'demo-shopify'],
+            'trendyol' => ['Örnek Trendyol mağazası', '384712'],
+            'hepsiburada' => ['Örnek Hepsiburada mağazası', 'a3f1c9e2-5b7d-4e08-9c61-2d84f0b3a715'],
+            'shopify' => ['ornek-magaza.com', 'ornek-magaza.myshopify.com'],
         ] as $code => [$label, $account]) {
             $channels[$code] = ChannelConnection::query()->create([
                 'channel_type_code' => $code,
                 'label' => $label,
                 'external_account_id' => $account,
                 'status' => 'inactive',
-                'settings' => [],
+                // Hepsiburada ilan açmak için KDV oranı ister ("1 ayar eksik" görünmesin).
+                'settings' => $code === 'hepsiburada' ? ['vat_rate' => 20] : [],
                 // Örnek bağlantı "bağlı" görünür; `status` inactive kaldığı
                 // için hiçbir iş kanala gitmez (ChannelHttpClient de keser).
                 'health_status' => 'healthy',
                 'last_healthy_at' => now()->subMinutes(4),
                 'connected_at' => now()->subDays(20),
-                'product_publish_enabled' => false,
-                'price_sync_enabled' => false,
-                'stock_sync_enabled' => false,
             ]);
+            // Yazma izinleri AÇIK görünür. Bağlantı `inactive` ve demo
+            // kiracısı ChannelHttpClient'ta kesildiği için hiçbir şey gitmez.
+            $channels[$code]->forceFill([
+                'product_publish_enabled' => true,
+                'price_sync_enabled' => true,
+                'stock_sync_enabled' => true,
+                'return_decision_enabled' => true,
+                'question_answer_enabled' => true,
+            ])->save();
         }
 
         // [SKU, ad, fiyat, stok]
@@ -490,6 +497,111 @@ final class DemoAccount
 
         $this->fillCatalogModules($channels);
         $this->fillContribution();
+        $this->fillAccount($channels);
+    }
+
+    /**
+     * Ekip, abonelik, gönderilemeyenler ve kategori eşleştirme.
+     *
+     * Ekip üyeleri sahip DEĞİL (uyarı postası almaz) ve adresleri
+     * 34Pazar'ın kendi alt alanında: hiçbir yabancı kutuya posta gitmez.
+     *
+     * @param  array<string, ChannelConnection>  $channels
+     */
+    private function fillAccount(array $channels): void
+    {
+        $tenantId = $channels['trendyol']->tenant_id;
+
+        foreach ([['Ayşe Kaya', 'ayse', TenantRole::ADMIN], ['Mert Demir', 'mert', TenantRole::WAREHOUSE]] as [$name, $local, $role]) {
+            $member = User::query()->firstOrCreate(['email' => $local.'@demo.34pazar.com'], [
+                'name' => $name,
+                'password' => bcrypt(Str::random(64)),
+            ]);
+            $member->forceFill(['email_verified_at' => $member->email_verified_at ?? now()])->save();
+
+            TenantUser::query()->create([
+                'tenant_id' => $tenantId,
+                'user_id' => $member->id,
+                'role' => $role->value,
+                'invited_at' => now()->subDays(15),
+                'accepted_at' => now()->subDays(15),
+            ]);
+        }
+
+        // Abonelik: Profesyonel, ödeme sağlayıcısı yok (hiçbir istek çıkmaz).
+        DB::table('subscriptions')->insert([
+            'id' => (string) new UuidV7,
+            'tenant_id' => $tenantId,
+            'plan_code' => 'pro',
+            'status' => 'active',
+            'started_at' => now()->subDays(20),
+            'current_period_end' => now()->addDays(10),
+            'created_at' => now()->subDays(20),
+            'updated_at' => now()->subDays(20),
+        ]);
+
+        // Gönderilemeyenler: biri satıcının düzeltmesi gereken (kalıcı),
+        // biri kanalın geçici hatası. Durum `dead` — kuyruk tekrar denemez.
+        foreach ([
+            ['hepsiburada', 'SBN-ZYT-3L', 'PRICE_PUSH', 'VALIDATION', 5, 'Fiyat, kategori için izin verilen en düşük tutarın altında (min. 175,00 TL).'],
+            ['trendyol', 'TAB-BAM-L', 'INVENTORY_PUSH', 'SERVER_ERROR', 8, 'Trendyol servis hatası (503). Kanal o sırada cevap vermedi.'],
+        ] as [$code, $sku, $type, $class, $attempts, $message]) {
+            $listingId = Listing::query()
+                ->where('channel_connection_id', $channels[$code]->id)
+                ->where('variant_id', Variant::query()->where('sku', $sku)->value('id'))
+                ->value('id');
+            $opId = (string) new UuidV7;
+            $at = now()->subHours(5);
+
+            DB::table('sync_operations')->insert([
+                'id' => $opId, 'tenant_id' => $tenantId, 'channel_connection_id' => $channels[$code]->id,
+                'operation_type' => $type, 'intent' => 'NORMAL_SYNC', 'entity_type' => 'listing', 'entity_id' => $listingId,
+                'entity_version' => 1, 'idempotency_key' => 'demo:'.$opId, 'status' => 'dead', 'attempt_count' => $attempts,
+                'last_error_class' => $class, 'scheduled_at' => $at, 'created_at' => $at, 'updated_at' => $at->copy()->addMinutes(40),
+            ]);
+
+            for ($i = 1; $i <= $attempts; $i++) {
+                DB::table('sync_attempts')->insert([
+                    'id' => (string) new UuidV7, 'tenant_id' => $tenantId, 'sync_operation_id' => $opId, 'attempt_number' => $i,
+                    'outcome' => 'failed', 'error_class' => $class, 'error_message' => $message,
+                    'started_at' => $at->copy()->addMinutes($i * 5), 'finished_at' => $at->copy()->addMinutes($i * 5)->addSeconds(2),
+                    'duration_ms' => 1800, 'created_at' => $at, 'updated_at' => $at,
+                ]);
+            }
+        }
+
+        // Kategori eşleştirme: iç kategoriler + Trendyol ağacında aynı adlı
+        // yaprak varsa eşleşme (ağaç ortaktır; yalnız OKUNUR, yazılmaz).
+        $categories = [
+            'KUP-350' => ['Mutfak > Kupa', 'Kupa'],
+            'MUM-' => ['Ev Dekorasyonu > Mum', 'Mum'],
+            'TAB-' => ['Mutfak > Kesme Tahtası', 'Kesme Tahtası'],
+            'ORT-' => ['Ev Tekstili > Masa Örtüsü', 'Masa Örtüsü'],
+            'SBN-' => ['Kişisel Bakım > Sabun', 'Sabun'],
+            'ATK-' => ['Aksesuar > Atkı', 'Atkı'],
+            'TRM-' => ['Mutfak > Termos', 'Termos'],
+            'STD-' => ['Telefon Aksesuarları > Stand', 'Telefon Tutucu'],
+        ];
+
+        foreach ($categories as $prefix => [$internal, $leafName]) {
+            Product::query()->where('sku', 'like', $prefix.'%')->update(['internal_category_id' => $internal]);
+
+            $leaf = DB::table('channel_categories')
+                ->where('channel_type_code', 'trendyol')
+                ->where('is_leaf', true)
+                ->where('name', $leafName)
+                ->orderBy('external_id')
+                ->first(['id', 'taxonomy_version']);
+
+            if ($leaf !== null) {
+                DB::table('category_mappings')->insert([
+                    'id' => (string) new UuidV7, 'tenant_id' => $tenantId, 'internal_category_id' => $internal,
+                    'channel_type_code' => 'trendyol', 'channel_category_id' => $leaf->id,
+                    'taxonomy_version' => $leaf->taxonomy_version, 'mapped_by' => 'user', 'verified_at' => now()->subDays(10),
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+        }
     }
 
     /**

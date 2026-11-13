@@ -38,3 +38,20 @@ Kartlarda aynı boyutlu kare kutu kullanılır; yazı-logosu yerine markanın ka
 | eBay | icon/ebay.png | https://pages.ebay.com/favicon.ico (64×64) |
 | İdefix | icon/idefix.png | https://asset.idefix.com/images/app-icons/180x180.png (128'e küçültüldü) |
 | Ticimax | — | Logo alınamadı; kartta gri kare içinde "T" harf rozeti (logo değil) |
+
+## Kargo ve fatura/ERP firmaları (`icon/`) — 13 Kas 2026
+
+Kare ikonlar; yalnız "bu firmaya bağlanır" bilgisini göstermek için, değiştirilmeden kullanılır.
+Kaynak: firmanın kendi sitesindeki favicon, Google favicon servisi üzerinden alındı
+(`https://www.google.com/s2/favicons?domain=<alan>&sz=128`).
+
+| Firma | Dosya | Alan adı | Not |
+|---|---|---|---|
+| Yurtiçi Kargo | icon/yurtici.png | yurticikargo.com | Site yalnız 16×16 sunuyor |
+| Aras Kargo | icon/aras.png | araskargo.com.tr | 128×128 |
+| HepsiJet | icon/hepsijet.png | hepsijet.com | 128×128 |
+| MNG Kargo | icon/mng.png | mngkargo.com.tr | 48×48; MNG sitesinin güncel (DHL eCommerce) ikonu |
+| Nilvera | icon/nilvera.png | nilvera.com | 128×128 |
+| Paraşüt | icon/parasut.png | parasut.com | 128×128 |
+| Logo | icon/logo.png | logo.com.tr | 32×32 |
+| Mikro | icon/mikro.png | mikro.com.tr | 128×128 |

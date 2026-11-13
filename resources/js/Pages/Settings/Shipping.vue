@@ -1,4 +1,5 @@
 <script setup>
+import { brandIcon } from '../../lib/format.js';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, reactive } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
@@ -71,7 +72,7 @@ function remove(carrier) {
                 <section v-for="carrier in carriers" :key="carrier.code" class="rounded-lg border border-stone-200 bg-white p-5">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
-                            <p class="text-sm font-medium text-stone-900">{{ carrier.name }}</p>
+                            <p class="flex items-center gap-2 text-sm font-medium text-stone-900"><img v-if="brandIcon(carrier.code)" :src="brandIcon(carrier.code)" alt="" class="size-6 rounded object-contain">{{ carrier.name }}</p>
                         </div>
                         <span
                             v-if="carrier.account && statusLabels[carrier.account.status]"
