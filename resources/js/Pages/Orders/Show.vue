@@ -106,7 +106,7 @@ const invoiceBadges = {
     failed: { text: k('Fatura kesilemedi'), class: 'bg-red-50 text-red-800 border-red-200' },
 };
 
-// S6 · Kargo II — satıcının kendi Yurtiçi/Aras sözleşmesi.
+// S6 · Kargo II — satıcının kendi kargo sözleşmesi (Yurtiçi/Aras/HepsiJet).
 const carrierBadges = {
     pending: { text: k('Açılıyor'), class: 'bg-stone-50 text-stone-700 border-stone-200' },
     creating: { text: k('Açılıyor'), class: 'bg-stone-50 text-stone-700 border-stone-200' },

@@ -88,7 +88,7 @@ const navGroups = [
              */
             { href: '/settings/invoicing', label: k('Fatura ve muhasebe'), perm: 'settings.view' },
             /*
-             * Kargo — satıcının kendi Yurtiçi/Aras sözleşmesi (S6).
+             * Kargo — satıcının kendi Yurtiçi/Aras/HepsiJet sözleşmesi (S6).
              * Acil kapatma anahtarı kapalıysa (`shipping.enabled`) gizlenir.
              */
             { href: '/settings/shipping', label: k('Kargo'), feature: 'carrierShipping', perm: 'settings.view' },

@@ -1976,5 +1976,17 @@
     "İletişim mesajları": "Contact messages",
     ":count mesaj": ":count messages",
     "Henüz mesaj yok.": "No messages yet.",
-    "Posta gitmedi": "Email not sent"
+    "Posta gitmedi": "Email not sent",
+    "Kendi kargo sözleşmenizle gönderi açın: siparişten kargo gönderisi oluşturulur, etiket buradan basılır. Alıcının adı, adresi ve telefonu gönderi anında kanaldan okunur ve 34Pazar'da saklanmaz.": "Ship with your own carrier contract: a shipment is created from the order and the label is printed here. The recipient's name, address and phone are read from the channel at shipping time and are not stored in 34Pazar.",
+    "Entegrasyon kullanıcı adı": "Integration username",
+    "Entegrasyon şifresi": "Integration password",
+    "API anahtarı (HepsiJet verdiyse)": "API key (if HepsiJet provided one)",
+    "Firma kısaltma kodu (barkod öneki)": "Company abbreviation code (barcode prefix)",
+    "HepsiJet'in size verdiği kısaltma; gönderi barkodu bununla başlar.": "The abbreviation HepsiJet gave you; shipment barcodes start with it.",
+    "Gönderici ili": "Sender province",
+    "Gönderici ilçesi": "Sender district",
+    "Gönderici adresi": "Sender address",
+    "Gönderici adres kodu (varsa)": "Sender address code (if any)",
+    "Depo kodu (varsa)": "Warehouse code (if any)",
+    "Bu firma belgesine göre bağlandı; gerçek bir hesapta henüz denenmedi. İlk gönderilerinizi firmanın kendi panelinden de kontrol edin.": "This carrier was connected from its documentation and has not been tried on a real account yet. Also check your first shipments in the carrier's own panel."
 }

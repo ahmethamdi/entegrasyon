@@ -7,7 +7,8 @@ import PanelLayout from '../../Layouts/PanelLayout.vue';
 import { k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
-    // [{ code, name, autoTracking, account: { status, environment, username, lastError, verifiedAt } | null }]
+    // [{ code, name, unverified, autoTracking, fields: [{ name, label, type, required, help }],
+    //    account: { status, environment, username, details: [{ label, value }], lastError, verifiedAt } | null }]
     carriers: { type: Array, default: () => [] },
 });
 
@@ -24,11 +25,11 @@ const statusLabels = {
 // Firma başına ayrı form: biri gönderilirken öteki etkilenmez.
 const forms = reactive({});
 for (const carrier of props.carriers) {
+    const fields = Object.fromEntries((carrier.fields ?? []).map((field) => [field.name, '']));
     forms[carrier.code] = useForm({
         provider: carrier.code,
         environment: carrier.account?.environment ?? 'live',
-        username: '',
-        password: '',
+        ...fields,
     });
 }
 
@@ -38,7 +39,7 @@ function save(code) {
     forms[code].post('/settings/shipping', {
         preserveScroll: true,
         onSuccess: () => {
-            forms[code].reset('username', 'password');
+            forms[code].reset(...(props.carriers.find((c) => c.code === code)?.fields ?? []).map((f) => f.name));
             editing[code] = false;
         },
     });
@@ -60,7 +61,7 @@ function remove(carrier) {
             </p>
 
             <p class="mt-6 max-w-2xl text-sm text-stone-600">
-                {{ t('Kendi kargo sözleşmenizle gönderi açın: siparişten Yurtiçi ya da Aras gönderisi oluşturulur, etiket buradan basılır. Alıcının adı, adresi ve telefonu gönderi anında kanaldan okunur ve 34Pazar\'da saklanmaz.') }}
+                {{ t('Kendi kargo sözleşmenizle gönderi açın: siparişten kargo gönderisi oluşturulur, etiket buradan basılır. Alıcının adı, adresi ve telefonu gönderi anında kanaldan okunur ve 34Pazar\'da saklanmaz.') }}
             </p>
             <p class="mt-2 max-w-2xl text-sm text-stone-600">
                 {{ t('Etiketin hazır olması kargoya verildi demek değildir: takip numarası kanala, paket kargoya teslim edilince gider.') }}
@@ -81,6 +82,10 @@ function remove(carrier) {
                         </span>
                     </div>
 
+                    <p v-if="carrier.unverified" class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        {{ t('Bu firma belgesine göre bağlandı; gerçek bir hesapta henüz denenmedi. İlk gönderilerinizi firmanın kendi panelinden de kontrol edin.') }}
+                    </p>
+
                     <p class="mt-2 text-xs text-stone-500">
                         {{ carrier.autoTracking
                             ? t('Durum kendiliğinden izlenir: kargo paketi teslim alınca takip numarası kanala bildirilir.')
@@ -93,6 +98,9 @@ function remove(carrier) {
 
                     <div v-if="carrier.account && !editing[carrier.code]" class="mt-4 space-y-1 text-sm text-stone-700">
                         <p>{{ t('Kullanıcı') }}: <span class="font-mono">{{ carrier.account.username }}</span></p>
+                        <p v-for="detail in carrier.account.details ?? []" :key="detail.label">
+                            {{ detail.label }}: <span class="font-mono">{{ detail.value }}</span>
+                        </p>
                         <p>
                             {{ t('Ortam') }}:
                             {{ carrier.account.environment === 'test' ? t('Test ortamı (gerçek gönderi açılmaz)') : t('Canlı') }}
@@ -109,13 +117,17 @@ function remove(carrier) {
                     </div>
 
                     <form v-else class="mt-4 space-y-3" @submit.prevent="save(carrier.code)">
-                        <label class="block text-xs font-medium text-stone-700">
-                            {{ t('Web servis kullanıcı adı') }}
-                            <input v-model="forms[carrier.code].username" type="text" autocomplete="off" required class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm" />
-                        </label>
-                        <label class="block text-xs font-medium text-stone-700">
-                            {{ t('Web servis şifresi') }}
-                            <input v-model="forms[carrier.code].password" type="password" autocomplete="new-password" required class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm" />
+                        <label v-for="field in carrier.fields" :key="field.name" class="block text-xs font-medium text-stone-700">
+                            {{ field.label }}
+                            <input
+                                v-model="forms[carrier.code][field.name]"
+                                :type="field.type === 'password' ? 'password' : 'text'"
+                                :autocomplete="field.type === 'password' ? 'new-password' : 'off'"
+                                :required="field.required"
+                                class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm"
+                            />
+                            <span v-if="field.help" class="mt-1 block font-normal text-stone-500">{{ field.help }}</span>
+                            <span v-if="forms[carrier.code].errors[field.name]" class="mt-1 block font-normal text-red-700">{{ forms[carrier.code].errors[field.name] }}</span>
                         </label>
                         <label class="block text-xs font-medium text-stone-700">
                             {{ t('Ortam') }}

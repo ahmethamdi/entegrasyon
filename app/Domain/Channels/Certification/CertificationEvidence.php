@@ -80,6 +80,7 @@ final class CertificationEvidence
         return [
             ['service' => 'Yurtiçi Kargo', 'status' => CertificationStatus::SANDBOX_VERIFIED, 'date' => '2026-10-23', 'evidence' => 'Gerçek kodla herkese açık test sunucusunda: doğrula / aç / 60020 tekrar / NOP / iptal ×2 / 82519. Doğrulanmadı: IND/ISR/DLV kodları, docId yeri.'],
             ['service' => 'Aras Kargo', 'status' => CertificationStatus::SANDBOX_VERIFIED, 'date' => '2026-10-23', 'evidence' => 'Gerçek kodla herkese açık test sunucusunda: doğrula / aç + etiket / tekrar aynı no / iptal ×2. Doğrulanmadı: canlıda PDF etiket, desi.'],
+            ['service' => 'HepsiJet', 'status' => CertificationStatus::MOCK_TESTED, 'date' => '2026-11-13', 'evidence' => 'YALNIZ SAHTE TEST: HepsiJet partner belgesindeki (v1.9.2/v2.1) örnek yanıtlarla Http::fake — token / aç + ZPL / BARCODE_EXIST / takip durumları / iptal. Test ya da canlı sunucuda HİÇ denenmedi; yeni bağlantıya varsayılan kapalı (CARRIERS_UNVERIFIED_ENABLED).'],
             ['service' => 'Nilvera e-fatura', 'status' => CertificationStatus::MOCK_TESTED, 'date' => '2026-10-24', 'evidence' => 'Belgedeki örnek yanıtlarla sahte testler; gerçek hesap/test ortamında denenmedi.'],
         ];
     }

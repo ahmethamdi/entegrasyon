@@ -20,13 +20,22 @@ final class ConnectCarrierAccount
 {
     public function __construct(private readonly Carriers $carriers) {}
 
-    /** @throws CarrierException firma kimliği reddederse ya da ulaşılamazsa */
-    public function run(string $provider, string $environment, string $username, string $password): CarrierAccount
+    /**
+     * `$extra` firmaya özgü alanlardır (HepsiJet firma kodu, gönderici adresi …);
+     * kimlikle aynı şifreli dizide durur.
+     *
+     * @param  array<string, string>  $extra
+     *
+     * @throws CarrierException firma kimliği reddederse ya da ulaşılamazsa
+     */
+    public function run(string $provider, string $environment, string $username, string $password, array $extra = []): CarrierAccount
     {
+        $credentials = ['username' => $username, 'password' => $password, ...$extra];
+
         $candidate = new CarrierAccount([
             'provider' => $provider,
             'environment' => $environment,
-            'credentials' => ['username' => $username, 'password' => $password],
+            'credentials' => $credentials,
             'status' => CarrierAccount::STATUS_CONNECTED,
         ]);
 
@@ -36,7 +45,7 @@ final class ConnectCarrierAccount
             ['tenant_id' => TenantContext::idOrFail(), 'provider' => $provider],
             [
                 'environment' => $environment,
-                'credentials' => ['username' => $username, 'password' => $password],
+                'credentials' => $credentials,
                 'status' => CarrierAccount::STATUS_CONNECTED,
                 'last_error' => null,
                 'verified_at' => now(),

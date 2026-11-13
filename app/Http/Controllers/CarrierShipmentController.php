@@ -17,7 +17,7 @@ use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * S6 · Kargo II — siparişten satıcının kendi Yurtiçi/Aras sözleşmesiyle gönderi.
+ * S6 · Kargo II — siparişten satıcının kendi Yurtiçi/Aras/HepsiJet sözleşmesiyle gönderi.
  *
  * Kimlikler kontrolcüde kiracı scope'u altında çözülür (`OrderController::show`
  * ile aynı gerekçe): başka kiracının siparişi 404 verir.

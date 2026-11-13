@@ -30,7 +30,30 @@ return [
         'test' => env('ARAS_TEST_ENDPOINT', 'https://customerservicestest.araskargo.com.tr/arascargoservice/arascargoservice.asmx'),
     ],
 
-    // SOAP isteği zaman aşımı (sn). Firmanın cevabı gecikirse istek
+    /*
+    | HepsiJet (REST/JSON). Canlı adres partner belgesindeki adrestir;
+    | belgedeki test adresi (dmzlastmile.hepsiexpress.com:8091) eskimiş
+    | görünüyor — test adresi açık kaynak istemcilerin ortak kullandığı
+    | adrestir ve 13 Kas 2026 itibarıyla GERÇEK istekle DOĞRULANMADI
+    | (docs/HEPSIJET-API-NOTLARI.md).
+    */
+    'hepsijet' => [
+        'live' => env('HEPSIJET_ENDPOINT', 'https://integration.hepsijet.com'),
+        'test' => env('HEPSIJET_TEST_ENDPOINT', 'https://integration-apitest.hepsijet.com'),
+        // Belge: token 60 dk geçerli. Süre dolmadan yenilemek için biraz kısa tutulur.
+        'token_ttl_minutes' => (int) env('HEPSIJET_TOKEN_TTL', 50),
+    ],
+
+    // Yeni bağlantıya SUNULMAYAN firmalar (virgüllü kod listesi, ör. "aras").
+    // Kanallardaki CHANNELS_WITHHELD ile aynı desen; mevcut hesaplar etkilenmez.
+    'withheld' => array_values(array_filter(array_map('trim', explode(',', (string) env('CARRIERS_WITHHELD', ''))))),
+
+    // Gerçek hesapta DOĞRULANMAMIŞ firmalar (CarrierAccount::UNVERIFIED)
+    // varsayılan gizlidir; pilot satıcıyla denemek için burada açılır
+    // (virgüllü kod listesi, ör. "hepsijet"). Varsayılan: hiçbiri.
+    'unverified_enabled' => array_values(array_filter(array_map('trim', explode(',', (string) env('CARRIERS_UNVERIFIED_ENABLED', ''))))),
+
+    // SOAP/REST isteği zaman aşımı (sn). Firmanın cevabı gecikirse istek
     // belirsiz sayılır — gönderi tekrar AÇILMAZ, aynı anahtarla sorulur.
     'timeout' => (int) env('CARRIER_TIMEOUT', 30),
 

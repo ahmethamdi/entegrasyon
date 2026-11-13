@@ -93,6 +93,10 @@ final class RequestCarrierShipment
                 return ItemDecision::actionRequired(FulfillmentReason::INVALID_ORDER_STATE);
             }
 
+            // Firmaya hiç ulaşmamış gönderi başka firmaya geçerse anahtar o
+            // firmanın biçimiyle yenilenir (HepsiJet barkodu firma koduyla başlar).
+            $switch = $existing->create_requested_at === null && $existing->provider !== $provider;
+
             // Koşullu: iki eşzamanlı yeniden deneme yalnız BİR iş kuyruğa koyar.
             $reset = CarrierShipment::query()
                 ->whereKey($existing->id)
@@ -102,6 +106,7 @@ final class RequestCarrierShipment
                     // Firmaya hiç ulaşmamışsa firma değiştirilebilir; anahtar aynı kalır.
                     'provider' => $existing->create_requested_at === null ? $provider : $existing->provider,
                     'environment' => $existing->create_requested_at === null ? $account->environment : $existing->environment,
+                    'cargo_key' => $switch ? Carriers::newCargoKeyFor($account) : $existing->cargo_key,
                     'reason_code' => null,
                     'error_detail' => null,
                     'attempts' => 0,
@@ -156,7 +161,7 @@ final class RequestCarrierShipment
         return [
             'provider' => $account->provider,
             'environment' => $account->environment,
-            'cargo_key' => Carriers::newCargoKey(),
+            'cargo_key' => Carriers::newCargoKeyFor($account),
             'status' => CarrierShipment::STATUS_PENDING,
             'reason_code' => null,
             'error_detail' => null,

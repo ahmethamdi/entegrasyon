@@ -6,13 +6,14 @@ namespace App\Domain\Shipping\Console;
 
 use App\Domain\Shipping\Jobs\TrackCarrierShipment;
 use App\Domain\Shipping\Models\CarrierShipment;
+use App\Domain\Shipping\Support\Carriers;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
 
 /**
  * Firmada yaşayan gönderilerin durumunu yoklar (S6 · Kargo II).
  *
- * Yalnız durum sorgusu olan firmanın (Yurtiçi) gönderileri işe dönüşür;
+ * Yalnız durum sorgusu olan firmaların (Yurtiçi, HepsiJet) gönderileri işe dönüşür;
  * iş kendisi `supportsTracking()`'e bakar. Gönderi açıldıktan sonra
  * `track_days` gün izlenir; daha eskisi listeye girmez (sonsuz yoklama yok).
  * Tur başına en çok `LIMIT` gönderi, en uzun süredir bakılmayan önce.
@@ -28,7 +29,7 @@ final class TrackCarrierShipmentsCommand extends Command
 
     protected $description = 'Kargo firmasındaki gönderilerin durumunu yoklar, kargoya verileni kanala bildirir';
 
-    public function handle(): int
+    public function handle(Carriers $carriers): int
     {
         if (! config('shipping.enabled')) {
             $this->info('Kargo entegrasyonu kapalı (CARRIER_SHIPPING_ENABLED=false).');
@@ -36,9 +37,11 @@ final class TrackCarrierShipmentsCommand extends Command
             return self::SUCCESS;
         }
 
+        $providers = $carriers->trackingProviders();
+
         $rows = TenantContext::runAsSystem(fn () => CarrierShipment::query()
             ->whereIn('status', CarrierShipment::TRACKED)
-            ->where('provider', 'yurtici')
+            ->whereIn('provider', $providers)
             ->where('confirmed_at', '>=', now()->subDays((int) config('shipping.track_days', 30)))
             ->where(fn ($q) => $q->whereNull('last_tracked_at')->orWhere('last_tracked_at', '<', now()->subMinutes(self::MIN_INTERVAL_MINUTES)))
             ->orderByRaw('last_tracked_at NULLS FIRST')

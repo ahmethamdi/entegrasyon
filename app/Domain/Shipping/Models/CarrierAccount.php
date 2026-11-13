@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * Satıcının kendi kargo sözleşmesi (Yurtiçi / Aras) — kiracı + firma başına tek satır.
+ * Satıcının kendi kargo sözleşmesi (Yurtiçi / Aras / HepsiJet) — kiracı + firma başına tek satır.
  *
  * `credentials` ŞİFRELİDİR (`encrypted:array`) ve `$hidden`'dadır: model
  * yanlışlıkla Inertia'ya ya da JSON'a giderse şifre sızmaz.
@@ -19,7 +19,9 @@ use Illuminate\Support\Carbon;
  * @property string $tenant_id
  * @property string $provider
  * @property string $environment
- * @property array{username?: string, password?: string} $credentials
+ *                               Firmaya özgü ek alanlar (HepsiJet firma kodu, gönderici adresi …)
+ *                               aynı şifreli `credentials` dizisinde durur — `credential()` okur.
+ * @property array<string, string> $credentials
  * @property string $status
  * @property string|null $last_error
  * @property Carbon|null $verified_at
@@ -33,7 +35,22 @@ class CarrierAccount extends Model
 
     public const PROVIDER_ARAS = 'aras';
 
-    public const PROVIDERS = [self::PROVIDER_YURTICI, self::PROVIDER_ARAS];
+    /** HepsiJet — REST/JSON; kaynak firmanın partner belgesi (docs/HEPSIJET-API-NOTLARI.md). */
+    public const PROVIDER_HEPSIJET = 'hepsijet';
+
+    public const PROVIDERS = [self::PROVIDER_YURTICI, self::PROVIDER_ARAS, self::PROVIDER_HEPSIJET];
+
+    /**
+     * Gerçek hesapta ya da firmanın test sunucusunda HİÇ denenmemiş firmalar
+     * (yalnız belgeye göre yazıldı, sahte HTTP ile sınandı).
+     *
+     * Protokol: harici API'yle doğrulanmamış özellik çalışıyormuş gibi
+     * gösterilmez. "Beta" rozeti KULLANILMAZ (24 Eki kararı, bkz.
+     * `NoBetaBadgeContractTest`); bunun yerine Amazon/OTTO/Etsy gibi
+     * VARSAYILAN GİZLİDİR ve pilot için `CARRIERS_UNVERIFIED_ENABLED` ile
+     * açılır — açıkken kartta "gerçek hesapta henüz denenmedi" notu durur.
+     */
+    public const UNVERIFIED = [self::PROVIDER_HEPSIJET];
 
     public const ENV_LIVE = 'live';
 
@@ -81,11 +98,25 @@ class CarrierAccount extends Model
         return (string) ($this->credentials['password'] ?? '');
     }
 
+    /** Firmaya özgü ek alan; boşsa null. */
+    public function credential(string $key): ?string
+    {
+        $value = $this->credentials[$key] ?? null;
+
+        return is_scalar($value) && trim((string) $value) !== '' ? trim((string) $value) : null;
+    }
+
+    public static function isUnverified(string $provider): bool
+    {
+        return in_array($provider, self::UNVERIFIED, true);
+    }
+
     public static function displayName(string $provider): string
     {
         return match ($provider) {
             self::PROVIDER_YURTICI => 'Yurtiçi Kargo',
             self::PROVIDER_ARAS => 'Aras Kargo',
+            self::PROVIDER_HEPSIJET => 'HepsiJet',
             default => $provider,
         };
     }

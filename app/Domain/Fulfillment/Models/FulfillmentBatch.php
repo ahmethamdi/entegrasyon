@@ -39,10 +39,13 @@ class FulfillmentBatch extends Model
 
     public const ACTION_CARRIER_ARAS = 'carrier_aras';
 
+    public const ACTION_CARRIER_HEPSIJET = 'carrier_hepsijet';
+
     /** Eylem → kargo firması kodu (`CarrierAccount::PROVIDER_*`). */
     public const CARRIER_ACTIONS = [
         self::ACTION_CARRIER_YURTICI => 'yurtici',
         self::ACTION_CARRIER_ARAS => 'aras',
+        self::ACTION_CARRIER_HEPSIJET => 'hepsijet',
     ];
 
     public const ACTIONS = [
@@ -52,6 +55,7 @@ class FulfillmentBatch extends Model
         self::ACTION_PICKING,
         self::ACTION_CARRIER_YURTICI,
         self::ACTION_CARRIER_ARAS,
+        self::ACTION_CARRIER_HEPSIJET,
     ];
 
     public function isCarrierAction(): bool
