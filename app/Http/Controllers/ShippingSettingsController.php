@@ -17,11 +17,11 @@ use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 
 /**
- * S6 · Kargo ayarları — satıcının Yurtiçi / Aras / HepsiJet web servis hesabı.
+ * S6 · Kargo ayarları — satıcının Yurtiçi / Aras / HepsiJet / MNG web servis hesabı.
  *
  * Yurtiçi ve Aras firmaların herkese açık test ortamında uçtan uca
  * denendi; gerçek müşteri hesabıyla gönderi açılmadı (23 Eki kararıyla
- * ekranda Beta rozeti YOK). `CarrierAccount::UNVERIFIED` firmaları (HepsiJet)
+ * ekranda Beta rozeti YOK). `CarrierAccount::UNVERIFIED` firmaları (HepsiJet, MNG)
  * hiçbir sunucuda denenmedi → varsayılan GİZLİ (`Carriers::offered`);
  * pilot için açıldığında kartta "gerçek hesapta henüz denenmedi" notu.
  *

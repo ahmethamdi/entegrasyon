@@ -1988,5 +1988,8 @@
     "Gönderici adresi": "Sender address",
     "Gönderici adres kodu (varsa)": "Sender address code (if any)",
     "Depo kodu (varsa)": "Warehouse code (if any)",
-    "Bu firma belgesine göre bağlandı; gerçek bir hesapta henüz denenmedi. İlk gönderilerinizi firmanın kendi panelinden de kontrol edin.": "This carrier was connected from its documentation and has not been tried on a real account yet. Also check your first shipments in the carrier's own panel."
+    "Bu firma belgesine göre bağlandı; gerçek bir hesapta henüz denenmedi. İlk gönderilerinizi firmanın kendi panelinden de kontrol edin.": "This carrier was connected from its documentation and has not been tried on a real account yet. Also check your first shipments in the carrier's own panel.",
+    "MNG müşteri numarası": "MNG customer number",
+    "MNG şifresi (kalıcı)": "MNG password (permanent)",
+    "Müşteri numaranızı ve şifrenizi MNG şubenizden ya da müşteri temsilcinizden alırsınız.": "You get your customer number and password from your MNG branch or account manager."
 }

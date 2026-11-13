@@ -44,6 +44,25 @@ return [
         'token_ttl_minutes' => (int) env('HEPSIJET_TOKEN_TTL', 50),
     ],
 
+    /*
+    | MNG Kargo API Zone (REST/JSON). Canlı adres resmî Swagger'daki host +
+    | basePath'tir; sandbox adresi yalnız açık kaynak istemcilerde geçer ve
+    | DOĞRULANMADI (docs/MNG-API-NOTLARI.md).
+    |
+    | client_id/secret 34Pazar'ın API Zone uygulamasınındır (satıcının değil);
+    | test ve canlı ayrı hesaplardır. Tanımlı değilse MNG satıcıya sunulmaz.
+    */
+    'mng' => [
+        'live' => env('MNG_ENDPOINT', 'https://api.mngkargo.com.tr/mngapi/api'),
+        'test' => env('MNG_TEST_ENDPOINT', 'https://testapi.mngkargo.com.tr/mngapi/api'),
+        'client_id' => env('MNG_CLIENT_ID'),
+        'client_secret' => env('MNG_CLIENT_SECRET'),
+        'test_client_id' => env('MNG_TEST_CLIENT_ID'),
+        'test_client_secret' => env('MNG_TEST_CLIENT_SECRET'),
+        // JWT ömrü spec'te yazmıyor; kısa tutulur, 401'de yine tazelenir.
+        'token_ttl_minutes' => (int) env('MNG_TOKEN_TTL', 60),
+    ],
+
     // Yeni bağlantıya SUNULMAYAN firmalar (virgüllü kod listesi, ör. "aras").
     // Kanallardaki CHANNELS_WITHHELD ile aynı desen; mevcut hesaplar etkilenmez.
     'withheld' => array_values(array_filter(array_map('trim', explode(',', (string) env('CARRIERS_WITHHELD', ''))))),

@@ -8,6 +8,8 @@ use App\Domain\Shipping\Contracts\Carrier;
 use App\Domain\Shipping\Models\CarrierAccount;
 use App\Domain\Shipping\Providers\Aras\ArasCarrier;
 use App\Domain\Shipping\Providers\Hepsijet\HepsijetCarrier;
+use App\Domain\Shipping\Providers\Mng\MngApp;
+use App\Domain\Shipping\Providers\Mng\MngCarrier;
 use App\Domain\Shipping\Providers\Yurtici\YurticiCarrier;
 use InvalidArgumentException;
 
@@ -19,6 +21,7 @@ final class Carriers
         CarrierAccount::PROVIDER_YURTICI => YurticiCarrier::class,
         CarrierAccount::PROVIDER_ARAS => ArasCarrier::class,
         CarrierAccount::PROVIDER_HEPSIJET => HepsijetCarrier::class,
+        CarrierAccount::PROVIDER_MNG => MngCarrier::class,
     ];
 
     public function for(string $provider): Carrier
@@ -35,6 +38,8 @@ final class Carriers
      *   · `CarrierAccount::UNVERIFIED` firma varsayılan GİZLİ; pilot için
      *     `CARRIERS_UNVERIFIED_ENABLED` (virgüllü kod listesi) açar
      *   · `CARRIERS_WITHHELD` bir firmayı elle saklar (doğrulanmış olsa da)
+     *   · platform anahtarı isteyen firma (MNG API Zone) anahtar yoksa gizli
+     *     (`AmazonApp`/`OttoApp`/`EtsyApp::configured` deseni)
      * Mevcut hesaplar ve açılmış gönderiler etkilenmez; yalnız ayar ekranı
      * ve yeni bağlantı.
      *
@@ -51,6 +56,10 @@ final class Carriers
     public static function isWithheld(string $provider): bool
     {
         if (in_array($provider, (array) config('shipping.withheld', []), true)) {
+            return true;
+        }
+
+        if ($provider === CarrierAccount::PROVIDER_MNG && ! MngApp::configured()) {
             return true;
         }
 

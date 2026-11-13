@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * Satıcının kendi kargo sözleşmesi (Yurtiçi / Aras / HepsiJet) — kiracı + firma başına tek satır.
+ * Satıcının kendi kargo sözleşmesi (Yurtiçi / Aras / HepsiJet / MNG) — kiracı + firma başına tek satır.
  *
  * `credentials` ŞİFRELİDİR (`encrypted:array`) ve `$hidden`'dadır: model
  * yanlışlıkla Inertia'ya ya da JSON'a giderse şifre sızmaz.
@@ -38,7 +38,10 @@ class CarrierAccount extends Model
     /** HepsiJet — REST/JSON; kaynak firmanın partner belgesi (docs/HEPSIJET-API-NOTLARI.md). */
     public const PROVIDER_HEPSIJET = 'hepsijet';
 
-    public const PROVIDERS = [self::PROVIDER_YURTICI, self::PROVIDER_ARAS, self::PROVIDER_HEPSIJET];
+    /** MNG Kargo — API Zone REST/JSON; resmî Swagger (docs/MNG-API-NOTLARI.md). */
+    public const PROVIDER_MNG = 'mng';
+
+    public const PROVIDERS = [self::PROVIDER_YURTICI, self::PROVIDER_ARAS, self::PROVIDER_HEPSIJET, self::PROVIDER_MNG];
 
     /**
      * Gerçek hesapta ya da firmanın test sunucusunda HİÇ denenmemiş firmalar
@@ -50,7 +53,7 @@ class CarrierAccount extends Model
      * VARSAYILAN GİZLİDİR ve pilot için `CARRIERS_UNVERIFIED_ENABLED` ile
      * açılır — açıkken kartta "gerçek hesapta henüz denenmedi" notu durur.
      */
-    public const UNVERIFIED = [self::PROVIDER_HEPSIJET];
+    public const UNVERIFIED = [self::PROVIDER_HEPSIJET, self::PROVIDER_MNG];
 
     public const ENV_LIVE = 'live';
 
@@ -117,6 +120,7 @@ class CarrierAccount extends Model
             self::PROVIDER_YURTICI => 'Yurtiçi Kargo',
             self::PROVIDER_ARAS => 'Aras Kargo',
             self::PROVIDER_HEPSIJET => 'HepsiJet',
+            self::PROVIDER_MNG => 'MNG Kargo',
             default => $provider,
         };
     }

@@ -134,7 +134,8 @@ final class StartFulfillmentBatch
                 : ItemDecision::actionRequired(FulfillmentReason::INVALID_ORDER_STATE),
             FulfillmentBatch::ACTION_CARRIER_YURTICI,
             FulfillmentBatch::ACTION_CARRIER_ARAS,
-            FulfillmentBatch::ACTION_CARRIER_HEPSIJET => $this->shipments->run($order, FulfillmentBatch::CARRIER_ACTIONS[$action], $userId),
+            FulfillmentBatch::ACTION_CARRIER_HEPSIJET,
+            FulfillmentBatch::ACTION_CARRIER_MNG => $this->shipments->run($order, FulfillmentBatch::CARRIER_ACTIONS[$action], $userId),
         };
     }
 }

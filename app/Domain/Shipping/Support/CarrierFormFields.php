@@ -39,6 +39,10 @@ final class CarrierFormFields
                 ['name' => 'sender_address_id', 'label' => __('Gönderici adres kodu (varsa)'), 'type' => 'text', 'required' => false, 'public' => false, 'rules' => ['nullable', 'string', 'max:64']],
                 ['name' => 'xdock_code', 'label' => __('Depo kodu (varsa)'), 'type' => 'text', 'required' => false, 'public' => true, 'rules' => ['nullable', 'string', 'max:64']],
             ],
+            CarrierAccount::PROVIDER_MNG => [
+                ['name' => 'username', 'label' => __('MNG müşteri numarası'), 'type' => 'text', 'required' => true, 'public' => false, 'rules' => ['required', 'string', 'max:32']],
+                ['name' => 'password', 'label' => __('MNG şifresi (kalıcı)'), 'type' => 'password', 'required' => true, 'public' => false, 'rules' => ['required', 'string', 'max:200'], 'help' => __('Müşteri numaranızı ve şifrenizi MNG şubenizden ya da müşteri temsilcinizden alırsınız.')],
+            ],
             default => $base,
         };
     }
