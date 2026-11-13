@@ -47,16 +47,22 @@ class InvoiceAccount extends Model
      */
     public const PROVIDER_LOGO = 'logo';
 
-    public const PROVIDERS = [self::PROVIDER_PARASUT, self::PROVIDER_NILVERA, self::PROVIDER_LOGO];
+    /**
+     * Mikro (Run / Jump / Fly) — satıcının şirket içi ERP'si (Mikro Desktop API).
+     * Siparişi SATIŞ SİPARİŞİ olarak aktarır; e-belgeyi Mikro keser.
+     */
+    public const PROVIDER_MIKRO = 'mikro';
+
+    public const PROVIDERS = [self::PROVIDER_PARASUT, self::PROVIDER_NILVERA, self::PROVIDER_LOGO, self::PROVIDER_MIKRO];
 
     /** Satıcının kendi ERP'si: kayıt aktarılır, e-belge ERP'de kesilir. */
-    public const ERP_PROVIDERS = [self::PROVIDER_LOGO];
+    public const ERP_PROVIDERS = [self::PROVIDER_LOGO, self::PROVIDER_MIKRO];
 
     /**
      * Gerçek kurulumda HİÇ denenmemiş entegratörler — varsayılan gizli,
      * pilot için `ERP_UNVERIFIED_ENABLED` (kargodaki `CarrierAccount::UNVERIFIED`).
      */
-    public const UNVERIFIED = [self::PROVIDER_LOGO];
+    public const UNVERIFIED = [self::PROVIDER_LOGO, self::PROVIDER_MIKRO];
 
     /** Ayar: Nilvera ortamı — `live` (varsayılan) | `test`. */
     public const SETTING_ENVIRONMENT = 'environment';
@@ -178,7 +184,7 @@ class InvoiceAccount extends Model
         return $this->provider === self::PROVIDER_PARASUT;
     }
 
-    /** Satıcının şirket içi ERP'si mi (Logo) — iptal/iade ERP'den yapılır. */
+    /** Satıcının şirket içi ERP'si mi (Logo, Mikro) — iptal/iade ERP'den yapılır. */
     public function isErp(): bool
     {
         return in_array($this->provider, self::ERP_PROVIDERS, true);
@@ -194,6 +200,7 @@ class InvoiceAccount extends Model
         return match ($provider) {
             self::PROVIDER_NILVERA => 'Nilvera',
             self::PROVIDER_LOGO => 'Logo',
+            self::PROVIDER_MIKRO => 'Mikro',
             default => 'Paraşüt',
         };
     }

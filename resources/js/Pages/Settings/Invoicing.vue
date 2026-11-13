@@ -8,7 +8,7 @@ import { k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     available: { type: Boolean, default: false },
-    // Şirket içi ERP'ler (Logo): [{ code, name, unverified, fields: [{ name, label, type, required, help }] }]
+    // Şirket içi ERP'ler (Logo, Mikro): [{ code, name, unverified, fields: [{ name, label, type, required, help }] }]
     erpProviders: { type: Array, default: () => [] },
     account: { type: Object, default: null },
     // Faturalanabilir kanallar (tahsilat eşlemesinin satırları).
@@ -91,7 +91,7 @@ function connectNilvera() {
 
 const reconnectNilvera = computed(() => props.account?.provider === 'nilvera');
 
-// ERP (Logo): kimlik kaydedilmeden önce sunucuda ERP'de denenir. Hesap yokken
+// ERP (Logo, Mikro): kimlik kaydedilmeden önce sunucuda ERP'de denenir. Hesap yokken
 // ya da aynı ERP'nin bağlantısı koptuğunda form görünür.
 const erpForms = {};
 for (const erp of props.erpProviders) {
@@ -173,7 +173,7 @@ function disconnect() {
             </div>
 
             <!--
-                ŞİRKET İÇİ ERP (Logo): satıcının sunucusundaki servis, https ile dışarı açık olmalı.
+                ŞİRKET İÇİ ERP (Logo, Mikro): satıcının sunucusundaki servis, https ile dışarı açık olmalı.
                 Gerçek kurulumda doğrulanmamış ERP yalnız pilot için açılır ve notla görünür.
             -->
             <div v-for="erp in visibleErps" :key="erp.code" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">

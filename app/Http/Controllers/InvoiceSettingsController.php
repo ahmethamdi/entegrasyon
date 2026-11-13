@@ -30,7 +30,7 @@ use Throwable;
 
 /**
  * Fatura ve muhasebe ayarları — entegratör hesabını bağlama (Nilvera,
- * Paraşüt ya da satıcının şirket içi ERP'si: Logo), firma ve seri, kip (e-belge / yalnız muhasebe), otomatik
+ * Paraşüt ya da satıcının şirket içi ERP'si: Logo, Mikro), firma ve seri, kip (e-belge / yalnız muhasebe), otomatik
  * aktarım, tahsilat hesapları.
  *
  * NİLVERA: satıcı Nilvera portalında kendi API anahtarını üretir ve buraya
@@ -176,7 +176,7 @@ final class InvoiceSettingsController extends Controller
     }
 
     /**
-     * Satıcının şirket içi ERP'sine (Logo) bağlanır — kimlik KAYDEDİLMEDEN
+     * Satıcının şirket içi ERP'sine (Logo, Mikro) bağlanır — kimlik KAYDEDİLMEDEN
      * önce ERP'de denenir (token): yanlış şifre ya da dışarıya açık olmayan
      * sunucu ilk siparişte, satıcının görmediği bir işte çıkmasın.
      *
@@ -203,7 +203,7 @@ final class InvoiceSettingsController extends Controller
         }
 
         try {
-            $credentials = ErpProviders::probe($provider, $credentials, $http);
+            $credentials = ErpProviders::probe($provider, $credentials, $http, $erpSettings);
         } catch (InvoiceProviderException $e) {
             Log::warning('erp.connect_failed', ['provider' => $provider, 'class' => $e->class->value]);
 
@@ -214,7 +214,7 @@ final class InvoiceSettingsController extends Controller
 
         // Başka entegratörden geçişte eski ayarlar TAŞINMAZ (Nilvera kuralı).
         $previous = $account->provider === $provider ? ($account->settings ?? []) : [];
-        $firm = (string) ($credentials['firm_no'] ?? $provider);
+        $firm = ErpProviders::companyId($provider, $credentials);
         $label = ErpProviders::companyLabel($provider, $credentials);
 
         $account->forceFill([

@@ -2007,5 +2007,17 @@
     "Logo'da tanımlı pazar yeri carinizin kodu (ör. 120.TRENDYOL). Cari kartı 34Pazar açmaz.": "The code of your marketplace customer account in Logo (e.g. 120.TRENDYOL). 34Pazar does not create account cards.",
     "Birim kodu (boşsa ADET)": "Unit code (ADET if empty)",
     ":provider'ya aktarılan kayıt buradan iptal edilmez; iptali :provider'dan yapın.": "Records transferred to :provider are not cancelled from here; cancel them in :provider.",
-    "İade kaydını :provider'da açın; buradan aktarılmaz.": "Record the return in :provider; it is not transferred from here."
+    "İade kaydını :provider'da açın; buradan aktarılmaz.": "Record the return in :provider; it is not transferred from here.",
+    "Mikro API adresi": "Mikro API address",
+    "Mikro Desktop API servisinin dışarıya https (443) ile açılmış adresi, ör. https://mikro.firmaniz.com — iç ağ adresi kabul edilmez.": "The address of your Mikro Desktop API service exposed over https (443), e.g. https://mikro.yourcompany.com — internal network addresses are not accepted.",
+    "Mikro API anahtarı (ApiKey)": "Mikro API key (ApiKey)",
+    "Firma kodu": "Company code",
+    "Çalışma yılı": "Working year",
+    "Kullanıcı kodu": "User code",
+    "Mikro şifresi": "Mikro password",
+    "Mikro'da tanımlı pazar yeri carinizin kodu. Cari kartı 34Pazar açmaz.": "The code of your marketplace customer account in Mikro. 34Pazar does not create account cards.",
+    "KDV → vergi işaretçisi": "VAT → tax pointer",
+    "Depo numarası": "Warehouse number",
+    "Evrak serisi (isteğe bağlı)": "Document series (optional)",
+    "Mikro firma KDV tablonuzdaki sıra numarası; her oran için oran ve sıra, virgülle ayrılmış (ör. 20:4,10:3,1:2,0:1). Eşlenmeyen orandaki sipariş aktarılmaz.": "The row number in your Mikro company VAT table; rate and row for each rate, comma separated (e.g. 20:4,10:3,1:2,0:1). Orders with an unmapped rate are not transferred."
 }
