@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Messaging\Consumers;
 
+use App\Domain\Identity\Support\DemoAccount;
 use App\Domain\Inventory\Support\SellableStock;
 use App\Domain\Messaging\Models\OutboxEvent;
 use App\Domain\Sync\Actions\OpenSyncOperation;
@@ -41,6 +42,13 @@ final class InventoryLevelChangedConsumer
 
     public function handle(OutboxEvent $event): void
     {
+        // Demo kiracısı kanala hiçbir şey göndermez (ChannelHttpClient de
+        // keser); burada iş açılsaydı her örnek stok hareketi "gönderilemedi"
+        // satırına dönüşürdü (13 Kas 2026 canlı demo: 2 yerine 29).
+        if (DemoAccount::isDemoTenant($event->tenant_id)) {
+            return;
+        }
+
         $payload = $event->payload;
 
         // (1) Hedef listing'ler: varyantın TÜM canlı listeleri.

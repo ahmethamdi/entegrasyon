@@ -13,6 +13,7 @@ use App\Domain\Identity\Enums\TenantRole;
 use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Identity\Support\DemoAccount;
+use App\Domain\Messaging\Support\OutboxRelay;
 use App\Support\Logging\PayloadRedactor;
 use App\Support\Observability\DispatchAlerts;
 use App\Support\Privacy\SealedJson;
@@ -169,6 +170,22 @@ final class DemoAccountTest extends TestCase
             ->assertRedirect();
 
         $this->assertSame(1, DB::table('tenant_invitations')->where('tenant_id', $tenant->id)->count());
+    }
+
+    #[Test]
+    public function relaying_the_demo_outbox_opens_no_channel_operations(): void
+    {
+        // 13 Kas 2026 canlı demo: kurulumun stok hareketleri outbox'tan
+        // işlenince her ilana bir stok gönderimi açılıyor, hepsi "Bağlantı
+        // sorunu" ile ölüyordu → "Kanala gönderilemeyenler" 2 yerine 29.
+        // Testte relay hiç koşmadığı için görünmüyordu.
+        $this->artisan('demo:install')->assertSuccessful();
+        $tenant = Tenant::query()->where('is_demo', true)->sole();
+        $before = DB::table('sync_operations')->where('tenant_id', $tenant->id)->count();
+
+        $this->asSystem(fn () => app(OutboxRelay::class)->run(1000));
+
+        $this->assertSame($before, DB::table('sync_operations')->where('tenant_id', $tenant->id)->count());
     }
 
     #[Test]
