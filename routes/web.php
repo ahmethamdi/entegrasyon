@@ -463,6 +463,10 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     Route::post('/settings/invoicing/nilvera', [InvoiceSettingsController::class, 'connectNilvera'])
         ->middleware('throttle:10,1')
         ->name('settings.invoicing.nilvera.connect');
+    // Satıcının şirket içi ERP'si (Logo) — kimlik kaydetmeden önce ERP'de denenir.
+    Route::post('/settings/invoicing/erp/{provider}', [InvoiceSettingsController::class, 'connectErp'])
+        ->middleware('throttle:10,1')
+        ->name('settings.invoicing.erp.connect');
     Route::post('/settings/invoicing/parasut/authorize', [InvoiceSettingsController::class, 'redirect'])
         ->name('settings.invoicing.parasut.authorize');
     Route::get('/settings/invoicing/parasut/callback', [InvoiceSettingsController::class, 'callback'])

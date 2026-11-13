@@ -93,4 +93,23 @@ return [
         'base_url' => env('PARASUT_BASE_URL'),
     ],
 
+    /*
+    | Logo Objects REST Servis — 34Pazar'ın Logo ÇÖZÜM ORTAĞI kimliği
+    | (Logo üretir, satıcının değil). Tanımlı değilse Logo sunulmaz.
+    */
+    'logo' => [
+        'client_id' => env('LOGO_CLIENT_ID'),
+        'client_secret' => env('LOGO_CLIENT_SECRET'),
+    ],
+
+    /*
+    | Satıcının şirket içi ERP'si (Logo, Mikro). Gerçek kurulumda
+    | DOĞRULANMAMIŞ ERP'ler (InvoiceAccount::UNVERIFIED) varsayılan gizlidir;
+    | pilot için ERP_UNVERIFIED_ENABLED=logo,mikro. "Beta" rozeti yok (24 Eki).
+    */
+    'erp' => [
+        'timeout' => (int) env('ERP_TIMEOUT', 30),
+        'unverified_enabled' => array_values(array_filter(array_map('trim', explode(',', (string) env('ERP_UNVERIFIED_ENABLED', ''))))),
+    ],
+
 ];

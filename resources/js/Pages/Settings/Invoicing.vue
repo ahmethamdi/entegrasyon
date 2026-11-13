@@ -8,6 +8,8 @@ import { k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
     available: { type: Boolean, default: false },
+    // Şirket içi ERP'ler (Logo): [{ code, name, unverified, fields: [{ name, label, type, required, help }] }]
+    erpProviders: { type: Array, default: () => [] },
     account: { type: Object, default: null },
     // Faturalanabilir kanallar (tahsilat eşlemesinin satırları).
     channels: { type: Array, default: () => [] },
@@ -89,6 +91,21 @@ function connectNilvera() {
 
 const reconnectNilvera = computed(() => props.account?.provider === 'nilvera');
 
+// ERP (Logo): kimlik kaydedilmeden önce sunucuda ERP'de denenir. Hesap yokken
+// ya da aynı ERP'nin bağlantısı koptuğunda form görünür.
+const erpForms = {};
+for (const erp of props.erpProviders) {
+    erpForms[erp.code] = useForm(Object.fromEntries(erp.fields.map((field) => [field.name, ''])));
+}
+const visibleErps = computed(() => props.erpProviders.filter((erp) => !props.account || (props.account.provider === erp.code && props.account.status !== 'connected')));
+
+function connectErp(code) {
+    erpForms[code].post(`/settings/invoicing/erp/${code}`, {
+        preserveScroll: true,
+        onSuccess: () => erpForms[code].reset('password'),
+    });
+}
+
 function save() {
     form.transform((data) => {
         if (ready.value) return data;
@@ -155,6 +172,44 @@ function disconnect() {
                 </form>
             </div>
 
+            <!--
+                ŞİRKET İÇİ ERP (Logo): satıcının sunucusundaki servis, https ile dışarı açık olmalı.
+                Gerçek kurulumda doğrulanmamış ERP yalnız pilot için açılır ve notla görünür.
+            -->
+            <div v-for="erp in visibleErps" :key="erp.code" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+                <p class="text-sm font-medium text-stone-900">{{ erp.name }}</p>
+                <p class="mt-1 max-w-2xl text-xs text-stone-500">
+                    {{ t('Sipariş, ERP\'nize satış siparişi olarak aktarılır; faturayı ve e-belgeyi ERP\'niz keser. Kimlik bilgileri şifreli saklanır ve ekrana geri gelmez.') }}
+                </p>
+                <p v-if="erp.unverified" class="mt-2 max-w-2xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    {{ t('Bu bağlantı belgesine göre kuruldu; gerçek bir ERP kurulumunda henüz denenmedi. İlk aktarımları ERP\'nizde kontrol edin.') }}
+                </p>
+                <form class="mt-4 grid max-w-2xl gap-3 sm:grid-cols-2" @submit.prevent="connectErp(erp.code)">
+                    <label v-for="field in erp.fields" :key="field.name" class="block text-xs font-medium text-stone-700" :class="field.type === 'url' ? 'sm:col-span-2' : ''">
+                        {{ field.label }}
+                        <input
+                            v-model="erpForms[erp.code][field.name]"
+                            :type="field.type === 'password' ? 'password' : (field.type === 'url' ? 'url' : 'text')"
+                            :autocomplete="field.type === 'password' ? 'new-password' : 'off'"
+                            :required="field.required"
+                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        >
+                        <span v-if="field.help" class="mt-1 block font-normal text-stone-500">{{ field.help }}</span>
+                        <span v-if="erpForms[erp.code].errors[field.name]" class="mt-1 block font-normal text-red-700">{{ erpForms[erp.code].errors[field.name] }}</span>
+                    </label>
+                    <div class="sm:col-span-2">
+                        <button
+                            type="submit"
+                            :disabled="erpForms[erp.code].processing"
+                            class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {{ t(':name\'ya bağlan', { name: erp.name }) }}
+                        </button>
+                        <p v-if="erpForms[erp.code].errors.erp" class="mt-2 text-sm text-red-700">{{ erpForms[erp.code].errors.erp }}</p>
+                    </div>
+                </form>
+            </div>
+
             <!-- Paraşüt yalnız sunucuda uygulama tanımlıysa bağlanabilir. -->
             <div v-if="!account && available" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
                 <p class="text-sm font-medium text-stone-900">Paraşüt</p>
@@ -193,6 +248,17 @@ function disconnect() {
                 </div>
 
                 <p v-if="account.lastError" class="mt-2 text-xs text-red-700">{{ account.lastError }}</p>
+                <template v-if="account.isErp">
+                    <p v-for="item in account.erpSettings" :key="item.label" class="mt-1 text-xs text-stone-600">
+                        {{ item.label }}: <span class="font-mono">{{ item.value }}</span>
+                    </p>
+                    <p class="mt-2 max-w-2xl text-xs text-stone-500">
+                        {{ t('Siparişler ERP\'nize satış siparişi olarak aktarılır; e-belgeyi ERP\'niz keser. İptal ve iade ERP\'nizden yapılır.') }}
+                    </p>
+                    <p v-if="account.unverified" class="mt-2 max-w-2xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                        {{ t('Bu bağlantı belgesine göre kuruldu; gerçek bir ERP kurulumunda henüz denenmedi. İlk aktarımları ERP\'nizde kontrol edin.') }}
+                    </p>
+                </template>
 
                 <form class="mt-5" @submit.prevent="save">
                     <div class="flex flex-wrap items-end gap-4">
@@ -210,7 +276,7 @@ function disconnect() {
                                 </option>
                             </select>
                         </div>
-                        <div>
+                        <div v-if="!account.isErp">
                             <label for="series" class="block text-xs font-medium text-stone-700">{{ t('Fatura serisi (isteğe bağlı)') }}</label>
                             <input
                                 id="series"
@@ -310,7 +376,7 @@ function disconnect() {
 
                 <div class="mt-6 flex flex-wrap gap-3 border-t border-stone-100 pt-4">
                     <button
-                        v-if="account.status === 'revoked' && !reconnectNilvera"
+                        v-if="account.status === 'revoked' && !reconnectNilvera && !account.isErp"
                         type="button"
                         class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700"
                         @click="connect"

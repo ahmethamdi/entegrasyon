@@ -14,6 +14,8 @@ use App\Domain\Invoicing\Providers\Nilvera\NilveraClient;
 use App\Domain\Invoicing\Providers\Parasut\ParasutApp;
 use App\Domain\Invoicing\Providers\Parasut\ParasutAuth;
 use App\Domain\Invoicing\Providers\Parasut\ParasutClient;
+use App\Domain\Invoicing\Support\ErpEndpoint;
+use App\Domain\Invoicing\Support\ErpProviders;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,8 +29,8 @@ use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
- * Fatura ve muhasebe ayarları — entegratör hesabını bağlama (Nilvera ya da
- * Paraşüt), firma ve seri, kip (e-belge / yalnız muhasebe), otomatik
+ * Fatura ve muhasebe ayarları — entegratör hesabını bağlama (Nilvera,
+ * Paraşüt ya da satıcının şirket içi ERP'si: Logo), firma ve seri, kip (e-belge / yalnız muhasebe), otomatik
  * aktarım, tahsilat hesapları.
  *
  * NİLVERA: satıcı Nilvera portalında kendi API anahtarını üretir ve buraya
@@ -67,10 +69,28 @@ final class InvoiceSettingsController extends Controller
 
         return Inertia::render('Settings/Invoicing', [
             'available' => ParasutApp::configured(),
+            // Şirket içi ERP'ler — yalnız sunulanlar (`ErpProviders::offered`).
+            'erpProviders' => array_map(fn (string $code): array => [
+                'code' => $code,
+                'name' => InvoiceAccount::nameOf($code),
+                'unverified' => in_array($code, InvoiceAccount::UNVERIFIED, true),
+                'fields' => array_map(fn (array $f): array => [
+                    'name' => $f['name'], 'label' => $f['label'], 'type' => $f['type'], 'required' => $f['required'], 'help' => $f['help'] ?? null,
+                ], ErpProviders::fields($code)),
+            ], ErpProviders::offered()),
             'account' => $account === null ? null : [
                 'provider' => $account->provider,
                 'providerName' => $account->providerName(),
                 'keepsBooks' => $account->keepsBooks(),
+                'isErp' => $account->isErp(),
+                'unverified' => in_array($account->provider, InvoiceAccount::UNVERIFIED, true),
+                // ERP'nin ekranda okunan ayarları (cari kodu, birim) — kimlik DEĞİL.
+                'erpSettings' => $account->isErp() ? array_values(array_filter(array_map(
+                    fn (array $f): ?array => $f['store'] === 'settings' && $account->setting($f['name']) !== null
+                        ? ['label' => $f['label'], 'value' => $account->setting($f['name'])]
+                        : null,
+                    ErpProviders::fields($account->provider),
+                ))) : [],
                 'environment' => $account->setting(InvoiceAccount::SETTING_ENVIRONMENT),
                 'credits' => $account->provider === InvoiceAccount::PROVIDER_NILVERA && $account->isUsable() ? $this->nilveraCredits($account) : null,
                 'status' => $account->status,
@@ -153,6 +173,70 @@ final class InvoiceSettingsController extends Controller
         );
 
         return $this->back(__('Nilvera bağlandı.'));
+    }
+
+    /**
+     * Satıcının şirket içi ERP'sine (Logo) bağlanır — kimlik KAYDEDİLMEDEN
+     * önce ERP'de denenir (token): yanlış şifre ya da dışarıya açık olmayan
+     * sunucu ilk siparişte, satıcının görmediği bir işte çıkmasın.
+     *
+     * Adres SSRF süzgecinden geçer (`ErpEndpoint`): https + 443, iç ağ yok.
+     * Kimlik `credentials`'ta ŞİFRELİ, ekrana dönmez; cari kodu ve birim
+     * `settings`'te (ekranda okunur).
+     */
+    public function connectErp(Request $request, string $provider, ErpEndpoint $http): RedirectResponse
+    {
+        abort_unless(in_array($provider, ErpProviders::offered(), true), 404);
+
+        $validated = $request->validate(ErpProviders::rules($provider));
+        $credentials = [];
+        $erpSettings = [];
+
+        foreach (ErpProviders::fields($provider) as $field) {
+            $value = trim((string) ($validated[$field['name']] ?? ''));
+
+            if ($field['store'] === 'credentials') {
+                $credentials[$field['name']] = $field['name'] === 'password' ? (string) ($validated[$field['name']] ?? '') : $value;
+            } elseif ($value !== '') {
+                $erpSettings[$field['name']] = $value;
+            }
+        }
+
+        try {
+            $credentials = ErpProviders::probe($provider, $credentials, $http);
+        } catch (InvoiceProviderException $e) {
+            Log::warning('erp.connect_failed', ['provider' => $provider, 'class' => $e->class->value]);
+
+            throw ValidationException::withMessages(['erp' => __(':provider bağlantısı doğrulanamadı: :reason', ['provider' => InvoiceAccount::nameOf($provider), 'reason' => $e->getMessage()])]);
+        }
+
+        $account = InvoiceAccount::query()->firstOrNew(['tenant_id' => TenantContext::idOrFail()]);
+
+        // Başka entegratörden geçişte eski ayarlar TAŞINMAZ (Nilvera kuralı).
+        $previous = $account->provider === $provider ? ($account->settings ?? []) : [];
+        $firm = (string) ($credentials['firm_no'] ?? $provider);
+        $label = ErpProviders::companyLabel($provider, $credentials);
+
+        $account->forceFill([
+            'provider' => $provider,
+            'credentials' => $credentials,
+            'token_expires_at' => null,
+            'company_id' => $firm,
+            'company_name' => $label,
+            'settings' => [...$previous, ...$erpSettings, 'companies' => [['id' => $firm, 'name' => $label]]],
+            'status' => InvoiceAccount::STATUS_CONNECTED,
+            'last_error' => null,
+        ])->save();
+
+        $this->audit->run(
+            action: AuditAction::INVOICE_ACCOUNT_CONNECTED,
+            subjectType: 'invoice_accounts',
+            subjectId: $account->id,
+            changes: ['provider' => $provider, 'company_id' => $firm],
+            userId: $request->user()?->id,
+        );
+
+        return $this->back(__(':provider bağlandı.', ['provider' => InvoiceAccount::nameOf($provider)]));
     }
 
     public function redirect(Request $request): Response|RedirectResponse

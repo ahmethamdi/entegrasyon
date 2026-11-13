@@ -1991,5 +1991,21 @@
     "Bu firma belgesine göre bağlandı; gerçek bir hesapta henüz denenmedi. İlk gönderilerinizi firmanın kendi panelinden de kontrol edin.": "This carrier was connected from its documentation and has not been tried on a real account yet. Also check your first shipments in the carrier's own panel.",
     "MNG müşteri numarası": "MNG customer number",
     "MNG şifresi (kalıcı)": "MNG password (permanent)",
-    "Müşteri numaranızı ve şifrenizi MNG şubenizden ya da müşteri temsilcinizden alırsınız.": "You get your customer number and password from your MNG branch or account manager."
+    "Müşteri numaranızı ve şifrenizi MNG şubenizden ya da müşteri temsilcinizden alırsınız.": "You get your customer number and password from your MNG branch or account manager.",
+    "Sipariş, ERP'nize satış siparişi olarak aktarılır; faturayı ve e-belgeyi ERP'niz keser. Kimlik bilgileri şifreli saklanır ve ekrana geri gelmez.": "Orders are transferred to your ERP as sales orders; your ERP issues the invoice and the e-document. Credentials are stored encrypted and never shown again.",
+    "Bu bağlantı belgesine göre kuruldu; gerçek bir ERP kurulumunda henüz denenmedi. İlk aktarımları ERP'nizde kontrol edin.": "This connection was built from the vendor's documentation and has not been tried on a real ERP installation yet. Check the first transfers in your ERP.",
+    ":name'ya bağlan": "Connect to :name",
+    "Siparişler ERP'nize satış siparişi olarak aktarılır; e-belgeyi ERP'niz keser. İptal ve iade ERP'nizden yapılır.": "Orders are transferred to your ERP as sales orders; your ERP issues the e-document. Cancellations and returns are handled in your ERP.",
+    ":provider bağlantısı doğrulanamadı: :reason": ":provider connection could not be verified: :reason",
+    ":provider bağlandı.": ":provider connected.",
+    "REST servis adresi": "REST service address",
+    "Logo REST servisinin dışarıya https (443) ile açılmış adresi, ör. https://logo.firmaniz.com — iç ağ adresi kabul edilmez.": "The address of your Logo REST service exposed over https (443), e.g. https://logo.yourcompany.com — internal network addresses are not accepted.",
+    "Logo kullanıcı adı": "Logo username",
+    "Logo şifresi": "Logo password",
+    "Firma numarası": "Company number",
+    "Siparişlerin açılacağı cari kodu": "Account code for orders",
+    "Logo'da tanımlı pazar yeri carinizin kodu (ör. 120.TRENDYOL). Cari kartı 34Pazar açmaz.": "The code of your marketplace customer account in Logo (e.g. 120.TRENDYOL). 34Pazar does not create account cards.",
+    "Birim kodu (boşsa ADET)": "Unit code (ADET if empty)",
+    ":provider'ya aktarılan kayıt buradan iptal edilmez; iptali :provider'dan yapın.": "Records transferred to :provider are not cancelled from here; cancel them in :provider.",
+    "İade kaydını :provider'da açın; buradan aktarılmaz.": "Record the return in :provider; it is not transferred from here."
 }

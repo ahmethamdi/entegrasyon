@@ -6,6 +6,7 @@ namespace App\Domain\Invoicing\Support;
 
 use App\Domain\Invoicing\Contracts\InvoiceProvider;
 use App\Domain\Invoicing\Models\InvoiceAccount;
+use App\Domain\Invoicing\Providers\Logo\LogoInvoiceProvider;
 use App\Domain\Invoicing\Providers\Nilvera\NilveraClient;
 use App\Domain\Invoicing\Providers\Nilvera\NilveraInvoiceProvider;
 use App\Domain\Invoicing\Providers\Parasut\ParasutClient;
@@ -29,6 +30,7 @@ class InvoiceProviders
                 new NilveraClient($account),
                 $account->setting(InvoiceAccount::SETTING_SERIES),
             ),
+            InvoiceAccount::PROVIDER_LOGO => new LogoInvoiceProvider(app(ErpEndpoint::class), $account),
             default => throw new RuntimeException("Bilinmeyen fatura entegratörü: {$account->provider}"),
         };
     }

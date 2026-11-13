@@ -41,7 +41,22 @@ class InvoiceAccount extends Model
      */
     public const PROVIDER_NILVERA = 'nilvera';
 
-    public const PROVIDERS = [self::PROVIDER_PARASUT, self::PROVIDER_NILVERA];
+    /**
+     * Logo Tiger / Wings — satıcının şirket içi ERP'si (Logo Objects REST).
+     * Siparişi SATIŞ SİPARİŞİ olarak aktarır; e-belgeyi Logo keser.
+     */
+    public const PROVIDER_LOGO = 'logo';
+
+    public const PROVIDERS = [self::PROVIDER_PARASUT, self::PROVIDER_NILVERA, self::PROVIDER_LOGO];
+
+    /** Satıcının kendi ERP'si: kayıt aktarılır, e-belge ERP'de kesilir. */
+    public const ERP_PROVIDERS = [self::PROVIDER_LOGO];
+
+    /**
+     * Gerçek kurulumda HİÇ denenmemiş entegratörler — varsayılan gizli,
+     * pilot için `ERP_UNVERIFIED_ENABLED` (kargodaki `CarrierAccount::UNVERIFIED`).
+     */
+    public const UNVERIFIED = [self::PROVIDER_LOGO];
 
     /** Ayar: Nilvera ortamı — `live` (varsayılan) | `test`. */
     public const SETTING_ENVIRONMENT = 'environment';
@@ -140,6 +155,11 @@ class InvoiceAccount extends Model
      */
     public function mode(): string
     {
+        // ERP'de e-belgeyi ERP'nin kendi modülü keser: burada hep "yalnız aktar".
+        if ($this->isErp()) {
+            return self::MODE_BOOKS_ONLY;
+        }
+
         if (! $this->keepsBooks()) {
             return self::MODE_E_DOCUMENT;
         }
@@ -158,10 +178,22 @@ class InvoiceAccount extends Model
         return $this->provider === self::PROVIDER_PARASUT;
     }
 
+    /** Satıcının şirket içi ERP'si mi (Logo) — iptal/iade ERP'den yapılır. */
+    public function isErp(): bool
+    {
+        return in_array($this->provider, self::ERP_PROVIDERS, true);
+    }
+
     public function providerName(): string
     {
-        return match ($this->provider) {
+        return self::nameOf($this->provider);
+    }
+
+    public static function nameOf(string $provider): string
+    {
+        return match ($provider) {
             self::PROVIDER_NILVERA => 'Nilvera',
+            self::PROVIDER_LOGO => 'Logo',
             default => 'Paraşüt',
         };
     }

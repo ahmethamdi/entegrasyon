@@ -40,6 +40,11 @@ final class RequestInvoiceCorrection
      */
     public function cancel(Order $order, InvoiceAccount $account, ?string $actorId = null): Invoice
     {
+        // ERP kaydı satıcının defteridir: uzaktan silinmez, iptal ERP'den yapılır.
+        if ($account->isErp()) {
+            throw new InvoiceCorrectionRefused(__(':provider\'ya aktarılan kayıt buradan iptal edilmez; iptali :provider\'dan yapın.', ['provider' => $account->providerName()]));
+        }
+
         $sale = $this->issuedSale($order);
 
         if ($sale->document_type === Invoice::TYPE_E_INVOICE) {
@@ -68,6 +73,10 @@ final class RequestInvoiceCorrection
      */
     public function recordReturn(ReturnRequest $request, InvoiceAccount $account, ?string $actorId = null): Invoice
     {
+        if ($account->isErp()) {
+            throw new InvoiceCorrectionRefused(__('İade kaydını :provider\'da açın; buradan aktarılmaz.', ['provider' => $account->providerName()]));
+        }
+
         if (! $account->keepsBooks()) {
             throw new InvoiceCorrectionRefused(__(':provider yalnız e-belge keser; iade kaydını muhasebe programınızda açın.', ['provider' => $account->providerName()]));
         }

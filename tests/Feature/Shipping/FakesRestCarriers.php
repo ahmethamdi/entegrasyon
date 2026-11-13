@@ -24,7 +24,7 @@ trait FakesRestCarriers
     /** @var array<string, list<mixed>> yol parçası → sıradaki cevaplar */
     protected array $restReplies = [];
 
-    /** @var list<array{path: string, method: string, url: string, headers: array<string, list<string>>, json: array<mixed>|null}> */
+    /** @var list<array{path: string, method: string, url: string, headers: array<string, list<string>>, json: array<mixed>|null, raw: string}> */
     protected array $restCalls = [];
 
     /** @var (\Closure(HttpRequest): mixed)|null */
@@ -74,6 +74,7 @@ trait FakesRestCarriers
                 'url' => $request->url(),
                 'headers' => $request->headers(),
                 'json' => is_array($json) ? $json : null,
+                'raw' => $request->body(),
             ];
 
             // En uzun eşleşen parça kazanır (`/token` ile `/refresh` karışmasın).
