@@ -233,7 +233,7 @@ function disconnect() {
                         <p class="flex items-center gap-2 text-sm font-medium text-stone-900">
                             <img v-if="brandIcon(account.provider)" :src="brandIcon(account.provider)" alt="" class="size-6 rounded object-contain">
                             {{ account.providerName }}
-                            <span v-if="account.environment === 'test'" class="ml-1 rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">{{ t('Test ortamı') }}</span>
+                            <span v-if="account.environment === 'test'" class="ml-1 rounded-[12px] border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">{{ t('Test ortamı') }}</span>
                         </p>
                         <p v-if="account.companyName" class="mt-0.5 text-xs text-stone-500">{{ account.companyName }}</p>
                         <p v-for="credit in account.credits ?? []" :key="credit.name" class="mt-0.5 font-mono text-[11px] text-stone-500">

@@ -4,6 +4,7 @@ import { computed } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { brandIcon } from '../../lib/format.js';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
 
 const props = defineProps({
@@ -41,6 +42,8 @@ const badges = {
 const connectionNames = computed(() => Object.fromEntries(
     props.connections.map((c) => [c.id, `${c.channel} · ${c.label}`]),
 ));
+
+const connectionById = computed(() => Object.fromEntries(props.connections.map((c) => [c.id, c])));
 
 const lastCheckedText = computed(() => (
     props.lastCheckedAt ? new Date(props.lastCheckedAt).toLocaleString(intlLocale()) : null
@@ -131,7 +134,7 @@ function applyFilter(patch) {
 
             <div
                 v-if="summary.rejected > 0"
-                class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+                class="mt-6 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
             >
                 <span class="font-semibold">{{ t(':count ürün kanal tarafından reddedildi.', { count: summary.rejected }) }}</span>
                 {{ t('Bu satırlar kendiliğinden düzelmez — sebebi okuyup ürünü düzeltin ve kanala yeniden gönderin.') }}
@@ -142,7 +145,7 @@ function applyFilter(patch) {
                 <div class="flex rounded-[10px] border border-stone-300 bg-white p-0.5">
                     <button
                         type="button"
-                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         :class="!filters.status ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: undefined })"
                     >
@@ -150,7 +153,7 @@ function applyFilter(patch) {
                     </button>
                     <button
                         type="button"
-                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         :class="filters.status === 'rejected' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: 'rejected' })"
                     >
@@ -158,7 +161,7 @@ function applyFilter(patch) {
                     </button>
                     <button
                         type="button"
-                        class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         :class="filters.status === 'pending_approval' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                         @click="applyFilter({ status: 'pending_approval' })"
                     >
@@ -188,7 +191,7 @@ function applyFilter(patch) {
             -->
             <div class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
                 <table class="w-full min-w-4xl text-sm">
-                    <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                    <thead class="border-b border-stone-200 text-left">
                         <tr>
                             <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Ürün') }}</th>
                             <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kanal') }}</th>
@@ -227,7 +230,14 @@ function applyFilter(patch) {
                             </td>
 
                             <td class="px-4 py-3 text-stone-600">
-                                {{ connectionNames[row.connectionId] ?? '—' }}
+                                <span v-if="connectionById[row.connectionId]" class="flex items-start gap-2" :title="connectionNames[row.connectionId]">
+                                    <img v-if="brandIcon(connectionById[row.connectionId].code)" :src="brandIcon(connectionById[row.connectionId].code)" alt="" class="mt-0.5 size-4 shrink-0 rounded-sm object-contain">
+                                    <span class="min-w-0">
+                                        <span class="block text-stone-900">{{ connectionById[row.connectionId].channel }}</span>
+                                        <span class="block text-xs text-stone-500">{{ connectionById[row.connectionId].label }}</span>
+                                    </span>
+                                </span>
+                                <span v-else>—</span>
                                 <a
                                     v-if="row.externalUrl"
                                     :href="row.externalUrl"
@@ -244,7 +254,7 @@ function applyFilter(patch) {
 
                             <td class="px-4 py-3">
                                 <span
-                                    class="inline-block rounded border px-2 py-0.5 text-[10px] font-medium tracking-wide"
+                                    class="inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                     :class="badgeFor(row.status).class"
                                 >
                                     {{ badgeFor(row.status).text }}

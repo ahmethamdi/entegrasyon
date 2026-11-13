@@ -93,6 +93,11 @@ const capabilityLabels = {
     taxonomy: k('Kategori'),
     approval: k('Onay'),
     fulfillment: k('Kargo'),
+    // S4 · müşteri hizmeti yetenekleri — eksikken ham anahtar basılıyordu
+    // ("returns · return_decisions · questions"), 13 Kas demo gezisinde görüldü.
+    returns: k('İadeler'),
+    return_decisions: k('İade kararı'),
+    questions: k('Müşteri soruları'),
 };
 
 function activeCapabilities(capabilities) {
@@ -217,7 +222,7 @@ function formatDate(iso) {
 
             <div
                 v-if="flashWarning"
-                class="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                class="mt-6 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             >
                 {{ flashWarning }}
             </div>
@@ -237,10 +242,15 @@ function formatDate(iso) {
                     :key="connection.id"
                     class="rounded-[14px] border border-stone-200 bg-white p-5"
                 >
-                    <div class="flex items-start justify-between gap-4">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
+                        <div class="flex min-w-0 items-start gap-3.5">
+                        <span class="flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-stone-200 bg-stone-50">
+                            <img v-if="connection.logo" :src="connection.logo" :alt="t(':channel logosu', { channel: connection.channel })" class="size-6 object-contain">
+                            <span v-else class="text-sm font-semibold text-stone-500">{{ connection.channel?.charAt(0) }}</span>
+                        </span>
                         <div class="min-w-0">
-                            <div class="flex items-center gap-2">
-                                <h2 class="truncate text-sm font-medium text-stone-900">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="truncate text-base font-semibold text-stone-900">
                                     {{ connection.label }}
                                 </h2>
                                 <span
@@ -272,8 +282,8 @@ function formatDate(iso) {
                                 </span>
                             </div>
 
-                            <p class="mt-1 truncate font-mono text-xs text-stone-500">
-                                <img v-if="connection.logo" :src="connection.logo" :alt="t(':channel logosu', { channel: connection.channel })" class="mr-1.5 inline-block size-4 align-[-3px] object-contain">{{ connection.channel }} · {{ connection.account }}
+                            <p class="mt-0.5 truncate text-[13px] text-stone-600">
+                                {{ connection.channel }} · <span class="font-mono text-xs text-stone-500">{{ connection.account }}</span>
                             </p>
                             <p v-if="connection.priceRule" class="mt-1 text-xs text-stone-600">
                                 {{ t('Fiyat') }}: {{ connection.priceRule }}
@@ -284,6 +294,7 @@ function formatDate(iso) {
                                     <li v-for="item in connection.works" :key="item">{{ item }}</li>
                                 </ul>
                             </details>
+                        </div>
                         </div>
 
                         <div class="flex shrink-0 items-center gap-2">
@@ -388,28 +399,37 @@ function formatDate(iso) {
                     </div>
 
                     <div class="mt-4 border-t border-stone-100 pt-4">
-                        <p class="text-xs text-stone-500">{{ t('Kanala yazma izinleri') }}</p>
-                        <ul class="mt-2 grid gap-2 sm:grid-cols-3">
+                        <p class="text-[13px] font-medium text-stone-700">{{ t('Kanala yazma izinleri') }}</p>
+                        <!--
+                            Anahtar (switch) görünümü: önceki yeşil kutular beş
+                            izni beş ayrı uyarı gibi okutuyordu. Durum hem
+                            anahtarın konumu hem metinle ("Açık/Kapalı") verilir.
+                        -->
+                        <ul class="mt-2 grid gap-x-6 sm:grid-cols-2 lg:grid-cols-3">
                             <li
                                 v-for="(label, write) in writeLabels"
                                 :key="write"
-                                class="flex items-center justify-between gap-2 rounded-[10px] border px-3 py-2 text-xs"
-                                :class="connection.writes?.[write] ? 'border-emerald-200 bg-emerald-50' : 'border-stone-200 bg-stone-50'"
+                                class="flex items-center justify-between gap-3 border-b border-stone-100 py-2.5 text-sm"
                             >
-                                <span>
-                                    <span class="font-medium text-stone-900">{{ t(label) }}</span>
-                                    <span :class="connection.writes?.[write] ? 'text-emerald-800' : 'text-stone-600'">
-                                        · {{ connection.writes?.[write] ? t('Açık') : t('Kapalı') }}
+                                <span class="min-w-0">
+                                    <span class="text-stone-900">{{ t(label) }}</span>
+                                    <span class="ml-1.5 text-xs" :class="connection.writes?.[write] ? 'text-emerald-700' : 'text-stone-500'">
+                                        {{ switching === `${connection.id}:${write}` ? t('Kaydediliyor…') : (connection.writes?.[write] ? t('Açık') : t('Kapalı')) }}
                                     </span>
                                 </span>
                                 <button
                                     v-if="connection.writes?.[write] || !connection.writesLocked"
                                     type="button"
-                                    class="rounded-[10px] border border-stone-300 bg-white px-2 py-1 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    role="switch"
+                                    :aria-checked="connection.writes?.[write] ? 'true' : 'false'"
+                                    :aria-label="t(label)"
+                                    :title="connection.writes?.[write] ? t('Kapat') : t('Aç')"
+                                    class="relative inline-flex h-6 w-10 shrink-0 items-center rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    :class="connection.writes?.[write] ? 'bg-emerald-600' : 'bg-stone-300'"
                                     :disabled="switching !== null"
                                     @click="setWrite(connection, write, !connection.writes?.[write])"
                                 >
-                                    {{ switching === `${connection.id}:${write}` ? t('Kaydediliyor…') : (connection.writes?.[write] ? t('Kapat') : t('Aç')) }}
+                                    <span class="inline-block size-[18px] rounded-full bg-white transition" :class="connection.writes?.[write] ? 'translate-x-[19px]' : 'translate-x-[3px]'" aria-hidden="true" />
                                 </button>
                             </li>
                         </ul>

@@ -91,7 +91,7 @@ function submitReject(request) {
         <div class="mt-6 flex rounded-[10px] border border-stone-300 bg-white p-0.5 text-sm sm:w-fit">
             <button
                 type="button"
-                class="flex-1 rounded px-3 py-1.5 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                class="flex-1 whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 :class="filter === 'action' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                 @click="setFilter('action')"
             >
@@ -99,7 +99,7 @@ function submitReject(request) {
             </button>
             <button
                 type="button"
-                class="flex-1 rounded px-3 py-1.5 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                class="flex-1 whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 :class="filter === 'all' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                 @click="setFilter('all')"
             >
@@ -150,7 +150,7 @@ function submitReject(request) {
                                 </p>
                             </td>
                             <td class="px-4 py-3 text-right">
-                                <span class="inline-block rounded border px-2 py-0.5 text-xs" :class="restockBadges[line.restockStatus]?.class">
+                                <span class="inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="restockBadges[line.restockStatus]?.class">
                                     {{ t(restockBadges[line.restockStatus]?.text ?? line.restockStatus) }}
                                 </span>
                                 <p v-if="line.restockReason" class="mt-1 text-xs text-stone-600">{{ line.restockReason }}</p>

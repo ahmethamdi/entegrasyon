@@ -75,7 +75,7 @@ onBeforeUnmount(() => clearInterval(timer));
 
         <div class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                <thead class="border-b border-stone-200 text-left">
                     <tr>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Sipariş') }}</th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Sonuç') }}</th>

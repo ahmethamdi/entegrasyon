@@ -57,22 +57,12 @@ function saveCost(variant) {
     <PanelLayout>
         <PageHeader :section="t('Ürünler')" :title="product.title">
             <template #actions>
-                <div class="text-right">
-                    <p class="text-xs text-stone-500">{{ t('Toplam stok') }}</p>
-                    <p
-                        class="font-mono text-xl font-semibold tabular-nums"
-                        :class="product.hasOversold ? 'text-red-800' : 'text-stone-900'"
-                    >
-                        {{ product.totalOnHand }}
-                    </p>
-                    <Link
-                        v-if="product.hasOversold"
-                        :href="`/products?filter=out&search=${encodeURIComponent(product.sku)}`"
-                        class="text-[11px] text-red-700 underline"
-                    >
-                        {{ t('fazla satış var') }}
-                    </Link>
-                </div>
+                <Link
+                    :href="`/products/${product.id}/channels`"
+                    class="rounded-[10px] border border-stone-300 bg-white px-3.5 py-2 text-sm font-medium text-stone-800 transition hover:bg-stone-50"
+                >
+                    {{ t('Hangi kanallarda') }}
+                </Link>
             </template>
 
             <template #toolbar>
@@ -83,17 +73,16 @@ function saveCost(variant) {
         </PageHeader>
         <WriteGuard permission="catalog.manage">
 
-            <!--
-                STOK BU EKRANDA DEĞİŞTİRİLMEZ. İçerik ve stok ayrı senkron
-                alanlarıdır; başlık düzeltmesinin stok hareketi yaratması
-                ledger'ı kirletirdi. Stok sayımı ürün listesindedir.
-            -->
-            <p class="mt-6 rounded-[14px] border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
-                {{ t('Bu ekran yalnızca içeriği düzenler; stok değişmez.') }}
-                <Link :href="`/products?search=${encodeURIComponent(product.sku)}`" class="font-medium text-stone-900 underline">{{ t('Stok sayımı ürün listesinden girilir.') }}</Link>
-            </p>
 
-            <form class="mt-6 max-w-xl space-y-5" @submit.prevent="submit">
+            <!--
+                İKİ SÜTUN (Yön A): solda içerik formu ve set içeriği, sağda
+                stok özeti ve alış maliyeti. Form eskiden sayfanın solunda
+                dar bir sütunda yüzüyordu; sağ yarı boş kalıyordu.
+            -->
+            <div class="mt-6 grid items-start gap-4 lg:grid-cols-3">
+            <div class="min-w-0 space-y-4 lg:col-span-2">
+            <form class="space-y-5 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-[22px]" @submit.prevent="submit">
+                <h2 class="text-base font-semibold text-stone-900">{{ t('Ürün bilgileri') }}</h2>
                 <div>
                     <label for="title" class="block text-sm font-medium text-stone-700">
                         {{ t('Ürün adı') }}
@@ -207,8 +196,8 @@ function saveCost(variant) {
                 </div>
             </form>
 
-            <section v-if="product.bundle" class="mt-10 max-w-2xl border-t border-stone-200 pt-6">
-                <h2 class="text-sm font-medium text-stone-900">{{ t('Setin içindekiler') }}</h2>
+            <section v-if="product.bundle" class="rounded-[14px] border border-stone-200 bg-white p-5 sm:p-[22px]">
+                <h2 class="text-base font-semibold text-stone-900">{{ t('Setin içindekiler') }}</h2>
                 <p class="mt-0.5 text-xs text-stone-500">
                     {{ t('Set stoğu: :count', { count: product.bundle.available }) }}
                     <span v-if="product.bundle.limitingSku">· {{ t('Sınırlayan: :sku', { sku: product.bundle.limitingSku }) }}</span>
@@ -227,8 +216,37 @@ function saveCost(variant) {
                 </button>
             </section>
 
-            <section v-if="product.variants?.length" class="mt-10 max-w-xl border-t border-stone-200 pt-6">
-                <h2 class="text-sm font-medium text-stone-900">{{ t('Alış maliyeti') }}</h2>
+            </div>
+
+            <div class="min-w-0 space-y-4">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-5">
+                <p class="text-[13px] text-stone-600">{{ t('Toplam stok') }}</p>
+                <p
+                    class="mt-1 text-[30px] font-bold tracking-tight tabular-nums"
+                    :class="product.hasOversold ? 'text-brand-700' : 'text-stone-900'"
+                >
+                    {{ product.totalOnHand }}
+                </p>
+                <Link
+                    v-if="product.hasOversold"
+                    :href="`/products?filter=out&search=${encodeURIComponent(product.sku)}`"
+                    class="text-[13px] font-medium text-brand-700 underline"
+                >
+                    {{ t('fazla satış var') }}
+                </Link>
+                <!--
+                    STOK BU EKRANDA DEĞİŞTİRİLMEZ. İçerik ve stok ayrı senkron
+                    alanlarıdır; başlık düzeltmesinin stok hareketi yaratması
+                    ledger'ı kirletirdi. Stok sayımı ürün listesindedir.
+                -->
+                <p class="mt-3 border-t border-stone-100 pt-3 text-xs leading-relaxed text-stone-600">
+                    {{ t('Bu ekran yalnızca içeriği düzenler; stok değişmez.') }}
+                    <Link :href="`/products?search=${encodeURIComponent(product.sku)}`" class="font-medium text-stone-900 underline">{{ t('Stok sayımı ürün listesinden girilir.') }}</Link>
+                </p>
+            </section>
+
+            <section v-if="product.variants?.length" class="rounded-[14px] border border-stone-200 bg-white p-5">
+                <h2 class="text-base font-semibold text-stone-900">{{ t('Alış maliyeti') }}</h2>
                 <p class="mt-0.5 text-xs text-stone-500">
                     {{ t('Kanala gitmez. Kanalın fiyat kuralında zarar koruması açıksa bu maliyetin altına düşen fiyat gönderilmez.') }}
                 </p>
@@ -246,7 +264,7 @@ function saveCost(variant) {
                                     step="0.01"
                                     inputmode="decimal"
                                     :placeholder="t('Maliyet')"
-                                    class="w-32 rounded-l-md border-0 px-3 py-1.5 text-sm focus:outline-none"
+                                    class="w-24 rounded-l-[10px] border-0 px-3 py-1.5 text-sm focus:outline-none"
                                 >
                                 <span class="px-2 font-mono text-xs text-stone-500">{{ variant.currency }}</span>
                             </span>
@@ -263,6 +281,8 @@ function saveCost(variant) {
                 </ul>
                 <p v-if="$page.props.errors?.cost_price" class="mt-2 text-sm text-red-700">{{ $page.props.errors.cost_price }}</p>
             </section>
+            </div>
+            </div>
         </WriteGuard>
     </PanelLayout>
 </template>

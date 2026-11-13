@@ -212,7 +212,8 @@ function stamp(value) {
             </template>
 
             <template #toolbar>
-                <p class="text-sm text-stone-600">
+                <p class="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-stone-600">
+                    <img v-if="brandIcon(order.channel.type)" :src="brandIcon(order.channel.type)" alt="" class="size-5 rounded object-contain">
                     {{ channelName(order.channel.type) }}
                     <span v-if="order.channel.label" class="text-stone-500">· {{ order.channel.label }}</span>
                     · {{ stamp(order.placedAt) }}
@@ -231,41 +232,25 @@ function stamp(value) {
             {{ flashSuccess }}
         </div>
 
-        <!-- tutarlar -->
-        <div class="mt-6 grid gap-4 sm:grid-cols-4">
-            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">{{ t('Ara toplam') }}</p>
-                <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
-                    {{ money(order.subtotal, order.currency) }}
-                </p>
-            </div>
-            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">{{ t('Kargo') }}</p>
-                <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
-                    {{ money(order.shippingTotal, order.currency) }}
-                </p>
-            </div>
-            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">{{ t('Vergi') }}</p>
-                <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
-                    {{ money(order.taxTotal, order.currency) }}
-                </p>
-            </div>
-            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
-                <p class="text-xs text-stone-500">{{ t('Genel toplam') }}</p>
-                <p class="mt-1 text-lg font-semibold tabular-nums text-stone-900">
-                    {{ money(order.grandTotal, order.currency) }}
-                </p>
-            </div>
+        <!--
+            İKİ SÜTUN (Yön A): solda kalemler + tutar özeti + geçmiş, sağda
+            kargo ve fatura işlemleri. Eskiden dört ayrı tutar kartı ve
+            alt alta beş başlık vardı; tutarlar artık kalem tablosunun
+            altında, faturadaki gibi okunur.
+        -->
+        <div class="mt-6 grid items-start gap-4 lg:grid-cols-3">
+        <div class="min-w-0 space-y-4 lg:col-span-2">
+        <!-- satırlar -->
+        <section class="rounded-[14px] border border-stone-200 bg-white">
+        <div class="flex items-center justify-between px-5 pb-3 pt-4">
+            <h2 class="text-base font-semibold text-stone-900">{{ t('Kalemler') }}</h2>
+            <span class="text-[13px] text-stone-500">{{ t(':count kalem', { count: order.lines.length }) }}</span>
         </div>
 
-        <!-- satırlar -->
-        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Kalemler') }}</h2>
-
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div class="relative mt-3 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
-            <table class="w-full min-w-2xl text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+        <div class="relative overflow-x-auto border-t border-stone-100">
+            <table class="w-full min-w-xl text-sm">
+                <thead class="border-b border-stone-100 text-left">
                     <tr>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Ürün') }}</th>
                         <th class="px-4 py-2.5 text-right text-xs font-medium text-stone-600">{{ t('Adet') }}</th>
@@ -283,7 +268,7 @@ function stamp(value) {
                         :class="line.isOversold ? 'bg-red-50/60 hover:bg-red-100/60' : (!line.isMatched ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-stone-50')"
                     >
                         <td class="px-4 py-3">
-                            <p class="text-xs text-stone-900">{{ line.title }}</p>
+                            <p class="text-sm text-stone-900">{{ line.title }}</p>
                             <p class="mt-0.5 font-mono text-[11px] text-stone-500">{{ line.sku }}</p>
                         </td>
 
@@ -321,14 +306,70 @@ function stamp(value) {
             </table>
         </div>
 
+        <dl class="space-y-1.5 border-t border-stone-100 px-5 py-4 text-sm">
+            <div class="flex justify-between gap-4 text-stone-600">
+                <dt>{{ t('Ara toplam') }}</dt>
+                <dd class="tabular-nums">{{ money(order.subtotal, order.currency) }}</dd>
+            </div>
+            <div class="flex justify-between gap-4 text-stone-600">
+                <dt>{{ t('Kargo') }}</dt>
+                <dd class="tabular-nums">{{ money(order.shippingTotal, order.currency) }}</dd>
+            </div>
+            <div class="flex justify-between gap-4 text-stone-600">
+                <dt>{{ t('Vergi') }}</dt>
+                <dd class="tabular-nums">{{ money(order.taxTotal, order.currency) }}</dd>
+            </div>
+            <div class="flex justify-between gap-4 border-t border-stone-100 pt-2 text-base font-semibold text-stone-900">
+                <dt>{{ t('Genel toplam') }}</dt>
+                <dd class="tabular-nums">{{ money(order.grandTotal, order.currency) }}</dd>
+            </div>
+        </dl>
+        </section>
+
+        <!-- olay geçmişi -->
+        <section class="rounded-[14px] border border-stone-200 bg-white">
+        <h2 class="px-5 pb-2 pt-4 text-base font-semibold text-stone-900">{{ t('Geçmiş') }}</h2>
+
+        <div class="border-t border-stone-100">
+            <ul>
+                <li
+                    v-for="event in order.events"
+                    :key="event.id"
+                    class="flex items-center justify-between gap-3 border-b border-stone-100 px-5 py-3 last:border-b-0"
+                >
+                    <div>
+                        <p
+                            class="text-xs"
+                            :class="event.type === 'OVERSELL_DETECTED'
+                                ? 'font-medium text-red-800'
+                                : 'text-stone-900'"
+                        >
+                            {{ eventLabels[event.type] ? t(eventLabels[event.type]) : event.type }}
+                            <span v-if="event.quantity" class="font-mono text-stone-500">
+                                · {{ t(':count adet', { count: event.quantity }) }}
+                            </span>
+                        </p>
+                        <p class="mt-0.5 text-xs text-stone-500">{{ sourceLabels[event.source] ? t(sourceLabels[event.source]) : event.source }}</p>
+                    </div>
+
+                    <p class="font-mono text-[11px] text-stone-500">{{ stamp(event.occurredAt) }}</p>
+                </li>
+            </ul>
+        </div>
+        </section>
+        </div>
+
+        <!-- Sağ sütun: kargo ve fatura işlemleri -->
+        <div class="min-w-0 space-y-4">
         <!--
             KARGO. Satıcı takip numarasını burada TEK yerden girer ve
             sipariş geldiği kanala gönderilir. Kanaldan gelen kargo da
             burada listelenir (rozetsiz).
         -->
-        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Kargo') }}</h2>
+        <section class="rounded-[14px] border border-stone-200 bg-white p-4 sm:p-5">
+        <h2 class="text-base font-semibold text-stone-900">{{ t('Kargo') }}</h2>
 
-        <div class="mt-3 rounded-[14px] border border-stone-200 bg-white">
+        <div class="mt-3 rounded-[10px] border border-stone-100 bg-stone-50/60">
             <ul v-if="order.fulfillments.length">
                 <li
                     v-for="fulfillment in order.fulfillments"
@@ -467,6 +508,7 @@ function stamp(value) {
         <datalist id="carrier-suggestions">
             <option v-for="name in carrierSuggestions" :key="name" :value="name" />
         </datalist>
+        </section>
 
         <!--
             KARGO GÖNDERİSİ (S6) — satıcının kendi Yurtiçi/Aras
@@ -474,11 +516,12 @@ function stamp(value) {
             kargoya verildi demek değildir.
         -->
         <template v-if="order.carrierChannelSupported || order.carrierShipment">
-            <h2 class="mt-10 flex items-center gap-2 text-sm font-semibold text-stone-900">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-4 sm:p-5">
+            <h2 class="flex items-center gap-2 text-base font-semibold text-stone-900">
                 {{ t('Kargo gönderisi') }}
             </h2>
 
-            <div class="mt-3 rounded-[14px] border border-stone-200 bg-white px-4 py-3">
+            <div class="mt-3">
                 <p v-if="shipmentError" class="mb-2 text-xs text-red-700">{{ shipmentError }}</p>
 
                 <template v-if="order.carrierShipment && order.carrierShipment.status !== 'cancelled'">
@@ -568,15 +611,17 @@ function stamp(value) {
                     <p v-else class="text-xs text-stone-500">{{ t('Henüz kargo gönderisi açılmadı.') }}</p>
                 </template>
             </div>
+            </section>
         </template>
 
         <!--
             E-FATURA. Fatura satıcının entegratöründen (Nilvera / Paraşüt) kesilir; alıcı bilgisi kanaldan
             anlık okunur, burada gösterilmez ve saklanmaz.
         -->
-        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Fatura') }}</h2>
+        <section class="rounded-[14px] border border-stone-200 bg-white p-4 sm:p-5">
+        <h2 class="text-base font-semibold text-stone-900">{{ t('Fatura') }}</h2>
 
-        <div class="mt-3 rounded-[14px] border border-stone-200 bg-white px-4 py-3">
+        <div class="mt-3">
             <div v-if="order.invoice" class="flex flex-wrap items-center justify-between gap-2">
                 <div>
                     <p class="text-xs text-stone-900">
@@ -731,35 +776,9 @@ function stamp(value) {
 
             <p v-if="invoiceError" class="mt-2 text-sm text-red-700">{{ invoiceError }}</p>
         </div>
-
-        <!-- olay geçmişi -->
-        <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Geçmiş') }}</h2>
-
-        <div class="mt-3 rounded-[14px] border border-stone-200 bg-white">
-            <ul>
-                <li
-                    v-for="event in order.events"
-                    :key="event.id"
-                    class="flex items-center justify-between border-b border-stone-100 px-4 py-3 last:border-b-0"
-                >
-                    <div>
-                        <p
-                            class="text-xs"
-                            :class="event.type === 'OVERSELL_DETECTED'
-                                ? 'font-medium text-red-800'
-                                : 'text-stone-900'"
-                        >
-                            {{ eventLabels[event.type] ? t(eventLabels[event.type]) : event.type }}
-                            <span v-if="event.quantity" class="font-mono text-stone-500">
-                                · {{ t(':count adet', { count: event.quantity }) }}
-                            </span>
-                        </p>
-                        <p class="mt-0.5 text-xs text-stone-500">{{ sourceLabels[event.source] ? t(sourceLabels[event.source]) : event.source }}</p>
-                    </div>
-
-                    <p class="font-mono text-[11px] text-stone-500">{{ stamp(event.occurredAt) }}</p>
-                </li>
-            </ul>
+        </section>
         </div>
+        </div>
+
     </PanelLayout>
 </template>

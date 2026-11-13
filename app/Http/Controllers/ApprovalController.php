@@ -279,6 +279,7 @@ final class ApprovalController extends Controller
             'id' => $c->id,
             'label' => $c->label,
             'channel' => $c->channelType?->name ?? $c->channel_type_code,
+            'code' => $c->channel_type_code,
         ], $connections);
     }
 

@@ -3,7 +3,7 @@ import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, nextTick, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
-import { money } from '../../lib/format.js';
+import { brandIcon, channelName, money } from '../../lib/format.js';
 import { k, useI18n } from '../../lib/i18n';
 import { usePermissions } from '../../lib/permissions.js';
 
@@ -62,6 +62,26 @@ function submitSearch() {
  * Kanal çipi — renk TEK sinyal değil: her durumun kendi işareti ve
  * yazısı var (renk körlüğünde yeşil/kırmızı karışır).
  */
+/*
+ * Etiket: logo + kanal adı ("Trendyol"). Aynı kanaldan iki mağaza bağlıysa
+ * kanal adı ikisini ayırmaz → o zaman bağlantının kendi adı yazılır.
+ * Tam ad her durumda `title`'da durur.
+ */
+const codeCounts = computed(() => {
+    const seen = new Map();
+    for (const row of props.rows ?? []) {
+        for (const c of row.channels ?? []) {
+            if (!seen.has(c.code)) seen.set(c.code, new Set());
+            seen.get(c.code).add(c.id);
+        }
+    }
+    return seen;
+});
+
+function chipName(c) {
+    return (codeCounts.value.get(c.code)?.size ?? 0) > 1 ? c.label : channelName(c.code);
+}
+
 const chipStates = {
     live: { text: k('Satışta'), mark: '✓', class: 'border-emerald-200 bg-emerald-50 text-emerald-800' },
     pending: { text: k('Bekliyor'), mark: '…', class: 'border-sky-200 bg-sky-50 text-sky-800' },
@@ -309,8 +329,9 @@ function submitCount() {
                                     :class="chipStates[c.state].class"
                                     :title="`${c.label}: ${t(chipStates[c.state].text)}`"
                                 >
+                                    <img v-if="brandIcon(c.code)" :src="brandIcon(c.code)" alt="" class="size-3.5 rounded-sm object-contain">
                                     <span aria-hidden="true">{{ chipStates[c.state].mark }}</span>
-                                    {{ c.label }}
+                                    {{ chipName(c) }}
                                     <span class="sr-only">— {{ t(chipStates[c.state].text) }}</span>
                                 </span>
                             </span>
@@ -425,8 +446,9 @@ function submitCount() {
                                     :class="chipStates[c.state].class"
                                     :title="`${c.label}: ${t(chipStates[c.state].text)}`"
                                 >
+                                    <img v-if="brandIcon(c.code)" :src="brandIcon(c.code)" alt="" class="size-3.5 rounded-sm object-contain">
                                     <span aria-hidden="true">{{ chipStates[c.state].mark }}</span>
-                                    {{ c.label }}
+                                    {{ chipName(c) }}
                                     <span class="sr-only">— {{ t(chipStates[c.state].text) }}</span>
                                 </component>
                                 <Link

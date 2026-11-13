@@ -37,7 +37,7 @@ const statusText = { complete: k('Tamam'), incomplete: k('Eksik'), not_available
             <section v-for="view in [expected, settled]" :key="view.basis" class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <h2 class="text-sm font-medium text-stone-900">
                     {{ view.basis === 'expected' ? t('Beklenen katkı (KDV dahil)') : t('Gerçekleşen katkı (KDV dahil)') }}
-                    <span class="ml-2 rounded border px-2 py-0.5 text-xs">{{ t(statusText[view.status]) }}</span>
+                    <span class="ml-2 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium">{{ t(statusText[view.status]) }}</span>
                 </h2>
 
                 <dl class="mt-3 grid grid-cols-2 gap-y-1 text-sm">

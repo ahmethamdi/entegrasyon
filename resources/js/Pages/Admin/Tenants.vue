@@ -35,7 +35,7 @@ const date = (iso) => (iso ? new Date(iso).toLocaleDateString(intlLocale(), { da
 
         <div class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-[760px] text-sm">
-                <thead class="bg-stone-50 text-left text-xs text-stone-500">
+                <thead class=" text-left text-xs text-stone-500">
                     <tr>
                         <th class="px-4 py-2 font-medium">{{ t('Müşteri') }}</th>
                         <th class="px-4 py-2 font-medium">{{ t('Plan') }}</th>

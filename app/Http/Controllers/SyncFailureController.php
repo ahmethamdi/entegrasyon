@@ -373,6 +373,7 @@ final class SyncFailureController extends Controller
                 'sku' => $operation->listing?->variant?->sku,
                 'externalId' => $operation->listing?->external_id,
                 'channel' => $operation->connection?->label,
+                'channelCode' => $operation->connection?->channel_type_code,
 
                 // Ekranda alan adı gösterilir (`Stok`), operasyon türü
                 // değil: `INVENTORY_PUSH` iç bir kavramdır ve satıcıya

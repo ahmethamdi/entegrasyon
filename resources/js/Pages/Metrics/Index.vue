@@ -135,7 +135,7 @@ const lastCapture = computed(() => {
         -->
         <div
             v-if="summary.breaching > 0"
-            class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+            class="mt-6 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
             <span class="font-semibold">{{ t(':count metrik eşiği aştı.', { count: summary.breaching }) }}</span>
             {{ t('Eşiği aşan metrikler aşağıda en üstte listelenir.') }}
@@ -145,7 +145,7 @@ const lastCapture = computed(() => {
             <div
                 v-for="card in cards"
                 :key="card.metric"
-                class="rounded border p-4"
+                class="rounded-[14px] border p-4"
                 :class="card.breaching
                     ? 'border-red-300 bg-red-50'
                     : (card.nearThreshold ? 'border-amber-300 bg-amber-50' : 'border-stone-200 bg-white')"
@@ -173,13 +173,13 @@ const lastCapture = computed(() => {
                     -->
                     <span
                         v-if="card.breaching"
-                        class="shrink-0 rounded border border-red-300 bg-white px-2 py-0.5 text-[10px] font-medium tracking-wide text-red-900"
+                        class="shrink-0 whitespace-nowrap rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-900"
                     >
                         {{ t('EŞİK AŞILDI') }}
                     </span>
                     <span
                         v-else-if="card.nearThreshold"
-                        class="shrink-0 rounded border border-amber-300 bg-white px-2 py-0.5 text-[10px] font-medium tracking-wide text-amber-900"
+                        class="shrink-0 whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-900"
                     >
                         {{ t('EŞİĞE YAKIN') }}
                     </span>

@@ -327,7 +327,7 @@ function toggleErrors(id) {
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
         <div class="relative mt-3 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                <thead class="border-b border-stone-200 text-left">
                     <tr>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kaynak') }}</th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Durum') }}</th>
@@ -354,7 +354,7 @@ function toggleErrors(id) {
 
                             <td class="px-4 py-3">
                                 <span
-                                    class="inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-medium tracking-wide"
+                                    class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                     :class="badgeFor(row.status).class"
                                 >
                                     <span

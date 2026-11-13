@@ -116,7 +116,7 @@ function placedAt(row) {
             <div class="flex flex-wrap rounded-[10px] border border-stone-300 bg-white p-0.5">
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 text-sm transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition"
                     :class="filters.filter === 'all'
                         ? 'bg-stone-900 text-white'
                         : 'text-stone-700 hover:bg-stone-100'"
@@ -126,7 +126,7 @@ function placedAt(row) {
                 </button>
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 text-sm transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition"
                     :class="filters.filter === 'awaiting_shipment'
                         ? 'bg-stone-900 text-white'
                         : 'text-stone-700 hover:bg-stone-100'"
@@ -136,7 +136,7 @@ function placedAt(row) {
                 </button>
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 text-sm transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition"
                     :class="filters.filter === 'oversold'
                         ? 'bg-stone-900 text-white'
                         : 'text-stone-700 hover:bg-stone-100'"
@@ -146,7 +146,7 @@ function placedAt(row) {
                 </button>
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 text-sm transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition"
                     :class="filters.filter === 'unmatched'
                         ? 'bg-stone-900 text-white'
                         : 'text-stone-700 hover:bg-stone-100'"
@@ -214,7 +214,7 @@ function placedAt(row) {
         -->
         <div v-else class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                <thead class="border-b border-stone-200 text-left">
                     <tr>
                         <th v-if="can('orders.work')" class="w-10 px-4 py-2.5">
                             <input type="checkbox" :checked="allSelected" :aria-label="t('Tümünü seç')" @change="toggleAll">

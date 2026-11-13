@@ -253,7 +253,7 @@ function isDeciding(row, decision) {
         -->
         <div
             v-if="summary.price_conflict > 0"
-            class="mt-6 rounded border border-violet-300 bg-violet-50 px-4 py-3 text-sm text-violet-900"
+            class="mt-6 rounded-[12px] border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900"
         >
             <span class="font-semibold">
                 {{ t(':count üründe kanaldaki fiyat sizinkinden farklı.', { count: summary.price_conflict }) }}
@@ -267,7 +267,7 @@ function isDeciding(row, decision) {
         -->
         <div
             v-if="summary.manual_review > 0"
-            class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+            class="mt-6 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
             <span class="font-semibold">{{ t(':count ürün elle inceleme bekliyor.', { count: summary.manual_review }) }}</span>
             {{ t('Bu satırlarda kanal üç tur üst üste bizim gönderdiğimiz değeri uygulamadı; otomatik onarım durduruldu. Kanal panelinden ürünün stok yönetimi ayarını ve yetkileri kontrol edin.') }}
@@ -278,7 +278,7 @@ function isDeciding(row, decision) {
             <div class="flex rounded-[10px] border border-stone-300 bg-white p-0.5">
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 text-sm transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition"
                     :class="filters.filter === 'open'
                         ? 'bg-stone-900 text-white'
                         : 'text-stone-700 hover:bg-stone-100'"
@@ -288,7 +288,7 @@ function isDeciding(row, decision) {
                 </button>
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 text-sm transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium text-sm transition"
                     :class="filters.filter === 'all'
                         ? 'bg-stone-900 text-white'
                         : 'text-stone-700 hover:bg-stone-100'"
@@ -307,7 +307,7 @@ function isDeciding(row, decision) {
         <div class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <!-- Karar sütunu iki düğme taşıyor: asgari genişlik ONA GÖRE. -->
             <table class="w-full min-w-5xl text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                <thead class="border-b border-stone-200 text-left">
                     <tr>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('SKU') }}</th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Durum') }}</th>
@@ -332,7 +332,7 @@ function isDeciding(row, decision) {
 
                         <td class="px-4 py-3">
                             <span
-                                class="inline-block rounded border px-2 py-0.5 text-[10px] font-medium tracking-wide"
+                                class="inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="badgeFor(row.status).class"
                             >
                                 {{ badgeFor(row.status).text }}

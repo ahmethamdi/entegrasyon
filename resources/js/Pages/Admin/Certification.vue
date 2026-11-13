@@ -60,7 +60,7 @@ const pick = (row, cap) => {
 
         <div class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-[1100px] text-xs">
-                <thead class="bg-stone-50 text-left text-stone-500">
+                <thead class=" text-left text-stone-500">
                     <tr>
                         <th class="px-3 py-2 font-medium">{{ t('Kanal') }}</th>
                         <th v-for="c in capabilities" :key="c.key" class="px-1 py-2 text-center font-medium">{{ t(c.label) }}</th>

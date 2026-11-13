@@ -69,7 +69,7 @@ function send(question) {
             <div class="flex rounded-[10px] border border-stone-300 bg-white p-0.5 text-sm">
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition"
                     :class="filter === 'unanswered' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                     @click="setFilter('unanswered')"
                 >
@@ -77,7 +77,7 @@ function send(question) {
                 </button>
                 <button
                     type="button"
-                    class="rounded px-3 py-1.5 transition"
+                    class="whitespace-nowrap rounded-lg px-3 py-1.5 font-medium transition"
                     :class="filter === 'all' ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-100'"
                     @click="setFilter('all')"
                 >

@@ -8,44 +8,35 @@ defineProps({
 });
 
 /*
- * DURUM DOLGU DEĞİL ÇUBUKTUR — sidebar'ın aktif öğesiyle AYNI ilke.
- *
- * Önceki hâlde kötü durumda kartın TAMAMI `bg-red-50` oluyordu: üçlü
- * ızgarada ~300×90px'lik kırmızı bir yüzey ve hemen altındaki tablonun
- * satır tonlarıyla yarışıyordu. Durum artık 3px'lik üst çubukta.
- *
- * SAYININ RENGİ ÇUBUĞU TEKRARLAR: renk körlüğünde tek sinyale
- * güvenilmez, ikisi birden kayarsa bile sayı hâlâ okunur.
- *
- * NÖTR ÇUBUK ŞEFFAF DEĞİL `stone-200`: yalnızca kötü durumda beliren bir
- * çubuk kartın okunuşunu 3px kaydırırdı. Çubuk hep var, yalnızca RENGİ
- * değişir.
+ * ANA SAYFA KARTIYLA AYNI DİL (Yön A): beyaz kart, 14px köşe, gölge ve
+ * üst renk çubuğu YOK. Durum iki sinyalle verilir — etiketin önündeki
+ * nokta ve sayının rengi; renk körlüğünde ikisinden biri yetmezse
+ * ipucu satırı metinle söyler.
  */
-const rails = {
-    neutral: 'bg-stone-200',
+const dots = {
+    neutral: null,
     good: 'bg-emerald-500',
     warning: 'bg-amber-500',
-    error: 'bg-red-500',
+    error: 'bg-brand-600',
 };
 
 const values = {
     neutral: 'text-stone-900',
     good: 'text-stone-900',
     warning: 'text-amber-800',
-    error: 'text-red-800',
+    error: 'text-brand-700',
 };
 </script>
 
 <template>
-    <div class="relative overflow-hidden rounded-[14px] border border-stone-200 bg-white p-4">
-        <span class="absolute inset-x-0 top-0 h-[3px]" :class="rails[tone] ?? rails.neutral" aria-hidden="true" />
-
-        <p class="text-sm text-stone-600">
+    <div class="flex flex-col gap-2 rounded-[14px] border border-stone-200 bg-white p-4 sm:p-5">
+        <span class="flex items-center gap-2 text-[13px] text-stone-600">
+            <span v-if="dots[tone]" class="h-2 w-2 shrink-0 rounded-full" :class="dots[tone]" aria-hidden="true" />
             {{ label }}
-        </p>
-        <p class="mt-1.5 text-2xl font-semibold tabular-nums" :class="values[tone] ?? values.neutral">
+        </span>
+        <span class="text-2xl font-bold tracking-tight tabular-nums sm:text-[30px]" :class="values[tone] ?? values.neutral">
             {{ value }}
-        </p>
-        <p v-if="hint" class="mt-1 text-xs text-stone-500">{{ hint }}</p>
+        </span>
+        <span v-if="hint" class="text-[13px] text-stone-600">{{ hint }}</span>
     </div>
 </template>

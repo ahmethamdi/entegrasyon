@@ -38,24 +38,24 @@ function when(iso) {
 <template>
     <PanelLayout>
         <PageHeader
-            :section="t('Ürünler')"
+            :section="t('Katalog')"
             :title="t('Tedarikçi XML')"
             :description="t('Toptancının XML ürün listesini bağla: yeni ürünleri aç, stok ve fiyatı her saat güncelle. Önce önizlersin, sonra uygularsın.')"
-        />
+        >
+            <template v-if="can('catalog.manage')" #actions>
+                <Link href="/suppliers/create" class="inline-flex rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700">
+                    {{ t('Tedarikçi ekle') }}
+                </Link>
+            </template>
+        </PageHeader>
 
         <p v-if="flashSuccess" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
 
-        <div class="mt-6">
-            <Link v-if="can('catalog.manage')" href="/suppliers/create" class="inline-flex rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700">
-                {{ t('Tedarikçi ekle') }}
-            </Link>
-        </div>
-
         <p v-if="sources.length === 0" class="mt-8 text-sm text-stone-600">{{ t('Henüz tedarikçi yok.') }}</p>
 
-        <div v-else class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200">
+        <div v-else class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
-                <thead class="bg-stone-50 text-left text-xs text-stone-600">
+                <thead class="text-left text-xs text-stone-500">
                     <tr>
                         <th class="px-4 py-2 font-medium">{{ t('Tedarikçi') }}</th>
                         <th class="px-4 py-2 font-medium">{{ t('Saatlik güncelleme') }}</th>
@@ -76,7 +76,7 @@ function when(iso) {
                             <span v-else class="text-stone-500">{{ t('Kapalı') }}</span>
                         </td>
                         <td class="px-4 py-3">
-                            <span v-if="statusFor(source.lastStatus)" class="rounded border px-2 py-0.5 text-xs" :class="statusFor(source.lastStatus).class">
+                            <span v-if="statusFor(source.lastStatus)" class="whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium" :class="statusFor(source.lastStatus).class">
                                 {{ t(statusFor(source.lastStatus).text) }}
                             </span>
                             <span v-else class="text-stone-400">—</span>

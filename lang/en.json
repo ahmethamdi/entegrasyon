@@ -2072,5 +2072,8 @@
     "Planı değiştir": "Change plan",
     "%:pct kullanıldı": ":pct% used",
     "Sınır yok": "No limit",
-    "Kullanıyorsun": "Your plan"
+    "Kullanıyorsun": "Your plan",
+    ":count kalem": "1 item|:count items",
+    "Hangi kanallarda": "Channels",
+    "Ürün bilgileri": "Product details"
 }

@@ -266,7 +266,7 @@ function send(connectionId) {
 
             <div
                 v-if="flashWarning"
-                class="mt-6 rounded border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+                class="mt-6 rounded-[12px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
             >
                 {{ flashWarning }}
             </div>

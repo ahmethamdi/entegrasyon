@@ -103,7 +103,7 @@ function filter(kind) {
             <span v-if="run.durationMs !== null" class="text-stone-500">· {{ (run.durationMs / 1000).toFixed(1) }} sn</span>
             <Link :href="`/suppliers/${source.id}`" class="ml-auto underline">{{ t('Kaynağa dön') }}</Link>
         </div>
-        <p v-if="run.errorDetail" class="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 font-mono text-xs text-red-900">{{ run.errorDetail }}</p>
+        <p v-if="run.errorDetail" class="mt-3 rounded-[12px] border border-red-200 bg-red-50 px-3 py-2 font-mono text-xs text-red-900">{{ run.errorDetail }}</p>
         <p v-if="running" class="mt-3 text-sm text-sky-800">{{ t('Tur sürüyor, sayfa kendiliğinden yenilenir…') }}</p>
 
         <dl class="mt-6 grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4">
@@ -122,7 +122,7 @@ function filter(kind) {
 
         <div class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
-                <thead class="bg-stone-50 text-left text-xs text-stone-600">
+                <thead class=" text-left text-xs text-stone-600">
                     <tr>
                         <th class="px-4 py-2 font-medium">{{ t('Tedarikçi kodu') }}</th>
                         <th class="px-4 py-2 font-medium">{{ t('Ne oldu') }}</th>

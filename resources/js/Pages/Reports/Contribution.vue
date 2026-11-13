@@ -124,7 +124,7 @@ const settledEmpty = computed(() => props.rows.every((r) => r.settled.status ===
 <template>
     <PanelLayout>
         <div class="flex flex-wrap items-end justify-between gap-4">
-            <PageHeader :section="t('Raporlar')" :title="t('Katkı (KDV dahil)')" />
+            <PageHeader :section="t('Finans')" :title="t('Katkı (KDV dahil)')" />
         </div>
 
         <p class="mt-1 max-w-3xl text-[13px] leading-relaxed text-stone-600">
@@ -261,9 +261,9 @@ const settledEmpty = computed(() => props.rows.every((r) => r.settled.status ===
                 {{ t('Siparişe güvenle bağlanamayan pazaryeri işlemleri. Tahminle bağlanmaz ve katkıya girmez; sipariş sonradan gelirse otomatik yeniden denenir.') }}
                 {{ t('Doğrulanmamış ya da tanınmayan türdeki işlem sayısı: :count', { count: unmatched.unclassified }) }}
             </p>
-            <div v-if="unmatched.rows.length" class="relative mt-2 overflow-x-auto rounded border border-stone-200 bg-white">
+            <div v-if="unmatched.rows.length" class="relative mt-2 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-stone-50 text-left text-xs text-stone-600">
+                    <thead class=" text-left text-xs text-stone-600">
                         <tr>
                             <th class="px-3 py-2">{{ t('Tarih') }}</th>
                             <th class="px-3 py-2">{{ t('Tür') }}</th>

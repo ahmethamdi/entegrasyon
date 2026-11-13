@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import StatCard from '../../Components/StatCard.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { brandIcon } from '../../lib/format.js';
 import { intlLocale, k, useI18n } from '../../lib/i18n';
 import { usePermissions } from '../../lib/permissions.js';
 
@@ -177,7 +178,7 @@ function domainFor(domain) {
         -->
         <div
             v-if="summary.needs_user > 0"
-            class="mt-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
+            class="mt-6 rounded-[12px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
             <span class="font-semibold">{{ t(':count işlem müdahale bekliyor.', { count: summary.needs_user }) }}</span>
             {{ t('Yetki ve doğrulama hataları yeniden denemeyle çözülmez: önce kanal anahtarını yenileyin veya ürün verisini düzeltin, sonra yeniden deneyin.') }}
@@ -194,7 +195,7 @@ function domainFor(domain) {
         -->
         <div class="relative mt-8 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-208 text-sm">
-                <thead class="border-b border-stone-200 bg-stone-50 text-left">
+                <thead class="border-b border-stone-200 text-left">
                     <tr>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('SKU') }}</th>
                         <th class="px-4 py-2.5 text-xs font-medium text-stone-600">{{ t('Kanal') }}</th>
@@ -216,13 +217,18 @@ function domainFor(domain) {
                             </p>
                         </td>
 
-                        <td class="px-4 py-3 text-stone-700">{{ row.channel ?? '—' }}</td>
+                        <td class="px-4 py-3 text-stone-700">
+                            <span class="flex items-start gap-2">
+                                <img v-if="brandIcon(row.channelCode)" :src="brandIcon(row.channelCode)" alt="" class="mt-0.5 size-4 shrink-0 rounded-sm object-contain">
+                                {{ row.channel ?? '—' }}
+                            </span>
+                        </td>
 
                         <td class="px-4 py-3 text-stone-700">{{ domainFor(row.domain) }}</td>
 
                         <td class="px-4 py-3">
                             <span
-                                class="inline-block rounded border px-2 py-0.5 text-[10px] font-medium tracking-wide"
+                                class="inline-block whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
                                 :class="errorFor(row.errorClass).class"
                             >
                                 {{ errorFor(row.errorClass).text }}
@@ -263,7 +269,7 @@ function domainFor(domain) {
                             <button
                                 v-if="can('catalog.manage')"
                                 type="button"
-                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="whitespace-nowrap rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="busy !== null"
                                 @click="retry(row.id)"
                             >

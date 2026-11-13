@@ -33,7 +33,7 @@ const measured = computed(() => props.report.sales.multi_channel > 0);
 
 <template>
     <PanelLayout>
-        <PageHeader :section="t('Raporlar')" :title="t('Fazla satış koruması')" />
+        <PageHeader :section="t('Finans')" :title="t('Fazla satış koruması')" />
 
         <p class="mt-2 max-w-3xl text-sm text-stone-600">
             {{ t('Son :days günün ölçülmüş rakamları (:from – :to). Her sayı kayıttan gelir; tahmin ya da örnek veri yoktur. Tanımlar her kutunun altında yazılıdır.', { days, from: date(report.from), to: date(report.to) }) }}

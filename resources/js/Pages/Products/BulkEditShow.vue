@@ -116,7 +116,7 @@ function priceCell(row) {
 
         <div v-if="bulkImport.status !== 'rejected'" class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
-                <thead class="bg-stone-50 text-left text-xs text-stone-600">
+                <thead class=" text-left text-xs text-stone-600">
                     <tr>
                         <th class="px-3 py-2 font-medium">{{ t('Satır') }}</th>
                         <th class="px-3 py-2 font-medium">SKU</th>
