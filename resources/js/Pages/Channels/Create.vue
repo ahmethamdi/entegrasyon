@@ -145,14 +145,14 @@ function submit() {
                     id="channel_type_code"
                     v-model="form.channel_type_code"
                     required
-                    class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                    class="mt-1 w-full rounded-[10px] border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                     <option v-for="type in channelTypes" :key="type.code" :value="type.code">
                         {{ type.name }}
                     </option>
                 </select>
                 <div v-if="selected?.logo" class="mt-3 flex h-7 items-center">
-                    <img :src="selected.logo" :alt="t(':channel logosu', { channel: selected.name })" class="size-10 rounded-md border border-stone-200 bg-white p-1 object-contain">
+                    <img :src="selected.logo" :alt="t(':channel logosu', { channel: selected.name })" class="size-10 rounded-[10px] border border-stone-200 bg-white p-1 object-contain">
                 </div>
                 <p v-if="form.errors.channel_type_code" class="mt-1 text-sm text-red-700">
                     {{ form.errors.channel_type_code }}
@@ -161,7 +161,7 @@ function submit() {
 
             <div
                 v-if="installUrl"
-                class="rounded-lg border border-stone-200 bg-white p-5"
+                class="rounded-[14px] border border-stone-200 bg-white p-5"
             >
                 <p class="text-sm font-medium text-stone-900">
                     {{ t(':channel mağazanı uygulamayla bağla', { channel: selected?.name ?? '' }) }}
@@ -174,7 +174,7 @@ function submit() {
                         :href="installUrl"
                         target="_blank"
                         rel="noopener"
-                        class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                        class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
                     >
                         {{ t(':channel App Store\'da aç', { channel: selected?.name ?? '' }) }}
                     </a>
@@ -195,7 +195,7 @@ function submit() {
                     type="text"
                     required
                     :placeholder="t('Ana Mağaza')"
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                    class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     {{ t('Yalnızca senin göreceğin isim; birden fazla mağazayı ayırt etmek için.') }}
@@ -215,7 +215,7 @@ function submit() {
                     type="text"
                     required
                     :placeholder="t('magaza.example.com')"
-                    class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                    class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
                 <p class="mt-1 text-xs text-stone-500">
                     {{ t('Bir mağaza yalnızca tek bir hesaba bağlanabilir. Bağlantı HTTPS üzerinden kurulur.') }}
@@ -232,7 +232,7 @@ function submit() {
             -->
             <div
                 v-if="!connectable"
-                class="rounded-lg border border-amber-300 bg-amber-50 p-4"
+                class="rounded-[14px] border border-amber-300 bg-amber-50 p-4"
             >
                 <p class="text-sm font-medium text-amber-900">
                     {{ t(':channel panelden bağlanamıyor', { channel: selected?.name ?? '' }) }}
@@ -244,7 +244,7 @@ function submit() {
                 </p>
             </div>
 
-            <div v-else-if="viaWizard" class="rounded-lg border border-sky-200 bg-sky-50 p-4">
+            <div v-else-if="viaWizard" class="rounded-[14px] border border-sky-200 bg-sky-50 p-4">
                 <p class="text-sm text-sky-900">
                     {{ t('Mağaza adresini yaz; WooCommerce yönetimine gidip 34Pazar\'a izin vereceksin. Anahtar kopyalaman gerekmez. Ürün, fiyat ve stok yazma izinleri kapalı başlar; Kanallar ekranından sen açarsın.') }}
                 </p>
@@ -253,7 +253,7 @@ function submit() {
                 </button>
             </div>
 
-            <div v-else-if="allFields.length" class="rounded-lg border border-stone-200 bg-stone-50 p-4">
+            <div v-else-if="allFields.length" class="rounded-[14px] border border-stone-200 bg-stone-50 p-4">
                 <p class="text-sm font-medium text-stone-900">
                     {{ t(':channel kimlik bilgileri', { channel: selected?.name ?? '' }) }}
                 </p>
@@ -287,7 +287,7 @@ function submit() {
                             :required="!field.optional"
                             autocomplete="off"
                             spellcheck="false"
-                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                            class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         >
                         <p v-if="field.hint" class="mt-1 text-xs text-stone-500">
                             {{ field.hint }}
@@ -306,7 +306,7 @@ function submit() {
             -->
             <div
                 v-if="connectable && usesOauth"
-                class="rounded-lg border border-sky-200 bg-sky-50 p-4"
+                class="rounded-[14px] border border-sky-200 bg-sky-50 p-4"
             >
                 <p class="text-sm text-sky-900">
                     {{ t('Kaydettikten sonra :channel sitesine yönlendirileceksin ve izni orada vereceksin. Bağlantı ancak izin verildikten sonra çalışır.', { channel: selected?.name ?? '' }) }}
@@ -317,7 +317,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing || !connectable"
-                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     <template v-if="form.processing">
                         {{ usesOauth ? t('Yönlendiriliyor…') : t('Bağlanıyor…') }}

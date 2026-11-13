@@ -25,7 +25,7 @@ function printPage() {
     <div class="mx-auto max-w-4xl bg-white p-6 text-sm text-stone-900 print:p-0">
         <div class="flex items-center justify-between gap-4 print:hidden">
             <Link :href="`/fulfillment/batches/${batch.id}`" class="text-stone-700 underline">{{ t('Geri') }}</Link>
-            <button type="button" class="rounded-md bg-stone-900 px-3 py-1.5 text-white" @click="printPage">{{ t('Yazdır') }}</button>
+            <button type="button" class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-white" @click="printPage">{{ t('Yazdır') }}</button>
         </div>
 
         <h1 class="mt-4 text-lg font-semibold">{{ t('Toplama listesi') }}</h1>

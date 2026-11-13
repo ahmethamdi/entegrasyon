@@ -243,7 +243,7 @@ function send(connectionId) {
             <template #actions>
                 <Link
                     :href="`/products/${product.id}/edit`"
-                    class="shrink-0 rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    class="shrink-0 rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                     {{ t('Ürünü düzenle') }}
                 </Link>
@@ -259,7 +259,7 @@ function send(connectionId) {
 
             <div
                 v-if="flashSuccess"
-                class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+                class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
             >
                 {{ flashSuccess }}
             </div>
@@ -273,7 +273,7 @@ function send(connectionId) {
 
             <div
                 v-if="connectionError"
-                class="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
+                class="mt-6 rounded-[14px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
             >
                 {{ connectionError }}
             </div>
@@ -282,7 +282,7 @@ function send(connectionId) {
                 GÖRSELLER (A15): her görsel varsayılan olarak her kanala gider;
                 satıcı bir görseli belirli bir kanaldan çıkarabilir.
             -->
-            <section v-if="imageChannels.length" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <section v-if="imageChannels.length" class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
                 <h2 class="text-sm font-medium text-stone-900">{{ t('Görseller') }}</h2>
 
                 <p v-if="!images.length" class="mt-2 text-sm text-amber-900">
@@ -310,7 +310,7 @@ function send(connectionId) {
                         <li
                             v-for="(image, index) in images"
                             :key="image.id"
-                            class="rounded-md border border-stone-200 p-2"
+                            class="rounded-[10px] border border-stone-200 p-2"
                         >
                             <img
                                 v-if="image.url"
@@ -358,7 +358,7 @@ function send(connectionId) {
             -->
             <div
                 v-if="!sorted.length"
-                class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center"
+                class="mt-10 rounded-[14px] border border-dashed border-stone-300 p-10 text-center"
             >
                 <p class="text-sm text-stone-600">
                     {{ t('Ürün gönderilebilecek aktif kanal yok. Kanalın sağlık kontrolünü geçmiş olması gerekiyor.') }}
@@ -372,7 +372,7 @@ function send(connectionId) {
                 <article
                     v-for="channel in sorted"
                     :key="channel.connectionId"
-                    class="rounded-lg border border-stone-200 bg-white p-5"
+                    class="rounded-[14px] border border-stone-200 bg-white p-5"
                 >
                     <div class="flex items-start justify-between gap-4">
                         <div class="min-w-0">
@@ -403,7 +403,7 @@ function send(connectionId) {
                             v-if="channel.publishEnabled"
                             type="button"
                             :disabled="sending === channel.connectionId"
-                            class="shrink-0 rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="shrink-0 rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                             @click="send(channel.connectionId)"
                         >
                             {{ channel.published ? t('Yeniden gönder') : t('Kanala gönder') }}
@@ -550,7 +550,7 @@ function send(connectionId) {
 
                                     <label class="block">
                                         <span class="sr-only">{{ t(':sku için kanal fiyatı', { sku: row.sku ?? '' }) }}</span>
-                                        <span class="flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                                        <span class="flex items-center rounded-[10px] border border-stone-300 bg-white focus-within:border-ring">
                                             <input
                                                 v-model="priceInputs[row.listingId]"
                                                 type="number"
@@ -569,7 +569,7 @@ function send(connectionId) {
                                     <button
                                         type="button"
                                         :disabled="savingPrice !== null"
-                                        class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                        class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                                         @click="savePrice(row)"
                                     >
                                         {{ savingPrice === row.listingId ? t('Kaydediliyor…') : t('Kaydet') }}

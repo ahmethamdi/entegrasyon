@@ -20,13 +20,13 @@ const date = (iso) => new Date(iso).toLocaleString(intlLocale(), { day: 'numeric
     <PanelLayout>
         <PageHeader :section="t('Yönetim')" :title="t('İletişim mesajları')" :description="t(':count mesaj', { count: messages.total })">
             <template #actions>
-                <Link href="/admin" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Platform özeti') }}</Link>
+                <Link href="/admin" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Platform özeti') }}</Link>
             </template>
         </PageHeader>
 
-        <p v-if="!messages.data.length" class="mt-4 rounded-lg border border-stone-200 bg-white px-4 py-6 text-center text-sm text-stone-500">{{ t('Henüz mesaj yok.') }}</p>
+        <p v-if="!messages.data.length" class="mt-4 rounded-[14px] border border-stone-200 bg-white px-4 py-6 text-center text-sm text-stone-500">{{ t('Henüz mesaj yok.') }}</p>
 
-        <ul v-else class="mt-4 divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">
+        <ul v-else class="mt-4 divide-y divide-stone-200 rounded-[14px] border border-stone-200 bg-white">
             <li v-for="row in messages.data" :key="row.id" class="px-4 py-4">
                 <div class="flex flex-wrap items-baseline justify-between gap-2">
                     <p class="text-sm">
@@ -45,9 +45,9 @@ const date = (iso) => new Date(iso).toLocaleString(intlLocale(), { day: 'numeric
         </ul>
 
         <nav v-if="messages.lastPage > 1" class="mt-4 flex items-center justify-between text-sm" :aria-label="t('Sayfalar')">
-            <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="messages.currentPage <= 1" @click="go(messages.currentPage - 1)">{{ t('Önceki') }}</button>
+            <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="messages.currentPage <= 1" @click="go(messages.currentPage - 1)">{{ t('Önceki') }}</button>
             <span class="text-stone-600">{{ messages.currentPage }} / {{ messages.lastPage }}</span>
-            <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="messages.currentPage >= messages.lastPage" @click="go(messages.currentPage + 1)">{{ t('Sonraki') }}</button>
+            <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="messages.currentPage >= messages.lastPage" @click="go(messages.currentPage + 1)">{{ t('Sonraki') }}</button>
         </nav>
     </PanelLayout>
 </template>

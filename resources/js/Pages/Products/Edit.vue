@@ -88,7 +88,7 @@ function saveCost(variant) {
                 alanlarıdır; başlık düzeltmesinin stok hareketi yaratması
                 ledger'ı kirletirdi. Stok sayımı ürün listesindedir.
             -->
-            <p class="mt-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
+            <p class="mt-6 rounded-[14px] border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
                 {{ t('Bu ekran yalnızca içeriği düzenler; stok değişmez.') }}
                 <Link :href="`/products?search=${encodeURIComponent(product.sku)}`" class="font-medium text-stone-900 underline">{{ t('Stok sayımı ürün listesinden girilir.') }}</Link>
             </p>
@@ -103,7 +103,7 @@ function saveCost(variant) {
                         v-model="form.title"
                         type="text"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.title" class="mt-1 text-sm text-red-700">
                         {{ form.errors.title }}
@@ -121,7 +121,7 @@ function saveCost(variant) {
                             type="number"
                             step="0.01"
                             min="0"
-                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                            class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         >
                         <p v-if="form.errors.price" class="mt-1 text-sm text-red-700">
                             {{ form.errors.price }}
@@ -135,7 +135,7 @@ function saveCost(variant) {
                         <select
                             id="status"
                             v-model="form.status"
-                            class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                            class="mt-1 w-full rounded-[10px] border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         >
                             <option value="active">{{ t('Yayında') }}</option>
                             <option value="draft">{{ t('Taslak') }}</option>
@@ -152,7 +152,7 @@ function saveCost(variant) {
                         id="description"
                         v-model="form.description"
                         rows="4"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     />
                 </div>
 
@@ -164,7 +164,7 @@ function saveCost(variant) {
                         id="brand"
                         v-model="form.brand"
                         type="text"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                 </div>
 
@@ -181,7 +181,7 @@ function saveCost(variant) {
                         v-model="form.internal_category_id"
                         type="text"
                         :placeholder="t('Örn. kadin-elbise')"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p class="mt-1 text-xs text-stone-500">
                         {{ t('Kendi kategori adınız.') }}
@@ -196,7 +196,7 @@ function saveCost(variant) {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {{ form.processing ? t('Kaydediliyor…') : t('Kaydet') }}
                     </button>
@@ -220,7 +220,7 @@ function saveCost(variant) {
                 <button
                     type="button"
                     :disabled="savingBundle || !bundleComponents.length"
-                    class="mt-4 rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="mt-4 rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="saveBundle"
                 >
                     {{ savingBundle ? t('Kaydediliyor…') : t('Setin içeriğini kaydet') }}
@@ -238,7 +238,7 @@ function saveCost(variant) {
                         <span class="min-w-0 flex-1 truncate font-mono text-xs text-stone-600">{{ variant.sku }}</span>
                         <label class="block">
                             <span class="sr-only">{{ t(':sku için alış maliyeti', { sku: variant.sku }) }}</span>
-                            <span class="flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                            <span class="flex items-center rounded-[10px] border border-stone-300 bg-white focus-within:border-ring">
                                 <input
                                     v-model="costs[variant.id]"
                                     type="number"
@@ -254,7 +254,7 @@ function saveCost(variant) {
                         <button
                             type="button"
                             :disabled="savingCost !== null"
-                            class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                             @click="saveCost(variant)"
                         >
                             {{ savingCost === variant.id ? t('Kaydediliyor…') : t('Kaydet') }}

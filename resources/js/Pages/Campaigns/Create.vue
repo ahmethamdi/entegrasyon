@@ -86,7 +86,7 @@ function submit() {
         <form class="mt-8 max-w-2xl space-y-7" @submit.prevent="submit">
             <div>
                 <label for="name" class="block text-sm font-medium text-stone-700">{{ t('Kampanya adı') }}</label>
-                <input id="name" v-model="form.name" type="text" maxlength="120" required :placeholder="t('Kasım indirimi')" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                <input id="name" v-model="form.name" type="text" maxlength="120" required :placeholder="t('Kasım indirimi')" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                 <p class="mt-1 text-xs text-stone-500">{{ t('Yalnız sende görünür.') }}</p>
                 <p v-if="form.errors.name" class="mt-1 text-sm text-red-700">{{ form.errors.name }}</p>
             </div>
@@ -100,7 +100,7 @@ function submit() {
                     <label class="flex items-center gap-2 text-sm text-stone-700">
                         <input v-model="form.discount_type" type="radio" value="amount"> {{ t('Tutar') }}
                     </label>
-                    <span class="flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                    <span class="flex items-center rounded-[10px] border border-stone-300 bg-white focus-within:border-ring">
                         <span v-if="form.discount_type === 'percent'" class="pl-3 text-sm text-stone-500">%</span>
                         <input v-model="form.discount_value" type="number" step="0.01" min="0.01" required inputmode="decimal" class="w-28 rounded-r-md border-0 px-2 py-2 text-sm focus:outline-none">
                     </span>
@@ -117,11 +117,11 @@ function submit() {
                 <div class="mt-2 flex flex-wrap gap-4">
                     <label class="block">
                         <span class="block text-xs text-stone-600">{{ t('Başlangıç') }}</span>
-                        <input v-model="form.starts_at" type="datetime-local" required class="mt-1 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                        <input v-model="form.starts_at" type="datetime-local" required class="mt-1 rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                     </label>
                     <label class="block">
                         <span class="block text-xs text-stone-600">{{ t('Bitiş') }}</span>
-                        <input v-model="form.ends_at" type="datetime-local" required class="mt-1 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                        <input v-model="form.ends_at" type="datetime-local" required class="mt-1 rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                     </label>
                 </div>
                 <p class="mt-1 text-xs text-stone-500">{{ t('Başlangıç geçmişteyse kampanya kaydedince hemen başlar.') }}</p>
@@ -158,13 +158,13 @@ function submit() {
                 </div>
 
                 <div class="mt-3 flex flex-wrap items-center gap-2">
-                    <input v-model="term" type="search" :placeholder="t('Ürün adı, SKU ya da barkod ara')" class="min-w-0 flex-1 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                    <input v-model="term" type="search" :placeholder="t('Ürün adı, SKU ya da barkod ara')" class="min-w-0 flex-1 rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                     <button type="button" class="text-sm text-stone-700 underline disabled:opacity-50" :disabled="!results.length" @click="addAllResults">
                         {{ t('Listelenenlerin hepsini ekle') }}
                     </button>
                 </div>
 
-                <ul class="mt-2 max-h-72 divide-y divide-stone-100 overflow-y-auto rounded-md border border-stone-200 bg-white">
+                <ul class="mt-2 max-h-72 divide-y divide-stone-100 overflow-y-auto rounded-[10px] border border-stone-200 bg-white">
                     <li v-if="searching" class="px-3 py-2 text-xs text-stone-500">{{ t('Aranıyor…') }}</li>
                     <li v-else-if="!results.length" class="px-3 py-2 text-xs text-stone-500">{{ t('Ürün bulunamadı.') }}</li>
                     <li v-for="product in results" :key="product.id">
@@ -182,7 +182,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing || !selected.length || !form.connection_ids.length"
-                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ form.processing ? t('Kaydediliyor…') : t('Kampanyayı kaydet') }}
                 </button>

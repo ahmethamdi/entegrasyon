@@ -463,6 +463,24 @@ final class CategoryMappingScreenTest extends TestCase
     /**
      * Misafir eşleştirme ekranını göremez.
      */
+    /**
+     * Varsayılan kanal, satıcının BAĞLI olduğu kanaldır — alfabetik ilk ağaç
+     * değil. Yalnız Trendyol'u olan satıcı Etsy ağacını görüp "hiçbir şey
+     * eşleşmemiş" sanmasın (13 Kas 2026).
+     */
+    #[Test]
+    public function the_default_channel_is_one_the_seller_is_connected_to(): void
+    {
+        [$tenant, $user] = $this->makeTenant();
+        $this->makeTree('v1', 'etsy');
+        $this->makeTree('v1', 'trendyol');
+        $this->makeConnection($tenant);
+
+        $props = $this->actingAs($user)->get('/mappings')->assertOk()->viewData('page')['props'];
+
+        $this->assertSame('trendyol', $props['selectedChannelType']);
+    }
+
     #[Test]
     public function guest_is_redirected_to_login(): void
     {

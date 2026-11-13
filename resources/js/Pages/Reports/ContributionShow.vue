@@ -34,7 +34,7 @@ const statusText = { complete: k('Tamam'), incomplete: k('Eksik'), not_available
         </p>
 
         <div class="mt-6 grid gap-6 lg:grid-cols-2">
-            <section v-for="view in [expected, settled]" :key="view.basis" class="rounded border border-stone-200 bg-white p-4">
+            <section v-for="view in [expected, settled]" :key="view.basis" class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <h2 class="text-sm font-medium text-stone-900">
                     {{ view.basis === 'expected' ? t('Beklenen katkı (KDV dahil)') : t('Gerçekleşen katkı (KDV dahil)') }}
                     <span class="ml-2 rounded border px-2 py-0.5 text-xs">{{ t(statusText[view.status]) }}</span>

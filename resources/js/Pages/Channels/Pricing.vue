@@ -143,14 +143,14 @@ function submit() {
                         <div class="mt-3 flex flex-wrap gap-4">
                             <label class="block">
                                 <span class="block text-xs text-stone-600">{{ t('Yüzde') }}</span>
-                                <span class="mt-1 flex items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                                <span class="mt-1 flex items-center rounded-[10px] border border-stone-300 bg-white focus-within:border-ring">
                                     <span class="pl-3 text-sm text-stone-500">%</span>
                                     <input v-model="form.markup_percent" type="number" step="0.01" min="-90" max="500" inputmode="decimal" class="w-28 rounded-r-md border-0 px-2 py-2 text-sm focus:outline-none">
                                 </span>
                             </label>
                             <label class="block">
                                 <span class="block text-xs text-stone-600">{{ t('Sabit tutar (yüzdeden sonra eklenir)') }}</span>
-                                <input v-model="form.markup_amount" type="number" step="0.01" inputmode="decimal" class="mt-1 w-32 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                                <input v-model="form.markup_amount" type="number" step="0.01" inputmode="decimal" class="mt-1 w-32 rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                             </label>
                         </div>
                         <p v-if="form.errors.markup_percent" class="mt-1 text-sm text-red-700">{{ form.errors.markup_percent }}</p>
@@ -177,7 +177,7 @@ function submit() {
                         <div v-if="guard" class="mt-3 pl-6">
                             <label class="block">
                                 <span class="block text-xs text-stone-600">{{ t('En az kâr') }}</span>
-                                <span class="mt-1 flex w-36 items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                                <span class="mt-1 flex w-36 items-center rounded-[10px] border border-stone-300 bg-white focus-within:border-ring">
                                     <span class="pl-3 text-sm text-stone-500">%</span>
                                     <input v-model="form.min_margin_percent" type="number" step="0.01" min="-100" inputmode="decimal" placeholder="0" class="w-24 rounded-r-md border-0 px-2 py-2 text-sm focus:outline-none">
                                 </span>
@@ -197,7 +197,7 @@ function submit() {
                         <div v-if="form.fx_enabled" class="mt-3 space-y-4 pl-6">
                             <label class="block">
                                 <span class="block text-xs text-stone-600">{{ t('Kanalın para birimi') }}</span>
-                                <select v-model="form.fx_currency" class="mt-1 w-40 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                                <select v-model="form.fx_currency" class="mt-1 w-40 rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                                     <option value="">{{ t('Seç') }}</option>
                                     <option v-for="code in fxCurrencies" :key="code" :value="code">{{ code }}</option>
                                 </select>
@@ -215,7 +215,7 @@ function submit() {
 
                             <label class="block">
                                 <span class="block text-xs text-stone-600">{{ t('Kur payı (komisyon, yurt dışı kargo)') }}</span>
-                                <span class="mt-1 flex w-36 items-center rounded-md border border-stone-300 bg-white focus-within:border-ring">
+                                <span class="mt-1 flex w-36 items-center rounded-[10px] border border-stone-300 bg-white focus-within:border-ring">
                                     <span class="pl-3 text-sm text-stone-500">%</span>
                                     <input v-model="form.fx_markup_percent" type="number" step="0.01" min="0" max="500" inputmode="decimal" class="w-24 rounded-r-md border-0 px-2 py-2 text-sm focus:outline-none">
                                 </span>
@@ -234,7 +234,7 @@ function submit() {
 
                             <label class="block">
                                 <span class="block text-xs text-stone-600">{{ t('En düşük fiyat (isteğe bağlı, kanalın para biriminde)') }}</span>
-                                <input v-model="form.fx_min_price" type="number" step="0.01" min="0" inputmode="decimal" class="mt-1 w-36 rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                                <input v-model="form.fx_min_price" type="number" step="0.01" min="0" inputmode="decimal" class="mt-1 w-36 rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                                 <span class="mt-1 block text-xs text-stone-500">{{ t('Çevrilmiş fiyat bunun altındaysa kanala gönderilmez.') }}</span>
                             </label>
                             <p v-if="form.errors.fx_min_price" class="text-sm text-red-700">{{ form.errors.fx_min_price }}</p>
@@ -245,7 +245,7 @@ function submit() {
                         <button
                             type="submit"
                             :disabled="form.processing"
-                            class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {{ form.processing ? t('Kaydediliyor…') : t('Kaydet') }}
                         </button>
@@ -253,15 +253,15 @@ function submit() {
                     </div>
                 </div>
 
-                <aside class="h-fit rounded-lg border border-stone-200 bg-stone-50 p-4">
+                <aside class="h-fit rounded-[14px] border border-stone-200 bg-stone-50 p-4">
                     <h2 class="text-sm font-medium text-stone-900">{{ t('Örnek hesap') }}</h2>
                     <label class="mt-3 block">
                         <span class="block text-xs text-stone-600">{{ t('Ürün fiyatı') }}</span>
-                        <input v-model="sample" type="number" step="0.01" min="0" inputmode="decimal" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                        <input v-model="sample" type="number" step="0.01" min="0" inputmode="decimal" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                     </label>
                     <label v-if="guard" class="mt-3 block">
                         <span class="block text-xs text-stone-600">{{ t('Alış maliyeti') }}</span>
-                        <input v-model="sampleCost" type="number" step="0.01" min="0" inputmode="decimal" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
+                        <input v-model="sampleCost" type="number" step="0.01" min="0" inputmode="decimal" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
                     </label>
                     <p class="mt-4 text-xs text-stone-600">{{ t(':channel\'e giden fiyat', { channel: connection.channel }) }}</p>
                     <p class="text-2xl font-semibold tabular-nums text-stone-900">{{ sampleResult }}<span v-if="form.fx_enabled && form.fx_currency" class="ml-1 text-sm font-normal text-stone-500">TL</span></p>

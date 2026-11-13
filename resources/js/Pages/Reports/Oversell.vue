@@ -40,13 +40,13 @@ const measured = computed(() => props.report.sales.multi_channel > 0);
         </p>
 
         <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <section class="rounded border border-stone-200 bg-white p-4">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <h2 class="text-sm font-medium text-stone-600">{{ t('İşlenen sipariş') }}</h2>
                 <p class="mt-2 text-3xl font-semibold tabular-nums text-stone-900">{{ count(report.orders.count) }}</p>
                 <p class="mt-2 text-xs text-stone-500">{{ t(':count kanaldan gelen siparişler.', { count: report.orders.channels }) }}</p>
             </section>
 
-            <section class="rounded border border-stone-200 bg-white p-4">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <h2 class="text-sm font-medium text-stone-600">{{ t('Tükenme koruması') }}</h2>
                 <p class="mt-2 text-3xl font-semibold tabular-nums text-stone-900">{{ measured ? count(report.stockouts.protected) : '—' }}</p>
                 <p class="mt-2 text-xs text-stone-500">{{ t('Satış stoğu sıfıra indirdi ve ürün başka kanalda da satıştaydı; sıfır diğer kanalların hepsine ulaştı. Senkron olmasaydı bu ürünler orada satılmaya devam ederdi.') }}</p>
@@ -55,7 +55,7 @@ const measured = computed(() => props.report.sales.multi_channel > 0);
                 </p>
             </section>
 
-            <section class="rounded border border-stone-200 bg-white p-4">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <h2 class="text-sm font-medium text-stone-600">{{ t('Stok güncelleme süresi') }}</h2>
                 <p class="mt-2 text-3xl font-semibold tabular-nums text-stone-900">{{ seconds(report.latency.p95) }}</p>
                 <p class="mt-1 text-xs text-stone-600">
@@ -65,7 +65,7 @@ const measured = computed(() => props.report.sales.multi_channel > 0);
                 <p class="mt-2 text-xs text-stone-500">{{ t('Satış 34Pazar\'a ulaştıktan sonra yeni stoğun diğer kanalların hepsine ulaşma süresi (en yavaş kanal). Pazaryerinin siparişi bize bildirme süresi dahil değildir.') }}</p>
             </section>
 
-            <section class="rounded border border-stone-200 bg-white p-4">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <h2 class="text-sm font-medium text-stone-600">{{ t('Kanal kontrolü') }}</h2>
                 <p class="mt-2 text-3xl font-semibold tabular-nums text-stone-900">{{ count(report.reconciliation.drift) }}</p>
                 <p class="mt-1 text-xs text-stone-600">
@@ -77,7 +77,7 @@ const measured = computed(() => props.report.sales.multi_channel > 0);
             </section>
         </div>
 
-        <section class="mt-6 rounded border border-stone-200 bg-white p-4 text-sm text-stone-700">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-4 text-sm text-stone-700">
             <h2 class="font-medium text-stone-900">{{ t('Satışlar') }}</h2>
             <p v-if="!measured" class="mt-1 text-stone-600">
                 {{ t('Bu dönemde birden fazla kanalda satışta olan bir ürünün satışı yok; süre ve tükenme koruması ilk böyle satışta ölçülür.') }}

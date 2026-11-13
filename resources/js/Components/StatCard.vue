@@ -37,7 +37,7 @@ const values = {
 </script>
 
 <template>
-    <div class="relative overflow-hidden rounded-lg border border-stone-200 bg-white p-4">
+    <div class="relative overflow-hidden rounded-[14px] border border-stone-200 bg-white p-4">
         <span class="absolute inset-x-0 top-0 h-[3px]" :class="rails[tone] ?? rails.neutral" aria-hidden="true" />
 
         <p class="text-sm text-stone-600">

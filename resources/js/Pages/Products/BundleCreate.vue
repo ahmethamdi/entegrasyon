@@ -49,7 +49,7 @@ function submit() {
                         type="text"
                         required
                         :placeholder="t('Kahve hediye seti')"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.title" class="mt-1 text-sm text-red-700">{{ form.errors.title }}</p>
                 </div>
@@ -61,7 +61,7 @@ function submit() {
                         type="text"
                         required
                         :placeholder="t('SET-KAHVE-01')"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.sku" class="mt-1 text-sm text-red-700">{{ form.errors.sku }}</p>
                 </div>
@@ -74,7 +74,7 @@ function submit() {
                         step="0.01"
                         min="0.01"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.price" class="mt-1 text-sm text-red-700">{{ form.errors.price }}</p>
                 </div>
@@ -84,7 +84,7 @@ function submit() {
                         id="description"
                         v-model="form.description"
                         rows="3"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     />
                 </div>
             </div>
@@ -99,7 +99,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing || !components.length"
-                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ t('Seti oluştur') }}
                 </button>

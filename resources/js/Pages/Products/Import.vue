@@ -169,7 +169,7 @@ function toggleErrors(id) {
 
         <div
             v-if="banner"
-            class="mt-6 flex items-center gap-3 rounded-lg border px-4 py-3 text-sm"
+            class="mt-6 flex items-center gap-3 rounded-[14px] border px-4 py-3 text-sm"
             :class="bannerTones[banner.tone]"
             role="status"
             aria-live="polite"
@@ -191,7 +191,7 @@ function toggleErrors(id) {
             <div class="mt-6 grid gap-6 lg:grid-cols-3">
                 <div class="lg:col-span-2">
                     <form
-                        class="rounded-lg border border-stone-200 bg-white p-6"
+                        class="rounded-[14px] border border-stone-200 bg-white p-6"
                         @submit.prevent="submit"
                     >
                         <label class="block text-sm font-medium text-stone-700">
@@ -202,7 +202,7 @@ function toggleErrors(id) {
                             ref="fileInput"
                             type="file"
                             accept=".csv,text/csv"
-                            class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
+                            class="mt-2 block w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:text-white"
                             @change="onFileChange"
                         >
 
@@ -216,7 +216,7 @@ function toggleErrors(id) {
 
                         <button
                             type="submit"
-                            class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="mt-4 rounded-[10px] bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="form.processing || !form.file"
                         >
                             {{ form.processing ? t('Yükleniyor…') : t('Yükle') }}
@@ -230,7 +230,7 @@ function toggleErrors(id) {
                         kanaldan okuyabildiği veriyi elle taşıtmak demektir.
                     -->
                     <form
-                        class="mt-6 rounded-lg border border-stone-200 bg-white p-6"
+                        class="mt-6 rounded-[14px] border border-stone-200 bg-white p-6"
                         @submit.prevent="submitChannel"
                     >
                         <label class="block text-sm font-medium text-stone-700">
@@ -244,7 +244,7 @@ function toggleErrors(id) {
                         <template v-else>
                             <select
                                 v-model="channelForm.connection_id"
-                                class="mt-2 block w-full rounded-md border border-stone-300 px-3 py-2 text-sm"
+                                class="mt-2 block w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm"
                             >
                                 <option value="">{{ t('Kanal seç…') }}</option>
                                 <option
@@ -273,7 +273,7 @@ function toggleErrors(id) {
 
                             <button
                                 type="submit"
-                                class="mt-4 rounded-md bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="mt-4 rounded-[10px] bg-stone-900 px-4 py-2 text-sm text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="channelForm.processing || inFlight || !channelForm.connection_id"
                             >
                                 {{ channelForm.processing ? t('Başlatılıyor…') : inFlight ? t('Çekiliyor…') : t('Ürünleri çek') }}
@@ -282,7 +282,7 @@ function toggleErrors(id) {
                     </form>
                 </div>
 
-                <div class="rounded-lg border border-stone-200 bg-white p-6">
+                <div class="rounded-[14px] border border-stone-200 bg-white p-6">
                     <p class="text-sm font-medium text-stone-900">{{ t('Kolonlar') }}</p>
 
                     <p class="mt-3 text-xs uppercase tracking-wide text-stone-500">{{ t('Zorunlu') }}</p>
@@ -325,7 +325,7 @@ function toggleErrors(id) {
         <h2 class="mt-10 text-sm font-medium text-stone-900">{{ t('Geçmiş içe aktarmalar') }}</h2>
 
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div class="relative mt-3 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-3 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>

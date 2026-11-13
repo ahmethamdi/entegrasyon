@@ -87,7 +87,7 @@ function dismiss(suggestion) {
         <div class="mt-3 flex flex-wrap gap-2">
             <button
                 type="button"
-                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="busy !== null"
                 @click="ask('content')"
             >
@@ -96,7 +96,7 @@ function dismiss(suggestion) {
             <button
                 v-if="channel.requirements?.categoryId"
                 type="button"
-                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="busy !== null"
                 @click="ask('attributes')"
             >
@@ -105,7 +105,7 @@ function dismiss(suggestion) {
             <button
                 v-if="channel.requirements && !channel.requirements.categoryId"
                 type="button"
-                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                 :disabled="busy !== null"
                 @click="ask('category')"
             >
@@ -121,7 +121,7 @@ function dismiss(suggestion) {
         </p>
 
         <!-- BAŞLIK + AÇIKLAMA -->
-        <div v-if="content" class="mt-3 rounded-md border border-stone-200 p-3" data-ai-content>
+        <div v-if="content" class="mt-3 rounded-[10px] border border-stone-200 p-3" data-ai-content>
             <div class="flex items-center justify-between gap-2">
                 <p class="text-xs font-medium text-stone-900">{{ t('Başlık ve açıklama') }}</p>
                 <span v-if="content.stale" class="text-xs text-amber-800">{{ t('Ürün öneriden sonra değişti.') }}</span>
@@ -131,11 +131,11 @@ function dismiss(suggestion) {
                 <span :class="titleTooLong ? 'text-red-700' : 'text-stone-500'">
                     ({{ titleLength }}/{{ rules?.titleMax }}<template v-if="rules && !rules.titleVerified"> · {{ t('tahmini sınır') }}</template>)
                 </span>
-                <input v-model="draft.title" type="text" class="mt-1 w-full rounded-md border border-stone-300 px-2 py-1.5 text-xs text-stone-900">
+                <input v-model="draft.title" type="text" class="mt-1 w-full rounded-[10px] border border-stone-300 px-2 py-1.5 text-xs text-stone-900">
             </label>
             <label class="mt-2 block text-xs text-stone-600">
                 {{ t('Açıklama') }}
-                <textarea v-model="draft.description" rows="6" class="mt-1 w-full rounded-md border border-stone-300 px-2 py-1.5 font-mono text-xs text-stone-900" />
+                <textarea v-model="draft.description" rows="6" class="mt-1 w-full rounded-[10px] border border-stone-300 px-2 py-1.5 font-mono text-xs text-stone-900" />
             </label>
             <ul v-if="content.warnings.length" class="mt-2 list-disc space-y-0.5 pl-5 text-xs text-amber-900">
                 <li v-for="w in content.warnings" :key="w">{{ w }}</li>
@@ -143,20 +143,20 @@ function dismiss(suggestion) {
             <div class="mt-3 flex gap-2">
                 <button
                     type="button"
-                    class="rounded-md bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="busy !== null || titleTooLong"
                     @click="apply(content, { title: draft.title, description: draft.description })"
                 >
                     {{ t('Onayla ve kaydet') }}
                 </button>
-                <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100" @click="dismiss(content)">
+                <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100" @click="dismiss(content)">
                     {{ t('Vazgeç') }}
                 </button>
             </div>
         </div>
 
         <!-- ÖZNİTELİKLER -->
-        <div v-if="attributes" class="mt-3 rounded-md border border-stone-200 p-3" data-ai-attributes>
+        <div v-if="attributes" class="mt-3 rounded-[10px] border border-stone-200 p-3" data-ai-attributes>
             <p class="text-xs font-medium text-stone-900">{{ t('Öznitelik önerileri') }}</p>
             <ul class="mt-2 space-y-1">
                 <li v-for="item in attributes.payload.items" :key="item.attributeId" class="flex items-center gap-2 text-xs">
@@ -175,20 +175,20 @@ function dismiss(suggestion) {
                 <button
                     v-if="attributes.payload.items?.length"
                     type="button"
-                    class="rounded-md bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="busy !== null || picked.length === 0"
                     @click="apply(attributes, { attributes: picked })"
                 >
                     {{ t('Seçilenleri kaydet') }}
                 </button>
-                <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100" @click="dismiss(attributes)">
+                <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100" @click="dismiss(attributes)">
                     {{ t('Vazgeç') }}
                 </button>
             </div>
         </div>
 
         <!-- KATEGORİ -->
-        <div v-if="category" class="mt-3 rounded-md border border-stone-200 p-3" data-ai-category>
+        <div v-if="category" class="mt-3 rounded-[10px] border border-stone-200 p-3" data-ai-category>
             <p class="text-xs font-medium text-stone-900">{{ t('Kategori önerisi') }}</p>
             <template v-if="category.payload.categoryId">
                 <p class="mt-1 text-xs text-stone-800">{{ category.payload.path }}</p>
@@ -202,13 +202,13 @@ function dismiss(suggestion) {
                 <button
                     v-if="category.payload.categoryId"
                     type="button"
-                    class="rounded-md bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="busy !== null"
                     @click="apply(category)"
                 >
                     {{ t('Eşlemeyi kaydet') }}
                 </button>
-                <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100" @click="dismiss(category)">
+                <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100" @click="dismiss(category)">
                     {{ t('Vazgeç') }}
                 </button>
             </div>

@@ -27,7 +27,10 @@ final class QuestionController extends Controller
         $filter = $request->query('filter') === 'all' ? 'all' : 'unanswered';
 
         $query = ChannelQuestion::query()
-            ->with('connection')
+            // Kanal tipi BAŞTAN yüklenir: AdapterRegistry onu okur. Tembel
+            // yükleme kapalı ortamda istisna yutulur ve kontrol sessizce
+            // "desteklemiyor" derdi (13 Kas 2026, demoda görüldü).
+            ->with('connection.channelType:code,name,adapter_class')
             ->orderByDesc('asked_at')
             ->orderByDesc('id');
 

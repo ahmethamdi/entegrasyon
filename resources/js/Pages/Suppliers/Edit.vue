@@ -171,14 +171,14 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
         />
         <WriteGuard permission="catalog.manage">
 
-            <p v-if="flashSuccess" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
-            <p v-for="key in ['sample', 'mapping', 'run', 'active', 'source']" v-show="errors[key]" :key="key" class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{{ errors[key] }}</p>
+            <p v-if="flashSuccess" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
+            <p v-for="key in ['sample', 'mapping', 'run', 'active', 'source']" v-show="errors[key]" :key="key" class="mt-4 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{{ errors[key] }}</p>
 
             <!-- 1 · Akışı oku -->
-            <section class="mt-8 max-w-5xl rounded-lg border border-stone-200 p-5">
+            <section class="mt-8 max-w-5xl rounded-[14px] border border-stone-200 p-5">
                 <h2 class="text-base font-semibold text-stone-900">{{ t('1. Akışı oku') }}</h2>
                 <p class="mt-1 text-sm text-stone-600">{{ t('Akışın ilk 2 MB\'ı okunur, yalnız yapısı çıkarılır. Hiçbir ürün değişmez.') }}</p>
-                <button type="button" :disabled="sampleForm.processing" class="mt-3 rounded-md border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50 disabled:opacity-50" @click="readSample(form.record_path || null)">
+                <button type="button" :disabled="sampleForm.processing" class="mt-3 rounded-[10px] border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50 disabled:opacity-50" @click="readSample(form.record_path || null)">
                     {{ sampleForm.processing ? t('Okunuyor…') : t('Akışı oku') }}
                 </button>
 
@@ -189,13 +189,13 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
                     </p>
                     <label class="block">
                         <span class="block text-xs text-stone-600">{{ t('Ürün düğümü') }}</span>
-                        <select :value="form.record_path" class="mt-1 rounded-md border border-stone-300 px-3 py-2 font-mono text-sm" @change="chooseRecordPath($event.target.value)">
+                        <select :value="form.record_path" class="mt-1 rounded-[10px] border border-stone-300 px-3 py-2 font-mono text-sm" @change="chooseRecordPath($event.target.value)">
                             <option v-for="candidate in sample.record_paths" :key="candidate.path" :value="candidate.path">{{ candidate.path }} ({{ candidate.count }})</option>
                         </select>
                     </label>
                     <label v-if="sample.variant_paths.length" class="block">
                         <span class="block text-xs text-stone-600">{{ t('Varyant düğümü (ürünün içinde tekrar eden)') }}</span>
-                        <select v-model="form.mapping.variant_path" class="mt-1 rounded-md border border-stone-300 px-3 py-2 font-mono text-sm" @change="readSample(form.record_path)">
+                        <select v-model="form.mapping.variant_path" class="mt-1 rounded-[10px] border border-stone-300 px-3 py-2 font-mono text-sm" @change="readSample(form.record_path)">
                             <option value="">{{ t('Yok — her düğüm tek ürün') }}</option>
                             <option v-for="candidate in sample.variant_paths" :key="candidate.path" :value="candidate.path">{{ candidate.path }} ({{ candidate.count }})</option>
                         </select>
@@ -205,14 +205,14 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
 
             <form class="mt-6 max-w-5xl space-y-6" @submit.prevent="save">
                 <!-- 2 · Alanlar -->
-                <section class="rounded-lg border border-stone-200 p-5">
+                <section class="rounded-[14px] border border-stone-200 p-5">
                     <h2 class="text-base font-semibold text-stone-900">{{ t('2. Alanları eşle') }}</h2>
                     <p v-if="!sample" class="mt-1 text-sm text-stone-600">{{ t('Önce akışı oku; alanlar akışın gerçek yapısından seçilir.') }}</p>
 
                     <div class="mt-4 grid gap-4 md:grid-cols-2">
                         <label v-for="field in fields" :key="field" class="block">
                             <span class="block text-xs font-medium text-stone-700">{{ t(fieldLabels[field]) }}</span>
-                            <select v-model="form.mapping.fields[field]" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 font-mono text-xs">
+                            <select v-model="form.mapping.fields[field]" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 font-mono text-xs">
                                 <option value="">—</option>
                                 <option v-if="form.mapping.fields[field] && !sampleFields.some((f) => f.path === form.mapping.fields[field])" :value="form.mapping.fields[field]">{{ form.mapping.fields[field] }}</option>
                                 <option v-for="option in sampleFields" :key="option.path" :value="option.path">{{ option.path }}{{ option.samples.length ? ' — ' + option.samples.join(' | ') : '' }}</option>
@@ -224,8 +224,8 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
 
                     <h3 class="mt-6 text-sm font-medium text-stone-900">{{ t('Seçenekler (beden, renk)') }}</h3>
                     <div v-for="(option, index) in form.mapping.options" :key="index" class="mt-2 flex flex-wrap gap-2">
-                        <input v-model="option.name" type="text" :placeholder="t('Seçenek adı')" maxlength="60" class="w-40 rounded-md border border-stone-300 px-3 py-2 text-sm">
-                        <select v-model="option.path" class="min-w-64 rounded-md border border-stone-300 px-3 py-2 font-mono text-xs">
+                        <input v-model="option.name" type="text" :placeholder="t('Seçenek adı')" maxlength="60" class="w-40 rounded-[10px] border border-stone-300 px-3 py-2 text-sm">
+                        <select v-model="option.path" class="min-w-64 rounded-[10px] border border-stone-300 px-3 py-2 font-mono text-xs">
                             <option value="">—</option>
                             <option v-if="option.path && !sampleFields.some((f) => f.path === option.path)" :value="option.path">{{ option.path }}</option>
                             <option v-for="candidate in sampleFields" :key="candidate.path" :value="candidate.path">{{ candidate.path }}{{ candidate.samples.length ? ' — ' + candidate.samples.join(' | ') : '' }}</option>
@@ -242,12 +242,12 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
 
                     <label class="mt-4 block w-40">
                         <span class="block text-xs text-stone-600">{{ t('Akışın para birimi (alan yoksa)') }}</span>
-                        <input v-model="form.currency" type="text" maxlength="3" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm uppercase">
+                        <input v-model="form.currency" type="text" maxlength="3" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm uppercase">
                     </label>
                 </section>
 
                 <!-- 3 · Politikalar -->
-                <section class="rounded-lg border border-stone-200 p-5">
+                <section class="rounded-[14px] border border-stone-200 p-5">
                     <h2 class="text-base font-semibold text-stone-900">{{ t('3. Stok ve fiyat') }}</h2>
 
                     <fieldset class="mt-4">
@@ -273,11 +273,11 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
                                 <div class="flex flex-wrap gap-4">
                                     <label class="block">
                                         <span class="block text-xs text-stone-600">{{ t('Alış fiyatının üzerine %') }}</span>
-                                        <input v-model="form.markup_percent" type="number" step="0.01" min="0" max="1000" class="mt-1 w-28 rounded-md border border-stone-300 px-3 py-2 text-sm">
+                                        <input v-model="form.markup_percent" type="number" step="0.01" min="0" max="1000" class="mt-1 w-28 rounded-[10px] border border-stone-300 px-3 py-2 text-sm">
                                     </label>
                                     <label class="block">
                                         <span class="block text-xs text-stone-600">{{ t('Sabit tutar (yüzdeden sonra eklenir)') }}</span>
-                                        <input v-model="form.markup_amount" type="number" step="0.01" min="0" class="mt-1 w-32 rounded-md border border-stone-300 px-3 py-2 text-sm">
+                                        <input v-model="form.markup_amount" type="number" step="0.01" min="0" class="mt-1 w-32 rounded-[10px] border border-stone-300 px-3 py-2 text-sm">
                                     </label>
                                 </div>
                                 <p class="text-xs text-stone-500">{{ t('Satış fiyatı = alış × (1 + yüzde) + tutar. Alış fiyatı yoksa ya da 0 ise fiyat değişmez.') }}</p>
@@ -287,9 +287,9 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
                                     </label>
                                 </div>
                             </div>
-                            <aside class="h-fit rounded-md border border-stone-200 bg-stone-50 p-3">
+                            <aside class="h-fit rounded-[10px] border border-stone-200 bg-stone-50 p-3">
                                 <label class="block text-xs text-stone-600">{{ t('Alış fiyatı') }}
-                                    <input v-model="sampleCost" type="number" step="0.01" min="0" class="mt-1 w-full rounded-md border border-stone-300 px-2 py-1 text-sm">
+                                    <input v-model="sampleCost" type="number" step="0.01" min="0" class="mt-1 w-full rounded-[10px] border border-stone-300 px-2 py-1 text-sm">
                                 </label>
                                 <p class="mt-2 text-xs text-stone-600">{{ t('Satış fiyatı') }}</p>
                                 <p class="text-xl font-semibold tabular-nums">{{ markupResult }}</p>
@@ -308,9 +308,9 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
                 <div class="flex items-center gap-3">
                     <label class="block">
                         <span class="sr-only">{{ t('Tedarikçi adı') }}</span>
-                        <input v-model="form.name" type="text" maxlength="120" class="rounded-md border border-stone-300 px-3 py-2 text-sm">
+                        <input v-model="form.name" type="text" maxlength="120" class="rounded-[10px] border border-stone-300 px-3 py-2 text-sm">
                     </label>
-                    <button type="submit" :disabled="form.processing" class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50">
+                    <button type="submit" :disabled="form.processing" class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50">
                         {{ form.processing ? t('Kaydediliyor…') : t('Kaydet') }}
                     </button>
                 </div>
@@ -318,20 +318,20 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
             </form>
 
             <!-- 4 · Önizle / uygula / saatlik -->
-            <section class="mt-8 max-w-5xl rounded-lg border border-stone-200 p-5">
+            <section class="mt-8 max-w-5xl rounded-[14px] border border-stone-200 p-5">
                 <h2 class="text-base font-semibold text-stone-900">{{ t('4. Önizle ve uygula') }}</h2>
                 <p v-if="source.mappingProblems.length" class="mt-2 text-sm text-amber-900">{{ t('Eksik eşleme: :fields', { fields: source.mappingProblems.join(', ') }) }}</p>
                 <div class="mt-3 flex flex-wrap gap-3">
-                    <button type="button" :disabled="!canRun" class="rounded-md border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50 disabled:opacity-50" @click="post('preview')">
+                    <button type="button" :disabled="!canRun" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50 disabled:opacity-50" @click="post('preview')">
                         {{ t('Önizle (hiçbir şey değişmez)') }}
                     </button>
-                    <button type="button" :disabled="!canRun" class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50" @click="post('apply', t('Akış şimdi uygulansın mı? Önce önizlemeyi gördüğünden emin ol.'))">
+                    <button type="button" :disabled="!canRun" class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50" @click="post('apply', t('Akış şimdi uygulansın mı? Önce önizlemeyi gördüğünden emin ol.'))">
                         {{ t('Uygula') }}
                     </button>
-                    <button v-if="!source.isActive" type="button" class="rounded-md border border-emerald-600 px-4 py-2 text-sm text-emerald-800 hover:bg-emerald-50" @click="toggleActive(true)">
+                    <button v-if="!source.isActive" type="button" class="rounded-[10px] border border-emerald-600 px-4 py-2 text-sm text-emerald-800 hover:bg-emerald-50" @click="toggleActive(true)">
                         {{ t('Saatlik güncellemeyi aç') }}
                     </button>
-                    <button v-else type="button" class="rounded-md border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50" @click="toggleActive(false)">
+                    <button v-else type="button" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50" @click="toggleActive(false)">
                         {{ t('Saatlik güncellemeyi durdur') }}
                     </button>
                 </div>

@@ -57,7 +57,7 @@ function remove(carrier) {
         <PageHeader :section="t('Katalog')" :title="t('Kargo')" />
         <WriteGuard permission="settings.manage">
 
-            <p v-if="flashSuccess" class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+            <p v-if="flashSuccess" class="mt-4 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
                 {{ flashSuccess }}
             </p>
 
@@ -69,7 +69,7 @@ function remove(carrier) {
             </p>
 
             <div class="mt-6 grid gap-4 lg:grid-cols-2">
-                <section v-for="carrier in carriers" :key="carrier.code" class="rounded-lg border border-stone-200 bg-white p-5">
+                <section v-for="carrier in carriers" :key="carrier.code" class="rounded-[14px] border border-stone-200 bg-white p-5">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
                             <p class="flex items-center gap-2 text-sm font-medium text-stone-900"><img v-if="brandIcon(carrier.code)" :src="brandIcon(carrier.code)" alt="" class="size-6 rounded object-contain">{{ carrier.name }}</p>
@@ -83,7 +83,7 @@ function remove(carrier) {
                         </span>
                     </div>
 
-                    <p v-if="carrier.unverified" class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <p v-if="carrier.unverified" class="mt-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                         {{ t('Bu firma belgesine göre bağlandı; gerçek bir hesapta henüz denenmedi. İlk gönderilerinizi firmanın kendi panelinden de kontrol edin.') }}
                     </p>
 
@@ -93,7 +93,7 @@ function remove(carrier) {
                             : t('Firma durum sorgusu sunmuyor: paketi kuryeye verince sipariş ekranından "Kargoya verdim" deyin; takip numarası kanala gider.') }}
                     </p>
 
-                    <p v-if="errors['carrier_' + carrier.code]" class="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                    <p v-if="errors['carrier_' + carrier.code]" class="mt-3 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
                         {{ errors['carrier_' + carrier.code] }}
                     </p>
 
@@ -108,10 +108,10 @@ function remove(carrier) {
                         </p>
                         <p v-if="carrier.account.lastError" class="text-xs text-red-700">{{ carrier.account.lastError }}</p>
                         <div class="flex gap-2 pt-3">
-                            <button type="button" class="rounded-md border border-stone-300 px-3 py-1 text-xs font-medium text-stone-700 hover:bg-stone-50" @click="editing[carrier.code] = true">
+                            <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1 text-xs font-medium text-stone-700 hover:bg-stone-50" @click="editing[carrier.code] = true">
                                 {{ t('Bilgileri değiştir') }}
                             </button>
-                            <button type="button" class="rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50" @click="remove(carrier)">
+                            <button type="button" class="rounded-[10px] border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50" @click="remove(carrier)">
                                 {{ t('Kaldır') }}
                             </button>
                         </div>
@@ -125,14 +125,14 @@ function remove(carrier) {
                                 :type="field.type === 'password' ? 'password' : 'text'"
                                 :autocomplete="field.type === 'password' ? 'new-password' : 'off'"
                                 :required="field.required"
-                                class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm"
+                                class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm"
                             />
                             <span v-if="field.help" class="mt-1 block font-normal text-stone-500">{{ field.help }}</span>
                             <span v-if="forms[carrier.code].errors[field.name]" class="mt-1 block font-normal text-red-700">{{ forms[carrier.code].errors[field.name] }}</span>
                         </label>
                         <label class="block text-xs font-medium text-stone-700">
                             {{ t('Ortam') }}
-                            <select v-model="forms[carrier.code].environment" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm">
+                            <select v-model="forms[carrier.code].environment" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm">
                                 <option value="live">{{ t('Canlı') }}</option>
                                 <option value="test">{{ t('Test ortamı (gerçek gönderi açılmaz)') }}</option>
                             </select>
@@ -144,11 +144,11 @@ function remove(carrier) {
                             <button
                                 type="submit"
                                 :disabled="forms[carrier.code].processing"
-                                class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {{ t('Bağla') }}
                             </button>
-                            <button v-if="carrier.account" type="button" class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700" @click="editing[carrier.code] = false">
+                            <button v-if="carrier.account" type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700" @click="editing[carrier.code] = false">
                                 {{ t('Vazgeç') }}
                             </button>
                         </div>

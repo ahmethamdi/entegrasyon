@@ -67,7 +67,7 @@ function submit() {
                         :id="field.key"
                         v-model="form[field.key]"
                         :required="field.required"
-                        class="mt-1 w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                         <option value="" :disabled="field.required">
                             {{ field.required ? t('Seç…') : t('Seçilmedi') }}
@@ -93,7 +93,7 @@ function submit() {
                     <div
                         v-for="group in blockedGroups(field)"
                         :key="group.note"
-                        class="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                        class="mt-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
                     >
                         <p>
                             <span class="font-medium">{{ t(':count seçenek kullanılamaz.', { count: group.labels.length }) }}</span>
@@ -116,7 +116,7 @@ function submit() {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {{ form.processing ? t('Kaydediliyor…') : t('Kaydet') }}
                     </button>

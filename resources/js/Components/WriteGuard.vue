@@ -27,7 +27,7 @@ const allowed = computed(() => can(props.permission));
 <template>
     <p
         v-if="!allowed"
-        class="mt-6 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600"
+        class="mt-6 rounded-[14px] border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600"
         role="note"
     >
         {{ t('Bu ekranı yalnız görüntüleyebilirsin; değişiklik için ekip yöneticisine başvur.') }}

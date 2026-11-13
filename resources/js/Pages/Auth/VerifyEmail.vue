@@ -42,14 +42,14 @@ function logout() {
                 {{ sentParts[0] }}<strong class="font-medium text-stone-900">{{ props.email }}</strong>{{ sentParts[1] ?? '' }}
             </p>
 
-            <p v-if="status" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            <p v-if="status" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 {{ status }}
             </p>
 
             <button
                 type="button"
                 :disabled="form.processing"
-                class="mt-8 w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                class="mt-8 w-full rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 @click="resend"
             >
                 {{ t('Bağlantıyı yeniden gönder') }}

@@ -35,14 +35,14 @@ function logout() {
                     <Link
                         v-if="hasAccount"
                         href="/login"
-                        class="block w-full rounded-md bg-stone-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-stone-700"
+                        class="block w-full rounded-[10px] bg-stone-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-stone-700"
                     >
                         {{ $t('Giriş yap ve katıl') }}
                     </Link>
                     <Link
                         v-else
                         href="/register"
-                        class="block w-full rounded-md bg-stone-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-stone-700"
+                        class="block w-full rounded-[10px] bg-stone-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-stone-700"
                     >
                         {{ $t('Hesap oluştur ve katıl') }}
                     </Link>
@@ -56,7 +56,7 @@ function logout() {
                 <p class="mt-2 text-sm text-stone-600">{{ message }}</p>
                 <button
                     type="button"
-                    class="mt-8 w-full rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 hover:bg-white"
+                    class="mt-8 w-full rounded-[10px] border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 hover:bg-white"
                     @click="logout"
                 >
                     {{ $t('Çıkış yap') }}

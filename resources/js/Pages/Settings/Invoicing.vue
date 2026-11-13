@@ -126,10 +126,10 @@ function disconnect() {
         <PageHeader :section="t('Finans')" :title="t('Fatura ve muhasebe')" />
         <WriteGuard permission="settings.manage">
 
-            <p v-if="flashSuccess" class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
+            <p v-if="flashSuccess" class="mt-4 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">
                 {{ flashSuccess }}
             </p>
-            <p v-if="errors.parasut" class="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+            <p v-if="errors.parasut" class="mt-4 rounded-[10px] border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
                 {{ errors.parasut }}
             </p>
 
@@ -141,7 +141,7 @@ function disconnect() {
                 NİLVERA: satıcının kendi API anahtarıyla — her kurulumda açık.
                 Hesap yokken ya da Nilvera bağlantısı koptuğunda görünür.
             -->
-            <div v-if="showNilveraForm" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <div v-if="showNilveraForm" class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
                 <p class="text-sm font-medium text-stone-900">Nilvera</p>
                 <p class="mt-1 max-w-2xl text-xs text-stone-500">
                     {{ t('Nilvera portalında API Tanımları → Yeni Anahtar ile bir anahtar üretip buraya yapıştırın. Anahtar şifreli saklanır ve ekrana geri gelmez. Kontörünüz Nilvera hesabınızdan düşer.') }}
@@ -155,7 +155,7 @@ function disconnect() {
                             type="password"
                             autocomplete="off"
                             required
-                            class="mt-1 w-80 max-w-full rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                            class="mt-1 w-80 max-w-full rounded-[10px] border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         >
                     </div>
                     <label class="flex items-center gap-2 text-xs text-stone-700">
@@ -165,7 +165,7 @@ function disconnect() {
                     <button
                         type="submit"
                         :disabled="nilveraForm.processing"
-                        class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {{ t('Nilvera\'ya bağlan') }}
                     </button>
@@ -177,12 +177,12 @@ function disconnect() {
                 ŞİRKET İÇİ ERP (Logo, Mikro): satıcının sunucusundaki servis, https ile dışarı açık olmalı.
                 Gerçek kurulumda doğrulanmamış ERP yalnız pilot için açılır ve notla görünür.
             -->
-            <div v-for="erp in visibleErps" :key="erp.code" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <div v-for="erp in visibleErps" :key="erp.code" class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
                 <p class="text-sm font-medium text-stone-900">{{ erp.name }}</p>
                 <p class="mt-1 max-w-2xl text-xs text-stone-500">
                     {{ t('Sipariş, ERP\'nize satış siparişi olarak aktarılır; faturayı ve e-belgeyi ERP\'niz keser. Kimlik bilgileri şifreli saklanır ve ekrana geri gelmez.') }}
                 </p>
-                <p v-if="erp.unverified" class="mt-2 max-w-2xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <p v-if="erp.unverified" class="mt-2 max-w-2xl rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     {{ t('Bu bağlantı belgesine göre kuruldu; gerçek bir ERP kurulumunda henüz denenmedi. İlk aktarımları ERP\'nizde kontrol edin.') }}
                 </p>
                 <form class="mt-4 grid max-w-2xl gap-3 sm:grid-cols-2" @submit.prevent="connectErp(erp.code)">
@@ -193,7 +193,7 @@ function disconnect() {
                             :type="field.type === 'password' ? 'password' : (field.type === 'url' ? 'url' : 'text')"
                             :autocomplete="field.type === 'password' ? 'new-password' : 'off'"
                             :required="field.required"
-                            class="mt-1 w-full rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                            class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         >
                         <span v-if="field.help" class="mt-1 block font-normal text-stone-500">{{ field.help }}</span>
                         <span v-if="erpForms[erp.code].errors[field.name]" class="mt-1 block font-normal text-red-700">{{ erpForms[erp.code].errors[field.name] }}</span>
@@ -202,7 +202,7 @@ function disconnect() {
                         <button
                             type="submit"
                             :disabled="erpForms[erp.code].processing"
-                            class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {{ t(':name\'ya bağlan', { name: erp.name }) }}
                         </button>
@@ -212,7 +212,7 @@ function disconnect() {
             </div>
 
             <!-- Paraşüt yalnız sunucuda uygulama tanımlıysa bağlanabilir. -->
-            <div v-if="!account && available" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <div v-if="!account && available" class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
                 <p class="text-sm font-medium text-stone-900">Paraşüt</p>
                 <p class="mt-1 text-xs text-stone-500">
                     {{ t('Paraşüt\'te oturum açıp 34Pazar\'a izin verirsiniz; şifreniz bize gelmez.') }}
@@ -220,14 +220,14 @@ function disconnect() {
                 <button
                     type="button"
                     :disabled="connectForm.processing"
-                    class="mt-4 rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="mt-4 rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="connect"
                 >
                     {{ t('Paraşüt\'e bağlan') }}
                 </button>
             </div>
 
-            <div v-if="account" class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+            <div v-if="account" class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <div>
                         <p class="flex items-center gap-2 text-sm font-medium text-stone-900">
@@ -257,7 +257,7 @@ function disconnect() {
                     <p class="mt-2 max-w-2xl text-xs text-stone-500">
                         {{ t('Siparişler ERP\'nize satış siparişi olarak aktarılır; e-belgeyi ERP\'niz keser. İptal ve iade ERP\'nizden yapılır.') }}
                     </p>
-                    <p v-if="account.unverified" class="mt-2 max-w-2xl rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <p v-if="account.unverified" class="mt-2 max-w-2xl rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                         {{ t('Bu bağlantı belgesine göre kuruldu; gerçek bir ERP kurulumunda henüz denenmedi. İlk aktarımları ERP\'nizde kontrol edin.') }}
                     </p>
                 </template>
@@ -270,7 +270,7 @@ function disconnect() {
                                 id="company"
                                 v-model="form.company_id"
                                 required
-                                class="mt-1 w-64 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                                class="mt-1 w-64 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                                 <option value="" disabled>{{ t('Seçin') }}</option>
                                 <option v-for="company in account.companies" :key="company.id" :value="company.id">
@@ -286,7 +286,7 @@ function disconnect() {
                                 type="text"
                                 :maxlength="account.provider === 'nilvera' ? 3 : 16"
                                 :placeholder="account.provider === 'nilvera' ? t('örn. EAR') : t('örn. TRY')"
-                                class="mt-1 w-32 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm uppercase focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                                class="mt-1 w-32 rounded-[10px] border border-stone-300 px-3 py-1.5 font-mono text-sm uppercase focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                         </div>
                     </div>
@@ -314,7 +314,7 @@ function disconnect() {
                                 id="auto-issue"
                                 v-model="form.auto_issue"
                                 :aria-label="t('Otomatik aktarım')"
-                                class="mt-3 w-full max-w-md rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                                class="mt-3 w-full max-w-md rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                                 <option v-for="option in autoIssueOptions" :key="option.value" :value="option.value">{{ t(option.label) }}</option>
                             </select>
@@ -334,7 +334,7 @@ function disconnect() {
                                 {{ t('Pazar yeri parayı müşteriden tahsil eder. Kanal için bir kasa/banka hesabı seçerseniz fatura o hesaba tahsil edilmiş olarak işlenir; seçmezseniz açık hesap kalır.') }}
                             </p>
 
-                            <p v-if="ledgerAccountsError" class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                            <p v-if="ledgerAccountsError" class="mt-3 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                                 {{ ledgerAccountsError }}
                             </p>
 
@@ -348,7 +348,7 @@ function disconnect() {
                                     :id="`payment-${channel.code}`"
                                     v-model="form.payment_accounts[channel.code]"
                                     :disabled="ledgerAccounts.length === 0"
-                                    class="w-64 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring disabled:bg-stone-50"
+                                    class="w-64 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring disabled:bg-stone-50"
                                 >
                                     <option value="">{{ t('Tahsilat işlenmesin') }}</option>
                                     <option v-for="ledger in ledgerAccounts" :key="ledger.id" :value="ledger.id">{{ ledger.name }}</option>
@@ -367,7 +367,7 @@ function disconnect() {
                         <button
                             type="submit"
                             :disabled="form.processing"
-                            class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {{ t('Kaydet') }}
                         </button>
@@ -380,14 +380,14 @@ function disconnect() {
                     <button
                         v-if="account.status === 'revoked' && !reconnectNilvera && !account.isErp"
                         type="button"
-                        class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700"
+                        class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700"
                         @click="connect"
                     >
                         {{ t('Yeniden bağlan') }}
                     </button>
                     <button
                         type="button"
-                        class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                        class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                         @click="disconnect"
                     >
                         {{ t('Bağlantıyı kaldır') }}

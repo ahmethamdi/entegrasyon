@@ -205,7 +205,7 @@ function stamp(value) {
             <template #actions>
                 <Link
                     href="/orders"
-                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                 >
                     {{ t('Listeye dön') }}
                 </Link>
@@ -226,32 +226,32 @@ function stamp(value) {
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flashSuccess }}
         </div>
 
         <!-- tutarlar -->
         <div class="mt-6 grid gap-4 sm:grid-cols-4">
-            <div class="rounded-lg border border-stone-200 bg-white p-4">
+            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">{{ t('Ara toplam') }}</p>
                 <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
                     {{ money(order.subtotal, order.currency) }}
                 </p>
             </div>
-            <div class="rounded-lg border border-stone-200 bg-white p-4">
+            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">{{ t('Kargo') }}</p>
                 <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
                     {{ money(order.shippingTotal, order.currency) }}
                 </p>
             </div>
-            <div class="rounded-lg border border-stone-200 bg-white p-4">
+            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">{{ t('Vergi') }}</p>
                 <p class="mt-1 text-lg font-medium tabular-nums text-stone-900">
                     {{ money(order.taxTotal, order.currency) }}
                 </p>
             </div>
-            <div class="rounded-lg border border-stone-200 bg-white p-4">
+            <div class="rounded-[14px] border border-stone-200 bg-white p-4">
                 <p class="text-xs text-stone-500">{{ t('Genel toplam') }}</p>
                 <p class="mt-1 text-lg font-semibold tabular-nums text-stone-900">
                     {{ money(order.grandTotal, order.currency) }}
@@ -263,7 +263,7 @@ function stamp(value) {
         <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Kalemler') }}</h2>
 
         <!-- Asgari genişlik sütunların dar ekranda sıkışmasını önler; kutu kayar. -->
-        <div class="relative mt-3 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-3 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
@@ -328,7 +328,7 @@ function stamp(value) {
         -->
         <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Kargo') }}</h2>
 
-        <div class="mt-3 rounded-lg border border-stone-200 bg-white">
+        <div class="mt-3 rounded-[14px] border border-stone-200 bg-white">
             <ul v-if="order.fulfillments.length">
                 <li
                     v-for="fulfillment in order.fulfillments"
@@ -360,7 +360,7 @@ function stamp(value) {
                             <button
                                 v-if="fulfillment.pushStatus === 'failed' && retrying !== fulfillment.id && can('orders.work')"
                                 type="button"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                 @click="openRetry(fulfillment)"
                             >
                                 {{ t('Düzelt ve tekrar gönder') }}
@@ -385,7 +385,7 @@ function stamp(value) {
                                 v-model="retryForm.carrier"
                                 type="text"
                                 list="carrier-suggestions"
-                                class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                                class="mt-1 w-48 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                         </div>
                         <div>
@@ -394,13 +394,13 @@ function stamp(value) {
                                 :id="`retry-tracking-${fulfillment.id}`"
                                 v-model="retryForm.tracking_number"
                                 type="text"
-                                class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                                class="mt-1 w-56 rounded-[10px] border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                         </div>
                         <button
                             type="submit"
                             :disabled="retryForm.processing"
-                            class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                             {{ t('Tekrar gönder') }}
                         </button>
@@ -421,7 +421,7 @@ function stamp(value) {
 
         <form
             v-else-if="!hasActiveShipment && can('orders.work')"
-            class="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-stone-200 bg-stone-50 p-4"
+            class="mt-3 flex flex-wrap items-end gap-3 rounded-[14px] border border-stone-200 bg-stone-50 p-4"
             @submit.prevent="submitShipment"
         >
             <div>
@@ -432,7 +432,7 @@ function stamp(value) {
                     type="text"
                     list="carrier-suggestions"
                     :placeholder="t('örn. Yurtiçi Kargo')"
-                    class="mt-1 w-48 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                    class="mt-1 w-48 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
             </div>
             <div>
@@ -442,13 +442,13 @@ function stamp(value) {
                     v-model="shipForm.tracking_number"
                     type="text"
                     required
-                    class="mt-1 w-56 rounded-md border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                    class="mt-1 w-56 rounded-[10px] border border-stone-300 px-3 py-1.5 font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                 >
             </div>
             <button
                 type="submit"
                 :disabled="shipForm.processing"
-                class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
                 {{ t('Kargoya verildi') }}
             </button>
@@ -478,7 +478,7 @@ function stamp(value) {
                 {{ t('Kargo gönderisi') }}
             </h2>
 
-            <div class="mt-3 rounded-lg border border-stone-200 bg-white px-4 py-3">
+            <div class="mt-3 rounded-[14px] border border-stone-200 bg-white px-4 py-3">
                 <p v-if="shipmentError" class="mb-2 text-xs text-red-700">{{ shipmentError }}</p>
 
                 <template v-if="order.carrierShipment && order.carrierShipment.status !== 'cancelled'">
@@ -507,17 +507,17 @@ function stamp(value) {
                     </p>
 
                     <div v-if="can('orders.work')" class="mt-3 flex flex-wrap gap-2">
-                        <a v-if="order.carrierShipment.hasZpl" :href="`/orders/${order.id}/carrier-shipment/label.zpl`" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">
+                        <a v-if="order.carrierShipment.hasZpl" :href="`/orders/${order.id}/carrier-shipment/label.zpl`" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">
                             {{ t('Etiket (ZPL)') }}
                         </a>
-                        <a v-if="order.carrierShipment.hasPdf" :href="`/orders/${order.id}/carrier-shipment/label.pdf`" target="_blank" rel="noopener" class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">
+                        <a v-if="order.carrierShipment.hasPdf" :href="`/orders/${order.id}/carrier-shipment/label.pdf`" target="_blank" rel="noopener" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">
                             {{ t('Etiket (PDF)') }}
                         </a>
                         <button
                             v-if="order.carrierShipment.status === 'created' && !order.carrierShipment.notified && order.carrierShipment.trackingNumber"
                             type="button"
                             :disabled="carrierBusy"
-                            class="rounded-md bg-stone-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-700 disabled:opacity-50"
+                            class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-stone-700 disabled:opacity-50"
                             @click="handOverCarrierShipment"
                         >
                             {{ t('Kargoya verdim') }}
@@ -526,7 +526,7 @@ function stamp(value) {
                             v-if="order.carrierShipment.cancellable"
                             type="button"
                             :disabled="carrierBusy"
-                            class="rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            class="rounded-[10px] border border-red-200 px-3 py-1.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-50"
                             @click="cancelCarrierShipment"
                         >
                             {{ t('Gönderiyi iptal et') }}
@@ -535,7 +535,7 @@ function stamp(value) {
                             v-if="order.carrierShipment.status === 'failed'"
                             type="button"
                             :disabled="carrierBusy"
-                            class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100 disabled:opacity-50"
+                            class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100 disabled:opacity-50"
                             @click="createCarrierShipment(order.carrierShipment.provider)"
                         >
                             {{ t('Tekrar dene') }}
@@ -558,7 +558,7 @@ function stamp(value) {
                                 :key="carrier.code"
                                 type="button"
                                 :disabled="carrierBusy"
-                                class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 @click="createCarrierShipment(carrier.code)"
                             >
                                 {{ t(':name gönderisi aç', { name: carrier.name }) }}
@@ -576,7 +576,7 @@ function stamp(value) {
         -->
         <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Fatura') }}</h2>
 
-        <div class="mt-3 rounded-lg border border-stone-200 bg-white px-4 py-3">
+        <div class="mt-3 rounded-[14px] border border-stone-200 bg-white px-4 py-3">
             <div v-if="order.invoice" class="flex flex-wrap items-center justify-between gap-2">
                 <div>
                     <p class="text-xs text-stone-900">
@@ -600,14 +600,14 @@ function stamp(value) {
                         :href="`/orders/${order.id}/invoice/pdf`"
                         target="_blank"
                         rel="noopener"
-                        class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                        class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                     >
                         {{ t('PDF') }}
                     </a>
                     <button
                         v-if="order.invoice.status === 'failed' && can('orders.work')"
                         type="button"
-                        class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                        class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                         @click="retryInvoice"
                     >
                         {{ t('Tekrar dene') }}
@@ -633,7 +633,7 @@ function stamp(value) {
                 <button
                     v-if="order.invoice.uploadStatus === 'failed' && can('orders.work')"
                     type="button"
-                    class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                    class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                     @click="retryInvoiceUpload"
                 >
                     {{ t(':channel\'a tekrar yükle', { channel: channelName(order.channel.type) }) }}
@@ -656,7 +656,7 @@ function stamp(value) {
                     <button
                         type="button"
                         :disabled="invoicing"
-                        class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                         @click="requestInvoice"
                     >
                         {{ t('Fatura kes') }}
@@ -688,7 +688,7 @@ function stamp(value) {
                             <button
                                 v-if="correction.status === 'failed' && can('finance.manage')"
                                 type="button"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                                 @click="retryCorrection(correction)"
                             >
                                 {{ t('Tekrar dene') }}
@@ -703,7 +703,7 @@ function stamp(value) {
                 <p class="text-xs text-stone-500">{{ t('Sipariş iptal edildi. Faturayı e-fatura entegratörünüzde iptal edebilirsiniz.') }}</p>
                 <button
                     type="button"
-                    class="rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-800 transition hover:bg-red-50"
+                    class="rounded-[10px] border border-red-300 px-3 py-1.5 text-xs text-red-800 transition hover:bg-red-50"
                     @click="cancelInvoice"
                 >
                     {{ t('Faturayı iptal et') }}
@@ -722,7 +722,7 @@ function stamp(value) {
                 <button
                     v-if="candidate.recordable"
                     type="button"
-                    class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                    class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                     @click="recordReturn(candidate)"
                 >
                     {{ t('İadeyi muhasebeye kaydet') }}
@@ -735,7 +735,7 @@ function stamp(value) {
         <!-- olay geçmişi -->
         <h2 class="mt-10 text-sm font-semibold text-stone-900">{{ t('Geçmiş') }}</h2>
 
-        <div class="mt-3 rounded-lg border border-stone-200 bg-white">
+        <div class="mt-3 rounded-[14px] border border-stone-200 bg-white">
             <ul>
                 <li
                     v-for="event in order.events"

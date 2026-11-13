@@ -1,4 +1,5 @@
 <script setup>
+import { brandIcon, channelName } from '../../lib/format.js';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
@@ -57,15 +58,15 @@ function send(question) {
     <PanelLayout>
         <PageHeader :section="t('Siparişler')" :title="t('Müşteri soruları')" />
 
-        <p v-if="flash.success" class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <p v-if="flash.success" class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             {{ flash.success }}
         </p>
-        <p v-if="flash.warning" class="mt-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p v-if="flash.warning" class="mt-6 rounded-[14px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {{ flash.warning }}
         </p>
 
         <div class="mt-6 flex flex-wrap items-center gap-3">
-            <div class="flex rounded-md border border-stone-300 bg-white p-0.5 text-sm">
+            <div class="flex rounded-[10px] border border-stone-300 bg-white p-0.5 text-sm">
                 <button
                     type="button"
                     class="rounded px-3 py-1.5 transition"
@@ -85,22 +86,22 @@ function send(question) {
             </div>
         </div>
 
-        <div v-if="questions.data.length === 0" class="mt-6 rounded-lg border border-stone-200 bg-white px-4 py-12 text-center text-sm text-stone-600">
+        <div v-if="questions.data.length === 0" class="mt-6 rounded-[14px] border border-stone-200 bg-white px-4 py-12 text-center text-sm text-stone-600">
             {{ filter === 'unanswered' ? t('Cevap bekleyen müşteri sorusu yok.') : t('Henüz müşteri sorusu gelmedi.') }}
         </div>
 
         <ul class="mt-6 space-y-4">
-            <li v-for="question in questions.data" :key="question.id" class="rounded-lg border border-stone-200 bg-white px-4 py-3">
+            <li v-for="question in questions.data" :key="question.id" class="rounded-[14px] border border-stone-200 bg-white px-4 py-3">
                 <div class="flex flex-wrap items-start justify-between gap-2">
                     <p class="text-xs text-stone-600">
-                        {{ question.channel }} · {{ question.connection }} · {{ question.product ?? question.productRef ?? '—' }} · {{ dateText(question.askedAt) }}
+                        <img v-if="brandIcon(question.channel)" :src="brandIcon(question.channel)" alt="" class="mr-1 inline-block size-3.5 rounded-sm align-[-2px] object-contain">{{ channelName(question.channel) }} · {{ question.connection }} · {{ question.product ?? question.productRef ?? '—' }} · {{ dateText(question.askedAt) }}
                     </p>
-                    <span class="rounded border border-stone-300 bg-stone-50 px-2 py-0.5 text-xs text-stone-800">{{ question.statusLabel }}</span>
+                    <span class="rounded-[10px] border border-stone-300 bg-stone-50 px-2 py-0.5 text-xs text-stone-800">{{ question.statusLabel }}</span>
                 </div>
 
                 <p class="mt-2 text-sm text-stone-900">{{ question.body }}</p>
 
-                <div v-if="question.answerBody" class="mt-3 rounded-md bg-stone-50 px-3 py-2 text-sm text-stone-800">
+                <div v-if="question.answerBody" class="mt-3 rounded-[10px] bg-stone-50 px-3 py-2 text-sm text-stone-800">
                     <p class="text-xs text-stone-500">{{ t('Yayındaki cevap') }} · {{ dateText(question.answeredAt) }}</p>
                     {{ question.answerBody }}
                 </div>
@@ -126,10 +127,10 @@ function send(question) {
                             minlength="10"
                             maxlength="2000"
                             required
-                            class="w-full rounded-md border border-stone-300 px-2 py-1.5 text-sm"
+                            class="w-full rounded-[10px] border border-stone-300 px-2 py-1.5 text-sm"
                             :placeholder="t('Cevabınız (10–2000 karakter). Cevap herkese açık yayınlanır.')"
                         />
-                        <button type="submit" class="w-fit rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white transition hover:bg-stone-700 disabled:opacity-50" :disabled="busy !== null">
+                        <button type="submit" class="w-fit rounded-[10px] bg-stone-900 px-3 py-1.5 text-sm text-white transition hover:bg-stone-700 disabled:opacity-50" :disabled="busy !== null">
                             {{ t('Cevabı gönder') }}
                         </button>
                     </form>

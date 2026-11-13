@@ -84,23 +84,23 @@ function priceCell(row) {
             :description="bulkImport.status === 'parsed' ? t('Önizleme — henüz hiçbir şey değişmedi.') : null"
         />
 
-        <p v-if="flashSuccess" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
-        <p v-if="errors.apply" class="mt-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{{ errors.apply }}</p>
-        <p v-if="bulkImport.status === 'rejected'" class="mt-6 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+        <p v-if="flashSuccess" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
+        <p v-if="errors.apply" class="mt-4 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{{ errors.apply }}</p>
+        <p v-if="bulkImport.status === 'rejected'" class="mt-6 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
             {{ bulkImport.reason }} — {{ t('Şablonu yeniden indirip onun üzerinde düzenle.') }}
         </p>
 
         <dl v-else class="mt-6 grid max-w-4xl grid-cols-2 gap-3 sm:grid-cols-4">
-            <div class="rounded-md border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Stok değişecek') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.stock_changes }}</dd></div>
-            <div class="rounded-md border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Fiyat değişecek') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.price_changes }}</dd></div>
-            <div class="rounded-md border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Hatalı satır') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.invalid }}</dd></div>
-            <div class="rounded-md border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Uygulanmayacak') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.conflict }}</dd></div>
-            <div v-if="bulkImport.status === 'applied'" class="rounded-md border border-emerald-200 p-3"><dt class="text-xs text-stone-600">{{ t('Uygulandı') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.applied }}</dd></div>
-            <div v-if="bulkImport.counts.apply_conflicts" class="rounded-md border border-amber-300 p-3"><dt class="text-xs text-stone-600">{{ t('Önizlemeden sonra değişti') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.apply_conflicts }}</dd></div>
+            <div class="rounded-[10px] border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Stok değişecek') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.stock_changes }}</dd></div>
+            <div class="rounded-[10px] border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Fiyat değişecek') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.price_changes }}</dd></div>
+            <div class="rounded-[10px] border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Hatalı satır') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.invalid }}</dd></div>
+            <div class="rounded-[10px] border border-stone-200 p-3"><dt class="text-xs text-stone-600">{{ t('Uygulanmayacak') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.conflict }}</dd></div>
+            <div v-if="bulkImport.status === 'applied'" class="rounded-[10px] border border-emerald-200 p-3"><dt class="text-xs text-stone-600">{{ t('Uygulandı') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.applied }}</dd></div>
+            <div v-if="bulkImport.counts.apply_conflicts" class="rounded-[10px] border border-amber-300 p-3"><dt class="text-xs text-stone-600">{{ t('Önizlemeden sonra değişti') }}</dt><dd class="text-xl font-semibold tabular-nums">{{ bulkImport.counts.apply_conflicts }}</dd></div>
         </dl>
 
         <div v-if="bulkImport.status !== 'rejected'" class="mt-6 flex flex-wrap items-center gap-3">
-            <button v-if="canApply && can('catalog.manage')" type="button" class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700" @click="apply">
+            <button v-if="canApply && can('catalog.manage')" type="button" class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700" @click="apply">
                 {{ t(':count satırı uygula', { count: bulkImport.counts.change }) }}
             </button>
             <span v-if="applying" class="text-sm text-sky-800">{{ t('Uygulanıyor, sayfa kendiliğinden yenilenir…') }}</span>
@@ -114,7 +114,7 @@ function priceCell(row) {
             </button>
         </div>
 
-        <div v-if="bulkImport.status !== 'rejected'" class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200">
+        <div v-if="bulkImport.status !== 'rejected'" class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-600">
                     <tr>

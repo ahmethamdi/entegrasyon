@@ -79,7 +79,7 @@ const preview = computed(() => {
 
 <template>
     <div>
-        <ul v-if="modelValue.length" class="divide-y divide-stone-100 rounded-lg border border-stone-200 bg-white">
+        <ul v-if="modelValue.length" class="divide-y divide-stone-100 rounded-[14px] border border-stone-200 bg-white">
             <li v-for="(component, index) in modelValue" :key="component.variantId" class="flex flex-wrap items-center gap-3 px-3 py-2">
                 <div class="min-w-0 flex-1">
                     <p class="truncate text-sm text-stone-900">{{ component.title }}</p>
@@ -93,20 +93,20 @@ const preview = computed(() => {
                         max="1000"
                         :value="component.quantity"
                         :aria-label="t(':sku adedi', { sku: component.sku })"
-                        class="w-20 rounded-md border border-stone-300 px-2 py-1 text-right font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="w-20 rounded-[10px] border border-stone-300 px-2 py-1 text-right font-mono text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         @input="setQuantity(index, $event.target.value)"
                     >
                 </label>
                 <button
                     type="button"
-                    class="rounded-md border border-stone-300 px-2 py-1 text-xs text-stone-700 transition hover:bg-stone-100"
+                    class="rounded-[10px] border border-stone-300 px-2 py-1 text-xs text-stone-700 transition hover:bg-stone-100"
                     @click="remove(index)"
                 >
                     {{ t('Çıkar') }}
                 </button>
             </li>
         </ul>
-        <p v-else class="rounded-lg border border-dashed border-stone-300 px-3 py-4 text-sm text-stone-500">
+        <p v-else class="rounded-[14px] border border-dashed border-stone-300 px-3 py-4 text-sm text-stone-500">
             {{ t('Henüz ürün yok. Aşağıdan arayıp sete ekleyin.') }}
         </p>
 
@@ -123,9 +123,9 @@ const preview = computed(() => {
                 v-model="term"
                 type="search"
                 :placeholder="t('Ürün adı, SKU ya da barkod')"
-                class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
             >
-            <ul class="mt-2 max-h-64 overflow-y-auto rounded-lg border border-stone-200 bg-white" :aria-busy="searching">
+            <ul class="mt-2 max-h-64 overflow-y-auto rounded-[14px] border border-stone-200 bg-white" :aria-busy="searching">
                 <li v-for="variant in results" :key="variant.id" class="flex items-center gap-3 border-b border-stone-100 px-3 py-2 last:border-b-0">
                     <div class="min-w-0 flex-1">
                         <p class="truncate text-sm text-stone-900">{{ variant.title }}</p>
@@ -134,7 +134,7 @@ const preview = computed(() => {
                     <button
                         type="button"
                         :disabled="chosen.has(variant.id) || modelValue.length >= max"
-                        class="rounded-md border border-stone-300 px-2 py-1 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        class="rounded-[10px] border border-stone-300 px-2 py-1 text-xs text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                         @click="add(variant)"
                     >
                         {{ chosen.has(variant.id) ? t('Sette') : t('Ekle') }}

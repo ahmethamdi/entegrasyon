@@ -97,7 +97,7 @@ function filter(kind) {
         />
 
         <div class="mt-6 flex flex-wrap items-center gap-3 text-sm">
-            <span class="rounded border border-stone-300 px-2 py-0.5">{{ t(statuses[run.status] ?? run.status) }}</span>
+            <span class="rounded-[10px] border border-stone-300 px-2 py-0.5">{{ t(statuses[run.status] ?? run.status) }}</span>
             <span v-if="run.reason" class="text-stone-700">{{ run.reason }}</span>
             <span class="text-stone-500">{{ when(run.startedAt) }}</span>
             <span v-if="run.durationMs !== null" class="text-stone-500">· {{ (run.durationMs / 1000).toFixed(1) }} sn</span>
@@ -107,7 +107,7 @@ function filter(kind) {
         <p v-if="running" class="mt-3 text-sm text-sky-800">{{ t('Tur sürüyor, sayfa kendiliğinden yenilenir…') }}</p>
 
         <dl class="mt-6 grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-4">
-            <div v-for="[key, label] in countLabels" v-show="key === 'records' || run.counts[key] > 0" :key="key" class="rounded-md border border-stone-200 p-3">
+            <div v-for="[key, label] in countLabels" v-show="key === 'records' || run.counts[key] > 0" :key="key" class="rounded-[10px] border border-stone-200 p-3">
                 <dt class="text-xs text-stone-600">{{ t(label) }}</dt>
                 <dd class="text-xl font-semibold tabular-nums">{{ run.counts[key] }}</dd>
             </div>
@@ -120,7 +120,7 @@ function filter(kind) {
             </button>
         </div>
 
-        <div class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200">
+        <div class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-600">
                     <tr>

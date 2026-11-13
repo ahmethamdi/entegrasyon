@@ -19,16 +19,16 @@ defineProps({
         çizgi olmadan başlık boşlukta yüzer ve ilk kart onunla aynı
         katmandaymış gibi okunur.
     -->
-    <header class="border-b border-stone-200 pb-5">
+    <header class="pb-2">
         <div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div class="min-w-0">
-                <p class="text-sm font-medium text-stone-500">
+                <p class="text-[13px] font-medium text-stone-500">
                     {{ section }}
                 </p>
-                <h1 class="mt-1.5 text-2xl font-semibold tracking-tight text-stone-900">
+                <h1 class="mt-1 text-[26px] font-bold tracking-tight text-stone-900">
                     {{ title }}
                 </h1>
-                <p v-if="description" class="mt-2 max-w-2xl text-sm leading-relaxed text-stone-600">
+                <p v-if="description" class="mt-1.5 max-w-2xl text-sm leading-relaxed text-stone-600">
                     {{ description }}
                 </p>
             </div>

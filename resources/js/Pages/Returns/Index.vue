@@ -1,4 +1,5 @@
 <script setup>
+import { brandIcon, channelName } from '../../lib/format.js';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
@@ -80,14 +81,14 @@ function submitReject(request) {
     <PanelLayout>
         <PageHeader :section="t('Siparişler')" :title="t('İadeler')" />
 
-        <p v-if="flash.success" class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <p v-if="flash.success" class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             {{ flash.success }}
         </p>
-        <p v-if="flash.warning" class="mt-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <p v-if="flash.warning" class="mt-6 rounded-[14px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {{ flash.warning }}
         </p>
 
-        <div class="mt-6 flex rounded-md border border-stone-300 bg-white p-0.5 text-sm sm:w-fit">
+        <div class="mt-6 flex rounded-[10px] border border-stone-300 bg-white p-0.5 text-sm sm:w-fit">
             <button
                 type="button"
                 class="flex-1 rounded px-3 py-1.5 transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -106,16 +107,16 @@ function submitReject(request) {
             </button>
         </div>
 
-        <div v-if="requests.data.length === 0" class="mt-6 rounded-lg border border-stone-200 bg-white px-4 py-12 text-center text-sm text-stone-600">
+        <div v-if="requests.data.length === 0" class="mt-6 rounded-[14px] border border-stone-200 bg-white px-4 py-12 text-center text-sm text-stone-600">
             {{ filter === 'action' ? t('İlgilenmeniz gereken iade talebi yok.') : t('Henüz iade talebi gelmedi.') }}
         </div>
 
         <ul class="mt-6 space-y-4">
-            <li v-for="request in requests.data" :key="request.id" class="rounded-lg border border-stone-200 bg-white">
+            <li v-for="request in requests.data" :key="request.id" class="rounded-[14px] border border-stone-200 bg-white">
                 <div class="flex flex-wrap items-start justify-between gap-3 border-b border-stone-100 px-4 py-3">
                     <div>
                         <p class="text-sm font-medium text-stone-900">
-                            {{ request.channel }} · {{ request.connection }}
+                            <img v-if="brandIcon(request.channel)" :src="brandIcon(request.channel)" alt="" class="mr-1 inline-block size-3.5 rounded-sm align-[-2px] object-contain">{{ channelName(request.channel) }} · {{ request.connection }}
                             <span class="text-stone-500">· {{ t('Talep') }} {{ request.claimId }}</span>
                         </p>
                         <p class="mt-0.5 text-xs text-stone-600">
@@ -125,7 +126,7 @@ function submitReject(request) {
                             · {{ dateText(request.claimedAt) }}
                         </p>
                     </div>
-                    <span class="rounded border border-stone-300 bg-stone-50 px-2 py-0.5 text-xs text-stone-800">{{ request.statusLabel }}</span>
+                    <span class="rounded-[10px] border border-stone-300 bg-stone-50 px-2 py-0.5 text-xs text-stone-800">{{ request.statusLabel }}</span>
                 </div>
 
                 <table class="w-full text-sm">
@@ -165,7 +166,7 @@ function submitReject(request) {
                     <div v-else-if="rejecting !== request.id" class="flex flex-wrap gap-2">
                         <button
                             type="button"
-                            class="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white transition hover:bg-stone-700 disabled:opacity-50"
+                            class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-sm text-white transition hover:bg-stone-700 disabled:opacity-50"
                             :disabled="busy !== null"
                             @click="approve(request)"
                         >
@@ -173,7 +174,7 @@ function submitReject(request) {
                         </button>
                         <button
                             type="button"
-                            class="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-50 disabled:opacity-50"
+                            class="rounded-[10px] border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-50 disabled:opacity-50"
                             :disabled="busy !== null"
                             @click="openReject(request)"
                         >
@@ -183,20 +184,20 @@ function submitReject(request) {
                     <form v-else class="grid gap-2 sm:max-w-lg" @submit.prevent="submitReject(request)">
                         <label class="text-xs text-stone-700">
                             {{ t('Red sebebi') }}
-                            <select v-model="rejectForm.reason_id" class="mt-1 w-full rounded-md border border-stone-300 bg-white px-2 py-1.5 text-sm">
+                            <select v-model="rejectForm.reason_id" class="mt-1 w-full rounded-[10px] border border-stone-300 bg-white px-2 py-1.5 text-sm">
                                 <option v-for="r in request.decision.reasons" :key="r.id" :value="r.id">{{ r.label }}</option>
                             </select>
                         </label>
                         <label class="text-xs text-stone-700">
                             {{ t('Açıklama (kanala gider, en çok 500 karakter)') }}
-                            <textarea v-model="rejectForm.description" maxlength="500" rows="3" required class="mt-1 w-full rounded-md border border-stone-300 px-2 py-1.5 text-sm" />
+                            <textarea v-model="rejectForm.description" maxlength="500" rows="3" required class="mt-1 w-full rounded-[10px] border border-stone-300 px-2 py-1.5 text-sm" />
                         </label>
                         <p class="text-xs text-stone-500">{{ t('Fotoğraf/belge gerektiren red sebepleri yalnız kanalın satıcı panelinden seçilebilir.') }}</p>
                         <div class="flex gap-2">
-                            <button type="submit" class="rounded-md bg-red-700 px-3 py-1.5 text-sm text-white transition hover:bg-red-800 disabled:opacity-50" :disabled="busy !== null">
+                            <button type="submit" class="rounded-[10px] bg-red-700 px-3 py-1.5 text-sm text-white transition hover:bg-red-800 disabled:opacity-50" :disabled="busy !== null">
                                 {{ t('Red talebini gönder') }}
                             </button>
-                            <button type="button" class="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm" @click="rejecting = null">
+                            <button type="button" class="rounded-[10px] border border-stone-300 bg-white px-3 py-1.5 text-sm" @click="rejecting = null">
                                 {{ t('Vazgeç') }}
                             </button>
                         </div>

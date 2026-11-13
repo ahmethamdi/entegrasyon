@@ -23,17 +23,17 @@ const date = (iso) => (iso ? new Date(iso).toLocaleDateString(intlLocale(), { da
     <PanelLayout>
         <PageHeader :section="t('Yönetim')" :title="t('Müşteriler')" :description="t(':count müşteri hesabı', { count: tenants.total })">
             <template #actions>
-                <Link href="/admin" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Platform özeti') }}</Link>
+                <Link href="/admin" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Platform özeti') }}</Link>
             </template>
         </PageHeader>
 
         <form class="mt-2 flex gap-2" role="search" @submit.prevent="submit">
             <label for="admin-q" class="sr-only">{{ t('Ad ya da e-posta ara') }}</label>
-            <input id="admin-q" v-model="q" type="search" :placeholder="t('Ad ya da e-posta ara')" class="w-full max-w-sm rounded-md border border-stone-300 px-3 py-2 text-sm" />
-            <button type="submit" class="rounded-md bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Ara') }}</button>
+            <input id="admin-q" v-model="q" type="search" :placeholder="t('Ad ya da e-posta ara')" class="w-full max-w-sm rounded-[10px] border border-stone-300 px-3 py-2 text-sm" />
+            <button type="submit" class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Ara') }}</button>
         </form>
 
-        <div class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-[760px] text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-500">
                     <tr>
@@ -67,9 +67,9 @@ const date = (iso) => (iso ? new Date(iso).toLocaleDateString(intlLocale(), { da
         </div>
 
         <nav v-if="tenants.lastPage > 1" class="mt-4 flex items-center justify-between text-sm" :aria-label="t('Sayfalar')">
-            <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="tenants.currentPage <= 1" @click="go(tenants.currentPage - 1)">{{ t('Önceki') }}</button>
+            <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="tenants.currentPage <= 1" @click="go(tenants.currentPage - 1)">{{ t('Önceki') }}</button>
             <span class="text-stone-600">{{ tenants.currentPage }} / {{ tenants.lastPage }}</span>
-            <button type="button" class="rounded-md border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="tenants.currentPage >= tenants.lastPage" @click="go(tenants.currentPage + 1)">{{ t('Sonraki') }}</button>
+            <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 disabled:opacity-40" :disabled="tenants.currentPage >= tenants.lastPage" @click="go(tenants.currentPage + 1)">{{ t('Sonraki') }}</button>
         </nav>
     </PanelLayout>
 </template>

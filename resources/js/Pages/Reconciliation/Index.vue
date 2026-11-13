@@ -202,7 +202,7 @@ function isDeciding(row, decision) {
         <!-- Karar geri bildirimi — gerekçe `flash` tanımında. -->
         <p
             v-if="flash"
-            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flash }}
         </p>
@@ -275,7 +275,7 @@ function isDeciding(row, decision) {
 
         <!-- filtreler -->
         <div class="mt-8 flex flex-wrap items-center gap-3">
-            <div class="flex rounded-md border border-stone-300 bg-white p-0.5">
+            <div class="flex rounded-[10px] border border-stone-300 bg-white p-0.5">
                 <button
                     type="button"
                     class="rounded px-3 py-1.5 text-sm transition"
@@ -304,7 +304,7 @@ function isDeciding(row, decision) {
             sütunları sıkıştırır ve "Sebep" gibi metin taşıyan sütun
             okunamaz hâle gelir. Genişlik verilince kutu KAYAR.
         -->
-        <div class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <!-- Karar sütunu iki düğme taşıyor: asgari genişlik ONA GÖRE. -->
             <table class="w-full min-w-5xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
@@ -399,7 +399,7 @@ function isDeciding(row, decision) {
                             <div v-if="row.status === 'PRICE_CONFLICT' && can('catalog.manage')" class="flex flex-wrap gap-2">
                                 <button
                                     type="button"
-                                    class="rounded-md border border-stone-300 bg-white px-2.5 py-1 text-xs text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+                                    class="rounded-[10px] border border-stone-300 bg-white px-2.5 py-1 text-xs text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
                                     :disabled="deciding !== null"
                                     @click="decide(row, 'accept_channel')"
                                 >
@@ -407,7 +407,7 @@ function isDeciding(row, decision) {
                                 </button>
                                 <button
                                     type="button"
-                                    class="rounded-md bg-stone-900 px-2.5 py-1 text-xs text-white transition hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
+                                    class="rounded-[10px] bg-stone-900 px-2.5 py-1 text-xs text-white transition hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-50"
                                     :disabled="deciding !== null"
                                     @click="decide(row, 'push_ours')"
                                 >

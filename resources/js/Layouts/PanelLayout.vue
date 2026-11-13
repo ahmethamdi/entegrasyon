@@ -354,7 +354,7 @@ function logout() {
                         v-if="memberships.length > 1"
                         :value="page.props.tenant?.id"
                         :aria-label="t('Firma')"
-                        class="mt-1 w-full truncate rounded border border-stone-200 bg-white px-1.5 py-0.5 text-xs font-medium text-stone-600"
+                        class="mt-1 w-full truncate rounded-[14px] border border-stone-200 bg-white px-1.5 py-0.5 text-xs font-medium text-stone-600"
                         @change="switchTenant"
                     >
                         <option v-for="m in memberships" :key="m.id" :value="m.id">{{ m.name }}</option>
@@ -514,7 +514,7 @@ function logout() {
             >
                 <button
                     type="button"
-                    class="rounded-md border border-stone-300 p-2 text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    class="rounded-[10px] border border-stone-300 p-2 text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     aria-controls="panel-sidebar"
                     :aria-expanded="mobileMenuOpen"
                     :aria-label="t('Menüyü aç')"
@@ -581,7 +581,7 @@ function logout() {
                     </div>
 
                     <template v-if="!onboardingCollapsed">
-                        <ol class="mt-4 grid gap-px overflow-hidden rounded-lg border border-amber-200 bg-amber-200 sm:grid-cols-3 lg:grid-cols-5">
+                        <ol class="mt-4 grid gap-px overflow-hidden rounded-[14px] border border-amber-200 bg-amber-200 sm:grid-cols-3 lg:grid-cols-5">
                             <li
                                 v-for="(step, index) in steps"
                                 :key="step.key"
@@ -633,7 +633,7 @@ function logout() {
                         <div v-if="nextStep?.href" class="mt-4">
                             <Link
                                 :href="nextStep.href"
-                                class="inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
+                                class="inline-block rounded-[10px] bg-amber-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700"
                             >
                                 {{ t(nextStep.action) }} →
                             </Link>

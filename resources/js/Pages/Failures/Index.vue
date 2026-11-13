@@ -136,7 +136,7 @@ function domainFor(domain) {
                 <button
                     v-if="rows.length > 0 && can('catalog.manage')"
                     type="button"
-                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="busy !== null"
                     @click="retryAll"
                 >
@@ -147,7 +147,7 @@ function domainFor(domain) {
 
         <p
             v-if="flash"
-            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
         >
             {{ flash }}
         </p>
@@ -192,7 +192,7 @@ function domainFor(domain) {
             genişlik verilince sütunlar doğal boyutlarını korur ve kutu
             KAYAR — kaydırma zaten tasarlanan davranıştı.
         -->
-        <div class="relative mt-8 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-8 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-208 text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
@@ -263,7 +263,7 @@ function domainFor(domain) {
                             <button
                                 v-if="can('catalog.manage')"
                                 type="button"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="busy !== null"
                                 @click="retry(row.id)"
                             >

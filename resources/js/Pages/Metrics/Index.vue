@@ -243,7 +243,7 @@ const lastCapture = computed(() => {
 
         <div
             v-if="cards.length === 0"
-            class="mt-8 rounded-lg border border-stone-200 bg-white px-4 py-12 text-center"
+            class="mt-8 rounded-[14px] border border-stone-200 bg-white px-4 py-12 text-center"
         >
             <p class="text-sm text-stone-600">{{ t('Henüz ölçüm yok.') }}</p>
             <p class="mt-1 text-xs text-stone-500">

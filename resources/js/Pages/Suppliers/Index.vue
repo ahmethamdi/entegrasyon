@@ -43,17 +43,17 @@ function when(iso) {
             :description="t('Toptancının XML ürün listesini bağla: yeni ürünleri aç, stok ve fiyatı her saat güncelle. Önce önizlersin, sonra uygularsın.')"
         />
 
-        <p v-if="flashSuccess" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
+        <p v-if="flashSuccess" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{{ flashSuccess }}</p>
 
         <div class="mt-6">
-            <Link v-if="can('catalog.manage')" href="/suppliers/create" class="inline-flex rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700">
+            <Link v-if="can('catalog.manage')" href="/suppliers/create" class="inline-flex rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700">
                 {{ t('Tedarikçi ekle') }}
             </Link>
         </div>
 
         <p v-if="sources.length === 0" class="mt-8 text-sm text-stone-600">{{ t('Henüz tedarikçi yok.') }}</p>
 
-        <div v-else class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200">
+        <div v-else class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-600">
                     <tr>

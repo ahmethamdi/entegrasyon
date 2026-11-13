@@ -90,6 +90,21 @@ final class CustomerServicePanelTest extends TestCase
             ->assertInertia(fn ($page) => $page->component('Questions/Index')->where('questions.total', 0)->where('unansweredCount', 0));
     }
 
+    /**
+     * Trendyol sorusu panelde CEVAPLANABİLİR görünür (13 Kas 2026: kanal
+     * tipi yüklenmeden sorulunca kontrol sessizce "desteklemiyor" diyordu).
+     */
+    #[Test]
+    public function questions_screen_knows_trendyol_can_answer(): void
+    {
+        [, $connection] = $this->trendyolTenant('999001');
+        $this->question('100');
+        $this->syncQuestions($connection);
+
+        $this->actingAs($this->owner)->get('/questions')->assertOk()
+            ->assertInertia(fn ($page) => $page->component('Questions/Index')->where('questions.data.0.answerSupported', true));
+    }
+
     #[Test]
     public function returns_screen_separates_return_requested_from_stock_restored(): void
     {

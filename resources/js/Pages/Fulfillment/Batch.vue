@@ -57,23 +57,23 @@ onBeforeUnmount(() => clearInterval(timer));
             <a
                 v-if="batch.action === 'labels' && readyLabels > 0 && can('orders.work')"
                 :href="`/fulfillment/batches/${batch.id}/labels.zpl`"
-                class="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white"
+                class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-sm text-white"
             >
                 {{ t('Hazır etiketleri indir (ZPL, :count)', { count: readyLabels }) }}
             </a>
             <Link
                 v-if="(batch.action === 'picking' || batch.action === 'labels') && can('orders.work')"
                 :href="`/fulfillment/batches/${batch.id}/picking`"
-                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-100"
+                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-100"
             >
                 {{ t('Toplama listesini aç') }}
             </Link>
-            <Link href="/orders" class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-100">
+            <Link href="/orders" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-800 hover:bg-stone-100">
                 {{ t('Siparişlere dön') }}
             </Link>
         </div>
 
-        <div class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-2xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
@@ -103,7 +103,7 @@ onBeforeUnmount(() => clearInterval(timer));
                             <a
                                 v-if="item.downloadable"
                                 :href="`/orders/${item.orderId}/invoice/pdf`"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100"
                             >
                                 {{ t('Fatura PDF') }}
                             </a>

@@ -46,11 +46,11 @@ const planLabel = (p) => `${p.name} · ${Number(p.price) > 0 ? money(p.price, p.
     <PanelLayout>
         <PageHeader :section="t('Yönetim · müşteri')" :title="tenant.name" :description="t('Kayıt: :date', { date: date(tenant.createdAt) })">
             <template #actions>
-                <Link href="/admin/tenants" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Müşteriler') }}</Link>
+                <Link href="/admin/tenants" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Müşteriler') }}</Link>
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ flashSuccess }}</div>
+        <div v-if="flashSuccess" class="mt-2 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ flashSuccess }}</div>
 
         <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard :label="t('Plan')" :value="currentPlan?.name ?? t('Ücretsiz')" :hint="current?.endsAt ? t('Bitiş: :date', { date: date(current.endsAt) }) : null" />
@@ -59,29 +59,29 @@ const planLabel = (p) => `${p.name} · ${Number(p.price) > 0 ? money(p.price, p.
             <StatCard :label="t('Sipariş (30 gün)')" :value="usage.orders30" />
         </div>
 
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Plan ata') }}</h2>
             <p class="mt-1 text-sm text-stone-600">{{ t('Müşteriye özel plan ya da ödemesi fatura ile alınan anlaşmalar için. Ödeme sağlayıcısının aktif aboneliği varsa atanmaz.') }}</p>
             <form class="mt-4 grid gap-3 sm:grid-cols-[1fr_200px_auto] sm:items-end" @submit.prevent="submit">
                 <div>
                     <label for="plan" class="block text-xs font-medium text-stone-600">{{ t('Plan') }}</label>
-                    <select id="plan" v-model="form.plan_code" required class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm">
+                    <select id="plan" v-model="form.plan_code" required class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm">
                         <option value="" disabled>{{ t('Plan seç') }}</option>
                         <option v-for="p in plans" :key="p.code" :value="p.code">{{ planLabel(p) }}</option>
                     </select>
                 </div>
                 <div>
                     <label for="ends" class="block text-xs font-medium text-stone-600">{{ t('Bitiş tarihi (isteğe bağlı)') }}</label>
-                    <input id="ends" v-model="form.ends_at" type="date" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm" />
+                    <input id="ends" v-model="form.ends_at" type="date" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm" />
                 </div>
-                <button type="submit" :disabled="form.processing || !form.plan_code" class="rounded-md bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Ata') }}</button>
+                <button type="submit" :disabled="form.processing || !form.plan_code" class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Ata') }}</button>
             </form>
             <p v-if="form.errors.plan_code" class="mt-2 text-sm text-red-700" role="alert">{{ form.errors.plan_code }}</p>
             <p v-if="form.errors.ends_at" class="mt-2 text-sm text-red-700" role="alert">{{ form.errors.ends_at }}</p>
         </section>
 
         <div class="mt-6 grid gap-6 lg:grid-cols-2">
-            <section class="rounded-lg border border-stone-200 bg-white p-5">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-5">
                 <h2 class="text-sm font-semibold text-stone-900">{{ t('Kullanıcılar') }}</h2>
                 <ul class="mt-3 divide-y divide-stone-100 text-sm">
                     <li v-for="u in users" :key="u.email" class="py-2">
@@ -98,7 +98,7 @@ const planLabel = (p) => `${p.name} · ${Number(p.price) > 0 ? money(p.price, p.
                 </ul>
             </section>
 
-            <section class="rounded-lg border border-stone-200 bg-white p-5">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-5">
                 <h2 class="text-sm font-semibold text-stone-900">{{ t('Kanallar') }}</h2>
                 <p v-if="!connections.length" class="mt-3 text-sm text-stone-500">{{ t('Henüz bağlı kanal yok.') }}</p>
                 <ul v-else class="mt-3 divide-y divide-stone-100 text-sm">
@@ -113,15 +113,15 @@ const planLabel = (p) => `${p.name} · ${Number(p.price) > 0 ? money(p.price, p.
             </section>
         </div>
 
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('14 gün iade güvencesi') }}</h2>
             <p class="mt-1 text-sm text-stone-600">{{ t('İlk ücretli abonelikte, ilk ödemeden itibaren 14 gün içinde, hesap başına bir kez tam iade. İade sonrası abonelik hemen biter ve müşteri ücretsiz plana geçer; verisi silinmez.') }}</p>
-            <p v-if="refundError" class="mt-3 rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-800">{{ refundError }}</p>
+            <p v-if="refundError" class="mt-3 rounded-[10px] border border-red-200 bg-red-50 p-2 text-sm text-red-800">{{ refundError }}</p>
             <div class="mt-3 flex flex-wrap items-center gap-3">
                 <button
                     v-if="refundGuarantee.eligible"
                     type="button"
-                    class="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-800 transition hover:bg-red-50 disabled:opacity-50"
+                    class="rounded-[10px] border border-red-300 px-4 py-2 text-sm font-medium text-red-800 transition hover:bg-red-50 disabled:opacity-50"
                     :disabled="refundForm.processing"
                     @click="refund"
                 >
@@ -135,7 +135,7 @@ const planLabel = (p) => `${p.name} · ${Number(p.price) > 0 ? money(p.price, p.
             </ul>
         </section>
 
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Abonelik geçmişi') }}</h2>
             <div class="relative mt-3 overflow-x-auto">
                 <table class="w-full min-w-[520px] text-sm">

@@ -200,7 +200,7 @@ function formatDate(iso) {
             <template v-if="can('channels.manage')" #actions>
                 <Link
                     href="/channels/create"
-                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                    class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
                 >
                     {{ t('Mağaza bağla') }}
                 </Link>
@@ -210,7 +210,7 @@ function formatDate(iso) {
 
             <div
                 v-if="flashSuccess"
-                class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+                class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
             >
                 {{ flashSuccess }}
             </div>
@@ -222,7 +222,7 @@ function formatDate(iso) {
                 {{ flashWarning }}
             </div>
 
-            <div v-if="!sorted.length" class="mt-10 rounded-lg border border-dashed border-stone-300 p-10 text-center">
+            <div v-if="!sorted.length" class="mt-10 rounded-[14px] border border-dashed border-stone-300 p-10 text-center">
                 <p class="text-sm text-stone-600">
                     {{ t('Henüz bağlı mağaza yok. Senkron için en az bir kanal gerekiyor.') }}
                 </p>
@@ -235,7 +235,7 @@ function formatDate(iso) {
                 <article
                     v-for="connection in sorted"
                     :key="connection.id"
-                    class="rounded-lg border border-stone-200 bg-white p-5"
+                    class="rounded-[14px] border border-stone-200 bg-white p-5"
                 >
                     <div class="flex items-start justify-between gap-4">
                         <div class="min-w-0">
@@ -290,14 +290,14 @@ function formatDate(iso) {
                             <Link
                                 v-if="connection.capabilities?.pricing"
                                 :href="`/channels/${connection.id}/pricing`"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                             >
                                 {{ t('Fiyat kuralı') }}
                             </Link>
                             <Link
                                 v-if="connection.hasSettings"
                                 :href="`/channels/${connection.id}/settings`"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                             >
                                 {{ t('Ayarlar') }}
                             </Link>
@@ -310,7 +310,7 @@ function formatDate(iso) {
                             <button
                                 v-if="connection.authorizeUrl"
                                 type="button"
-                                class="rounded-md bg-stone-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="authorizing !== null"
                                 @click="authorize(connection)"
                             >
@@ -319,7 +319,7 @@ function formatDate(iso) {
                             <button
                                 v-else
                                 type="button"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 :disabled="checking !== null"
                                 @click="recheck(connection.id)"
                             >
@@ -330,7 +330,7 @@ function formatDate(iso) {
 
                     <div
                         v-if="connection.settingsMissing > 0 && !connection.authorizeUrl"
-                        class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2"
+                        class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2"
                     >
                         <p class="text-sm text-amber-900">
                             {{ t('İlan açabilmek için :count ayar eksik.', { count: connection.settingsMissing }) }}
@@ -357,7 +357,7 @@ function formatDate(iso) {
 
                     <div
                         v-if="connection.locationChoices?.length"
-                        class="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3"
+                        class="mt-3 rounded-[10px] border border-amber-200 bg-amber-50 p-3"
                     >
                         <label :for="`depo-${connection.id}`" class="block text-sm font-medium text-stone-900">
                             {{ t('Stok hangi depoya yazılsın?') }}
@@ -369,7 +369,7 @@ function formatDate(iso) {
                             <select
                                 :id="`depo-${connection.id}`"
                                 v-model="chosenLocation[connection.id]"
-                                class="min-w-0 flex-1 rounded-md border border-stone-300 px-2 py-1.5 text-sm"
+                                class="min-w-0 flex-1 rounded-[10px] border border-stone-300 px-2 py-1.5 text-sm"
                             >
                                 <option :value="undefined" disabled>{{ t('Depo seç…') }}</option>
                                 <option v-for="location in connection.locationChoices" :key="location.id" :value="location.id">
@@ -378,7 +378,7 @@ function formatDate(iso) {
                             </select>
                             <button
                                 type="button"
-                                class="rounded-md bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                                class="rounded-[10px] bg-stone-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
                                 :disabled="!chosenLocation[connection.id] || savingLocation !== null"
                                 @click="saveLocation(connection.id)"
                             >
@@ -393,7 +393,7 @@ function formatDate(iso) {
                             <li
                                 v-for="(label, write) in writeLabels"
                                 :key="write"
-                                class="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs"
+                                class="flex items-center justify-between gap-2 rounded-[10px] border px-3 py-2 text-xs"
                                 :class="connection.writes?.[write] ? 'border-emerald-200 bg-emerald-50' : 'border-stone-200 bg-stone-50'"
                             >
                                 <span>
@@ -405,7 +405,7 @@ function formatDate(iso) {
                                 <button
                                     v-if="connection.writes?.[write] || !connection.writesLocked"
                                     type="button"
-                                    class="rounded border border-stone-300 bg-white px-2 py-1 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    class="rounded-[10px] border border-stone-300 bg-white px-2 py-1 text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                                     :disabled="switching !== null"
                                     @click="setWrite(connection, write, !connection.writes?.[write])"
                                 >

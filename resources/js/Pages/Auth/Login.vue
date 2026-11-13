@@ -42,15 +42,15 @@ function submit() {
                 bekliyor. Satıcı adres yazmaz; hesabı açınca bağlantı kendiliğinden
                 tamamlanır.
             -->
-            <div v-if="shopifyInstall" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <div v-if="shopifyInstall" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
                 <p class="font-medium">{{ $t(':shop onaylandı.', { shop: shopifyInstall.name ?? shopifyInstall.shop }) }}</p>
                 <p class="mt-1">{{ $t('Giriş yap, Shopify mağazan otomatik bağlansın. Hesabın yoksa kayıt ol.') }}</p>
             </div>
 
-            <p v-if="warning" class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            <p v-if="warning" class="mt-6 rounded-[10px] border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 {{ warning }}
             </p>
-            <p v-if="success" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            <p v-if="success" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 {{ success }}
             </p>
 
@@ -66,7 +66,7 @@ function submit() {
                         autocomplete="email"
                         required
                         autofocus
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.email" class="mt-1 text-sm text-red-700">
                         {{ form.errors.email }}
@@ -83,7 +83,7 @@ function submit() {
                         type="password"
                         autocomplete="current-password"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.password" class="mt-1 text-sm text-red-700">
                         {{ form.errors.password }}
@@ -103,7 +103,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="w-full rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ $t('Giriş yap') }}
                 </button>

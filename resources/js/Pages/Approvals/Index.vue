@@ -90,7 +90,7 @@ function applyFilter(patch) {
         -->
         <div
             v-if="!hasApprovalChannels"
-            class="mt-6 rounded-lg border border-stone-200 bg-white px-4 py-12 text-center"
+            class="mt-6 rounded-[14px] border border-stone-200 bg-white px-4 py-12 text-center"
         >
             <p class="text-sm text-stone-600">
                 {{ t('Onay süreci olan bağlı kanalınız yok.') }}
@@ -100,7 +100,7 @@ function applyFilter(patch) {
             </p>
             <Link
                 href="/channels"
-                class="mt-4 inline-block rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                class="mt-4 inline-block rounded-[10px] border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
                 {{ t('Kanallara git') }}
             </Link>
@@ -139,7 +139,7 @@ function applyFilter(patch) {
 
             <!-- filtreler -->
             <div class="mt-8 flex flex-wrap items-center gap-3">
-                <div class="flex rounded-md border border-stone-300 bg-white p-0.5">
+                <div class="flex rounded-[10px] border border-stone-300 bg-white p-0.5">
                     <button
                         type="button"
                         class="rounded px-3 py-1.5 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -169,7 +169,7 @@ function applyFilter(patch) {
                 <!-- Tek kanal varsa seçim sormak gereksiz bir karar yüküdür. -->
                 <select
                     v-if="connections.length > 1"
-                    class="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    class="rounded-[10px] border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     :value="filters.connection ?? ''"
                     @change="applyFilter({ connection: $event.target.value || undefined })"
                 >
@@ -186,7 +186,7 @@ function applyFilter(patch) {
                 bir şeride düşüp okunamaz hâle gelir. Genişlik verilince
                 kutu KAYAR ve sayfa taşması ÜRETMEZ.
             -->
-            <div class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+            <div class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
                 <table class="w-full min-w-4xl text-sm">
                     <thead class="border-b border-stone-200 bg-stone-50 text-left">
                         <tr>

@@ -414,6 +414,8 @@ final class BillingController extends Controller
                     'limits' => [
                         'products' => $plan->limitFor(QuotaMetric::PRODUCTS),
                         'channels' => $plan->limitFor(QuotaMetric::CHANNELS),
+                        'users' => $plan->limitFor(QuotaMetric::USERS),
+                        'invoices' => $plan->limitFor(QuotaMetric::INVOICES),
                     ],
                 ])
                 ->all(),

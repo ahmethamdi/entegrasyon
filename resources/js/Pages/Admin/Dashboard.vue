@@ -47,10 +47,10 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
         <PageHeader :section="t('Yönetim')" :title="t('Platform özeti')" :description="t('Tüm müşteriler üzerinden kayıt, kullanım ve gelir.')">
             <template #actions>
                 <div class="flex gap-2">
-                    <Link href="/admin/tenants" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Müşteriler') }}</Link>
-                    <Link href="/admin/plans" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Planlar') }}</Link>
-                    <Link href="/admin/certification" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Kanal sertifikasyonu') }}</Link>
-                    <Link href="/admin/contact-messages" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('İletişim mesajları') }}</Link>
+                    <Link href="/admin/tenants" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Müşteriler') }}</Link>
+                    <Link href="/admin/plans" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Planlar') }}</Link>
+                    <Link href="/admin/certification" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Kanal sertifikasyonu') }}</Link>
+                    <Link href="/admin/contact-messages" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('İletişim mesajları') }}</Link>
                 </div>
             </template>
         </PageHeader>
@@ -67,7 +67,7 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
             BAŞINADIR — yedi günlük sayı, üç gün gelen kişiyi üç kez sayar;
             bunu açıkça yazmazsak rakam olduğundan büyük okunur.
         -->
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Ziyaret · son 7 / 30 gün') }}</h2>
             <div class="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <StatCard :label="t('Görüntüleme · 7 gün')" :value="visits.views7" />
@@ -116,7 +116,7 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
             <p class="mt-4 text-xs text-stone-500">{{ t('Çerezsiz sayılır, IP saklanmaz. Tekil ziyaretçi gün başınadır: iki gün gelen kişi iki kez sayılır. Botlar ve yönetici hesabı sayılmaz.') }}</p>
         </section>
 
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Kayıttan ödemeye') }}</h2>
             <ul class="mt-4 space-y-3">
                 <li v-for="step in funnel" :key="step.label">
@@ -131,7 +131,7 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
             </ul>
         </section>
 
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Günlük kayıt · son 30 gün') }}</h2>
             <div class="mt-4 flex h-32 items-end gap-1" role="img" :aria-label="t('Günlük kayıt · son 30 gün')">
                 <div
@@ -149,7 +149,7 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
         </section>
 
         <div class="mt-6 grid gap-6 lg:grid-cols-3">
-            <section class="rounded-lg border border-stone-200 bg-white p-5">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-5">
                 <h2 class="text-sm font-semibold text-stone-900">{{ t('Aylık tekrarlayan gelir') }}</h2>
                 <p v-if="!revenue.length" class="mt-3 text-sm text-stone-500">{{ t('Henüz ücretli abonelik yok.') }}</p>
                 <ul v-else class="mt-3 space-y-1">
@@ -158,7 +158,7 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
                 <p class="mt-2 text-xs text-stone-500">{{ t('Para birimleri ayrı gösterilir, toplanmaz.') }}</p>
             </section>
 
-            <section class="rounded-lg border border-stone-200 bg-white p-5">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-5">
                 <h2 class="text-sm font-semibold text-stone-900">{{ t('Kanallar') }}</h2>
                 <p v-if="!stats.channels.length" class="mt-3 text-sm text-stone-500">{{ t('Henüz bağlı kanal yok.') }}</p>
                 <ul v-else class="mt-3 divide-y divide-stone-100 text-sm">
@@ -172,7 +172,7 @@ const revenue = computed(() => Object.entries(props.stats.revenue ?? {}));
                 </ul>
             </section>
 
-            <section class="rounded-lg border border-stone-200 bg-white p-5">
+            <section class="rounded-[14px] border border-stone-200 bg-white p-5">
                 <h2 class="text-sm font-semibold text-stone-900">{{ t('Planlar') }}</h2>
                 <ul class="mt-3 divide-y divide-stone-100 text-sm">
                     <li v-for="p in stats.plans" :key="p.code" class="flex justify-between py-1.5">

@@ -329,7 +329,17 @@ final class CategoryMappingController extends Controller
             return $requested;
         }
 
-        return $this->taxonomyChannelTypes()[0]['code'] ?? '';
+        $types = array_column($this->taxonomyChannelTypes(), 'code');
+
+        // Önce satıcının BAĞLI olduğu kanal: yalnız Trendyol'u olan satıcı
+        // sayfayı açınca alfabetik ilk ağacı (Etsy) görüp "hiçbiri
+        // eşleşmemiş" sanmasın (13 Kas 2026).
+        $connected = ChannelConnection::query()
+            ->whereIn('channel_type_code', $types)
+            ->orderBy('channel_type_code')
+            ->value('channel_type_code');
+
+        return $connected ?? $types[0] ?? '';
     }
 
     /**

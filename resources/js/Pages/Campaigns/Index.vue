@@ -51,19 +51,19 @@ function cancel(campaign) {
             <template v-if="can('catalog.manage')" #actions>
                 <Link
                     href="/campaigns/create"
-                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                    class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
                 >
                     {{ t('Kampanya oluştur') }}
                 </Link>
             </template>
         </PageHeader>
 
-        <div v-if="!campaigns.length" class="mt-10 rounded-lg border border-dashed border-stone-300 px-6 py-10 text-center">
+        <div v-if="!campaigns.length" class="mt-10 rounded-[14px] border border-dashed border-stone-300 px-6 py-10 text-center">
             <p class="text-sm text-stone-700">{{ t('Henüz kampanya yok.') }}</p>
             <p class="mt-1 text-xs text-stone-500">{{ t('Örnek: Kasım indirimi — Trendyol ve Shopify kanallarında tüm kremlerde %20, 1–30 Kasım.') }}</p>
         </div>
 
-        <ul v-else class="mt-8 divide-y divide-stone-200 rounded-lg border border-stone-200 bg-white">
+        <ul v-else class="mt-8 divide-y divide-stone-200 rounded-[14px] border border-stone-200 bg-white">
             <li v-for="campaign in campaigns" :key="campaign.id" class="flex flex-wrap items-center gap-4 px-5 py-4">
                 <div class="min-w-0 flex-1">
                     <div class="flex flex-wrap items-center gap-2">
@@ -87,7 +87,7 @@ function cancel(campaign) {
                     v-if="(campaign.status === 'active' || campaign.status === 'scheduled') && can('catalog.manage')"
                     type="button"
                     :disabled="cancelling !== null"
-                    class="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
                     @click="cancel(campaign)"
                 >
                     {{ cancelling === campaign.id ? t('İptal ediliyor…') : t('İptal et') }}

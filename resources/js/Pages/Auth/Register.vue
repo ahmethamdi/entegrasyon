@@ -56,12 +56,12 @@ function submit() {
                 bekliyor. Satıcı adres yazmaz; hesabı açınca bağlantı kendiliğinden
                 tamamlanır.
             -->
-            <div v-if="shopifyInstall" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <div v-if="shopifyInstall" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
                 <p class="font-medium">{{ $t(':shop onaylandı.', { shop: shopifyInstall.name ?? shopifyInstall.shop }) }}</p>
                 <p class="mt-1">{{ $t('34Pazar hesabını aç, Shopify mağazan otomatik bağlansın. Hesabın varsa giriş yap.') }}</p>
             </div>
 
-            <div v-if="invitation" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+            <div v-if="invitation" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
                 <p class="font-medium">{{ $t(':tenant ekibine davet edildin.', { tenant: invitation.tenant }) }}</p>
                 <p class="mt-1">{{ $t('Hesabını aç, ekibe kendiliğinden katılırsın.') }}</p>
             </div>
@@ -76,7 +76,7 @@ function submit() {
                     <label>Website<input v-model="form.website" name="website" type="text" tabindex="-1" autocomplete="off"></label>
                 </div>
 
-                <p v-if="form.errors.ft" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                <p v-if="form.errors.ft" class="rounded-[10px] border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                     {{ form.errors.ft }}
                 </p>
 
@@ -90,7 +90,7 @@ function submit() {
                         type="text"
                         required
                         autofocus
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.name" class="mt-1 text-sm text-red-700">
                         {{ form.errors.name }}
@@ -106,7 +106,7 @@ function submit() {
                         v-model="form.company"
                         type="text"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.company" class="mt-1 text-sm text-red-700">
                         {{ form.errors.company }}
@@ -124,7 +124,7 @@ function submit() {
                         autocomplete="email"
                         required
                         :readonly="!!invitation"
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.email" class="mt-1 text-sm text-red-700">
                         {{ form.errors.email }}
@@ -141,7 +141,7 @@ function submit() {
                         type="password"
                         autocomplete="new-password"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.password" class="mt-1 text-sm text-red-700">
                         {{ form.errors.password }}
@@ -158,14 +158,14 @@ function submit() {
                         type="password"
                         autocomplete="new-password"
                         required
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                 </div>
 
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="w-full rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ $t('Hesap oluştur') }}
                 </button>

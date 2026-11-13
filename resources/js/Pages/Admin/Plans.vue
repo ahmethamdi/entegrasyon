@@ -25,13 +25,13 @@ const limit = (n) => (n === null || n === undefined ? t('Sınırsız') : n);
     <PanelLayout>
         <PageHeader :section="t('Yönetim')" :title="t('Planlar')" :description="t('Özel planlar müşteriye görünmez ve satın alınamaz; yalnız müşteri sayfasından atanır.')">
             <template #actions>
-                <Link href="/admin" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Platform özeti') }}</Link>
+                <Link href="/admin" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Platform özeti') }}</Link>
             </template>
         </PageHeader>
 
-        <div v-if="flashSuccess" class="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ flashSuccess }}</div>
+        <div v-if="flashSuccess" class="mt-2 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{{ flashSuccess }}</div>
 
-        <div class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-[620px] text-sm">
                 <thead class="bg-stone-50 text-left text-xs text-stone-500">
                     <tr>
@@ -58,12 +58,12 @@ const limit = (n) => (n === null || n === undefined ? t('Sınırsız') : n);
             </table>
         </div>
 
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Müşteriye özel plan oluştur') }}</h2>
             <form class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end" @submit.prevent="submit">
                 <div class="lg:col-span-2">
                     <label for="p-name" class="block text-xs font-medium text-stone-600">{{ t('Plan adı') }}</label>
-                    <input id="p-name" v-model="form.name" required maxlength="80" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm" :placeholder="t('Ör. Konfor Halı özel')" />
+                    <input id="p-name" v-model="form.name" required maxlength="80" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm" :placeholder="t('Ör. Konfor Halı özel')" />
                     <p v-if="form.errors.name" class="mt-1 text-xs text-red-700">{{ form.errors.name }}</p>
                 </div>
                 <div>
@@ -79,14 +79,14 @@ const limit = (n) => (n === null || n === undefined ? t('Sınırsız') : n);
                 </div>
                 <div>
                     <label for="p-prod" class="block text-xs font-medium text-stone-600">{{ t('Ürün sınırı (boş = sınırsız)') }}</label>
-                    <input id="p-prod" v-model="form.max_products" type="number" min="1" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm" />
+                    <input id="p-prod" v-model="form.max_products" type="number" min="1" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm" />
                 </div>
                 <div>
                     <label for="p-chan" class="block text-xs font-medium text-stone-600">{{ t('Kanal sınırı (boş = sınırsız)') }}</label>
-                    <input id="p-chan" v-model="form.max_channels" type="number" min="1" class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm" />
+                    <input id="p-chan" v-model="form.max_channels" type="number" min="1" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm" />
                 </div>
                 <div class="sm:col-span-2 lg:col-span-5">
-                    <button type="submit" :disabled="form.processing" class="rounded-md bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Planı oluştur') }}</button>
+                    <button type="submit" :disabled="form.processing" class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm text-white hover:bg-stone-700 disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">{{ t('Planı oluştur') }}</button>
                 </div>
             </form>
         </section>

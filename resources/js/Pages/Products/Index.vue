@@ -192,25 +192,25 @@ function submitCount() {
                 -->
                 <Link
                     href="/products/import"
-                    class="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                    class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
                 >
                     {{ t('Toplu içe aktar') }}
                 </Link>
                 <Link
                     href="/products/bulk-edit"
-                    class="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                    class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
                 >
                     {{ t('Excel ile fiyat/stok') }}
                 </Link>
                 <Link
                     href="/products/bundles/create"
-                    class="rounded-md border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                    class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
                 >
                     {{ t('Set oluştur') }}
                 </Link>
                 <Link
                     href="/products/create"
-                    class="rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
+                    class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700"
                 >
                     {{ t('Ürün ekle') }}
                 </Link>
@@ -249,11 +249,11 @@ function submitCount() {
                             type="search"
                             :placeholder="t('Ürün adı veya stok kodu')"
                             :aria-label="t('Ürün ara')"
-                            class="w-full min-w-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring sm:w-64"
+                            class="w-full min-w-0 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring sm:w-64"
                         >
                         <button
                             type="submit"
-                            class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                            class="shrink-0 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                         >
                             {{ t('Ara') }}
                         </button>
@@ -264,14 +264,14 @@ function submitCount() {
 
         <div
             v-if="flashSuccess"
-            class="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+            class="mt-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
             role="status"
         >
             {{ flashSuccess }}
         </div>
 
         <!-- Boş durumlar: hiç ürün yok ≠ bu filtrede ürün yok. -->
-        <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
+        <div v-if="!rows.length" class="mt-8 rounded-[14px] border border-dashed border-stone-300 p-10 text-center">
             <template v-if="tabCounts.all === 0 && !filters.search">
                 <p class="text-sm text-stone-600">{{ t('Henüz ürün yok. Mağazandan çekebilir ya da elle ekleyebilirsin.') }}</p>
                 <Link v-if="can('catalog.manage')" href="/products/import" class="mt-3 inline-block text-sm font-medium text-stone-900 underline">
@@ -281,7 +281,7 @@ function submitCount() {
             <p v-else class="text-sm text-stone-600">{{ t('Bu filtrede ürün yok.') }}</p>
         </div>
 
-        <ul v-else class="mt-6 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200 bg-white">
+        <ul v-else class="mt-6 divide-y divide-stone-100 overflow-hidden rounded-[14px] border border-stone-200 bg-white">
             <template v-for="item in items" :key="item.key">
                 <!-- ── varyant grubu ─────────────────────────────── -->
                 <li v-if="item.type === 'group'">
@@ -291,7 +291,7 @@ function submitCount() {
                         :aria-expanded="isOpen(item)"
                         @click="toggle(item)"
                     >
-                        <span class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-stone-100">
+                        <span class="h-12 w-12 shrink-0 overflow-hidden rounded-[10px] border border-stone-200 bg-stone-100">
                             <img v-if="item.imageUrl" :src="item.imageUrl" alt="" class="h-full w-full object-cover" loading="lazy">
                             <svg v-else class="m-auto mt-3.5 h-5 w-5 text-stone-300" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 6l7-3 7 3-7 3z M3 6v8l7 3 7-3V6 M10 9v8" stroke-linecap="round" stroke-linejoin="round" /></svg>
                         </span>
@@ -337,7 +337,7 @@ function submitCount() {
                                     <button
                                         v-if="row.countVariantId && can('catalog.manage')"
                                         type="button"
-                                        class="rounded-md border border-transparent px-2 py-1 font-mono text-sm font-semibold tabular-nums transition hover:border-stone-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-ring"
+                                        class="rounded-[10px] border border-transparent px-2 py-1 font-mono text-sm font-semibold tabular-nums transition hover:border-stone-300 hover:bg-white focus-visible:outline-2 focus-visible:outline-ring"
                                         :class="stockTone(row.available)"
                                         :aria-label="t(':sku stoğunu say', { sku: row.sku })"
                                         @click="openCount(row)"
@@ -370,12 +370,12 @@ function submitCount() {
                                     min="0"
                                     inputmode="numeric"
                                     required
-                                    class="w-28 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                                    class="w-28 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                                 >
                                 <button
                                     type="submit"
                                     :disabled="countForm.processing"
-                                    class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:opacity-50"
+                                    class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:opacity-50"
                                 >
                                     {{ t('Kaydet') }}
                                 </button>
@@ -391,7 +391,7 @@ function submitCount() {
                 <!-- ── tek ürün ──────────────────────────────────── -->
                 <li v-else :class="item.row.shortfall ? 'bg-red-50/50' : ''">
                     <div class="flex items-center gap-3 px-4 py-3">
-                        <component :is="productLink" :href="`/products/${item.row.id}/edit`" class="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-stone-200 bg-stone-100" tabindex="-1" aria-hidden="true">
+                        <component :is="productLink" :href="`/products/${item.row.id}/edit`" class="h-12 w-12 shrink-0 overflow-hidden rounded-[10px] border border-stone-200 bg-stone-100" tabindex="-1" aria-hidden="true">
                             <img v-if="item.row.imageUrl" :src="item.row.imageUrl" alt="" class="h-full w-full object-cover" loading="lazy">
                             <svg v-else class="m-auto mt-3.5 h-5 w-5 text-stone-300" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 6l7-3 7 3-7 3z M3 6v8l7 3 7-3V6 M10 9v8" stroke-linecap="round" stroke-linejoin="round" /></svg>
                         </component>
@@ -443,7 +443,7 @@ function submitCount() {
                             <button
                                 v-if="item.row.countVariantId && can('catalog.manage')"
                                 type="button"
-                                class="rounded-md border border-stone-200 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums transition hover:border-stone-400 hover:bg-white focus-visible:outline-2 focus-visible:outline-ring"
+                                class="rounded-[10px] border border-stone-200 px-2.5 py-1 font-mono text-sm font-semibold tabular-nums transition hover:border-stone-400 hover:bg-white focus-visible:outline-2 focus-visible:outline-ring"
                                 :class="stockTone(item.row.available)"
                                 :aria-label="t(':sku stoğunu say', { sku: item.row.sku })"
                                 @click="openCount(item.row)"
@@ -479,12 +479,12 @@ function submitCount() {
                             min="0"
                             inputmode="numeric"
                             required
-                            class="w-28 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                            class="w-28 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                         >
                         <button
                             type="submit"
                             :disabled="countForm.processing"
-                            class="rounded-md bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:opacity-50"
+                            class="rounded-[10px] bg-stone-900 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:opacity-50"
                         >
                             {{ t('Kaydet') }}
                         </button>
@@ -515,7 +515,7 @@ function submitCount() {
         >
             <button
                 type="button"
-                class="rounded-md border border-stone-300 px-3 py-1.5 transition hover:bg-stone-100 disabled:opacity-40"
+                class="rounded-[10px] border border-stone-300 px-3 py-1.5 transition hover:bg-stone-100 disabled:opacity-40"
                 :disabled="pagination.page <= 1"
                 @click="go({ page: pagination.page - 1 })"
             >
@@ -524,7 +524,7 @@ function submitCount() {
             <span class="tabular-nums">{{ t(':page / :last', { page: pagination.page, last: pagination.lastPage }) }}</span>
             <button
                 type="button"
-                class="rounded-md border border-stone-300 px-3 py-1.5 transition hover:bg-stone-100 disabled:opacity-40"
+                class="rounded-[10px] border border-stone-300 px-3 py-1.5 transition hover:bg-stone-100 disabled:opacity-40"
                 :disabled="pagination.page >= pagination.lastPage"
                 @click="go({ page: pagination.page + 1 })"
             >

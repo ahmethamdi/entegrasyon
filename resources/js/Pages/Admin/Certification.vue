@@ -50,7 +50,7 @@ const pick = (row, cap) => {
     <PanelLayout>
         <PageHeader :section="t('Yönetim')" :title="t('Kanal sertifikasyonu')" :description="t('Her kanal × yetenek: koddan, test taramasından ve kanıtlı gerçek doğrulamalardan.')">
             <template #actions>
-                <Link href="/admin" class="rounded-md border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100">{{ t('Yönetim') }}</Link>
+                <Link href="/admin" class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm text-stone-700 transition hover:bg-stone-100">{{ t('Yönetim') }}</Link>
             </template>
         </PageHeader>
 
@@ -58,7 +58,7 @@ const pick = (row, cap) => {
             <li v-for="s in statuses" :key="s.key" class="rounded px-2 py-1" :class="tone[s.key]">{{ t(short[s.key]) }} · {{ t(s.label) }}</li>
         </ul>
 
-        <div class="relative mt-4 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-[1100px] text-xs">
                 <thead class="bg-stone-50 text-left text-stone-500">
                     <tr>
@@ -90,7 +90,7 @@ const pick = (row, cap) => {
         </div>
         <p class="mt-2 text-xs text-stone-500">{{ t('Hata sütunu: kanala giden başarısız istek / ölen senkron işlem, son 24 saat, bütün kiracılar.') }}</p>
 
-        <section v-if="selected" class="mt-6 rounded-lg border border-stone-200 bg-white p-5" aria-live="polite">
+        <section v-if="selected" class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5" aria-live="polite">
             <h2 class="text-sm font-semibold text-stone-900">{{ selected.channel }} · {{ t(selected.capability) }}</h2>
             <p class="mt-1 text-sm">{{ t(statusLabel[selected.status]) }}</p>
             <p v-if="selected.evidence" class="mt-3 text-sm text-stone-700">
@@ -105,7 +105,7 @@ const pick = (row, cap) => {
             </div>
         </section>
 
-        <section class="mt-6 rounded-lg border border-stone-200 bg-white p-5">
+        <section class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
             <h2 class="text-sm font-semibold text-stone-900">{{ t('Kanal dışı servisler') }}</h2>
             <ul class="mt-3 space-y-2 text-sm">
                 <li v-for="s in services" :key="s.service" class="flex flex-wrap items-start gap-2">

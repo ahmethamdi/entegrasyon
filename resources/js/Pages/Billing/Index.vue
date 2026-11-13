@@ -134,6 +134,16 @@ const showCardHint = computed(() => !viaShopify.value && props.cardDeclineHint !
     && (returnedFromCheckout.value || props.current.status === 'past_due'));
 
 const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) => ({ key, ...row })));
+
+const currentPlan = computed(() => props.plans.find((p) => p.code === props.current.planCode) ?? null);
+
+/* Plan kartındaki özellikler — sınırlar `limits`ten, null = sınırsız. */
+const planFeatures = [
+    ['products', k(':count ürün')],
+    ['channels', k(':count kanal')],
+    ['users', k(':count kullanıcı')],
+    ['invoices', k('Ayda :count e-fatura')],
+];
 </script>
 
 <template>
@@ -185,103 +195,103 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
             {{ errors.plan_code ?? errors.accept_terms }}
         </p>
 
-        <!-- Mevcut plan -->
-        <section class="mt-8">
-            <h2 class="text-sm font-semibold text-stone-900">{{ t('Mevcut planın') }}</h2>
-
-            <div class="mt-3 rounded-lg border border-stone-200 bg-white p-4">
-                <div class="flex flex-wrap items-baseline justify-between gap-2">
-                    <p class="text-lg font-medium text-stone-900">
-                        {{ current.planName ? t(current.planName) : '—' }}
-                    </p>
+        <!-- Mevcut plan — Yön A (13 Kas 2026) -->
+        <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-6" :aria-label="t('Mevcut planın')">
+            <div class="min-w-0">
+                <p class="text-[13px] text-stone-600">{{ t('Mevcut planın') }}</p>
+                <div class="mt-1 flex flex-wrap items-center gap-2.5">
+                    <p class="text-2xl font-bold tracking-tight text-stone-900">{{ current.planName ? t(current.planName) : '—' }}</p>
                     <span
                         v-if="current.status"
-                        class="rounded px-2 py-0.5 text-[11px] font-medium"
-                        :class="current.status === 'active' || current.status === 'trialing'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-red-100 text-red-800'"
+                        class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                        :class="current.status === 'active' || current.status === 'trialing' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'"
                     >
                         {{ t(statusLabels[current.status] ?? current.status) }}
                     </span>
-                    <span v-else class="text-[11px] text-stone-500 first-letter:uppercase">
-                        {{ t('abonelik yok') }}
-                    </span>
+                    <span v-else class="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs font-medium text-stone-600 first-letter:uppercase">{{ t('abonelik yok') }}</span>
                 </div>
-
-                <p v-if="current.cancelAt" class="mt-2 text-xs text-amber-800">
+                <p v-if="current.cancelAt" class="mt-1.5 text-[13px] text-amber-800">
                     {{ t('Aboneliğin :date tarihinde bitecek; sonra ücretsiz plana geçersin. Verilerin silinmez.', { date: formatDate(current.cancelAt) }) }}
                 </p>
-                <p v-else-if="current.currentPeriodEnd" class="mt-2 text-xs text-stone-600">
+                <p v-else-if="current.currentPeriodEnd" class="mt-1.5 text-[13px] text-stone-600">
                     {{ t('Yenileme tarihi: :date', { date: formatDate(current.currentPeriodEnd) }) }}
                 </p>
+            </div>
+            <div class="flex items-center gap-4">
+                <p v-if="currentPlan && Number(price(currentPlan) ?? 0) > 0" class="text-right">
+                    <span class="block text-2xl font-bold tabular-nums text-stone-900">{{ priceText(currentPlan) }}</span>
+                    <span class="text-[13px] text-stone-500">{{ t('/ ay') }}</span>
+                </p>
+                <a href="#planlar" class="inline-flex h-11 items-center rounded-[10px] border border-stone-300 px-4 text-sm font-semibold text-stone-900 transition hover:bg-stone-50">{{ t('Planı değiştir') }}</a>
             </div>
         </section>
 
         <!-- Kullanım — DEĞER VE LİMİT BİRLİKTE -->
-        <section class="mt-8">
-            <h2 class="text-sm font-semibold text-stone-900">{{ t('Kullanımın') }}</h2>
+        <section class="mt-6">
+            <h2 class="text-base font-semibold text-stone-900">{{ t('Kullanımın') }}</h2>
 
-            <dl class="mt-3 grid gap-px overflow-hidden rounded-lg border border-stone-200 bg-stone-200 sm:grid-cols-2">
-                <div v-for="row in usageRows" :key="row.key" class="bg-white p-4">
-                    <dt class="text-xs font-medium text-stone-500 first-letter:uppercase">
-                        {{ t(row.label) }}
-                    </dt>
-                    <dd class="mt-1 text-xl font-medium tabular-nums text-stone-900">
+            <dl class="mt-3 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <div v-for="row in usageRows" :key="row.key" class="flex flex-col gap-1.5 rounded-[14px] border border-stone-200 bg-white p-4 sm:p-5">
+                    <dt class="text-[13px] text-stone-600 first-letter:uppercase">{{ t(row.label) }}</dt>
+                    <dd class="text-xl font-bold tabular-nums tracking-tight text-stone-900 sm:text-[26px]">
                         {{ Number(row.current).toLocaleString(intlLocale()) }}
-                        <span class="text-sm font-normal text-stone-500">
-                            / {{ limitText(row.limit) }}
-                        </span>
+                        <span class="text-sm font-normal text-stone-500">/ {{ limitText(row.limit) }}</span>
                     </dd>
-
-                    <div v-if="ratio(row) !== null" class="mt-2 h-1.5 overflow-hidden rounded bg-stone-100">
-                        <div
-                            class="h-full rounded transition-all"
-                            :class="ratio(row) >= 100 ? 'bg-red-500' : ratio(row) >= 80 ? 'bg-amber-500' : 'bg-emerald-500'"
-                            :style="{ width: `${ratio(row)}%` }"
-                        />
-                    </div>
+                    <dd v-if="ratio(row) !== null">
+                        <div class="h-2 overflow-hidden rounded-full bg-stone-100">
+                            <div
+                                class="h-full rounded-full transition-all"
+                                :class="ratio(row) >= 100 ? 'bg-red-500' : ratio(row) >= 80 ? 'bg-amber-500' : 'bg-emerald-500'"
+                                :style="{ width: `${Math.max(ratio(row), 2)}%` }"
+                            />
+                        </div>
+                        <p class="mt-1.5 text-xs text-stone-500">{{ t('%:pct kullanıldı', { pct: ratio(row) }) }}</p>
+                    </dd>
+                    <dd v-else class="text-xs text-stone-500">{{ t('Sınır yok') }}</dd>
                 </div>
             </dl>
         </section>
 
         <!-- Planlar -->
-        <section class="mt-8">
-            <h2 class="text-sm font-semibold text-stone-900">{{ t('Planlar') }}</h2>
+        <section id="planlar" class="mt-8 scroll-mt-6">
+            <h2 class="text-base font-semibold text-stone-900">{{ t('Planlar') }}</h2>
 
             <div class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div
                     v-for="plan in plans"
                     :key="plan.code"
-                    class="flex flex-col rounded border bg-white p-4"
-                    :class="plan.code === current.planCode
-                        ? 'border-stone-900 ring-1 ring-stone-900'
-                        : 'border-stone-200'"
+                    class="relative flex flex-col rounded-[14px] border bg-white p-5"
+                    :class="plan.code === current.planCode ? 'border-2 border-brand-600' : 'border-stone-200'"
                 >
+                    <span v-if="plan.code === current.planCode" class="absolute -top-3 left-5 rounded-full bg-brand-600 px-2.5 py-0.5 text-[11px] font-semibold text-white">{{ t('Mevcut planın') }}</span>
                     <p class="text-sm font-semibold text-stone-900">{{ t(plan.name) }}</p>
 
-                    <p class="mt-2 text-xl font-medium tabular-nums text-stone-900">
+                    <p class="mt-2 tabular-nums text-stone-900">
                         <template v-if="Number(price(plan) ?? 0) > 0">
-                            {{ priceText(plan) }}
-                            <span class="text-xs font-normal text-stone-500">{{ t('/ ay') }}</span>
+                            <span class="text-[28px] font-bold tracking-tight">{{ priceText(plan) }}</span>
+                            <span class="text-sm text-stone-500"> {{ t('/ ay') }}</span>
                         </template>
-                        <template v-else>{{ t('Her zaman ücretsiz') }}</template>
+                        <span v-else class="text-[28px] font-bold tracking-tight">{{ t('Ücretsiz') }}</span>
                     </p>
 
-                    <ul class="mt-3 flex-1 space-y-1 text-xs text-stone-600">
-                        <li>{{ t(':count ürün', { count: limitText(plan.limits.products) }) }}</li>
-                        <li>{{ t(':count kanal', { count: limitText(plan.limits.channels) }) }}</li>
+                    <ul class="mt-4 flex-1 space-y-2 text-[13px] text-stone-700">
+                        <li v-for="[key, label] in planFeatures" :key="key" class="flex items-start gap-2">
+                            <svg class="mt-0.5 size-4 shrink-0 text-emerald-600" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 10.5l3 3 7-7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+                            {{ t(label, { count: limitText(plan.limits[key]) }) }}
+                        </li>
                     </ul>
 
                     <p
                         v-if="plan.code === current.planCode"
-                        class="mt-4 rounded bg-stone-100 py-2 text-center text-xs font-medium text-stone-600"
+                        class="mt-5 rounded-[10px] bg-stone-100 py-2.5 text-center text-sm font-medium text-stone-600"
                     >
-                        {{ t('Mevcut planın') }}
+                        {{ t('Kullanıyorsun') }}
                     </p>
                     <button
                         v-else-if="Number(price(plan)) > 0"
                         type="button"
-                        class="mt-4 rounded-md bg-stone-900 py-2 text-xs font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                        class="mt-5 rounded-[10px] py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:bg-stone-300 disabled:text-white"
+                        :class="Number(price(plan)) > Number(price(currentPlan ?? {}) ?? 0) ? 'bg-brand-600 text-white hover:bg-brand-700' : 'border border-stone-300 text-stone-900 hover:bg-stone-50'"
                         :disabled="!paymentsEnabled || buying !== null"
                         @click="choose(plan)"
                     >
@@ -290,15 +300,13 @@ const usageRows = computed(() => Object.entries(props.usage).map(([key, row]) =>
                     <button
                         v-else-if="billing.canDowngrade"
                         type="button"
-                        class="mt-4 rounded-md border border-stone-300 py-2 text-xs font-medium text-stone-700 transition hover:bg-stone-100 disabled:opacity-50"
+                        class="mt-5 rounded-[10px] border border-stone-300 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-stone-100 disabled:opacity-50"
                         :disabled="buying !== null"
                         @click="downgrade(plan)"
                     >
                         {{ t('Ücretsiz plana geç') }}
                     </button>
-                    <p v-else class="mt-4 py-2 text-center text-xs text-stone-500">
-                        {{ t('Ücretsiz') }}
-                    </p>
+                    <p v-else class="mt-5 py-2.5 text-center text-sm text-stone-500">{{ t('Her zaman ücretsiz') }}</p>
                 </div>
             </div>
 

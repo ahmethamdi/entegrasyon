@@ -54,7 +54,7 @@ function toggle(key) {
                 {{ section.intro }}
             </p>
 
-            <div class="mt-4 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200 bg-white">
+            <div class="mt-4 divide-y divide-stone-100 overflow-hidden rounded-[14px] border border-stone-200 bg-white">
                 <div v-for="(item, index) in section.items" :key="index">
                     <button
                         type="button"

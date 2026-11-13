@@ -42,7 +42,7 @@ function submit() {
             </p>
 
             <!-- Yanıt adresin kayıtlı olup olmadığını SÖYLEMEZ (bkz. denetleyici). -->
-            <p v-if="status" class="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            <p v-if="status" class="mt-6 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
                 {{ status }} {{ t('Birkaç dakika içinde gelmezse gereksiz klasörünü kontrol et.') }}
             </p>
 
@@ -56,7 +56,7 @@ function submit() {
                     <label>Website<input v-model="form.website" name="website" type="text" tabindex="-1" autocomplete="off"></label>
                 </div>
 
-                <p v-if="form.errors.ft" class="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                <p v-if="form.errors.ft" class="rounded-[10px] border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                     {{ form.errors.ft }}
                 </p>
 
@@ -71,7 +71,7 @@ function submit() {
                         autocomplete="email"
                         required
                         autofocus
-                        class="mt-1 w-full rounded-md border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                        class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                     >
                     <p v-if="form.errors.email" class="mt-1 text-sm text-red-700">
                         {{ form.errors.email }}
@@ -81,7 +81,7 @@ function submit() {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full rounded-md bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    class="w-full rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                     {{ t('Sıfırlama bağlantısı gönder') }}
                 </button>

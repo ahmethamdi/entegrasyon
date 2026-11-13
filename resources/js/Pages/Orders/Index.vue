@@ -113,7 +113,7 @@ function placedAt(row) {
 
         <!-- filtreler -->
         <div class="mt-8 flex flex-wrap items-center gap-3">
-            <div class="flex flex-wrap rounded-md border border-stone-300 bg-white p-0.5">
+            <div class="flex flex-wrap rounded-[10px] border border-stone-300 bg-white p-0.5">
                 <button
                     type="button"
                     class="rounded px-3 py-1.5 text-sm transition"
@@ -168,11 +168,11 @@ function placedAt(row) {
                     type="search"
                     :placeholder="t('Sipariş no veya SKU ara')"
                     :aria-label="t('Sipariş ara')"
-                    class="w-full min-w-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring sm:w-64"
+                    class="w-full min-w-0 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring sm:w-64"
                 >
                 <button
                     type="submit"
-                    class="shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
+                    class="shrink-0 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm text-stone-700 transition hover:bg-stone-100"
                 >
                     {{ t('Ara') }}
                 </button>
@@ -181,7 +181,7 @@ function placedAt(row) {
 
         <div
             v-if="selected.length && can('orders.work')"
-            class="mt-6 flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-stone-50 px-4 py-3"
+            class="mt-6 flex flex-wrap items-center gap-2 rounded-[14px] border border-stone-300 bg-stone-50 px-4 py-3"
             role="region"
             :aria-label="t('Toplu işlem')"
         >
@@ -190,7 +190,7 @@ function placedAt(row) {
                 v-for="[action, label] in bulkActions"
                 :key="action"
                 type="button"
-                class="rounded-md border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-100 disabled:opacity-50"
+                class="rounded-[10px] border border-stone-300 bg-white px-3 py-1.5 text-sm text-stone-800 transition hover:bg-stone-100 disabled:opacity-50"
                 :disabled="bulk.processing"
                 @click="runBulk(action)"
             >
@@ -201,7 +201,7 @@ function placedAt(row) {
             </p>
         </div>
 
-        <div v-if="!rows.length" class="mt-8 rounded-lg border border-dashed border-stone-300 p-10 text-center">
+        <div v-if="!rows.length" class="mt-8 rounded-[14px] border border-dashed border-stone-300 p-10 text-center">
             <p class="text-sm text-stone-600">{{ t('Bu ölçütlerle sipariş bulunamadı.') }}</p>
         </div>
 
@@ -212,7 +212,7 @@ function placedAt(row) {
             kap konumlandırılmamışsa kaydırma kutusu onları KIRPMAZ — 390
             px'te sayfa 759 px'e taşıyordu (24 Eki 2026'da ölçüldü).
         -->
-        <div v-else class="relative mt-6 overflow-x-auto rounded-lg border border-stone-200 bg-white">
+        <div v-else class="relative mt-6 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="w-full min-w-3xl text-sm">
                 <thead class="border-b border-stone-200 bg-stone-50 text-left">
                     <tr>
@@ -293,7 +293,7 @@ function placedAt(row) {
                         <td class="px-4 py-3 text-right">
                             <Link
                                 :href="`/orders/${row.id}`"
-                                class="rounded-md border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
+                                class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-xs text-stone-700 transition hover:bg-stone-100"
                             >
                                 {{ t('Ayrıntı') }}
                             </Link>
