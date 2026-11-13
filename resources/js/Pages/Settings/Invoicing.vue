@@ -122,7 +122,7 @@ function disconnect() {
 
 <template>
     <PanelLayout>
-        <PageHeader :section="t('Modüller')" :title="t('Fatura ve muhasebe')" />
+        <PageHeader :section="t('Finans')" :title="t('Fatura ve muhasebe')" />
         <WriteGuard permission="settings.manage">
 
             <p v-if="flashSuccess" class="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800">

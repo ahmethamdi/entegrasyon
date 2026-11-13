@@ -6,6 +6,8 @@ use App\Domain\Identity\Enums\Permission;
 use App\Domain\Identity\Enums\TenantRole;
 use App\Domain\Identity\Support\OnboardingProgress;
 use App\Domain\Identity\Support\SuperAdmin;
+use App\Domain\Orders\Models\Order;
+use App\Domain\Questions\Models\ChannelQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
@@ -155,6 +157,20 @@ class HandleInertiaRequests extends Middleware
                 || ! ($request->attributes->get('tenant_role')?->allows(Permission::CHANNELS_MANAGE) ?? false)
                 ? null
                 : (new OnboardingProgress)->forCurrentTenant(),
+
+            // Yan menü rozetleri — iki ucuz sayım, ana sayfadaki "Yapman
+            // gerekenler"le AYNI tanım. Siparişi göremeyen üyeye hesaplanmaz.
+            'navBadges' => function () use ($request): ?array {
+                if ($request->attributes->get('tenant') === null
+                    || ! ($request->attributes->get('tenant_role')?->allows(Permission::ORDERS_VIEW) ?? false)) {
+                    return null;
+                }
+
+                return [
+                    '/orders' => Order::query()->awaitingShipment()->count(),
+                    '/questions' => ChannelQuestion::query()->unanswered()->count(),
+                ];
+            },
         ];
     }
 

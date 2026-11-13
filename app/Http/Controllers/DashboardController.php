@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Orders\Enums\OrderState;
@@ -54,6 +55,11 @@ final class DashboardController extends Controller
             'recentOperations' => $this->recentOperations(),
             'todos' => $this->todos(),
             'today' => $this->today(),
+            'stock' => $this->stockSummary(),
+            'recentOrders' => $this->recentOrders(),
+            'lastSyncAt' => SyncOperation::query()
+                ->where('status', SyncOperationStatus::COMPLETED->value)
+                ->max('updated_at'),
         ]);
     }
 
@@ -219,10 +225,112 @@ final class DashboardController extends Controller
             ])
             ->all();
 
+        /*
+         * DÜNLE KARŞILAŞTIRMA AYNI SAATE KADAR yapılır. Dünün tam günüyle
+         * kıyaslansaydı sabah 10'da her gün "%80 düşüş" yazardı.
+         */
+        $yesterday = Order::query()
+            ->whereRaw('coalesce(placed_at, created_at) >= ?', [now()->subDay()->startOfDay()])
+            ->whereRaw('coalesce(placed_at, created_at) < ?', [now()->subDay()])
+            ->where(static function ($q): void {
+                $q->whereNotIn('state', OrderState::nonRevenue())
+                    ->orWhere(static function ($legacy): void {
+                        $legacy->whereNull('state')->whereRaw('lower(status) <> ?', ['cancelled']);
+                    });
+            })
+            ->selectRaw('currency, sum(grand_total) AS total')
+            ->groupBy('currency')
+            ->pluck('total', 'currency')
+            ->map(fn ($total): string => number_format((float) $total, 2, '.', ''))
+            ->all();
+
+        // Bağlantı başına sayılır, ad sonra eklenir: `$base` nitelenmemiş
+        // kolonlar kullanır, JOIN'le `created_at` belirsiz kalırdı. Aynı
+        // kanalın iki mağazası tek satırda toplanır.
+        $perConnection = (clone $base)
+            ->selectRaw('channel_connection_id, count(*) AS n')
+            ->groupBy('channel_connection_id')
+            ->pluck('n', 'channel_connection_id');
+
+        $names = ChannelConnection::query()
+            ->with('channelType:code,name')
+            ->whereIn('id', $perConnection->keys())
+            ->get()
+            ->mapWithKeys(fn (ChannelConnection $c): array => [$c->id => $c->channelType?->name ?? $c->channel_type_code]);
+
+        $byChannel = $perConnection
+            ->groupBy(fn ($n, $id): string => (string) ($names[$id] ?? '—'), preserveKeys: true)
+            ->map(fn ($group, $channel): array => ['channel' => $channel, 'count' => (int) $group->sum()])
+            ->sortByDesc('count')
+            ->values()
+            ->all();
+
+        $awaiting = Order::query()->awaitingShipment();
+
         return [
             'orderCount' => (clone $base)->count(),
             'revenue' => $revenue,
+            'yesterdayRevenue' => $yesterday,
+            'byChannel' => $byChannel,
+            'awaitingShipment' => (clone $awaiting)->count(),
+            // Kanal "kargoya veriş" son tarihini her yerde vermiyor; dürüst
+            // ölçü siparişin yaşıdır. 24 saati geçen paket gecikme adayıdır.
+            'awaitingOverDay' => (clone $awaiting)
+                ->whereRaw('coalesce(orders.placed_at, orders.created_at) < ?', [now()->subDay()])
+                ->count(),
         ];
+    }
+
+    /**
+     * Stokta azalan ve biten ürün sayısı — Ürünler listesindeki "Azalan" ve
+     * "Stoksuz" sekmeleriyle AYNI tanım (`ProductController::availableSql`).
+     * Ayrı yazılsaydı kart ile sekme farklı sayı gösterirdi.
+     *
+     * @return array{low: int, out: int, threshold: int}
+     */
+    private function stockSummary(): array
+    {
+        $available = ProductController::availableSql();
+
+        $row = Product::query()
+            ->selectRaw("count(*) FILTER (WHERE {$available} BETWEEN 1 AND ?) AS low", [ProductController::LOW_STOCK])
+            ->selectRaw("count(*) FILTER (WHERE {$available} <= 0) AS out")
+            ->toBase()
+            ->first();
+
+        return [
+            'low' => (int) ($row?->low ?? 0),
+            'out' => (int) ($row?->out ?? 0),
+            'threshold' => ProductController::LOW_STOCK,
+        ];
+    }
+
+    /**
+     * Son siparişler — ana sayfadaki kısa tablo. Müşteri adı GÖSTERİLMEZ:
+     * `customer_ref` şifreli kişisel veridir (§11) ve listede de yoktur.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function recentOrders(): array
+    {
+        return Order::query()
+            ->with('connection:id,channel_type_code,label', 'connection.channelType:code,name')
+            ->withCount('fulfillments')
+            ->orderByRaw('coalesce(orders.placed_at, orders.created_at) DESC')
+            ->limit(6)
+            ->get()
+            ->map(fn (Order $order): array => [
+                'id' => $order->id,
+                'number' => $order->external_number ?: $order->external_id,
+                'channel' => $order->connection?->channelType?->name ?? $order->connection?->channel_type_code,
+                'status' => $order->status,
+                'state' => $order->state,
+                'hasShipment' => ($order->fulfillments_count ?? 0) > 0,
+                'currency' => $order->currency,
+                'grandTotal' => $order->grand_total,
+                'placedAt' => ($order->placed_at ?? $order->created_at)?->toIso8601String(),
+            ])
+            ->all();
     }
 
     /** @return array<string, mixed> */
@@ -243,6 +351,25 @@ final class DashboardController extends Controller
      */
     private function connections(): array
     {
+        $dead = SyncOperation::query()->unresolvedDead()
+            ->selectRaw('channel_connection_id, count(*) AS n')
+            ->groupBy('channel_connection_id')
+            ->pluck('n', 'channel_connection_id')
+            ->all();
+
+        $rejected = Listing::query()->where('lifecycle_status', 'rejected')
+            ->selectRaw('channel_connection_id, count(*) AS n')
+            ->groupBy('channel_connection_id')
+            ->pluck('n', 'channel_connection_id')
+            ->all();
+
+        $pending = SyncOperation::query()
+            ->whereIn('status', [SyncOperationStatus::PENDING->value, SyncOperationStatus::RETRYING->value])
+            ->selectRaw('channel_connection_id, count(*) AS n')
+            ->groupBy('channel_connection_id')
+            ->pluck('n', 'channel_connection_id')
+            ->all();
+
         return ChannelConnection::query()
             ->with('channelType:code,name')
             ->orderBy('channel_type_code')
@@ -254,6 +381,10 @@ final class DashboardController extends Controller
                 'status' => $c->status,
                 'health' => $c->health_status,
                 'lastHealthyAt' => $c->last_healthy_at?->toIso8601String(),
+                // Ana sayfadaki "Yapman gerekenler"le AYNI iki kaynak:
+                // gönderilemeyen güncelleme + kanalın reddettiği ürün.
+                'issues' => ($dead[$c->id] ?? 0) + ($rejected[$c->id] ?? 0),
+                'pending' => $pending[$c->id] ?? 0,
             ])
             ->all();
     }

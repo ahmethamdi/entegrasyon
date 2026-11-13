@@ -185,7 +185,7 @@ function isDeciding(row, decision) {
 
 <template>
     <PanelLayout>
-        <PageHeader :section="t('Gelişmiş')" :title="t('Fiyat ve stok kontrolü')">
+        <PageHeader :section="t('Finans')" :title="t('Fiyat ve stok kontrolü')">
             <template #actions>
                 <p v-if="lastRunText" class="text-xs text-stone-500">
                     {{ t('Son tur: :time', { time: lastRunText }) }}

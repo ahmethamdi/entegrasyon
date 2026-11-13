@@ -311,7 +311,7 @@ final class ProductController extends Controller
      * (min ⌊bileşen / adet⌋, `SellableStock` ile aynı kural). Yazılmasaydı
      * her set "Tükenen" sekmesine düşerdi.
      */
-    private function availableSql(): string
+    public static function availableSql(): string
     {
         return "(CASE WHEN EXISTS (SELECT 1 FROM variants bv
                 WHERE bv.product_id = products.id AND bv.tenant_id = products.tenant_id AND bv.kind = 'bundle')

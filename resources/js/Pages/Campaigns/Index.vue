@@ -44,7 +44,7 @@ function cancel(campaign) {
 <template>
     <PanelLayout>
         <PageHeader
-            :section="t('Modüller')"
+            :section="t('Katalog')"
             :title="t('Kampanyalar')"
             :description="t('Seçtiğin ürünlere, seçtiğin kanallarda belirli tarihler arasında indirim. Bitince fiyatlar kendiliğinden geri döner.')"
         >

@@ -72,7 +72,7 @@ function applyFilter(patch) {
 
 <template>
     <PanelLayout>
-        <PageHeader :section="t('Mağazam')" :title="t('Kanal onayları')">
+        <PageHeader :section="t('Katalog')" :title="t('Kanal onayları')">
             <template #actions>
                 <p v-if="lastCheckedText" class="text-xs text-stone-500">
                     {{ t('Son kontrol: :time', { time: lastCheckedText }) }}

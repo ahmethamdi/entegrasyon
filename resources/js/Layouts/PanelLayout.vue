@@ -42,84 +42,80 @@ function switchTenant(event) {
  * "Abonelik" ve "Yardım" gezinme değil HESAP öğeleridir; sidebar
  * altında, ayrı bir bölümde yaşarlar (yerleşik SaaS konvansiyonu).
  */
+const ICONS = {
+    home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z',
+    orders: 'M6 6h15l-2 9H7L5 3H2 M9 20h.01 M18 20h.01',
+    products: 'M21 8l-9-5-9 5 9 5 9-5z M3 8v8l9 5 9-5V8',
+    channels: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+    returns: 'M9 14L4 9l5-5 M4 9h11a5 5 0 0 1 0 10h-3',
+    questions: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z',
+};
+
+/*
+ * Yön A "Sade beyaz" (kullanıcı kararı, 13 Kasım 2026).
+ *
+ * HİÇBİR EKRAN MENÜDEN ÇIKMADI — kullanıcı kararı. Tasarım taslağındaki
+ * kısa menü yalnız günlük grubu gösteriyordu; geri kalanlar başlıklı
+ * gruplara ve kapalı "Gelişmiş"e dağıtıldı.
+ *
+ * GÜNLÜK GRUP İKONLUDUR, diğerleri değil: ikon taramayı hızlandırır ama
+ * her satırda olsaydı ayırt edici olmaktan çıkardı. Rozet (`badge`)
+ * paylaşılan `navBadges`'ten gelir; sıfırsa gösterilmez.
+ *
+ * Stok AYRI EKRAN DEĞİL, Ürünler listesinde (5 Ekim kullanıcı kararı).
+ */
 const navGroups = [
     {
         heading: null,
         items: [
-            { href: '/panel', label: k('Ana sayfa'), perm: 'panel' },
-            { href: '/orders', label: k('Siparişler'), perm: 'orders.view' },
-            { href: '/returns', label: k('İadeler'), perm: 'orders.view' },
-            { href: '/questions', label: k('Müşteri soruları'), perm: 'orders.view' },
-            { href: '/products', label: k('Ürünler'), perm: 'stock.view' },
+            { href: '/panel', label: k('Ana sayfa'), perm: 'panel', icon: ICONS.home },
+            { href: '/orders', label: k('Siparişler'), perm: 'orders.view', icon: ICONS.orders, badge: 'brand' },
+            { href: '/products', label: k('Ürünler'), perm: 'stock.view', icon: ICONS.products },
+            { href: '/channels', label: k('Kanallar'), perm: 'channels.view', icon: ICONS.channels },
+            { href: '/returns', label: k('İadeler'), perm: 'orders.view', icon: ICONS.returns },
+            { href: '/questions', label: k('Müşteri soruları'), perm: 'orders.view', icon: ICONS.questions, badge: 'muted' },
+        ],
+    },
+    {
+        heading: k('Katalog'),
+        items: [
             { href: '/suppliers', label: k('Tedarikçi XML'), perm: 'catalog.view' },
-        ],
-    },
-    {
-        heading: k('Mağazam'),
-        items: [
-            { href: '/channels', label: k('Kanallar'), perm: 'channels.view' },
-            /*
-             * Onaylar GÜNLÜK işe yakındır (Trendyol reddettiği ürünün
-             * sebebini burada gösteriyoruz), bu yüzden "Gelişmiş"e
-             * gömülmedi. Hata grubuna da konmaz: onay kanalın NORMAL
-             * süreci, arıza değil.
-             */
+            // Onaylar günlük işe yakın: Trendyol'un red sebebi burada.
             { href: '/approvals', label: k('Kanal onayları'), perm: 'catalog.view' },
-        ],
-    },
-    {
-        /*
-         * MODÜLLER — 34Pazar'ın büyüyeceği yer. Henüz olmayan modül
-         * `soon: true` ile "Yakında" görünür ama tıklanmaz. Hiç
-         * gösterilmeseydi satıcı ürünün nereye gittiğini bilemez;
-         * tıklanabilir olsaydı boş bir sayfaya düşerdi.
-         */
-        heading: k('Modüller'),
-        items: [
-            /*
-             * Kampanyalar — süreli indirim (9 Ekim). Kalıcı kanal farkı
-             * Kanallar → "Fiyat kuralı"ndadır.
-             */
+            // Süreli indirim; kalıcı kanal farkı Kanallar → "Fiyat kuralı"nda.
             { href: '/campaigns', label: k('Kampanyalar'), perm: 'catalog.view' },
-            /*
-             * Fatura ve muhasebe — Paraşüt (10 Ekim). e-Fatura ile muhasebe
-             * aktarımı AYNI bağlantı ve AYNI ekrandır; iki kalem olsaydı
-             * satıcı Paraşüt'ü iki kez bağlaması gerektiğini sanırdı.
-             */
-            { href: '/settings/invoicing', label: k('Fatura ve muhasebe'), perm: 'settings.view' },
-            /*
-             * Kargo — satıcının kendi Yurtiçi/Aras/HepsiJet sözleşmesi (S6).
-             * Acil kapatma anahtarı kapalıysa (`shipping.enabled`) gizlenir.
-             */
+            // Satıcının kendi kargo sözleşmesi; acil kapatma anahtarıyla gizlenir.
             { href: '/settings/shipping', label: k('Kargo'), feature: 'carrierShipping', perm: 'settings.view' },
-            /*
-             * Katkı raporu (S1) — sipariş başına KDV dahil katkı, beklenen ve
-             * gerçekleşen ayrı; her rakam ayrıntıda kaynağına iner.
-             */
+        ],
+    },
+    {
+        heading: k('Finans'),
+        items: [
+            // Mutabakat: kanaldaki fiyat/stok bizimkiyle aynı mı.
+            { href: '/reconciliation', label: k('Fiyat ve stok kontrolü'), perm: 'catalog.view' },
             { href: '/reports/contribution', label: k('Katkı raporu'), perm: 'finance.view' },
-            // S11 · kanıt ekranı — satışta ekran görüntüsü olarak kullanılır.
             { href: '/reports/oversell', label: k('Fazla satış koruması'), perm: 'catalog.view' },
+            // e-Fatura ile muhasebe aktarımı AYNI bağlantı, AYNI ekran.
+            { href: '/settings/invoicing', label: k('Fatura ve muhasebe'), perm: 'settings.view' },
         ],
     },
     {
         /*
-         * GELİŞMİŞ — KATLANIR, varsayılan KAPALI. Bu ekranlar sistemin
-         * iç işleyişini gösterir (mutabakat, ölü gönderimler, metrikler)
-         * ve satıcının günlük işi değildir; açık dursalardı menünün
-         * yarısını teknik terimler kaplardı. İçlerinde YAPILMASI gereken
-         * bir şey çıkarsa ana sayfadaki "Yapman gerekenler" oraya
-         * bağlantı verir — satıcı menüyü karıştırmadan ulaşır.
+         * GELİŞMİŞ — KATLANIR, varsayılan KAPALI. Sistemin iç işleyişi;
+         * içinde yapılacak iş çıkarsa ana sayfa "Yapman gerekenler"
+         * oraya bağlantı verir.
          */
         heading: k('Gelişmiş'),
         collapsible: true,
         items: [
             { href: '/mappings', label: k('Kategori eşleştirme'), perm: 'catalog.view' },
-            { href: '/reconciliation', label: k('Fiyat ve stok kontrolü'), perm: 'catalog.view' },
             { href: '/failures', label: k('Gönderilemeyenler'), perm: 'catalog.view' },
             { href: '/metrics', label: k('Sistem durumu'), perm: 'catalog.view' },
         ],
     },
 ];
+
+const badgeCount = (item) => (item.badge ? Number(page.props.navBadges?.[item.href] ?? 0) : 0);
 
 /* Hesap öğeleri — gezinme listesinin dışında, sidebar altında. */
 const accountNav = computed(() => [
@@ -385,12 +381,12 @@ function logout() {
                 </button>
             </div>
 
-            <nav class="flex-1 overflow-y-auto px-2 py-2" :aria-label="t('Ana menü')">
+            <nav class="flex-1 overflow-y-auto px-3 py-3" :aria-label="t('Ana menü')">
                 <div v-for="(group, groupIndex) in navGroups.filter((g) => g.items.some(allowed))" :key="group.heading ?? 'ana'">
                     <button
                         v-if="group.collapsible"
                         type="button"
-                        class="mt-3 flex w-full items-center justify-between border-t border-stone-200 px-3 pb-1.5 pt-4 text-xs font-medium text-stone-500 transition hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        class="mt-5 flex w-full items-center justify-between px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-600 transition hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         :aria-expanded="advancedOpen"
                         @click="advancedOpen = !advancedOpen"
                     >
@@ -399,13 +395,13 @@ function logout() {
                     </button>
                     <p
                         v-else-if="group.heading"
-                        class="px-3 pb-1.5 text-xs font-medium text-stone-500"
-                        :class="groupIndex === 0 ? 'pt-2' : 'mt-3 border-t border-stone-200 pt-4'"
+                        class="px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-stone-600"
+                        :class="groupIndex === 0 ? 'pt-2' : 'mt-5'"
                     >
                         {{ t(group.heading) }}
                     </p>
 
-                    <ul v-show="!group.collapsible || advancedOpen" :class="groupIndex === 0 ? 'pt-1' : ''">
+                    <ul v-show="!group.collapsible || advancedOpen" class="space-y-0.5">
                         <li v-for="item in group.items.filter((i) => (!i.feature || page.props.features?.[i.feature]) && allowed(i))" :key="item.href ?? item.label">
                             <span
                                 v-if="item.soon"
@@ -435,12 +431,23 @@ function logout() {
                                 v-else
                                 :href="item.href"
                                 :aria-current="isActive(item.href) ? 'page' : undefined"
-                                class="relative flex items-center rounded px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                                class="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                                 :class="isActive(item.href)
-                                    ? 'bg-stone-100 font-medium text-stone-900 before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-full before:bg-brand-600'
-                                    : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
+                                    ? 'bg-stone-100 font-semibold text-stone-900'
+                                    : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900'"
                             >
-                                {{ t(item.label) }}
+                                <svg v-if="item.icon" class="h-[18px] w-[18px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path :d="item.icon" />
+                                </svg>
+                                <span class="min-w-0 flex-1 truncate">{{ t(item.label) }}</span>
+                                <span
+                                    v-if="badgeCount(item) > 0"
+                                    class="shrink-0 rounded-full px-2 py-px text-xs font-semibold tabular-nums"
+                                    :class="item.badge === 'brand' ? 'bg-brand-100 text-brand-700' : 'bg-stone-100 text-stone-700'"
+                                >
+                                    {{ badgeCount(item) > 99 ? '99+' : badgeCount(item) }}
+                                    <span class="sr-only">{{ t('bekleyen') }}</span>
+                                </span>
                             </Link>
                         </li>
                     </ul>
@@ -448,16 +455,16 @@ function logout() {
             </nav>
 
             <!-- Hesap öğeleri ve çıkış — gezinme listesinin DIŞINDA. -->
-            <div class="border-t border-stone-200 p-2">
+            <div class="border-t border-stone-200 px-3 py-3">
                 <ul>
                     <li v-for="item in accountNav" :key="item.href">
                         <Link
                             :href="item.href"
                             :aria-current="isActive(item.href) ? 'page' : undefined"
-                            class="relative flex items-center rounded px-3 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                            class="flex items-center rounded-lg px-2.5 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                             :class="isActive(item.href)
-                                ? 'bg-stone-100 font-medium text-stone-900 before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[3px] before:rounded-full before:bg-brand-600'
-                                : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'"
+                                ? 'bg-stone-100 font-semibold text-stone-900'
+                                : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900'"
                         >
                             {{ t(item.label) }}
                         </Link>
@@ -541,7 +548,7 @@ function logout() {
                 class="border-b border-amber-200 bg-amber-50"
                 :aria-label="t('Kurulum adımları')"
             >
-                <div class="mx-auto max-w-5xl px-6 lg:px-8" :class="onboardingCollapsed ? 'py-3' : 'py-5'">
+                <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-10" :class="onboardingCollapsed ? 'py-3' : 'py-5'">
                     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <h2 class="text-sm font-semibold text-amber-900">
                             {{ t('Kurulumu tamamla') }}
@@ -642,7 +649,7 @@ function logout() {
             </div>
 
             <!-- Alt menü yüksekliği kadar boşluk: son satır menünün altında kalmasın. -->
-            <main id="main" tabindex="-1" class="mx-auto max-w-5xl px-6 pb-28 pt-10 lg:px-8 lg:pb-10">
+            <main id="main" tabindex="-1" class="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-8">
                 <slot />
             </main>
 
