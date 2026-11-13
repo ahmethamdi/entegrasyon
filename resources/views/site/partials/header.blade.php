@@ -233,6 +233,9 @@
                     <a href="{{ url('/panel') }}" class="btn btn-primary w-full">{{ $t('Panele git', 'Open panel') }}</a>
                 @else
                     <a href="{{ route('register') }}" class="btn btn-primary w-full">{{ $t('Ücretsiz dene', 'Try free') }}</a>
+                    @if ($demoAvailable ?? false)
+                        <a href="{{ route('demo') }}" class="btn btn-secondary w-full" rel="nofollow">{{ $t('Demo paneli gör', 'See the demo panel') }}</a>
+                    @endif
                     <a href="{{ route('login') }}" class="btn btn-secondary w-full">{{ $t('Giriş yap', 'Log in') }}</a>
                 @endif
             </div>

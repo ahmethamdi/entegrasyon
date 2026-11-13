@@ -14,6 +14,7 @@ use App\Domain\Identity\Models\Tenant;
 use App\Domain\Identity\Models\User;
 use App\Domain\Identity\Support\DemoAccount;
 use App\Support\Logging\PayloadRedactor;
+use App\Support\Observability\DispatchAlerts;
 use App\Support\Privacy\SealedJson;
 use App\Support\Tenancy\TenantContext;
 use Database\Seeders\ChannelTypeSeeder;
@@ -24,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\Test;
+use ReflectionMethod;
 use Tests\TestCase;
 
 /**
@@ -53,8 +55,10 @@ final class DemoAccountTest extends TestCase
         $tenant = Tenant::query()->where('is_demo', true)->sole();
         $roles = DB::table('tenant_users')->where('tenant_id', $tenant->id)->pluck('role')->all();
 
-        // Sahip yok: günlük uyarı postaları kimseye gitmez.
-        $this->assertSame([TenantRole::VIEWER->value], $roles);
+        // 13 Kas 2026: demo kullanıcısı SAHİP — ziyaretçi bütün menüyü
+        // görür; yazma rolden bağımsız kapalı (aşağıdaki testler), uyarı
+        // postası demo adresine gitmez (the_demo_owner_gets_no_alert_mail).
+        $this->assertSame([TenantRole::OWNER->value], $roles);
 
         $connections = DB::table('channel_connections')->where('tenant_id', $tenant->id)->get();
         $this->assertCount(3, $connections);
@@ -65,7 +69,15 @@ final class DemoAccountTest extends TestCase
             $this->assertFalse((bool) $c->product_publish_enabled);
         }
 
-        $this->assertSame(9, DB::table('orders')->where('tenant_id', $tenant->id)->count());
+        $this->assertSame(12, DB::table('orders')->where('tenant_id', $tenant->id)->count());
+
+        // Modüller dolu görünür: kargo, e-fatura, soru, iade.
+        $this->assertSame(2, DB::table('carrier_accounts')->where('tenant_id', $tenant->id)->count());
+        $this->assertSame(1, DB::table('invoice_accounts')->where('tenant_id', $tenant->id)->count());
+        $this->assertSame(3, DB::table('channel_questions')->where('tenant_id', $tenant->id)->count());
+        $this->assertSame(1, DB::table('return_requests')->where('tenant_id', $tenant->id)->count());
+        // Kargo takibi dışarı çıkmasın: hiçbir gönderi takip listesine girmez.
+        $this->assertSame(0, DB::table('carrier_shipments')->where('tenant_id', $tenant->id)->whereNotNull('confirmed_at')->count());
         // Alıcı bilgisi şifreli saklanır; açınca boş olmalı.
         foreach (DB::table('orders')->where('tenant_id', $tenant->id)->pluck('customer_ref') as $sealed) {
             $this->assertSame([], SealedJson::open($sealed) ?? []);
@@ -194,6 +206,17 @@ final class DemoAccountTest extends TestCase
         $demo->sendEmailVerificationNotification();
 
         Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function the_demo_owner_gets_no_alert_mail(): void
+    {
+        $this->artisan('demo:install')->assertSuccessful();
+        $tenant = Tenant::query()->where('is_demo', true)->sole();
+
+        $method = new ReflectionMethod(DispatchAlerts::class, 'tenantOwnerEmails');
+
+        $this->assertSame([], $method->invoke(app(DispatchAlerts::class), $tenant->id));
     }
 
     /** Site "Demoyu incele" der — ama yalnız demo kuruluysa (bağlantı 404 vermesin). */

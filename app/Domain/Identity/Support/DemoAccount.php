@@ -16,11 +16,20 @@ use App\Domain\Inventory\Actions\ApplyMovement;
 use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
 use App\Domain\Inventory\Support\MovementKey;
+use App\Domain\Invoicing\Models\Invoice;
+use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Orders\Actions\IngestChannelOrder;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
 use App\Domain\Orders\Support\IncomingOrder;
 use App\Domain\Orders\Support\IncomingOrderLine;
+use App\Domain\Questions\Enums\QuestionStatus;
+use App\Domain\Questions\Models\ChannelQuestion;
+use App\Domain\Returns\Enums\ReturnStatus;
+use App\Domain\Returns\Models\ReturnRequest;
+use App\Domain\Returns\Models\ReturnRequestLine;
+use App\Domain\Shipping\Models\CarrierAccount;
+use App\Domain\Shipping\Models\CarrierShipment;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Support\Tenancy\TenantContext;
@@ -126,11 +135,14 @@ final class DemoAccount
         $tenant = (new CreateTenant)->run(name: self::TENANT_NAME, owner: $user);
         $tenant->forceFill(['is_demo' => true])->save();
 
-        // Sahip yok: demo kullanıcısı salt okunur üyedir.
+        // 13 Kas 2026 (kullanıcı kararı): demo kullanıcısı SAHİP rolündedir
+        // ki ziyaretçi menünün TAMAMINI (Ayarlar, Ekip, Abonelik, Kargo,
+        // Fatura) görsün. Yazma yine kapalıdır: `AuthorizeTenantRoute` demo
+        // kiracısında rolden bağımsız olarak yalnız okuma isteğini geçirir.
         TenantUser::query()
             ->where('tenant_id', $tenant->id)
             ->where('user_id', $user->id)
-            ->update(['role' => TenantRole::VIEWER->value]);
+            ->update(['role' => TenantRole::OWNER->value]);
 
         TenantContext::set($tenant->id);
 
@@ -162,7 +174,10 @@ final class DemoAccount
                 'external_account_id' => $account,
                 'status' => 'inactive',
                 'settings' => [],
-                'health_status' => 'unknown',
+                // Örnek bağlantı "bağlı" görünür; `status` inactive kaldığı
+                // için hiçbir iş kanala gitmez (ChannelHttpClient de keser).
+                'health_status' => 'healthy',
+                'last_healthy_at' => now()->subMinutes(4),
                 'connected_at' => now()->subDays(20),
                 'product_publish_enabled' => false,
                 'price_sync_enabled' => false,
@@ -175,7 +190,7 @@ final class DemoAccount
             ['KUP-350-BEYAZ', 'Seramik Kupa 350 ml · Beyaz', '189.90', 64],
             ['KUP-350-YESIL', 'Seramik Kupa 350 ml · Yağ Yeşili', '189.90', 23],
             ['MUM-LAV-200', 'El Yapımı Soya Mum · Lavanta', '249.00', 41],
-            ['MUM-SDR-200', 'El Yapımı Soya Mum · Sedir', '249.00', 7],
+            ['MUM-SDR-200', 'El Yapımı Soya Mum · Sedir', '249.00', 5],
             ['TAB-BAM-L', 'Bambu Kesme Tahtası · Büyük', '329.00', 18],
             ['ORT-KTN-140', 'Keten Masa Örtüsü 140×180', '899.00', 9],
             ['SBN-ZYT-3L', 'Zeytinyağlı Sabun · 3\'lü', '159.00', 120],
@@ -236,6 +251,10 @@ final class DemoAccount
             ['hepsiburada', '4471209101', 'Open', 7, [['KUP-350-YESIL', 4]], 'KUP-350-MAVI'],
             ['shopify', '#1043', 'fulfilled', 26, [['MUM-SDR-200', 1]]],
             ['trendyol', '10283977', 'Delivered', 30, [['SBN-ZYT-3L', 2]]],
+            // Dünün siparişleri: ana sayfadaki "dünden" kıyası anlamlı kalsın.
+            ['hepsiburada', '4471208766', 'Delivered', 25, [['ORT-KTN-140', 2], ['MUM-LAV-200', 2]]],
+            ['shopify', '#1041', 'fulfilled', 27, [['TRM-500-SYH', 3], ['KUP-350-BEYAZ', 2]]],
+            ['trendyol', '10283902', 'Delivered', 29, [['TAB-BAM-L', 2], ['STD-AHS-01', 3]]],
         ];
 
         foreach ($orders as $i => $row) {
@@ -307,5 +326,155 @@ final class DemoAccount
                 'push_status' => null,
             ]);
         }
+
+        $this->fillModules($channels);
+    }
+
+    /**
+     * Kargo, e-fatura, müşteri soruları ve iade — ziyaretçi modüllerin dolu
+     * hâlini görsün (13 Kas 2026, kullanıcı isteği).
+     *
+     * DIŞARI İSTEK ÇIKMAZ:
+     *   · kargo kaydında `confirmed_at` boş → `shipping:track` seçmez
+     *   · fatura `issued` + `upload_status` sent, `public_token` yok → ne
+     *     kesme ne yükleme ne PDF çekme işi tetiklenir
+     *   · soru/iade senkronu `inactive` bağlantıya gitmez
+     *   · kimlik bilgileri örnektir; demo kiracısında yazma rotası zaten 403
+     *
+     * @param  array<string, ChannelConnection>  $channels
+     */
+    private function fillModules(array $channels): void
+    {
+        $tenantId = $channels['trendyol']->tenant_id;
+        $order = fn (string|int $number): Order => Order::query()->where('external_number', (string) $number)->firstOrFail();
+
+        foreach ([CarrierAccount::PROVIDER_YURTICI, CarrierAccount::PROVIDER_ARAS] as $provider) {
+            CarrierAccount::query()->create([
+                'tenant_id' => $tenantId,
+                'provider' => $provider,
+                'environment' => CarrierAccount::ENV_LIVE,
+                'credentials' => ['username' => 'ornekatolye', 'password' => 'ornek-parola'],
+                'status' => CarrierAccount::STATUS_CONNECTED,
+                'verified_at' => now()->subDays(18),
+            ]);
+        }
+
+        // Teslim edilmiş paket + etiketi kesilmiş, kargoya verilmeyi bekleyen paket.
+        $delivered = $order('#1043');
+        CarrierShipment::query()->create([
+            'tenant_id' => $tenantId,
+            'order_id' => $delivered->id,
+            'fulfillment_id' => Fulfillment::query()->where('order_id', $delivered->id)->value('id'),
+            'provider' => CarrierAccount::PROVIDER_YURTICI,
+            'environment' => CarrierAccount::ENV_LIVE,
+            'cargo_key' => '1043-YK',
+            'status' => CarrierShipment::STATUS_DELIVERED,
+            'carrier_status_text' => 'Teslim edildi',
+            'tracking_number' => '30584712206',
+            'package_count' => 1,
+            'attempts' => 1,
+            'create_requested_at' => now()->subHours(25),
+            'shipped_at' => now()->subHours(20),
+            'delivered_at' => now()->subHours(2),
+        ]);
+
+        CarrierShipment::query()->create([
+            'tenant_id' => $tenantId,
+            'order_id' => $order('10284498')->id,
+            'provider' => CarrierAccount::PROVIDER_ARAS,
+            'environment' => CarrierAccount::ENV_LIVE,
+            'cargo_key' => '10284498-AR',
+            'status' => CarrierShipment::STATUS_CREATED,
+            'carrier_status_text' => 'Kargo şubesine teslim bekleniyor',
+            'tracking_number' => '6081734452',
+            'package_count' => 1,
+            'attempts' => 1,
+            'create_requested_at' => now()->subHours(5),
+        ]);
+
+        InvoiceAccount::query()->create([
+            'tenant_id' => $tenantId,
+            'provider' => InvoiceAccount::PROVIDER_NILVERA,
+            'credentials' => ['api_key' => 'demo'],
+            'company_id' => '1234567890',
+            'company_name' => 'Örnek Atölye Tic. Ltd. Şti.',
+            'settings' => [
+                InvoiceAccount::SETTING_ENVIRONMENT => InvoiceAccount::ENVIRONMENT_LIVE,
+                'companies' => [['id' => '1234567890', 'name' => 'Örnek Atölye Tic. Ltd. Şti.']],
+            ],
+            'status' => InvoiceAccount::STATUS_CONNECTED,
+        ]);
+
+        foreach (['#1043' => 'EAR2026000000118', '10283977' => 'EAR2026000000117'] as $number => $invoiceNumber) {
+            Invoice::query()->create([
+                'tenant_id' => $tenantId,
+                'order_id' => $order($number)->id,
+                'provider' => InvoiceAccount::PROVIDER_NILVERA,
+                'status' => Invoice::STATUS_ISSUED,
+                'document_type' => Invoice::TYPE_E_ARCHIVE,
+                'kind' => Invoice::KIND_SALE,
+                'invoice_number' => $invoiceNumber,
+                'attempts' => 1,
+                'issued_at' => now()->subHours(22),
+                'upload_status' => Invoice::UPLOAD_SENT,
+                'upload_attempts' => 1,
+                'uploaded_at' => now()->subHours(21),
+            ]);
+        }
+
+        // [kanal, soru, ürün, kaç saat önce, cevap]
+        foreach ([
+            ['trendyol', 'Kupa bulaşık makinesinde yıkanabilir mi?', 'Seramik Kupa 350 ml · Beyaz', 4, null],
+            ['hepsiburada', 'Mumun yanma süresi ne kadar?', 'El Yapımı Soya Mum · Lavanta', 9, null],
+            ['trendyol', 'Masa örtüsü yıkanınca çeker mi?', 'Keten Masa Örtüsü 140×180', 30, 'Ön yıkamalı keten kullanıyoruz; 30 derecede yıkandığında çekme olmaz.'],
+        ] as $i => [$code, $body, $product, $hoursAgo, $answer]) {
+            ChannelQuestion::query()->create([
+                'tenant_id' => $tenantId,
+                'channel_connection_id' => $channels[$code]->id,
+                'channel_type_code' => $code,
+                'external_question_id' => 'demo-q-'.$i,
+                'product_name' => $product,
+                'body' => $body,
+                'asked_at' => now()->subHours($hoursAgo),
+                'expires_at' => now()->subHours($hoursAgo)->addDays(3),
+                'status' => $answer === null ? QuestionStatus::AWAITING_ANSWER->value : QuestionStatus::ANSWERED->value,
+                'answer_body' => $answer,
+                'answered_at' => $answer === null ? null : now()->subHours($hoursAgo - 2),
+                'last_seen_at' => now()->subMinutes(10),
+            ]);
+        }
+
+        // Teslim edilen siparişten iade: ürün depoya ulaştı, karar bekliyor.
+        $returned = $order('10283977');
+        $line = $returned->lines()->first();
+        $claim = ReturnRequest::query()->create([
+            'tenant_id' => $tenantId,
+            'channel_connection_id' => $channels['trendyol']->id,
+            'channel_type_code' => 'trendyol',
+            'external_claim_id' => '48213907',
+            'external_order_number' => '10283977',
+            'order_id' => $returned->id,
+            'match_status' => 'matched',
+            'status' => ReturnStatus::AWAITING_ACTION->value,
+            'claim_type' => 'return',
+            'claimed_at' => now()->subHours(6),
+            'last_seen_at' => now()->subMinutes(10),
+        ]);
+        ReturnRequestLine::query()->create([
+            'tenant_id' => $tenantId,
+            'return_request_id' => $claim->id,
+            'channel_connection_id' => $channels['trendyol']->id,
+            'external_item_id' => '48213907-1',
+            'sku' => $line?->sku,
+            'product_name' => $line?->title,
+            'quantity' => 1,
+            'order_line_id' => $line?->id,
+            'variant_id' => $line?->variant_id,
+            'match_status' => 'matched',
+            'status' => ReturnStatus::AWAITING_ACTION->value,
+            'reason_text' => 'Ürün beklentimi karşılamadı',
+            'receipt_proven_at' => now()->subHours(3),
+            'restock_status' => ReturnRequestLine::RESTOCK_PENDING,
+        ]);
     }
 }

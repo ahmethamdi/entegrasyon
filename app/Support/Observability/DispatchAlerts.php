@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Observability;
 
+use App\Domain\Identity\Support\DemoAccount;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -247,6 +248,12 @@ final class DispatchAlerts
      */
     private function tenantOwnerEmails(string $tenantId): array
     {
+        // Demo kiracısının sahibi herkese açık ortak hesaptır (13 Kas 2026);
+        // adresi posta almaz, geri dönen posta gönderici itibarını düşürür.
+        if (DemoAccount::isDemoTenant($tenantId)) {
+            return [];
+        }
+
         $emails = DB::table('tenant_users')
             ->join('users', 'users.id', '=', 'tenant_users.user_id')
             ->where('tenant_users.tenant_id', $tenantId)

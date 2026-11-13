@@ -113,7 +113,7 @@
                 <div class="mt-8 flex flex-wrap items-center gap-x-6 gap-y-4">
                     <a href="{{ $signupUrl }}" class="btn btn-primary btn-lg">{{ $signupLabel }}</a>
                     @if ($demoAvailable ?? false)
-                        <a href="{{ route('demo') }}" class="home-hero__link" rel="nofollow">{{ $t('Demo hesabı incele', 'Explore the demo account') }} <span aria-hidden="true">→</span></a>
+                        <a href="{{ route('demo') }}" class="btn btn-secondary btn-lg" rel="nofollow">{{ $t('Demo paneli gör', 'See the demo panel') }}</a>
                     @else
                         <a href="#kanallar" class="home-hero__link">{{ $t('Bağlanan kanallar', 'Supported channels') }} <span aria-hidden="true">→</span></a>
                     @endif

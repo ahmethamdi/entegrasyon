@@ -14,6 +14,10 @@
         <span class="hidden md:inline">{{ $en ? 'Support:' : 'Destek:' }} <a href="mailto:{{ $email }}">{{ $email }}</a></span>
         <span>WhatsApp: <a href="https://wa.me/{{ config('site.whatsapp') }}">{{ config('site.whatsapp_display') }}</a></span>
         <span class="hidden lg:inline">{{ $en ? 'Every day' : 'Her gün' }} {{ config('site.support_hours') }}</span>
+        {{-- 13 Kas 2026 · demo panel herkese görünür (başlıkta yer yok: menü kırılıyordu). --}}
+        @if ($demoAvailable ?? false)
+            <a href="{{ route('demo') }}" class="hidden sm:inline" rel="nofollow">{{ $en ? 'Demo panel' : 'Demo paneli gör' }}</a>
+        @endif
         @unless ($en)
             <a href="{{ route('site.contact', ['konu' => 'gorusme']) }}#form">Görüşme planla</a>
         @endunless

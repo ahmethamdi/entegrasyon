@@ -153,7 +153,10 @@ class HandleInertiaRequests extends Middleware
             // S7 · kurulum adımlarını (kanal bağla, ürün gönder) yalnız
             // yapabilecek olan görür: depo/salt okunur üyeye tıklayınca 403
             // veren bir şerit gösterilmez.
+            // Demo kiracısında kurulum şeridi YOK: ziyaretçi hazır bir
+            // mağazaya bakar, "kanal bağla" çağrısı 403'e giderdi.
             'onboarding' => fn (): ?array => $request->attributes->get('tenant') === null
+                || ($request->attributes->get('tenant')?->is_demo ?? false)
                 || ! ($request->attributes->get('tenant_role')?->allows(Permission::CHANNELS_MANAGE) ?? false)
                 ? null
                 : (new OnboardingProgress)->forCurrentTenant(),

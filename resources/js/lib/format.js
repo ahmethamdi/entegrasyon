@@ -52,7 +52,8 @@ export function channelName(code) {
  * ile listedeki rozet aynı şeyi söylemeli. Tanınmayan durum olduğu gibi
  * yazılır: yanlış bir tercüme uydurmaktan iyidir.
  */
-const awaiting = ['processing', 'paid', 'partially_paid', 'partial', 'created', 'picking', 'invoiced'];
+// 'open' = Hepsiburada'nın gönderime hazır paketi (adapter da awaiting_shipment'a eşler).
+const awaiting = ['processing', 'paid', 'partially_paid', 'partial', 'created', 'picking', 'invoiced', 'open'];
 const shipped = ['shipped', 'completed', 'fulfilled', 'intransit', 'atcollectionpoint'];
 const delivered = ['delivered'];
 const cancelled = ['cancelled', 'canceled', 'unpacked', 'voided', 'failed'];
