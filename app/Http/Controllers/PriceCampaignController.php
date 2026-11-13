@@ -69,6 +69,7 @@ final class PriceCampaignController extends Controller
                 'id' => $c->id,
                 'label' => $c->label,
                 'channel' => $c->channelType?->name ?? $c->channel_type_code,
+                'code' => $c->channel_type_code,
             ])->values()->all(),
             'timezone' => $timezone,
             // Varsayılan: şimdi → 7 gün sonra, kiracının saatinde.

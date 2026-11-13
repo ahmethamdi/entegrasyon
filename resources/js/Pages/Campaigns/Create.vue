@@ -3,6 +3,7 @@ import { Link, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 import PageHeader from '../../Components/PageHeader.vue';
 import PanelLayout from '../../Layouts/PanelLayout.vue';
+import { brandIcon } from '../../lib/format.js';
 import { useI18n } from '../../lib/i18n';
 
 const { t } = useI18n();
@@ -83,7 +84,7 @@ function submit() {
             :description="t('İndirim, kanalın normal fiyatına uygulanır (fiyat kuralı dahil). Zarar koruması kampanyada da geçerli: maliyetin altına düşen fiyat gönderilmez.')"
         />
 
-        <form class="mt-8 max-w-2xl space-y-7" @submit.prevent="submit">
+        <form class="mt-6 max-w-3xl space-y-7 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-7" @submit.prevent="submit">
             <div>
                 <label for="name" class="block text-sm font-medium text-stone-700">{{ t('Kampanya adı') }}</label>
                 <input id="name" v-model="form.name" type="text" maxlength="120" required :placeholder="t('Kasım indirimi')" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
@@ -132,10 +133,19 @@ function submit() {
             <fieldset>
                 <legend class="text-sm font-medium text-stone-700">{{ t('Kanallar') }}</legend>
                 <p v-if="!connections.length" class="mt-2 text-sm text-amber-800">{{ t('Fiyat gönderen bağlı kanal yok.') }}</p>
-                <div class="mt-2 space-y-1.5">
-                    <label v-for="connection in connections" :key="connection.id" class="flex items-center gap-2 text-sm text-stone-700">
-                        <input v-model="form.connection_ids" type="checkbox" :value="connection.id">
-                        {{ connection.label }} <span class="text-xs text-stone-500">· {{ connection.channel }}</span>
+                <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                    <label
+                        v-for="connection in connections"
+                        :key="connection.id"
+                        class="flex cursor-pointer items-center gap-3 rounded-[10px] border px-3 py-2.5 text-sm transition"
+                        :class="form.connection_ids.includes(connection.id) ? 'border-stone-900 bg-stone-50' : 'border-stone-200 hover:border-stone-300'"
+                    >
+                        <input v-model="form.connection_ids" type="checkbox" :value="connection.id" class="size-4 shrink-0 rounded border-stone-400">
+                        <img v-if="brandIcon(connection.code)" :src="brandIcon(connection.code)" alt="" class="size-6 shrink-0 rounded object-contain">
+                        <span class="min-w-0">
+                            <span class="block truncate text-stone-900">{{ connection.label }}</span>
+                            <span class="block text-xs text-stone-500">{{ connection.channel }}</span>
+                        </span>
                     </label>
                 </div>
                 <p v-if="form.errors.connection_ids" class="mt-1 text-sm text-red-700">{{ form.errors.connection_ids }}</p>
@@ -178,7 +188,7 @@ function submit() {
                 <p v-if="form.errors.product_ids" class="mt-1 text-sm text-red-700">{{ form.errors.product_ids }}</p>
             </fieldset>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 border-t border-stone-100 pt-5">
                 <button
                     type="submit"
                     :disabled="form.processing || !selected.length || !form.connection_ids.length"

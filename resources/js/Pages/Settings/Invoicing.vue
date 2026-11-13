@@ -229,9 +229,12 @@ function disconnect() {
 
             <div v-if="account" class="mt-6 rounded-[14px] border border-stone-200 bg-white p-5">
                 <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-start gap-3">
+                    <span class="flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-stone-200 bg-stone-50">
+                        <img v-if="brandIcon(account.provider)" :src="brandIcon(account.provider)" alt="" class="size-6 object-contain">
+                    </span>
                     <div>
-                        <p class="flex items-center gap-2 text-sm font-medium text-stone-900">
-                            <img v-if="brandIcon(account.provider)" :src="brandIcon(account.provider)" alt="" class="size-6 rounded object-contain">
+                        <p class="flex items-center gap-2 text-base font-semibold text-stone-900">
                             {{ account.providerName }}
                             <span v-if="account.environment === 'test'" class="ml-1 rounded-[12px] border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-900">{{ t('Test ortamı') }}</span>
                         </p>
@@ -239,6 +242,7 @@ function disconnect() {
                         <p v-for="credit in account.credits ?? []" :key="credit.name" class="mt-0.5 font-mono text-[11px] text-stone-500">
                             {{ t(':name: :count kontör kaldı', { name: credit.name, count: credit.remaining }) }}
                         </p>
+                    </div>
                     </div>
                     <span
                         v-if="statusLabels[account.status]"
@@ -270,7 +274,7 @@ function disconnect() {
                                 id="company"
                                 v-model="form.company_id"
                                 required
-                                class="mt-1 w-64 rounded-[10px] border border-stone-300 px-3 py-1.5 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
+                                class="mt-1 w-64 rounded-[10px] border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
                             >
                                 <option value="" disabled>{{ t('Seçin') }}</option>
                                 <option v-for="company in account.companies" :key="company.id" :value="company.id">

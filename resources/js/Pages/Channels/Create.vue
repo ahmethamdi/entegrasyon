@@ -136,28 +136,43 @@ function submit() {
             :description="t('Bilgilerin şifrelenerek saklanır, kimseye gösterilmez. Kaydedince bağlantıyı hemen deneriz; başarılıysa kanal kullanıma açılır.')"
         />
 
-        <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">
-            <div>
-                <label for="channel_type_code" class="block text-sm font-medium text-stone-700">
+        <form class="mt-6 max-w-3xl space-y-5 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-7" @submit.prevent="submit">
+            <!--
+                KANAL SEÇİMİ logolu kartlarla (Yön A). Açılır liste kanalı
+                adından tanımayı gerektiriyordu; satıcı logoyu tanır. Altta
+                gerçek radio girdisi durur — klavye ve ekran okuyucu aynı.
+            -->
+            <fieldset>
+                <legend class="block text-sm font-medium text-stone-700">
                     {{ t('Kanal') }}
-                </label>
-                <select
-                    id="channel_type_code"
-                    v-model="form.channel_type_code"
-                    required
-                    class="mt-1 w-full rounded-[10px] border border-stone-300 bg-white px-3 py-2 text-sm focus:border-ring focus:outline-2 focus:outline-offset-0 focus:outline-ring"
-                >
-                    <option v-for="type in channelTypes" :key="type.code" :value="type.code">
-                        {{ type.name }}
-                    </option>
-                </select>
-                <div v-if="selected?.logo" class="mt-3 flex h-7 items-center">
-                    <img :src="selected.logo" :alt="t(':channel logosu', { channel: selected.name })" class="size-10 rounded-[10px] border border-stone-200 bg-white p-1 object-contain">
+                </legend>
+                <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <label
+                        v-for="type in channelTypes"
+                        :key="type.code"
+                        class="flex cursor-pointer items-center gap-3 rounded-[10px] border px-3 py-2.5 text-sm transition has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ring"
+                        :class="form.channel_type_code === type.code ? 'border-stone-900 bg-stone-50 font-medium text-stone-900' : 'border-stone-200 text-stone-700 hover:border-stone-300'"
+                    >
+                        <input
+                            v-model="form.channel_type_code"
+                            type="radio"
+                            name="channel_type_code"
+                            :value="type.code"
+                            required
+                            class="sr-only"
+                        >
+                        <img v-if="type.logo" :src="type.logo" alt="" class="size-7 shrink-0 rounded-md object-contain">
+                        <span v-else class="flex size-7 shrink-0 items-center justify-center rounded-md bg-stone-100 text-xs font-semibold text-stone-500">{{ type.name.charAt(0) }}</span>
+                        <span class="min-w-0">
+                            <span class="block truncate">{{ type.name }}</span>
+                            <span v-if="type.connectable === false" class="block text-[11px] font-normal text-stone-500">{{ t('Yakında') }}</span>
+                        </span>
+                    </label>
                 </div>
                 <p v-if="form.errors.channel_type_code" class="mt-1 text-sm text-red-700">
                     {{ form.errors.channel_type_code }}
                 </p>
-            </div>
+            </fieldset>
 
             <div
                 v-if="installUrl"
@@ -313,7 +328,7 @@ function submit() {
                 </p>
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 border-t border-stone-100 pt-5">
                 <button
                     type="submit"
                     :disabled="form.processing || !connectable"

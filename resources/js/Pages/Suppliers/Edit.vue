@@ -175,7 +175,7 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
             <p v-for="key in ['sample', 'mapping', 'run', 'active', 'source']" v-show="errors[key]" :key="key" class="mt-4 rounded-[10px] border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{{ errors[key] }}</p>
 
             <!-- 1 · Akışı oku -->
-            <section class="mt-8 max-w-5xl rounded-[14px] border border-stone-200 p-5">
+            <section class="mt-8 max-w-5xl rounded-[14px] border border-stone-200 p-5 bg-white">
                 <h2 class="text-base font-semibold text-stone-900">{{ t('1. Akışı oku') }}</h2>
                 <p class="mt-1 text-sm text-stone-600">{{ t('Akışın ilk 2 MB\'ı okunur, yalnız yapısı çıkarılır. Hiçbir ürün değişmez.') }}</p>
                 <button type="button" :disabled="sampleForm.processing" class="mt-3 rounded-[10px] border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50 disabled:opacity-50" @click="readSample(form.record_path || null)">
@@ -205,7 +205,7 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
 
             <form class="mt-6 max-w-5xl space-y-6" @submit.prevent="save">
                 <!-- 2 · Alanlar -->
-                <section class="rounded-[14px] border border-stone-200 p-5">
+                <section class="rounded-[14px] border border-stone-200 p-5 bg-white">
                     <h2 class="text-base font-semibold text-stone-900">{{ t('2. Alanları eşle') }}</h2>
                     <p v-if="!sample" class="mt-1 text-sm text-stone-600">{{ t('Önce akışı oku; alanlar akışın gerçek yapısından seçilir.') }}</p>
 
@@ -247,7 +247,7 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
                 </section>
 
                 <!-- 3 · Politikalar -->
-                <section class="rounded-[14px] border border-stone-200 p-5">
+                <section class="rounded-[14px] border border-stone-200 p-5 bg-white">
                     <h2 class="text-base font-semibold text-stone-900">{{ t('3. Stok ve fiyat') }}</h2>
 
                     <fieldset class="mt-4">
@@ -318,7 +318,7 @@ const canRun = computed(() => props.source.mappingProblems.length === 0 && !prop
             </form>
 
             <!-- 4 · Önizle / uygula / saatlik -->
-            <section class="mt-8 max-w-5xl rounded-[14px] border border-stone-200 p-5">
+            <section class="mt-8 max-w-5xl rounded-[14px] border border-stone-200 p-5 bg-white">
                 <h2 class="text-base font-semibold text-stone-900">{{ t('4. Önizle ve uygula') }}</h2>
                 <p v-if="source.mappingProblems.length" class="mt-2 text-sm text-amber-900">{{ t('Eksik eşleme: :fields', { fields: source.mappingProblems.join(', ') }) }}</p>
                 <div class="mt-3 flex flex-wrap gap-3">

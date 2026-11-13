@@ -39,7 +39,7 @@ function submit() {
         />
 
         <WriteGuard permission="catalog.manage">
-        <form class="mt-8 max-w-2xl space-y-6" @submit.prevent="submit">
+        <form class="mt-6 max-w-3xl space-y-6 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-7" @submit.prevent="submit">
             <div class="grid gap-5 sm:grid-cols-2">
                 <div class="sm:col-span-2">
                     <label for="title" class="block text-sm font-medium text-stone-700">{{ t('Set adı') }}</label>
@@ -95,7 +95,7 @@ function submit() {
                 <BundleComponentsEditor v-model="components" class="mt-3" :max="maxComponents" :error="form.errors.components" />
             </fieldset>
 
-            <div class="flex flex-wrap items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3 border-t border-stone-100 pt-5">
                 <button
                     type="submit"
                     :disabled="form.processing || !components.length"

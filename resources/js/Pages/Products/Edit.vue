@@ -223,14 +223,14 @@ function saveCost(variant) {
                 <p class="text-[13px] text-stone-600">{{ t('Toplam stok') }}</p>
                 <p
                     class="mt-1 text-[30px] font-bold tracking-tight tabular-nums"
-                    :class="product.hasOversold ? 'text-brand-700' : 'text-stone-900'"
+                    :class="product.hasOversold ? 'text-red-800' : 'text-stone-900'"
                 >
                     {{ product.totalOnHand }}
                 </p>
                 <Link
                     v-if="product.hasOversold"
                     :href="`/products?filter=out&search=${encodeURIComponent(product.sku)}`"
-                    class="text-[13px] font-medium text-brand-700 underline"
+                    class="text-[13px] font-medium text-red-700 underline"
                 >
                     {{ t('fazla satış var') }}
                 </Link>

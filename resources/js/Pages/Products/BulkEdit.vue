@@ -49,13 +49,13 @@ function when(iso) {
         <WriteGuard permission="catalog.manage">
 
             <section class="mt-8 max-w-3xl space-y-6">
-                <div class="rounded-[14px] border border-stone-200 p-5">
+                <div class="rounded-[14px] border border-stone-200 p-5 bg-white">
                     <h2 class="text-base font-semibold text-stone-900">{{ t('1. Listeyi indir') }}</h2>
                     <p class="mt-1 text-sm text-stone-600">{{ t('Bütün ürünlerin, şu anki stok ve fiyatlarıyla. 34Pazar ID sütununu değiştirme.') }}</p>
                     <a href="/products/bulk-edit/export" class="mt-3 inline-flex rounded-[10px] border border-stone-300 px-4 py-2 text-sm hover:bg-stone-50">{{ t('Excel indir') }}</a>
                 </div>
 
-                <div class="rounded-[14px] border border-stone-200 p-5">
+                <div class="rounded-[14px] border border-stone-200 p-5 bg-white">
                     <h2 class="text-base font-semibold text-stone-900">{{ t('2. Düzenle') }}</h2>
                     <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-stone-700">
                         <li>{{ t('Yeni stok = rafta olacak sayı. 5 yazarsan stok 5 olur, 5 eklenmez.') }}</li>
@@ -65,10 +65,10 @@ function when(iso) {
                     </ul>
                 </div>
 
-                <form class="rounded-[14px] border border-stone-200 p-5" @submit.prevent="submit">
+                <form class="rounded-[14px] border border-stone-200 p-5 bg-white" @submit.prevent="submit">
                     <h2 class="text-base font-semibold text-stone-900">{{ t('3. Yükle ve önizle') }}</h2>
                     <p class="mt-1 text-xs text-stone-500">{{ t('Yalnız .xlsx, en çok :kb KB ve :rows satır.', { kb: maxKilobytes, rows: maxRows }) }}</p>
-                    <input ref="fileInput" type="file" accept=".xlsx" class="mt-3 block text-sm" @change="form.file = $event.target.files[0] ?? null">
+                    <input ref="fileInput" type="file" accept=".xlsx" class="mt-3 block w-full rounded-[10px] border border-stone-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-stone-900 file:px-3 file:py-1.5 file:text-sm file:text-white" @change="form.file = $event.target.files[0] ?? null">
                     <p v-if="form.errors.file" class="mt-1 text-sm text-red-700">{{ form.errors.file }}</p>
                     <button type="submit" :disabled="!form.file || form.processing" class="mt-3 rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50">
                         {{ form.processing ? t('Okunuyor…') : t('Yükle ve önizle') }}
@@ -78,7 +78,7 @@ function when(iso) {
 
             <section v-if="imports.length" class="mt-10 max-w-3xl">
                 <h2 class="text-sm font-medium text-stone-900">{{ t('Son yüklemeler') }}</h2>
-                <ul class="mt-2 divide-y divide-stone-100 rounded-[14px] border border-stone-200 text-sm">
+                <ul class="mt-2 divide-y divide-stone-100 rounded-[14px] border border-stone-200 text-sm bg-white">
                     <li v-for="item in imports" :key="item.id" class="flex flex-wrap items-center gap-3 px-4 py-2">
                         <Link :href="`/products/bulk-edit/${item.id}`" class="font-medium underline">{{ item.filename }}</Link>
                         <span class="text-stone-600">{{ t(statuses[item.status] ?? item.status) }}</span>

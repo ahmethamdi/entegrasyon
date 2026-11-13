@@ -21,7 +21,7 @@ function submit() {
             :description="t('Toptancının sana verdiği XML adresini yapıştır. Adres https ile başlamalı.')"
         />
 
-        <form class="mt-8 max-w-xl space-y-5" @submit.prevent="submit">
+        <form class="mt-6 max-w-3xl space-y-5 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-7" @submit.prevent="submit">
             <label class="block">
                 <span class="block text-sm font-medium text-stone-900">{{ t('Tedarikçi adı') }}</span>
                 <input v-model="form.name" type="text" maxlength="120" class="mt-1 w-full rounded-[10px] border border-stone-300 px-3 py-2 text-sm focus:border-ring focus:outline-none">
@@ -35,7 +35,7 @@ function submit() {
                 <p v-if="form.errors.feed_url" class="mt-1 text-sm text-red-700">{{ form.errors.feed_url }}</p>
             </label>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 border-t border-stone-100 pt-5">
                 <button type="submit" :disabled="form.processing" class="rounded-[10px] bg-stone-900 px-4 py-2 text-sm font-medium text-white hover:bg-stone-700 disabled:opacity-50">
                     {{ t('Devam') }}
                 </button>

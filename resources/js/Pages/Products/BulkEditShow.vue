@@ -114,7 +114,7 @@ function priceCell(row) {
             </button>
         </div>
 
-        <div v-if="bulkImport.status !== 'rejected'" class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200">
+        <div v-if="bulkImport.status !== 'rejected'" class="relative mt-4 overflow-x-auto rounded-[14px] border border-stone-200 bg-white">
             <table class="min-w-full divide-y divide-stone-200 text-sm">
                 <thead class=" text-left text-xs text-stone-600">
                     <tr>

@@ -48,7 +48,7 @@ function submit() {
         />
         <WriteGuard permission="channels.manage">
 
-            <form class="mt-8 max-w-xl space-y-6" @submit.prevent="submit">
+            <form class="mt-6 max-w-3xl space-y-6 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-7" @submit.prevent="submit">
                 <div v-for="field in fields" :key="field.key">
                     <label :for="field.key" class="block text-sm font-medium text-stone-700">
                         {{ field.label }}
@@ -112,7 +112,7 @@ function submit() {
                     </p>
                 </div>
 
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 border-t border-stone-100 pt-5">
                     <button
                         type="submit"
                         :disabled="form.processing"

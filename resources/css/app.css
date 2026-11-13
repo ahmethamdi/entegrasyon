@@ -63,3 +63,11 @@
         transition-duration: 0.01ms !important;
     }
 }
+
+/* Onay kutusu ve seçim düğmesi tarayıcı mavisi yerine panelin koyu tonunda. */
+@layer base {
+    input[type='checkbox'],
+    input[type='radio'] {
+        accent-color: var(--color-stone-900);
+    }
+}

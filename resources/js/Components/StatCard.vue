@@ -17,14 +17,14 @@ const dots = {
     neutral: null,
     good: 'bg-emerald-500',
     warning: 'bg-amber-500',
-    error: 'bg-brand-600',
+    error: 'bg-red-600',
 };
 
 const values = {
     neutral: 'text-stone-900',
     good: 'text-stone-900',
     warning: 'text-amber-800',
-    error: 'text-brand-700',
+    error: 'text-red-800',
 };
 </script>
 

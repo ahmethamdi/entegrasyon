@@ -71,8 +71,11 @@ function remove(carrier) {
             <div class="mt-6 grid gap-4 lg:grid-cols-2">
                 <section v-for="carrier in carriers" :key="carrier.code" class="rounded-[14px] border border-stone-200 bg-white p-5">
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
-                            <p class="flex items-center gap-2 text-sm font-medium text-stone-900"><img v-if="brandIcon(carrier.code)" :src="brandIcon(carrier.code)" alt="" class="size-6 rounded object-contain">{{ carrier.name }}</p>
+                        <div class="flex items-center gap-3">
+                            <span class="flex size-11 shrink-0 items-center justify-center rounded-[10px] border border-stone-200 bg-stone-50">
+                                <img v-if="brandIcon(carrier.code)" :src="brandIcon(carrier.code)" alt="" class="size-6 object-contain">
+                            </span>
+                            <p class="text-base font-semibold text-stone-900">{{ carrier.name }}</p>
                         </div>
                         <span
                             v-if="carrier.account && statusLabels[carrier.account.status]"
@@ -97,21 +100,23 @@ function remove(carrier) {
                         {{ errors['carrier_' + carrier.code] }}
                     </p>
 
-                    <div v-if="carrier.account && !editing[carrier.code]" class="mt-4 space-y-1 text-sm text-stone-700">
-                        <p>{{ t('Kullanıcı') }}: <span class="font-mono">{{ carrier.account.username }}</span></p>
-                        <p v-for="detail in carrier.account.details ?? []" :key="detail.label">
-                            {{ detail.label }}: <span class="font-mono">{{ detail.value }}</span>
-                        </p>
-                        <p>
-                            {{ t('Ortam') }}:
-                            {{ carrier.account.environment === 'test' ? t('Test ortamı (gerçek gönderi açılmaz)') : t('Canlı') }}
-                        </p>
-                        <p v-if="carrier.account.lastError" class="text-xs text-red-700">{{ carrier.account.lastError }}</p>
-                        <div class="flex gap-2 pt-3">
-                            <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1 text-xs font-medium text-stone-700 hover:bg-stone-50" @click="editing[carrier.code] = true">
+                    <div v-if="carrier.account && !editing[carrier.code]" class="mt-4 text-sm">
+                        <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 border-t border-stone-100 pt-4">
+                            <dt class="text-stone-500">{{ t('Kullanıcı') }}</dt>
+                            <dd class="font-mono text-stone-900">{{ carrier.account.username }}</dd>
+                            <template v-for="detail in carrier.account.details ?? []" :key="detail.label">
+                                <dt class="text-stone-500">{{ detail.label }}</dt>
+                                <dd class="font-mono text-stone-900">{{ detail.value }}</dd>
+                            </template>
+                            <dt class="text-stone-500">{{ t('Ortam') }}</dt>
+                            <dd class="text-stone-900">{{ carrier.account.environment === 'test' ? t('Test ortamı (gerçek gönderi açılmaz)') : t('Canlı') }}</dd>
+                        </dl>
+                        <p v-if="carrier.account.lastError" class="mt-2 text-xs text-red-700">{{ carrier.account.lastError }}</p>
+                        <div class="flex gap-2 pt-4">
+                            <button type="button" class="rounded-[10px] border border-stone-300 px-3 py-1.5 text-[13px] font-medium text-stone-700 hover:bg-stone-50" @click="editing[carrier.code] = true">
                                 {{ t('Bilgileri değiştir') }}
                             </button>
-                            <button type="button" class="rounded-[10px] border border-red-200 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50" @click="remove(carrier)">
+                            <button type="button" class="rounded-[10px] border border-red-200 px-3 py-1.5 text-[13px] font-medium text-red-700 hover:bg-red-50" @click="remove(carrier)">
                                 {{ t('Kaldır') }}
                             </button>
                         </div>
