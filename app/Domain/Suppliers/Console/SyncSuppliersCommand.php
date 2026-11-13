@@ -12,6 +12,7 @@ use App\Domain\Suppliers\Models\SupplierSyncRun;
 use App\Domain\Suppliers\Support\SupplierFeedException;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -57,6 +58,8 @@ final class SyncSuppliersCommand extends Command
 
         $due = TenantContext::runAsSystem(fn () => SupplierSource::query()
             ->where('is_active', true)
+            // Demo tedarikçisi örnektir; adresine istek atılmaz.
+            ->whereNotIn('tenant_id', DB::table('tenants')->where('is_demo', true)->select('id'))
             ->where('sync_state', SupplierSource::STATE_IDLE)
             ->where(fn ($q) => $q->whereNull('next_run_at')->orWhere('next_run_at', '<=', now()))
             ->get(['id', 'tenant_id']));

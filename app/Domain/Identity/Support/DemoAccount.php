@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Identity\Support;
 
+use App\Domain\Catalog\Models\PriceCampaign;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
@@ -21,15 +22,25 @@ use App\Domain\Invoicing\Models\InvoiceAccount;
 use App\Domain\Orders\Actions\IngestChannelOrder;
 use App\Domain\Orders\Models\Fulfillment;
 use App\Domain\Orders\Models\Order;
+use App\Domain\Orders\Models\OrderCharge;
 use App\Domain\Orders\Support\IncomingOrder;
 use App\Domain\Orders\Support\IncomingOrderLine;
 use App\Domain\Questions\Enums\QuestionStatus;
 use App\Domain\Questions\Models\ChannelQuestion;
+use App\Domain\Reconciliation\Enums\ItemStatus;
+use App\Domain\Reconciliation\Enums\ReconciliationScope;
+use App\Domain\Reconciliation\Models\ReconciliationItem;
+use App\Domain\Reconciliation\Models\ReconciliationRun;
 use App\Domain\Returns\Enums\ReturnStatus;
 use App\Domain\Returns\Models\ReturnRequest;
 use App\Domain\Returns\Models\ReturnRequestLine;
 use App\Domain\Shipping\Models\CarrierAccount;
 use App\Domain\Shipping\Models\CarrierShipment;
+use App\Domain\Suppliers\Enums\FieldState;
+use App\Domain\Suppliers\Enums\RunStatus;
+use App\Domain\Suppliers\Models\SupplierRecord;
+use App\Domain\Suppliers\Models\SupplierSource;
+use App\Domain\Suppliers\Models\SupplierSyncRun;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Support\Tenancy\TenantContext;
@@ -230,7 +241,7 @@ final class DemoAccount
                 Listing::query()->create([
                     'channel_connection_id' => $connection->id,
                     'variant_id' => $variant->id,
-                    'external_id' => 'demo-'.$n,
+                    'external_id' => (string) (40211000 + $n * 17),
                     // Trendyol bir ürünü reddetmiş: "yapman gerekenler"
                     // listesinde gerçek bir madde görünsün.
                     'lifecycle_status' => $code === 'trendyol' && $sku === 'ORT-KTN-140' ? 'rejected' : 'live',
@@ -476,5 +487,244 @@ final class DemoAccount
             'receipt_proven_at' => now()->subHours(3),
             'restock_status' => ReturnRequestLine::RESTOCK_PENDING,
         ]);
+
+        $this->fillCatalogModules($channels);
+        $this->fillContribution();
+    }
+
+    /**
+     * Kanal onayları, kampanyalar, tedarikçi XML ve fiyat/stok kontrolü.
+     * Zamanlanmış işler demo kiracısını atlar (TickPriceCampaigns,
+     * SyncSuppliers); onay takibi `inactive` bağlantıya gitmez.
+     *
+     * @param  array<string, ChannelConnection>  $channels
+     */
+    private function fillCatalogModules(array $channels): void
+    {
+        $tenantId = $channels['trendyol']->tenant_id;
+        $variant = fn (string $sku): Variant => Variant::query()->where('sku', $sku)->firstOrFail();
+        $listing = fn (string $code, string $sku): Listing => Listing::query()
+            ->where('channel_connection_id', $channels[$code]->id)
+            ->where('variant_id', $variant($sku)->id)
+            ->firstOrFail();
+
+        // --- Kanal onayları: bir red (sebepli), iki onay bekleyen.
+        $listing('trendyol', 'ORT-KTN-140')->forceFill([
+            'approval_rejection_reason' => 'Ürün görselinde beyaz arka plan zorunludur; ana görsel kurala uymuyor.',
+            'approval_checked_at' => now()->subHours(3),
+        ])->save();
+
+        foreach (['TRM-500-SYH', 'STD-AHS-01'] as $sku) {
+            $listing('hepsiburada', $sku)->forceFill([
+                'lifecycle_status' => 'pending_approval',
+                'create_requested_at' => now()->subHours(20),
+                'approval_checked_at' => now()->subMinutes(40),
+            ])->save();
+        }
+
+        // --- Kampanyalar: süren, planlanan, biten. İtme zamanları dolu:
+        // süren kampanya "kanala gitti" görünür, hiçbir iş tetiklenmez.
+        foreach ([
+            ['Kasım indirimi', PriceCampaign::TYPE_PERCENT, '15', -3, 10, ['trendyol', 'shopify'], ['MUM-LAV-200', 'MUM-SDR-200', 'KUP-350-BEYAZ', 'KUP-350-YESIL']],
+            ['Yılbaşı fırsatı', PriceCampaign::TYPE_AMOUNT, '50', 18, 32, ['trendyol', 'hepsiburada', 'shopify'], ['ORT-KTN-140', 'TRM-500-SYH']],
+            ['Ekim sonu', PriceCampaign::TYPE_PERCENT, '10', -30, -20, ['hepsiburada'], ['SBN-ZYT-3L']],
+        ] as [$name, $type, $value, $startDays, $endDays, $codes, $skus]) {
+            $campaign = (new PriceCampaign)->forceFill([
+                'tenant_id' => $tenantId,
+                'name' => $name,
+                'discount_type' => $type,
+                'discount_value' => $value,
+                'starts_at' => now()->addDays($startDays)->startOfDay(),
+                'ends_at' => now()->addDays($endDays)->endOfDay(),
+                'show_compare_at' => true,
+                'start_pushed_at' => $startDays <= 0 ? now()->addDays($startDays)->startOfDay()->addMinutes(2) : null,
+                'end_pushed_at' => $endDays < 0 ? now()->addDays($endDays)->endOfDay()->addMinutes(2) : null,
+            ]);
+            $campaign->save();
+
+            foreach ($codes as $code) {
+                DB::table('price_campaign_connections')->insert([
+                    'tenant_id' => $tenantId, 'price_campaign_id' => $campaign->id, 'channel_connection_id' => $channels[$code]->id,
+                ]);
+            }
+
+            foreach ($skus as $sku) {
+                DB::table('price_campaign_variants')->insert([
+                    'tenant_id' => $tenantId, 'price_campaign_id' => $campaign->id, 'variant_id' => $variant($sku)->id,
+                ]);
+            }
+        }
+
+        // --- Tedarikçi XML: saatlik çalışan bir kaynak, üç başarılı tur.
+        $source = SupplierSource::query()->create([
+            'tenant_id' => $tenantId,
+            'name' => 'Örnek Toptancı',
+            'feed_url' => 'https://tedarikci.ornek-toptanci.com/xml/urunler.xml',
+            'feed_host' => 'tedarikci.ornek-toptanci.com',
+            'record_path' => 'Urunler/Urun',
+            'mapping' => [
+                'variant_path' => null,
+                'fields' => ['key' => 'StokKodu', 'sku' => 'StokKodu', 'barcode' => 'Barkod', 'name' => 'UrunAdi', 'stock' => 'Stok', 'cost' => 'AlisFiyati', 'currency' => 'ParaBirimi'],
+                'options' => [],
+            ],
+            'number_format' => SupplierSource::NUMBER_DOT,
+            'currency' => 'TRY',
+            'stock_policy' => SupplierSource::STOCK_INFORMATIONAL,
+            'price_policy' => SupplierSource::PRICE_NONE,
+            'create_products' => false,
+        ]);
+
+        $runIds = [];
+        foreach ([3, 2, 1] as $hoursAgo) {
+            $started = now()->subHours($hoursAgo)->subMinutes(35);
+            $runIds[] = DB::table('supplier_sync_runs')->insertGetId([
+                'id' => (string) new UuidV7,
+                'tenant_id' => $tenantId,
+                'supplier_source_id' => $source->id,
+                'mode' => SupplierSyncRun::MODE_APPLY,
+                'trigger' => SupplierSyncRun::TRIGGER_SCHEDULE,
+                'status' => RunStatus::COMPLETE->value,
+                'started_at' => $started,
+                'finished_at' => $started->copy()->addSeconds(2),
+                'duration_ms' => 2140,
+                'bytes' => 48211,
+                'records_seen' => 12,
+                'counts' => json_encode(['records' => 12, 'matched' => 10, 'stock_changed' => $hoursAgo === 1 ? 2 : 0, 'cost_changed' => 0, 'unchanged' => $hoursAgo === 1 ? 8 : 10, 'unmatched' => 2]),
+                'created_at' => $started,
+                'updated_at' => $started,
+            ], 'id');
+        }
+
+        $lastRun = end($runIds);
+        $n = 0;
+        foreach (Variant::query()->orderBy('sku')->get() as $v) {
+            $n++;
+            DB::table('supplier_records')->insert([
+                'id' => (string) new UuidV7, 'tenant_id' => $tenantId, 'supplier_source_id' => $source->id,
+                'source_key' => $v->sku, 'variant_id' => $v->id, 'sku' => $v->sku, 'barcode' => '86900000'.str_pad((string) $n, 5, '0', STR_PAD_LEFT),
+                'name' => Product::query()->whereKey($v->product_id)->value('title'),
+                'stock_state' => FieldState::PRESENT->value, 'stock_value' => 20 + $n * 7,
+                'cost_state' => FieldState::PRESENT->value, 'cost_value' => number_format((float) $v->price * 0.45, 2, '.', ''),
+                'price_state' => FieldState::MISSING->value, 'currency' => 'TRY',
+                'presence' => SupplierRecord::PRESENT, 'match_status' => SupplierRecord::BOUND,
+                'first_seen_run_id' => $runIds[0], 'last_seen_run_id' => $lastRun, 'last_seen_at' => now()->subMinutes(35),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        foreach ([['SRM-TBK-SET4', 'Seramik Tabak Seti · 4\'lü', 36], ['MUM-VNL-200', 'El Yapımı Soya Mum · Vanilya', 48]] as [$key, $name, $stock]) {
+            DB::table('supplier_records')->insert([
+                'id' => (string) new UuidV7, 'tenant_id' => $tenantId, 'supplier_source_id' => $source->id,
+                'source_key' => $key, 'sku' => $key, 'name' => $name,
+                'stock_state' => FieldState::PRESENT->value, 'stock_value' => $stock,
+                'cost_state' => FieldState::PRESENT->value, 'cost_value' => '112.00',
+                'price_state' => FieldState::MISSING->value, 'currency' => 'TRY',
+                'presence' => SupplierRecord::PRESENT, 'match_status' => SupplierRecord::UNMATCHED,
+                'first_seen_run_id' => $lastRun, 'last_seen_run_id' => $lastRun, 'last_seen_at' => now()->subMinutes(35),
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $source->forceFill([
+            'is_active' => true,
+            'sync_state' => SupplierSource::STATE_IDLE,
+            'last_attempted_at' => now()->subMinutes(35),
+            'last_succeeded_at' => now()->subMinutes(35),
+            'last_status' => RunStatus::COMPLETE->value,
+            'last_duration_ms' => 2140,
+            'next_run_at' => now()->addMinutes(25),
+        ])->save();
+
+        // --- Fiyat ve stok kontrolü: bir fiyat çakışması (karar bekliyor),
+        // bir onarılmış stok farkı, kalanı eşit.
+        $checked = now()->subMinutes(12);
+        foreach ($channels as $code => $connection) {
+            $run = ReconciliationRun::query()->create([
+                'tenant_id' => $tenantId,
+                'channel_connection_id' => $connection->id,
+                'scope' => ReconciliationScope::WARM->value,
+                'trigger_reason' => 'schedule',
+                'started_at' => $checked,
+                'finished_at' => $checked->copy()->addSeconds(4),
+                'candidates_count' => 10,
+                'checked_count' => 10,
+                'drift_count' => $code === 'shopify' ? 0 : 1,
+                'repaired_count' => $code === 'trendyol' ? 1 : 0,
+                'status' => 'completed',
+            ]);
+
+            foreach (Listing::query()->where('channel_connection_id', $connection->id)->where('lifecycle_status', 'live')->get() as $l) {
+                $sku = $variant('KUP-350-BEYAZ')->id === $l->variant_id ? 'KUP-350-BEYAZ' : ($variant('MUM-LAV-200')->id === $l->variant_id ? 'MUM-LAV-200' : null);
+                $available = (int) DB::table('inventory_levels')->where('variant_id', $l->variant_id)->sum('available');
+
+                [$domain, $status, $local, $remote, $magnitude, $reason] = match (true) {
+                    $code === 'hepsiburada' && $sku === 'KUP-350-BEYAZ' => ['PRICE', ItemStatus::PRICE_CONFLICT, ['price' => '189.90'], ['price' => '209.90'], null, 'sampled'],
+                    $code === 'trendyol' && $sku === 'MUM-LAV-200' => ['INVENTORY', ItemStatus::REPAIRED, ['available' => $available, 'expected_remote' => max(0, $available)], ['quantity' => max(0, $available) + 2], 2, 'recently_sold'],
+                    default => ['INVENTORY', ItemStatus::MATCHED, ['available' => $available, 'expected_remote' => max(0, $available)], ['quantity' => max(0, $available)], 0, 'sampled'],
+                };
+
+                ReconciliationItem::query()->create([
+                    'tenant_id' => $tenantId,
+                    'reconciliation_run_id' => $run->id,
+                    'listing_id' => $l->id,
+                    'domain' => $domain,
+                    'priority_reason' => $reason,
+                    'status' => $status->value,
+                    'local_value' => $local,
+                    'remote_value' => $remote,
+                    'drift_magnitude' => $magnitude,
+                    'checked_at' => $checked,
+                    'resolved_at' => $status === ItemStatus::PRICE_CONFLICT ? null : $checked,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Katkı raporu: satış anı net tutar ve maliyet + beklenen komisyon ve
+     * kargo kesintisi (KDV %20). Hakediş (gerçekleşen) yazılmaz — "hakediş
+     * yok" demo için de doğru durumdur.
+     */
+    private function fillContribution(): void
+    {
+        $commission = ['trendyol' => '0.18', 'hepsiburada' => '0.16', 'shopify' => '0.029'];
+        $shipping = ['trendyol' => '-42.90', 'hepsiburada' => '-39.90', 'shopify' => '-54.90'];
+
+        foreach (Order::query()->with('lines', 'connection:id,channel_type_code')->get() as $order) {
+            $code = $order->connection?->channel_type_code;
+            $sale = 0.0;
+
+            foreach ($order->lines as $line) {
+                $gross = (float) $line->line_total;
+                $net = round($gross / 1.2, 2);
+                $sale += $gross;
+                $unitCost = $line->variant_id === null ? null : number_format((float) $line->unit_price * 0.45, 2, '.', '');
+
+                $line->forceFill([
+                    'vat_rate' => '20.00',
+                    'vat_amount' => number_format($gross - $net, 2, '.', ''),
+                    'amounts_include_vat' => true,
+                    'net_line_total' => number_format($net, 2, '.', ''),
+                    'unit_cost' => $unitCost,
+                    'cost_currency' => $unitCost === null ? null : 'TRY',
+                    'cost_captured_at' => $unitCost === null ? null : $order->placed_at,
+                ])->save();
+            }
+
+            foreach (['commission' => number_format(-$sale * (float) ($commission[$code] ?? 0), 2, '.', ''), 'shipping_fee' => $shipping[$code] ?? '0.00'] as $kind => $amount) {
+                OrderCharge::query()->create([
+                    'tenant_id' => $order->tenant_id,
+                    'order_id' => $order->id,
+                    'channel_connection_id' => $order->channel_connection_id,
+                    'kind' => $kind,
+                    'basis' => OrderCharge::BASIS_EXPECTED,
+                    'amount' => $amount,
+                    'currency' => 'TRY',
+                    'rate' => $kind === 'commission' ? $commission[$code] ?? null : null,
+                    'source' => 'system',
+                    'occurred_at' => $order->placed_at,
+                ]);
+            }
+        }
     }
 }

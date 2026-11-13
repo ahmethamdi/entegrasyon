@@ -8,6 +8,7 @@ use App\Domain\Catalog\Actions\PushCampaignPrices;
 use App\Domain\Catalog\Models\PriceCampaign;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -33,6 +34,8 @@ final class TickPriceCampaignsCommand extends Command
         // Tarama TÜM kiracıları görür; itme kiracı bağlamında yapılır.
         $due = TenantContext::runAsSystem(fn () => PriceCampaign::query()
             ->whereNull('cancelled_at')
+            // Demo kampanyası örnektir; fiyat hiçbir kanala itilmez.
+            ->whereNotIn('tenant_id', DB::table('tenants')->where('is_demo', true)->select('id'))
             ->where(function ($query) use ($now): void {
                 $query->where(fn ($q) => $q->whereNull('start_pushed_at')->where('starts_at', '<=', $now)->where('ends_at', '>', $now))
                     ->orWhere(fn ($q) => $q->whereNull('end_pushed_at')->where('ends_at', '<=', $now)->whereNotNull('start_pushed_at'));

@@ -123,8 +123,12 @@ final class ApprovalController extends Controller
      */
     private function approvalConnections(): array
     {
+        // Demo kiracısında bağlantılar bilerek `inactive`tir (dışarı istek
+        // çıkmasın); örnek onay listesi yine görünsün.
+        $demo = (bool) (request()->attributes->get('tenant')?->is_demo ?? false);
+
         $connections = ChannelConnection::query()
-            ->where('status', 'active')
+            ->when(! $demo, fn ($q) => $q->where('status', 'active'))
             ->with('channelType:code,name,adapter_class')
             ->get()
             ->all();

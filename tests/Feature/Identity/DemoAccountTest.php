@@ -171,6 +171,32 @@ final class DemoAccountTest extends TestCase
     }
 
     #[Test]
+    public function catalog_modules_are_filled_but_schedulers_skip_the_demo(): void
+    {
+        $this->artisan('demo:install')->assertSuccessful();
+        $tenant = Tenant::query()->where('is_demo', true)->sole();
+        $t = fn (string $table) => DB::table($table)->where('tenant_id', $tenant->id);
+
+        $this->assertSame(3, $t('price_campaigns')->count());
+        $this->assertSame(1, $t('supplier_sources')->count());
+        $this->assertSame(3, $t('supplier_sync_runs')->count());
+        $this->assertSame(2, $t('listings')->where('lifecycle_status', 'pending_approval')->count());
+        $this->assertSame(1, $t('reconciliation_items')->where('status', 'PRICE_CONFLICT')->whereNull('resolved_at')->count());
+        $this->assertGreaterThan(0, $t('order_charges')->count());
+
+        // Vakti gelmiş gibi yap: zamanlayıcılar yine de demoya dokunmaz.
+        $t('supplier_sources')->update(['next_run_at' => now()->subMinute()]);
+        $t('price_campaigns')->whereNull('start_pushed_at')->update(['starts_at' => now()->subMinute()]);
+
+        $this->artisan('suppliers:sync')->assertSuccessful();
+        $this->artisan('campaigns:tick')->assertSuccessful();
+
+        $this->assertSame(3, $t('supplier_sync_runs')->count());
+        $this->assertSame(1, $t('price_campaigns')->whereNull('start_pushed_at')->count());
+        $this->assertSame(0, $t('sync_operations')->count());
+    }
+
+    #[Test]
     public function a_demo_connection_never_reaches_the_network(): void
     {
         $this->artisan('demo:install')->assertSuccessful();
