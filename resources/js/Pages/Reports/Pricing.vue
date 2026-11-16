@@ -120,16 +120,16 @@ const ruleMissing = computed(() => props.report && props.report.rule.commissionP
                         </div>
                     </div>
                     <div class="overflow-x-auto px-5 pb-3">
-                        <table class="mt-2 w-full min-w-[860px] text-left text-[13px]">
+                        <table class="mt-2 w-full min-w-[720px] text-left text-[13px]">
                             <thead>
                                 <tr class="border-b border-stone-200 text-stone-600">
-                                    <th scope="col" class="py-2.5 pr-3 font-normal">{{ t('Ürün') }}</th>
-                                    <th scope="col" class="py-2.5 pr-3 text-right font-normal">{{ t('Kanal fiyatı') }}</th>
-                                    <th scope="col" class="py-2.5 pr-3 text-right font-normal">{{ t('Maliyet') }}</th>
-                                    <th scope="col" class="py-2.5 pr-3 text-right font-normal">{{ t('Komisyon') }}</th>
-                                    <th scope="col" class="py-2.5 pr-3 text-right font-normal">{{ t('Adet başı katkı') }}</th>
-                                    <th scope="col" class="py-2.5 pr-3 text-right font-normal">{{ t('Zararsız fiyat') }}</th>
-                                    <th scope="col" class="py-2.5 pr-3 text-right font-normal">{{ t('Hedef için fiyat') }}</th>
+                                    <th scope="col" class="py-2.5 pr-2 font-normal">{{ t('Ürün') }}</th>
+                                    <th scope="col" class="py-2.5 pr-2 text-right font-normal">{{ t('Kanal fiyatı') }}</th>
+                                    <th scope="col" class="py-2.5 pr-2 text-right font-normal">{{ t('Maliyet') }}</th>
+                                    <th scope="col" class="py-2.5 pr-2 text-right font-normal">{{ t('Komisyon') }}</th>
+                                    <th scope="col" class="py-2.5 pr-2 text-right font-normal">{{ t('Adet başı katkı') }}</th>
+                                    <th scope="col" class="py-2.5 pr-2 text-right font-normal">{{ t('Zararsız fiyat') }}</th>
+                                    <th scope="col" class="py-2.5 pr-2 text-right font-normal">{{ t('Hedef için fiyat') }}</th>
                                     <th scope="col" class="py-2.5 text-right font-normal">{{ t('Durum') }}</th>
                                 </tr>
                             </thead>
@@ -140,20 +140,20 @@ const ruleMissing = computed(() => props.report && props.report.rule.commissionP
                                         <span v-else class="text-stone-500">{{ row.title ?? '—' }}</span>
                                         <div class="text-xs text-stone-500">{{ row.sku }}</div>
                                     </td>
-                                    <td class="py-2.5 pr-3 text-right tabular-nums text-stone-900">{{ money(row.price, row.currency) }}</td>
-                                    <td class="py-2.5 pr-3 text-right tabular-nums text-stone-700">{{ row.cost === null ? '—' : money(row.cost, row.currency) }}</td>
-                                    <td class="py-2.5 pr-3 text-right tabular-nums text-stone-700">{{ row.commissionPercent === null ? '—' : `%${row.commissionPercent}` }}</td>
-                                    <td class="py-2.5 pr-3 text-right tabular-nums">
+                                    <td class="py-2.5 pr-2 text-right tabular-nums text-stone-900">{{ money(row.price, row.currency) }}</td>
+                                    <td class="py-2.5 pr-2 text-right tabular-nums text-stone-700">{{ row.cost === null ? '—' : money(row.cost, row.currency) }}</td>
+                                    <td class="py-2.5 pr-2 text-right tabular-nums text-stone-700">{{ row.commissionPercent === null ? '—' : `%${row.commissionPercent}` }}</td>
+                                    <td class="py-2.5 pr-2 text-right tabular-nums">
                                         <template v-if="row.contribution !== null">
                                             <strong :class="Number(row.contribution) < 0 ? 'text-brand-700' : 'text-stone-900'">{{ money(row.contribution, row.currency) }}</strong>
                                             <div v-if="row.margin !== null" class="text-xs" :class="row.margin < 0 ? 'text-brand-700' : 'text-stone-500'">%{{ row.margin }}</div>
                                         </template>
                                         <span v-else class="text-xs text-stone-500">{{ row.missing.map((m) => t(missingText[m])).join(', ') }}</span>
                                     </td>
-                                    <td class="py-2.5 pr-3 text-right tabular-nums text-stone-700">{{ row.breakEven === null ? '—' : money(row.breakEven, row.currency) }}</td>
-                                    <td class="py-2.5 pr-3 text-right tabular-nums font-medium text-stone-900">{{ row.target === null ? '—' : money(row.target, row.currency) }}</td>
+                                    <td class="py-2.5 pr-2 text-right tabular-nums text-stone-700">{{ row.breakEven === null ? '—' : money(row.breakEven, row.currency) }}</td>
+                                    <td class="py-2.5 pr-2 text-right tabular-nums font-medium text-stone-900">{{ row.target === null ? '—' : money(row.target, row.currency) }}</td>
                                     <td class="py-2.5 text-right">
-                                        <span class="inline-block rounded-md border px-2 py-0.5 text-xs font-medium" :class="statusClass[row.status]">{{ t(statusText[row.status]) }}</span>
+                                        <span class="inline-block whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-medium" :class="statusClass[row.status]">{{ t(statusText[row.status]) }}</span>
                                     </td>
                                 </tr>
                                 <tr v-if="rows.length === 0">
