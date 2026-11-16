@@ -114,6 +114,7 @@ function groupName(group) {
 }
 
 function known(value, count, total) {
+    if (count === 0) return '—';
     return count === total ? money(value, currency.value) : `${money(value, currency.value)}*`;
 }
 
