@@ -73,7 +73,7 @@ function margin(v) {
             </div>
             <form class="flex gap-2" @submit.prevent="go({ page: 1 })">
                 <label class="sr-only" for="cost-search">{{ t('Ürün adı ya da SKU ara') }}</label>
-                <input id="cost-search" v-model="search" type="search" :placeholder="t('Ürün adı ya da SKU ara')" class="h-9 w-56 rounded-[10px] border-stone-300 text-sm" />
+                <input id="cost-search" v-model="search" type="search" :placeholder="t('Ürün adı ya da SKU ara')" class="h-9 w-56 rounded-[10px] border border-stone-300 px-3 text-sm" />
                 <button type="submit" class="h-9 rounded-[10px] border border-stone-300 px-3 text-sm font-medium text-stone-700 hover:bg-stone-100">{{ t('Ara') }}</button>
             </form>
         </div>
@@ -116,7 +116,7 @@ function margin(v) {
                                     inputmode="decimal"
                                     :disabled="!editable"
                                     placeholder="0,00"
-                                    class="h-9 w-28 rounded-[10px] border-stone-300 text-right text-sm tabular-nums disabled:bg-stone-50"
+                                    class="h-9 w-28 rounded-[10px] border border-stone-300 px-3 text-right text-sm tabular-nums disabled:bg-stone-50"
                                     :class="String(values[v.id] ?? '') !== String(v.cost ?? '') ? 'border-brand-500 ring-1 ring-brand-500' : ''"
                                 />
                             </td>

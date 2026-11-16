@@ -88,19 +88,19 @@ function error(form, key) {
                 <div class="mt-4 grid gap-4 sm:grid-cols-3">
                     <label class="block text-[13px] text-stone-700">
                         {{ t('Komisyon (%)') }}
-                        <input v-model="forms[c.id].commission_percent" type="text" inputmode="decimal" placeholder="18" class="mt-1 h-9 w-full rounded-[10px] border-stone-300 text-sm tabular-nums disabled:bg-stone-50" />
+                        <input v-model="forms[c.id].commission_percent" type="text" inputmode="decimal" placeholder="18" class="mt-1 h-9 w-full rounded-[10px] border border-stone-300 px-3 text-sm tabular-nums disabled:bg-stone-50" />
                         <span class="mt-1 block text-xs text-stone-500">{{ t('Satış tutarı (KDV dahil) üzerinden') }}</span>
                         <span v-if="error(forms[c.id], 'commission_percent')" class="mt-1 block text-xs text-brand-700">{{ error(forms[c.id], 'commission_percent') }}</span>
                     </label>
                     <label class="block text-[13px] text-stone-700">
                         {{ t('Kargo kesintisi (sipariş başı, ₺)') }}
-                        <input v-model="forms[c.id].shipping_fee" type="text" inputmode="decimal" placeholder="42,90" class="mt-1 h-9 w-full rounded-[10px] border-stone-300 text-sm tabular-nums disabled:bg-stone-50" />
+                        <input v-model="forms[c.id].shipping_fee" type="text" inputmode="decimal" placeholder="42,90" class="mt-1 h-9 w-full rounded-[10px] border border-stone-300 px-3 text-sm tabular-nums disabled:bg-stone-50" />
                         <span class="mt-1 block text-xs text-stone-500">{{ t('Pazaryerinin kestiği kargo ücreti') }}</span>
                         <span v-if="error(forms[c.id], 'shipping_fee')" class="mt-1 block text-xs text-brand-700">{{ error(forms[c.id], 'shipping_fee') }}</span>
                     </label>
                     <label class="block text-[13px] text-stone-700">
                         {{ t('Paketleme (sipariş başı, ₺)') }}
-                        <input v-model="forms[c.id].packaging_fee" type="text" inputmode="decimal" placeholder="5,00" class="mt-1 h-9 w-full rounded-[10px] border-stone-300 text-sm tabular-nums disabled:bg-stone-50" />
+                        <input v-model="forms[c.id].packaging_fee" type="text" inputmode="decimal" placeholder="5,00" class="mt-1 h-9 w-full rounded-[10px] border border-stone-300 px-3 text-sm tabular-nums disabled:bg-stone-50" />
                         <span class="mt-1 block text-xs text-stone-500">{{ t('Kutu, bant, dolgu — Kâr panelinde "Diğer"') }}</span>
                         <span v-if="error(forms[c.id], 'packaging_fee')" class="mt-1 block text-xs text-brand-700">{{ error(forms[c.id], 'packaging_fee') }}</span>
                     </label>
@@ -113,9 +113,9 @@ function error(form, key) {
                     <ul v-if="forms[c.id].categories.length" class="mt-3 space-y-2">
                         <li v-for="(row, i) in forms[c.id].categories" :key="i" class="flex flex-wrap items-center gap-2">
                             <label class="sr-only" :for="`cat-${c.id}-${i}`">{{ t('Kategori') }}</label>
-                            <input :id="`cat-${c.id}-${i}`" v-model="row.category" list="charge-rule-categories" type="text" :placeholder="t('Kategori')" class="h-9 w-64 rounded-[10px] border-stone-300 text-sm disabled:bg-stone-50" />
+                            <input :id="`cat-${c.id}-${i}`" v-model="row.category" list="charge-rule-categories" type="text" :placeholder="t('Kategori')" class="h-9 w-64 rounded-[10px] border border-stone-300 px-3 text-sm disabled:bg-stone-50" />
                             <label class="sr-only" :for="`catp-${c.id}-${i}`">{{ t('Komisyon (%)') }}</label>
-                            <input :id="`catp-${c.id}-${i}`" v-model="row.commission_percent" type="text" inputmode="decimal" placeholder="%" class="h-9 w-24 rounded-[10px] border-stone-300 text-right text-sm tabular-nums disabled:bg-stone-50" />
+                            <input :id="`catp-${c.id}-${i}`" v-model="row.commission_percent" type="text" inputmode="decimal" placeholder="%" class="h-9 w-24 rounded-[10px] border border-stone-300 px-3 text-right text-sm tabular-nums disabled:bg-stone-50" />
                             <button v-if="editable" type="button" class="h-9 rounded-[10px] px-2 text-[13px] text-stone-500 hover:text-brand-700" @click="removeCategory(c.id, i)">{{ t('Kaldır') }}</button>
                             <span v-if="error(forms[c.id], `categories.${i}.category`) || error(forms[c.id], `categories.${i}.commission_percent`)" class="w-full text-xs text-brand-700">
                                 {{ error(forms[c.id], `categories.${i}.category`) || error(forms[c.id], `categories.${i}.commission_percent`) }}

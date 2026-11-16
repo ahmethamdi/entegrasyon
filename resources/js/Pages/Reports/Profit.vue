@@ -145,17 +145,17 @@ const gaps = computed(() => {
             </div>
             <label class="text-[13px] text-stone-600">
                 <span class="sr-only">{{ t('Başlangıç') }}</span>
-                <input v-model="from" type="date" class="h-9 rounded-[10px] border-stone-300 text-sm" />
+                <input v-model="from" type="date" class="h-9 rounded-[10px] border border-stone-300 px-3 text-sm" />
             </label>
             <span class="pb-2 text-stone-400" aria-hidden="true">–</span>
             <label class="text-[13px] text-stone-600">
                 <span class="sr-only">{{ t('Bitiş') }}</span>
-                <input v-model="to" type="date" class="h-9 rounded-[10px] border-stone-300 text-sm" />
+                <input v-model="to" type="date" class="h-9 rounded-[10px] border border-stone-300 px-3 text-sm" />
             </label>
             <button type="submit" class="h-9 rounded-[10px] bg-stone-900 px-4 text-sm font-semibold text-white hover:bg-stone-700">{{ t('Göster') }}</button>
             <label v-if="currencyKeys.length > 1" class="ml-auto text-[13px] text-stone-600">
                 {{ t('Para birimi') }}
-                <select v-model="currency" class="ml-1 h-9 rounded-[10px] border-stone-300 text-sm">
+                <select v-model="currency" class="ml-1 h-9 rounded-[10px] border border-stone-300 px-3 text-sm">
                     <option v-for="c in currencyKeys" :key="c" :value="c">{{ c }}</option>
                 </select>
             </label>

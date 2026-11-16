@@ -140,12 +140,12 @@ const settledEmpty = computed(() => props.rows.every((r) => r.settled.status ===
             </div>
             <label class="text-[13px] text-stone-600">
                 <span class="sr-only">{{ t('Başlangıç') }}</span>
-                <input v-model="from" type="date" class="h-9 rounded-[10px] border-stone-300 text-sm" />
+                <input v-model="from" type="date" class="h-9 rounded-[10px] border border-stone-300 px-3 text-sm" />
             </label>
             <span class="pb-2 text-stone-400" aria-hidden="true">–</span>
             <label class="text-[13px] text-stone-600">
                 <span class="sr-only">{{ t('Bitiş') }}</span>
-                <input v-model="to" type="date" class="h-9 rounded-[10px] border-stone-300 text-sm" />
+                <input v-model="to" type="date" class="h-9 rounded-[10px] border border-stone-300 px-3 text-sm" />
             </label>
             <button type="submit" class="h-9 rounded-[10px] bg-stone-900 px-4 text-sm font-semibold text-white hover:bg-stone-700">{{ t('Göster') }}</button>
         </form>
