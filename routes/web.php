@@ -18,6 +18,7 @@ use App\Http\Controllers\CategoryMappingController;
 use App\Http\Controllers\ChannelConnectionController;
 use App\Http\Controllers\ChannelPricingController;
 use App\Http\Controllers\ChannelSettingsController;
+use App\Http\Controllers\ChargeRuleController;
 use App\Http\Controllers\ContactMessageController;
 use App\Http\Controllers\ContributionReportController;
 use App\Http\Controllers\DashboardController;
@@ -482,6 +483,10 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
         ->name('settings.invoicing.parasut.authorize');
     Route::get('/settings/invoicing/parasut/callback', [InvoiceSettingsController::class, 'callback'])
         ->name('settings.invoicing.parasut.callback');
+
+    // Kâr paneli B — kanal kesinti varsayılanları (komisyon/kargo/paketleme).
+    Route::get('/settings/charge-rules', [ChargeRuleController::class, 'index'])->name('settings.charge-rules');
+    Route::post('/settings/charge-rules', [ChargeRuleController::class, 'store'])->name('settings.charge-rules.store');
 
     // S6 · Kargo II (BETA) — satıcının kendi Yurtiçi/Aras sözleşmesi. Alıcı
     // kanaldan ANLIK okunur; kargoya verilen gönderinin takip numarası

@@ -2125,5 +2125,21 @@
     "Brüt pay = (satış fiyatı − maliyet) / satış fiyatı. Komisyon ve kargo hariçtir; asıl katkı kâr panelindedir.": "Gross margin = (sale price − cost) / sale price. Commission and shipping are excluded; real contribution is on the profit dashboard.",
     ":count satır değişti": ":count rows changed",
     "Geçersiz tutar var: yalnız sayı girin.": "Invalid amount: enter numbers only.",
-    ":count ürünün alış maliyeti kaydedildi.": "Purchase cost saved for :count products."
+    ":count ürünün alış maliyeti kaydedildi.": "Purchase cost saved for :count products.",
+    "Kesinti varsayılanları": "Fee defaults",
+    "Pazaryerinin her siparişten kestiği komisyonu ve kargo ücretini, ayrıca sipariş başına paketleme maliyetini gir. Yeni siparişler gelince beklenen kesinti bunlardan yazılır; pazaryeri hakedişi gelince gerçek rakam Katkı raporunda ayrıca görünür.": "Enter the commission and shipping fee the marketplace deducts from each order, plus your packaging cost per order. New orders get expected deductions from these; when the marketplace settlement arrives, the actual figure appears separately in the contribution report.",
+    "Kaydedince son :days günün kesintisi olmayan siparişlerine de uygulanır. Değişiklik, önceden kesintisi yazılmış siparişleri değiştirmez.": "On save, it also applies to orders from the last :days days that have no deductions yet. Changes do not alter orders whose deductions were already recorded.",
+    "Komisyon (%)": "Commission (%)",
+    "Satış tutarı (KDV dahil) üzerinden": "On the sale amount (VAT included)",
+    "Kargo kesintisi (sipariş başı, ₺)": "Shipping deduction (per order, ₺)",
+    "Pazaryerinin kestiği kargo ücreti": "Shipping fee the marketplace deducts",
+    "Paketleme (sipariş başı, ₺)": "Packaging (per order, ₺)",
+    "Kutu, bant, dolgu — Kâr panelinde \"Diğer\"": "Box, tape, filler — shown as \"Other\" on the profit dashboard",
+    "Kategori istisnaları": "Category exceptions",
+    "Bazı kategorilerde komisyon farklıysa buraya yaz; yazılmayan kategoriler yukarıdaki yüzdeyi kullanır.": "If some categories have a different commission, enter them here; other categories use the rate above.",
+    "Kategori istisnası ekle": "Add category exception",
+    "Kanalın komisyon yüzdesini gir; yeni siparişlerde ve son 90 günde kesintisi olmayan siparişlerde beklenen komisyon yazılır.": "Enter the channel's commission rate; expected commission is recorded for new orders and for orders from the last 90 days without deductions.",
+    "Kesinti varsayılanı gir": "Enter fee defaults",
+    "Kargo kesintisi bilinmeyen sipariş katkıya girmez. Sipariş başı kargo ücretini gir.": "Orders with an unknown shipping deduction are left out of contribution. Enter the per-order shipping fee.",
+    "Kesinti varsayılanı kaydedildi. Son :days günün kesintisi olmayan siparişlerine uygulanıyor.": "Fee defaults saved. Applying them to orders from the last :days days without deductions."
 }

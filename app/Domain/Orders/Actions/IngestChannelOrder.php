@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Orders\Actions;
 
 use App\Domain\Catalog\Models\Variant;
+use App\Domain\Finance\Actions\ApplyChargeRules;
 use App\Domain\Inventory\Actions\ApplyMovement;
 use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
@@ -52,6 +53,7 @@ final class IngestChannelOrder
     public function __construct(
         private readonly ApplyMovement $applyMovement = new ApplyMovement,
         private readonly LockInventoryRows $lockInventoryRows = new LockInventoryRows,
+        private readonly ApplyChargeRules $chargeRules = new ApplyChargeRules(new RecordOrderCharge),
     ) {}
 
     public function run(IncomingOrder $incoming, string $warehouseId): Order
@@ -70,6 +72,10 @@ final class IngestChannelOrder
             }
 
             $lines = $this->recordLines($order, $incoming, $tenantId);
+
+            // Kâr paneli B: kanal kesinti varsayılanından BEKLENEN komisyon,
+            // kargo ve paketleme (kural yoksa hiçbir şey yazılmaz).
+            $this->chargeRules->forOrder($order);
 
             // (2) TÜM varyantlar TEK sorguda, variant_id sırasıyla kilitlenir.
             //     Eşzamanlı ikinci sipariş burada BEKLER.

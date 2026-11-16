@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\PriceCampaign;
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Finance\Models\ChannelChargeRule;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Enums\TenantRole;
 use App\Domain\Identity\Models\Tenant;
@@ -807,6 +808,22 @@ final class DemoAccount
     {
         $commission = ['trendyol' => '0.18', 'hepsiburada' => '0.16', 'shopify' => '0.029'];
         $shipping = ['trendyol' => '-42.90', 'hepsiburada' => '-39.90', 'shopify' => '-54.90'];
+
+        // Kesinti varsayılanları ekranı demoda dolu görünsün — sipariş
+        // kesintileriyle AYNI oranlar (siparişler zaten yazıldı; kural
+        // geçmişe ayrıca uygulanmaz).
+        foreach (ChannelConnection::query()->get(['id', 'channel_type_code']) as $connection) {
+            $code = (string) $connection->channel_type_code;
+
+            if (! isset($commission[$code])) {
+                continue;
+            }
+
+            ChannelChargeRule::query()->updateOrCreate(
+                ['channel_connection_id' => $connection->id, 'internal_category_id' => ChannelChargeRule::DEFAULT_CATEGORY],
+                ['commission_percent' => number_format((float) $commission[$code] * 100, 2, '.', ''), 'shipping_fee' => ltrim($shipping[$code], '-'), 'packaging_fee' => null],
+            );
+        }
 
         foreach (Order::query()->with('lines', 'connection:id,channel_type_code')->get() as $order) {
             $code = $order->connection?->channel_type_code;

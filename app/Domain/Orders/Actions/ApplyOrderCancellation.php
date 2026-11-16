@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Orders\Actions;
 
+use App\Domain\Finance\Actions\ApplyChargeRules;
 use App\Domain\Inventory\Actions\ApplyMovement;
 use App\Domain\Inventory\Actions\LockInventoryRows;
 use App\Domain\Inventory\Enums\MovementType;
@@ -36,6 +37,7 @@ final class ApplyOrderCancellation
     public function __construct(
         private readonly ApplyMovement $applyMovement = new ApplyMovement,
         private readonly LockInventoryRows $lockInventoryRows = new LockInventoryRows,
+        private readonly ApplyChargeRules $chargeRules = new ApplyChargeRules(new RecordOrderCharge),
     ) {}
 
     /** @return OrderEvent|null null = bu iptal zaten işlenmiş */
@@ -116,6 +118,10 @@ final class ApplyOrderCancellation
                     'quantity_cancelled' => $line->quantity_cancelled + $quantity,
                 ])->save();
             }
+
+            // Kâr paneli B: kuralla yazılmış komisyonun iptal payı geri,
+            // sipariş tamamen iptalse kargo/paketleme ters kayıtla sıfır.
+            $this->chargeRules->forCancellation($order, $orderEvent->id, $lines);
 
             return $orderEvent;
         }, attempts: 3);
