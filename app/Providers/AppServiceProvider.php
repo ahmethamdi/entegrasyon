@@ -12,6 +12,7 @@ use App\Domain\Catalog\Support\ActiveCampaigns;
 use App\Domain\Catalog\Support\ChannelPriceRules;
 use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Channels\Support\CredentialVault;
+use App\Domain\Finance\Support\ChannelChargeRules;
 use App\Domain\Identity\Actions\SendWelcomeMail;
 use App\Domain\Identity\Models\User;
 use App\Domain\Identity\Support\SuperAdmin;
@@ -43,6 +44,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(CredentialVault::class);
         // scoped: her iş/istekte sıfırlanır — kural değişince eski fiyat gitmesin.
         $this->app->scoped(ChannelPriceRules::class);
+        $this->app->scoped(ChannelChargeRules::class);
         $this->app->scoped(ActiveCampaigns::class);
         $this->app->scoped(FxRates::class);
 

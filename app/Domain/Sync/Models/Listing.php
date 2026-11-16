@@ -6,6 +6,7 @@ namespace App\Domain\Sync\Models;
 
 use App\Domain\Catalog\Models\ChannelPriceRule;
 use App\Domain\Catalog\Models\PriceCampaign;
+use App\Domain\Catalog\Models\Product;
 use App\Domain\Catalog\Models\Variant;
 use App\Domain\Catalog\Support\ActiveCampaigns;
 use App\Domain\Catalog\Support\ChannelPriceRules;
@@ -13,7 +14,9 @@ use App\Domain\Catalog\Support\Fx\FxConverter;
 use App\Domain\Catalog\Support\Fx\FxRates;
 use App\Domain\Catalog\Support\PriceRuleCalculator;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Finance\Support\ChannelChargeRules;
 use App\Support\Tenancy\BelongsToTenant;
+use App\Support\Tenancy\TenantContext;
 use App\Support\Uuid\HasUuidV7;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -447,15 +450,45 @@ class Listing extends Model
             return null;
         }
 
-        $floor = PriceRuleCalculator::floor((string) $cost, (string) $rule->min_margin_percent);
+        // Kanal kesintileri (Finans › Kesinti varsayılanları) tabana eklenir:
+        // komisyon ve kargo düşüldükten sonra da en az kâr% kalmalı. Kural
+        // yoksa sıfır — eski davranış.
+        $variant = $this->variant;
+        $charges = app(ChannelChargeRules::class)->forListing(
+            $this->channel_connection_id,
+            fn (): ?string => $variant === null ? null : ($variant->relationLoaded('product')
+                ? $variant->product?->internal_category_id
+                : TenantContext::runAsSystem(fn () => Product::query()->whereKey($variant->product_id)->value('internal_category_id'))),
+        );
+
+        $floor = PriceRuleCalculator::floor((string) $cost, (string) $rule->min_margin_percent, $charges['commission'], $charges['perOrder']);
+
+        if ($floor === null) {
+            return __('Komisyon %:commission; bu kesintiyle hiçbir fiyat zararsız değil. Zarar koruması kanala göndermedi.', [
+                'commission' => $charges['commission'],
+            ]);
+        }
 
         if (PriceRuleCalculator::toMinor($price) >= PriceRuleCalculator::toMinor($floor)) {
             return null;
         }
 
-        return __('Fiyat :price, alış maliyeti :cost ve en az %:margin kâr ile hesaplanan :floor tabanının altında; zarar koruması kanala göndermedi.', [
+        $withCharges = PriceRuleCalculator::toMinor($charges['commission']) > 0 || PriceRuleCalculator::toMinor($charges['perOrder']) > 0;
+
+        if (! $withCharges) {
+            return __('Fiyat :price, alış maliyeti :cost ve en az %:margin kâr ile hesaplanan :floor tabanının altında; zarar koruması kanala göndermedi.', [
+                'price' => $price,
+                'cost' => (string) $cost,
+                'margin' => (string) $rule->min_margin_percent,
+                'floor' => $floor,
+            ]);
+        }
+
+        return __('Fiyat :price; alış maliyeti :cost, komisyon %:commission ve sipariş başı kargo+paketleme :perOrder düşüldükten sonra en az %:margin kâr için taban :floor. Zarar koruması kanala göndermedi.', [
             'price' => $price,
             'cost' => (string) $cost,
+            'commission' => $charges['commission'],
+            'perOrder' => $charges['perOrder'],
             'margin' => (string) $rule->min_margin_percent,
             'floor' => $floor,
         ]);

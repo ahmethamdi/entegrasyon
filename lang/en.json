@@ -2164,5 +2164,11 @@
     "Zararına ya da hedefin altında ürün yok.": "No products at a loss or below target.",
     "fiyat yok": "no price",
     "komisyon yok": "no commission",
-    "maliyet yok": "no cost"
+    "maliyet yok": "no cost",
+    "Zararına satılacak fiyatı bu kanala gönderme": "Don't send prices to this channel that would sell at a loss",
+    "Taban bu kanalın kesintilerini de sayar: komisyon %:commission, sipariş başı kargo ve paketleme :perOrder. Komisyon ve kargo düşüldükten sonra da en az kâr kalmalı.": "The floor includes this channel's fees: commission :commission%, shipping and packaging per order :perOrder. The minimum profit must remain after commission and shipping.",
+    "Bu kanalın komisyon ve kargo kesintisi girilmemiş; taban yalnız maliyet ve en az kârla hesaplanır. Finans › Kesinti varsayılanları ekranından girebilirsin.": "No commission or shipping fees are set for this channel; the floor uses only cost and minimum profit. You can set them under Finance › Fee defaults.",
+    "Kanalın fiyat kuralında zarar koruması açıksa bu kesintiler tabana eklenir: komisyon ve kargo düşüldükten sonra en az kâr kalmayan fiyat kanala gönderilmez.": "If loss protection is on in the channel's price rule, these fees are added to the floor: a price that leaves less than the minimum profit after commission and shipping is not sent.",
+    "Komisyon %:commission; bu kesintiyle hiçbir fiyat zararsız değil. Zarar koruması kanala göndermedi.": "Commission :commission%; no price breaks even with this fee. Loss protection did not send it to the channel.",
+    "Fiyat :price; alış maliyeti :cost, komisyon %:commission ve sipariş başı kargo+paketleme :perOrder düşüldükten sonra en az %:margin kâr için taban :floor. Zarar koruması kanala göndermedi.": "Price :price; with cost :cost, commission :commission% and per-order shipping+packaging :perOrder, the floor for at least :margin% profit is :floor. Loss protection did not send it to the channel."
 }

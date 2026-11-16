@@ -67,6 +67,9 @@ function error(form, key) {
         <p class="mt-1 max-w-3xl text-[13px] leading-relaxed text-stone-600">
             {{ t('Kaydedince son :days günün kesintisi olmayan siparişlerine de uygulanır. Değişiklik, önceden kesintisi yazılmış siparişleri değiştirmez.', { days }) }}
         </p>
+        <p class="mt-1 max-w-3xl text-[13px] leading-relaxed text-stone-600">
+            {{ t('Kanalın fiyat kuralında zarar koruması açıksa bu kesintiler tabana eklenir: komisyon ve kargo düşüldükten sonra en az kâr kalmayan fiyat kanala gönderilmez.') }}
+        </p>
 
         <div v-if="!connections.length" class="mt-6 rounded-[14px] border border-stone-200 bg-white px-5 py-8 text-center">
             <p class="text-sm text-stone-700">{{ t('Henüz bağlı kanalın yok.') }}</p>

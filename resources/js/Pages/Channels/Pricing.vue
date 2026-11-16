@@ -11,6 +11,7 @@ const { t } = useI18n();
 const props = defineProps({
     connection: { type: Object, required: true },
     rule: { type: Object, required: true },
+    charges: { type: Object, default: () => ({ commission: '0', perOrder: '0' }) },
     roundings: { type: Array, default: () => [] },
     fxRoundings: { type: Array, default: () => [] },
     fxCurrencies: { type: Array, default: () => [] },
@@ -105,10 +106,18 @@ function format(value) {
 
 const sampleResult = computed(() => format(apply(sample.value)));
 
+// Sunucudaki PriceRuleCalculator::floor ile aynı: (maliyet × (1 + kâr%) + sipariş başı) / (1 − komisyon%), yukarı.
+const commissionBp = computed(() => minor(props.charges.commission || 0));
+const perOrderMinor = computed(() => minor(props.charges.perOrder || 0));
+const hasCharges = computed(() => commissionBp.value > 0 || perOrderMinor.value > 0);
+
 const sampleFloor = computed(() => {
     if (!guard.value || sampleCost.value === '') return null;
     const basisPoints = minor(form.min_margin_percent || 0);
-    return Math.trunc((minor(sampleCost.value) * (10000 + basisPoints) + 9999) / 10000);
+    const denominator = 10000 - commissionBp.value;
+    if (denominator <= 0) return Infinity;
+    const numerator = minor(sampleCost.value) * (10000 + basisPoints) + perOrderMinor.value * 10000;
+    return Math.trunc((numerator + denominator - 1) / denominator);
 });
 
 const sampleBlocked = computed(() => sampleFloor.value !== null && apply(sample.value) < sampleFloor.value);
@@ -172,7 +181,7 @@ function submit() {
                         <legend class="text-sm font-medium text-stone-900">{{ t('Zarar koruması') }}</legend>
                         <label class="mt-2 flex items-start gap-2 text-sm text-stone-700">
                             <input v-model="guard" type="checkbox" class="mt-0.5">
-                            <span>{{ t('Alış maliyetinin altına düşen fiyatı bu kanala gönderme') }}</span>
+                            <span>{{ t('Zararına satılacak fiyatı bu kanala gönderme') }}</span>
                         </label>
                         <div v-if="guard" class="mt-3 pl-6">
                             <label class="block">
@@ -183,6 +192,8 @@ function submit() {
                                 </span>
                             </label>
                             <p class="mt-1 text-xs text-stone-500">{{ t('Maliyeti ürün düzenleme ekranından girersin. Maliyeti girilmemiş ürün denetlenmez. Durdurulan fiyat kanala gitmez, nedeni ürünün Kanallar sayfasında yazar.') }}</p>
+                            <p v-if="hasCharges" class="mt-1 text-xs text-stone-500">{{ t('Taban bu kanalın kesintilerini de sayar: komisyon %:commission, sipariş başı kargo ve paketleme :perOrder. Komisyon ve kargo düşüldükten sonra da en az kâr kalmalı.', { commission: charges.commission, perOrder: charges.perOrder.replace('.', ',') }) }}</p>
+                            <p v-else class="mt-1 text-xs text-stone-500">{{ t('Bu kanalın komisyon ve kargo kesintisi girilmemiş; taban yalnız maliyet ve en az kârla hesaplanır. Finans › Kesinti varsayılanları ekranından girebilirsin.') }}</p>
                             <p v-if="form.errors.min_margin_percent" class="mt-1 text-sm text-red-700">{{ form.errors.min_margin_percent }}</p>
                         </div>
                     </fieldset>

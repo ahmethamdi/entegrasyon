@@ -11,6 +11,7 @@ use App\Domain\Catalog\Support\PriceRuleCalculator;
 use App\Domain\Channels\Contracts\SupportsPricing;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Finance\Support\ChannelChargeRules;
 use App\Domain\Sync\Support\ChannelCurrency;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,9 @@ final class ChannelPricingController extends Controller
                 'fxRounding' => $rule?->fx_rounding ?? ChannelPriceRule::ROUNDING_NONE,
                 'fxMinPrice' => $rule?->fx_min_price === null ? null : self::trim((string) $rule->fx_min_price),
             ],
+            // Zarar korumasının tabanı bu kesintileri sayar (Finans › Kesinti
+            // varsayılanları); örnek hesap sunucuyla aynı sonucu versin.
+            'charges' => app(ChannelChargeRules::class)->forListing($model->id, fn (): ?string => null),
             // Örnek hesap ekranda canlı yapılır; sunucuyla aynı sonucu
             // vermesi için yuvarlama seçenekleri buradan gider.
             'roundings' => ChannelPriceRule::ROUNDINGS,

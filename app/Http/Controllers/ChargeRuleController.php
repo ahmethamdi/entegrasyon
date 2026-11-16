@@ -8,6 +8,7 @@ use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Finance\Jobs\ApplyChargeRulesToRecentOrders;
 use App\Domain\Finance\Models\ChannelChargeRule;
+use App\Domain\Finance\Support\ChannelChargeRules;
 use App\Support\Tenancy\TenantContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -105,6 +106,10 @@ final class ChargeRuleController extends Controller
                 );
             }
         });
+
+        // Zarar korumasının tabanı bu kesintileri sayar; aynı istekte eski
+        // değer okunmasın.
+        app(ChannelChargeRules::class)->forget($connection->id);
 
         ApplyChargeRulesToRecentOrders::dispatch(TenantContext::idOrFail(), $connection->id)->afterCommit();
 

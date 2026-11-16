@@ -90,16 +90,35 @@ final class PriceRuleCalculator
     }
 
     /**
-     * Zarar korumasının tabanı: maliyet × (1 + yüzde/100), YUKARI yuvarlı.
+     * Zarar korumasının tabanı — kanal kesintileri DAHİL:
+     *
+     *   taban = (maliyet × (1 + kâr%) + sipariş başı kargo/paketleme) / (1 − komisyon%)
+     *
+     * Yani komisyon ve kargo düşüldükten sonra elde yine maliyetin en az
+     * kâr% fazlası kalır. Kesinti yoksa (komisyon 0, sipariş başı 0) eski
+     * formülle birebir aynıdır: maliyet × (1 + kâr%).
+     *
+     * Sipariş başı tutar tek adetlik siparişe yüklenir (en kötü durum,
+     * UnitEconomics ile aynı varsayım).
+     *
+     * NULL: komisyon %100 ya da üstü — hiçbir fiyat zararsız değil.
+     * YUKARI yuvarlı: taban bir kuruş aşağı kayarsa zarar koruması tam
+     * sınırdaki zararlı fiyatı geçirirdi.
      */
-    public static function floor(string $cost, string $minMarginPercent): string
+    public static function floor(string $cost, string $minMarginPercent, string $commissionPercent = '0', string $perOrder = '0'): ?string
     {
-        $minor = self::toMinor($cost);
-        $basisPoints = self::toMinor($minMarginPercent);
+        $marginBp = self::toMinor($minMarginPercent);
+        $commissionBp = self::toMinor($commissionPercent);
 
-        // Yukarı yuvarla: taban bir kuruş aşağı kayarsa zarar koruması
-        // tam sınırdaki zararlı fiyatı geçirirdi.
-        return self::fromMinor(intdiv($minor * (10000 + $basisPoints) + 9999, 10000));
+        if ($commissionBp >= 10000) {
+            return null;
+        }
+
+        // Pay 1/10000 kuruş biriminde: maliyet×(1+kâr) + sipariş başı.
+        $numerator = self::toMinor($cost) * (10000 + $marginBp) + self::toMinor($perOrder) * 10000;
+        $denominator = 10000 - $commissionBp;
+
+        return self::fromMinor(intdiv($numerator + $denominator - 1, $denominator));
     }
 
     public static function toMinor(string $amount): int

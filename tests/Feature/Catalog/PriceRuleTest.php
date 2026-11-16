@@ -14,6 +14,8 @@ use App\Domain\Channels\Adapters\Etsy\EtsyAdapter;
 use App\Domain\Channels\Models\ChannelConnection;
 use App\Domain\Channels\Models\ChannelType;
 use App\Domain\Channels\Registry\AdapterRegistry;
+use App\Domain\Finance\Models\ChannelChargeRule;
+use App\Domain\Finance\Support\ChannelChargeRules;
 use App\Domain\Identity\Actions\CreateTenant;
 use App\Domain\Identity\Enums\AuditAction;
 use App\Domain\Identity\Models\AuditLog;
@@ -188,6 +190,86 @@ final class PriceRuleTest extends TestCase
             $listing->forceFill(['channel_price' => '209.00', 'channel_price_currency' => 'TRY']);
             $this->assertNull($listing->priceFloorViolation(), 'Tam tabandaki fiyat geçmeliydi.');
         });
+    }
+
+    /** Taban kanal kesintilerini sayar; kesinti yoksa eski formül. */
+    #[Test]
+    public function the_floor_formula_includes_commission_and_per_order_fees(): void
+    {
+        // (100 × 1,10 + 20) / 0,85 = 152,94117… → yukarı 152,95
+        $this->assertSame('152.95', PriceRuleCalculator::floor('100.00', '10', '15', '20'));
+        // Kesinti yok → eski formül birebir.
+        $this->assertSame('110.00', PriceRuleCalculator::floor('100.00', '10', '0', '0'));
+        $this->assertSame('110.02', PriceRuleCalculator::floor('100.01', '10'));
+        // Yalnız kargo: 100 + 25 = 125.
+        $this->assertSame('125.00', PriceRuleCalculator::floor('100.00', '0', '0', '25'));
+        // Komisyon %100: hiçbir fiyat yetmez.
+        $this->assertNull(PriceRuleCalculator::floor('100.00', '10', '100'));
+    }
+
+    /** Eskiden geçen fiyat, komisyon + kargo sayılınca durur; neden kesintileri söyler. */
+    #[Test]
+    public function the_floor_blocks_a_price_that_only_looked_safe_before_charges(): void
+    {
+        [$tenant, $variant, $connection] = $this->context(cost: '150.00');
+        $this->rule($tenant, $connection, margin: '10');
+
+        $listing = $this->asTenant($tenant, function () use ($variant, $connection): Listing {
+            $listing = $this->listing($variant, $connection);
+            // Kesintisiz taban 165,00 → 199,90 geçer.
+            $this->assertNull($listing->priceFloorViolation());
+
+            return $listing;
+        });
+
+        $this->chargeRule($tenant, $connection, commission: '15', shipping: '20', packaging: '5');
+
+        $this->asTenant($tenant, function () use ($listing): void {
+            // (165 + 25) / 0,85 = 223,5294… → 223,53
+            $violation = $listing->priceFloorViolation();
+
+            $this->assertNotNull($violation);
+            $this->assertStringContainsString('223.53', $violation);
+            $this->assertStringContainsString('%15', $violation);
+
+            $listing->forceFill(['channel_price' => '223.53', 'channel_price_currency' => 'TRY']);
+            $this->assertNull($listing->priceFloorViolation(), 'Tam tabandaki fiyat geçmeliydi.');
+        });
+    }
+
+    /** Kategori istisnasının komisyonu varsayılanın yerine geçer. */
+    #[Test]
+    public function the_floor_uses_the_category_commission(): void
+    {
+        [$tenant, $variant, $connection] = $this->context(cost: '150.00');
+        $this->rule($tenant, $connection, margin: '10');
+        $this->chargeRule($tenant, $connection, commission: '10');
+        $this->chargeRule($tenant, $connection, commission: '30', category: 'kozmetik');
+
+        $this->asTenant($tenant, function () use ($variant, $connection): void {
+            $listing = $this->listing($variant, $connection);
+            // Varsayılan %10: 165 / 0,90 = 183,34 → 199,90 geçer.
+            $this->assertNull($listing->priceFloorViolation());
+
+            Product::query()->whereKey($variant->product_id)->update(['internal_category_id' => 'kozmetik']);
+            app(ChannelChargeRules::class)->forget($connection->id);
+
+            // Kategori %30: 165 / 0,70 = 235,72 → durur.
+            $violation = $listing->priceFloorViolation();
+            $this->assertNotNull($violation);
+            $this->assertStringContainsString('235.72', $violation);
+        });
+    }
+
+    /** Kesinti tanımlı ama zarar koruması kapalı: durdurma yok (koruma satıcının tercihi). */
+    #[Test]
+    public function charges_alone_do_not_switch_the_floor_on(): void
+    {
+        [$tenant, $variant, $connection] = $this->context(cost: '190.00');
+        $this->rule($tenant, $connection, margin: null);
+        $this->chargeRule($tenant, $connection, commission: '20', shipping: '40');
+
+        $this->asTenant($tenant, fn () => $this->assertNull($this->listing($variant, $connection)->priceFloorViolation()));
     }
 
     /** Maliyet bilinmiyorsa ya da koruma kapalıysa durdurma yok. */
@@ -500,6 +582,26 @@ final class PriceRuleTest extends TestCase
             'rounding' => $rounding,
             'min_margin_percent' => $margin,
         ]));
+    }
+
+    private function chargeRule(
+        Tenant $tenant,
+        ChannelConnection $connection,
+        ?string $commission = null,
+        ?string $shipping = null,
+        ?string $packaging = null,
+        string $category = ChannelChargeRule::DEFAULT_CATEGORY,
+    ): void {
+        $this->asTenant($tenant, fn () => ChannelChargeRule::query()->create([
+            'tenant_id' => $tenant->id,
+            'channel_connection_id' => $connection->id,
+            'internal_category_id' => $category,
+            'commission_percent' => $commission,
+            'shipping_fee' => $shipping,
+            'packaging_fee' => $packaging,
+        ]));
+
+        app(ChannelChargeRules::class)->forget($connection->id);
     }
 
     private function listing(
