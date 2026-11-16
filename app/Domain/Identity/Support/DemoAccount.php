@@ -229,6 +229,12 @@ final class DemoAccount
                 'product_id' => $product->id, 'sku' => $sku, 'price' => $price,
                 'currency' => 'TRY', 'status' => 'active', 'content_version' => 0,
             ]);
+            // Alış maliyeti siparişlerdeki satış anı maliyetiyle aynı oran
+            // (%45); iki ürün BOŞ bırakılır ki "Alış maliyetleri" ve kâr
+            // panelinin eksik maliyet yolu demoda da görünsün.
+            if (! in_array($sku, ['SBN-ZYT-3L', 'STD-AHS-01'], true)) {
+                $variant->forceFill(['cost_price' => number_format((float) $price * 0.45, 2, '.', '')])->save();
+            }
             $variants[$sku] = $variant;
 
             DB::transaction(function () use ($warehouseId, $variant, $stock): void {
