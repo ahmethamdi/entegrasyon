@@ -58,6 +58,7 @@ final class RoutePermissions
         'reports.contribution' => P::FINANCE_VIEW,
         'reports.contribution.show' => P::FINANCE_VIEW,
         'reports.profit' => P::FINANCE_VIEW,
+        'reports.pricing' => P::FINANCE_VIEW,
         'settings.charge-rules' => P::FINANCE_VIEW,
         'settings.charge-rules.store' => P::FINANCE_MANAGE,
 

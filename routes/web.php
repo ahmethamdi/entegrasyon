@@ -37,6 +37,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\OttoOAuthController;
 use App\Http\Controllers\OversellReportController;
 use App\Http\Controllers\PriceCampaignController;
+use App\Http\Controllers\PricingReportController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
@@ -422,6 +423,9 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     // Kâr paneli — dönem hunisi ve kanal/kategori/marka kırılımı (KDV dahil
     // katkı, katkı raporuyla aynı hesap). Salt okunur.
     Route::get('/reports/profit', [ProfitReportController::class, 'index'])->name('reports.profit');
+    // Fiyat ve kâr — canlı ilanlarda adet başı katkı, zararsız ve önerilen
+    // fiyat. Salt okunur; kanala hiçbir şey gönderilmez.
+    Route::get('/reports/pricing', [PricingReportController::class, 'index'])->name('reports.pricing');
 
     // S11 · "Fazla satış yok" kanıt ekranı — son 30 günün ölçülmüş rakamları.
     Route::get('/reports/oversell', [OversellReportController::class, 'index'])->name('reports.oversell');
