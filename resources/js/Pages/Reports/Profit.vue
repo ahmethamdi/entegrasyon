@@ -121,7 +121,7 @@ function known(value, count, total) {
 const gaps = computed(() => {
     const g = props.report.gaps ?? {};
     const items = [];
-    if (g.variantsWithoutCost > 0) items.push({ key: 'cost', count: g.variantsWithoutCost, title: k('üründe alış maliyeti girilmemiş'), hint: k('Maliyet girilince yeni siparişlerde katkı hesaplanır. Geçmiş siparişler satış anındaki maliyetle kalır.'), href: '/products', action: k('Maliyet gir') });
+    if (g.variantsWithoutCost > 0) items.push({ key: 'cost', count: g.variantsWithoutCost, title: k('üründe alış maliyeti girilmemiş'), hint: k('Maliyet girilince yeni siparişlerde katkı hesaplanır. Geçmiş siparişler satış anındaki maliyetle kalır.'), href: '/products/costs?filter=missing', action: k('Maliyet gir') });
     if (g.ordersWithoutCommission > 0) items.push({ key: 'commission', count: g.ordersWithoutCommission, title: k('siparişte beklenen komisyon yok'), hint: k('Pazaryeri hakedişi geldikçe gerçek komisyon katkı raporunda görünür.'), href: '/reports/contribution', action: k('Katkı raporu') });
     if (g.ordersWithoutShipping > 0) items.push({ key: 'shipping', count: g.ordersWithoutShipping, title: k('siparişte beklenen kargo kesintisi yok'), hint: k('Kargo kesintisi bilinmeyen sipariş katkıya girmez.'), href: '/reports/contribution', action: k('Katkı raporu') });
     if (g.unmatchedLines > 0) items.push({ key: 'unmatched', count: g.unmatchedLines, title: k('sipariş satırı kataloğa bağlı değil'), hint: k('Stok kodunu (SKU) kataloğundaki ürünle aynı yap; kategori ve marka o zaman görünür.'), href: '/orders?filter=unmatched', action: k('Siparişlere git') });

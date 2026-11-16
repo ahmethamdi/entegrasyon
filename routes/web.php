@@ -51,6 +51,7 @@ use App\Http\Controllers\SupplierSourceController;
 use App\Http\Controllers\SyncFailureController;
 use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TenantSwitchController;
+use App\Http\Controllers\VariantCostController;
 use App\Http\Controllers\WooAuthController;
 use App\Http\Middleware\EnsureCarrierShippingEnabled;
 use App\Http\Middleware\SetLocale;
@@ -341,6 +342,11 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     // BU ROTA `/products/{product}/edit`'TEN ÖNCE GELİR: sonra gelseydi
     // Laravel `import` kelimesini bir ürün kimliği sanar ve ekran 404
     // verirdi.
+    // Toplu maliyet girişi (kâr paneli "Maliyet gir"). `/products/{product}`
+    // rotalarından ÖNCE: yoksa `costs` ürün kimliği sanılır.
+    Route::get('/products/costs', [VariantCostController::class, 'index'])->name('products.costs.index');
+    Route::post('/products/costs', [VariantCostController::class, 'store'])->name('products.costs.store');
+
     Route::get('/products/import', [ProductImportController::class, 'index'])
         ->name('products.import.index');
     Route::post('/products/import', [ProductImportController::class, 'store'])

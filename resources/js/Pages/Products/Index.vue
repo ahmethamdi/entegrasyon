@@ -223,6 +223,12 @@ function submitCount() {
                     {{ t('Excel ile fiyat/stok') }}
                 </Link>
                 <Link
+                    href="/products/costs"
+                    class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
+                >
+                    {{ t('Alış maliyetleri') }}
+                </Link>
+                <Link
                     href="/products/bundles/create"
                     class="rounded-[10px] border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100"
                 >

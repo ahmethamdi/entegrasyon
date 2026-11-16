@@ -2113,5 +2113,17 @@
     "Katkıyı tamamlamak için": "To complete your contribution",
     "Kırılım": "Breakdown",
     "* İşaretli tutar yalnız bilinen kalemlerin toplamıdır. Katkı ve marj yalnız bütün kalemleri bilinen siparişlerden.": "* Marked amounts are the sum of known items only. Contribution and margin come only from orders whose items are all known.",
-    "Kategori ve markada iade, komisyon ve kargo satırlara satış payıyla dağıtılır; kuruş yuvarlaması olabilir.": "For category and brand, refunds, commission and shipping are allocated to lines by sales share; small rounding differences may occur."
+    "Kategori ve markada iade, komisyon ve kargo satırlara satış payıyla dağıtılır; kuruş yuvarlaması olabilir.": "For category and brand, refunds, commission and shipping are allocated to lines by sales share; small rounding differences may occur.",
+    "Alış maliyetleri": "Purchase costs",
+    "Ürünün sana kaça mal olduğunu (KDV dahil) gir. Kâr paneli ve zarar koruması bu rakamı kullanır; kanala gönderilmez. Yeni siparişler girilen maliyetle hesaplanır, geçmiş siparişler satış anındaki maliyetle kalır.": "Enter what each product costs you (VAT included). The profit dashboard and loss protection use this figure; it is never sent to channels. New orders use the cost you enter; past orders keep the cost from the time of sale.",
+    "Maliyeti boş": "No cost",
+    "Bütün ürünlerin maliyeti girilmiş.": "Every product has a cost.",
+    "Eşleşen ürün yok.": "No matching products.",
+    "Brüt pay": "Gross margin",
+    ":sku alış maliyeti": ":sku purchase cost",
+    ":from–:to / :total": ":from–:to of :total",
+    "Brüt pay = (satış fiyatı − maliyet) / satış fiyatı. Komisyon ve kargo hariçtir; asıl katkı kâr panelindedir.": "Gross margin = (sale price − cost) / sale price. Commission and shipping are excluded; real contribution is on the profit dashboard.",
+    ":count satır değişti": ":count rows changed",
+    "Geçersiz tutar var: yalnız sayı girin.": "Invalid amount: enter numbers only.",
+    ":count ürünün alış maliyeti kaydedildi.": "Purchase cost saved for :count products."
 }

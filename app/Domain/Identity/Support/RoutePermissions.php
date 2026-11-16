@@ -92,6 +92,8 @@ final class RoutePermissions
         'products.store' => P::CATALOG_MANAGE,
         'products.update' => P::CATALOG_MANAGE,
         'products.variants.cost' => P::CATALOG_MANAGE,
+        'products.costs.index' => P::CATALOG_VIEW,
+        'products.costs.store' => P::CATALOG_MANAGE,
         'products.channels.store' => P::CATALOG_MANAGE,
         'products.listings.price' => P::CATALOG_MANAGE,
         'products.channel-attributes.store' => P::CATALOG_MANAGE,
