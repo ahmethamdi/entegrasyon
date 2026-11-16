@@ -39,6 +39,7 @@ use App\Http\Controllers\PriceCampaignController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\ProfitReportController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\ReconciliationController;
 use App\Http\Controllers\ReturnController;
@@ -410,6 +411,10 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     // başına izlenebilir. Salt okunur.
     Route::get('/reports/contribution', [ContributionReportController::class, 'index'])->name('reports.contribution');
     Route::get('/reports/contribution/{order}', [ContributionReportController::class, 'show'])->name('reports.contribution.show');
+
+    // Kâr paneli — dönem hunisi ve kanal/kategori/marka kırılımı (KDV dahil
+    // katkı, katkı raporuyla aynı hesap). Salt okunur.
+    Route::get('/reports/profit', [ProfitReportController::class, 'index'])->name('reports.profit');
 
     // S11 · "Fazla satış yok" kanıt ekranı — son 30 günün ölçülmüş rakamları.
     Route::get('/reports/oversell', [OversellReportController::class, 'index'])->name('reports.oversell');

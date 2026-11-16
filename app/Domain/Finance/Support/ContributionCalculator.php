@@ -62,6 +62,17 @@ final class ContributionCalculator
 
     public function expected(Order $order): ContributionView
     {
+        return $this->expectedWithLines($order)[0];
+    }
+
+    /**
+     * Beklenen katkı + satır dökümü (kâr paneli kategori/marka kırılımı).
+     * Aynı çekirdekten gelir: iki ekran farklı rakam söyleyemez.
+     *
+     * @return array{0: ContributionView, 1: list<array{line_id: string, variant_id: ?string, gross: ?string, revenue: ?string, cost: ?string}>}
+     */
+    public function expectedWithLines(Order $order): array
+    {
         $core = OrderContribution::for($order, expectedChargesOnly: true);
         $missing = $core->missing;
         $reasons = [];
@@ -107,7 +118,7 @@ final class ContributionCalculator
             $trace[] = $this->traceItem(__('Beklenen kesinti: :kind', ['kind' => (string) $c->kind]), (string) $c->amount, true, 'order_charges', $c->external_ref, null);
         }
 
-        return $this->build(self::BASIS_EXPECTED, $core->currency, $sale, $refund, $commission, $shipping, $other, $cost, $reasons, $trace);
+        return [$this->build(self::BASIS_EXPECTED, $core->currency, $sale, $refund, $commission, $shipping, $other, $cost, $reasons, $trace), $core->lines];
     }
 
     public function settled(Order $order): ContributionView

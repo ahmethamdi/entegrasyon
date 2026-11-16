@@ -57,6 +57,7 @@ final class RoutePermissions
         'orders.invoice.correction.retry' => P::FINANCE_MANAGE,
         'reports.contribution' => P::FINANCE_VIEW,
         'reports.contribution.show' => P::FINANCE_VIEW,
+        'reports.profit' => P::FINANCE_VIEW,
 
         // Stok listesi (5 Ekim'den beri Ürünler ekranı).
         'products.index' => P::STOCK_VIEW,

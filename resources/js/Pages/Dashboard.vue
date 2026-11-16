@@ -1,5 +1,5 @@
 <script setup>
-import { Link, router, usePage } from '@inertiajs/vue3';
+import { Deferred, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import PanelLayout from '../Layouts/PanelLayout.vue';
 import { brandIcon, money, orderState } from '../lib/format.js';
@@ -16,6 +16,7 @@ const props = defineProps({
     stock: { type: Object, default: () => ({ low: 0, out: 0, threshold: 5 }) },
     recentOrders: { type: Array, default: () => [] },
     lastSyncAt: { type: String, default: null },
+    profit: { type: Object, default: null },
 });
 
 const page = usePage();
@@ -268,6 +269,23 @@ function orderTime(iso) {
                 </Link>
             </section>
         </div>
+
+        <!-- bu ay kâr (kâr paneli özeti; ertelenmiş prop) -->
+        <Deferred v-if="can('finance.view')" data="profit">
+            <template #fallback>
+                <div class="mt-4 h-[74px] rounded-[14px] border border-stone-200 bg-white" aria-hidden="true" />
+            </template>
+            <Link v-if="profit" href="/reports/profit" class="mt-4 flex flex-wrap items-center gap-x-8 gap-y-2 rounded-[14px] border border-stone-200 bg-white px-5 py-4 hover:border-stone-300 sm:px-[22px]">
+                <span class="text-base font-semibold text-stone-900">{{ t('Bu ay kârın') }}</span>
+                <span class="text-sm text-stone-600">{{ t('Net satış') }} <strong class="tabular-nums text-stone-900">{{ money(profit.sale, profit.currency) }}</strong></span>
+                <span class="text-sm text-stone-600">{{ t('Katkı') }}
+                    <strong class="tabular-nums" :class="profit.contribution === null ? 'text-stone-400' : 'text-emerald-800'">{{ profit.contribution === null ? '—' : money(profit.contribution, profit.currency) }}</strong>
+                    <span class="text-xs text-stone-500">({{ t(':a / :b sipariş hesaplanabildi', { a: profit.complete, b: profit.orders }) }})</span>
+                </span>
+                <span v-if="profit.variantsWithoutCost > 0" class="text-[13px] font-medium text-amber-800">{{ t(':count üründe maliyet yok', { count: profit.variantsWithoutCost }) }}</span>
+                <span class="ml-auto text-[13px] font-semibold text-brand-700">{{ t('Kâr paneli') }} →</span>
+            </Link>
+        </Deferred>
 
         <!-- son siparişler -->
         <section class="mt-4 rounded-[14px] border border-stone-200 bg-white p-5 sm:p-[22px]" aria-labelledby="recent-heading">

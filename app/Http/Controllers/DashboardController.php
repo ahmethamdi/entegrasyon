@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 
 use App\Domain\Catalog\Models\Product;
 use App\Domain\Channels\Models\ChannelConnection;
+use App\Domain\Finance\Support\ProfitReport;
+use App\Domain\Identity\Enums\Permission;
 use App\Domain\Inventory\Models\InventoryLevel;
 use App\Domain\Orders\Enums\OrderState;
 use App\Domain\Orders\Models\Fulfillment;
@@ -18,7 +20,9 @@ use App\Domain\Sync\Enums\SyncOperationStatus;
 use App\Domain\Sync\Models\Listing;
 use App\Domain\Sync\Models\ListingSyncState;
 use App\Domain\Sync\Models\SyncOperation;
+use App\Support\Money\Money;
 use App\Support\Tenancy\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -60,7 +64,39 @@ final class DashboardController extends Controller
             'lastSyncAt' => SyncOperation::query()
                 ->where('status', SyncOperationStatus::COMPLETED->value)
                 ->max('updated_at'),
+            // Kâr paneli özeti (bu ay) — ERTELENMİŞ: sayfa beklemez, kart
+            // sonra dolar. Finans yetkisi olmayan rol hiç hesaplatmaz.
+            'profit' => ($request->attributes->get('tenant_role')?->allows(Permission::FINANCE_VIEW) ?? false)
+                ? Inertia::defer(fn (): ?array => $this->profitSummary())
+                : null,
         ]);
+    }
+
+    /**
+     * Bu ayın katkı özeti — kâr paneliyle AYNI hesap (ProfitReport).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function profitSummary(): ?array
+    {
+        $now = CarbonImmutable::now('Europe/Istanbul');
+        $report = app(ProfitReport::class)->build($now->startOfMonth(), $now);
+        $currency = array_key_first($report['currencies']);
+
+        if ($currency === null) {
+            return null;
+        }
+
+        $funnel = $report['currencies'][$currency]['funnel'];
+
+        return [
+            'currency' => $currency,
+            'orders' => $funnel['orders'],
+            'complete' => $funnel['complete'],
+            'sale' => Money::add($funnel['gross']['amount'], $funnel['cancel']['amount'], $funnel['refund']['amount']),
+            'contribution' => $funnel['contribution'],
+            'variantsWithoutCost' => $report['gaps']['variantsWithoutCost'],
+        ];
     }
 
     /**

@@ -93,6 +93,7 @@ const navGroups = [
         items: [
             // Mutabakat: kanaldaki fiyat/stok bizimkiyle aynı mı.
             { href: '/reconciliation', label: k('Fiyat ve stok kontrolü'), perm: 'catalog.view' },
+            { href: '/reports/profit', label: k('Kâr paneli'), perm: 'finance.view' },
             { href: '/reports/contribution', label: k('Katkı raporu'), perm: 'finance.view' },
             { href: '/reports/oversell', label: k('Fazla satış koruması'), perm: 'catalog.view' },
             // e-Fatura ile muhasebe aktarımı AYNI bağlantı, AYNI ekran.

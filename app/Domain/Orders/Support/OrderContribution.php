@@ -35,6 +35,10 @@ final class OrderContribution
     /**
      * @param  array<string, array{amount: string, basis: string}>  $charges
      * @param  list<string>  $missing
+     * @param  list<array{line_id: string, variant_id: ?string, gross: ?string, revenue: ?string, cost: ?string}>  $lines
+     *                                                                                                                     satır dökümü (kâr paneli kırılımı): gross = satış anı net
+     *                                                                                                                     tutar (iptal öncesi), revenue = gelire giren pay, cost =
+     *                                                                                                                     elde kalmayan adet maliyeti; NULL = bilinmiyor
      */
     public function __construct(
         public readonly string $currency,
@@ -44,6 +48,7 @@ final class OrderContribution
         public readonly string $cost,
         public readonly string $contribution,
         public readonly array $missing,
+        public readonly array $lines = [],
     ) {}
 
     public function complete(): bool
@@ -72,6 +77,7 @@ final class OrderContribution
 
         $revenue = BigDecimal::zero();
         $cost = BigDecimal::zero();
+        $lines = [];
 
         foreach ($order->lines()->get() as $line) {
             $qty = (int) $line->quantity;
@@ -85,27 +91,38 @@ final class OrderContribution
             $covered = min($cancelled, max(0, (int) ($refundedQty[$line->id] ?? 0) - $returned));
             $revenueQty = $qty - ($cancelled - $covered);
 
+            $lineRevenue = null;
+
             if ($line->net_line_total === null) {
                 $missing[] = "net:{$line->id}";
             } else {
-                $revenue = $revenue->plus(
-                    Money::decimal((string) $line->net_line_total)->multipliedBy($revenueQty)->dividedBy($qty, 2, RoundingMode::HALF_UP),
-                );
+                $lineRevenue = Money::decimal((string) $line->net_line_total)->multipliedBy($revenueQty)->dividedBy($qty, 2, RoundingMode::HALF_UP);
+                $revenue = $revenue->plus($lineRevenue);
             }
 
             $costQty = max(0, $qty - $cancelled - $returned);
+            $lineCost = BigDecimal::zero();
 
-            if ($costQty === 0) {
-                continue;
+            if ($costQty > 0) {
+                if ($line->unit_cost === null) {
+                    $missing[] = "cost:{$line->id}";
+                    $lineCost = null;
+                } elseif (strtoupper((string) $line->cost_currency) !== $currency) {
+                    $missing[] = "cost_currency:{$line->id}";
+                    $lineCost = null;
+                } else {
+                    $lineCost = Money::decimal((string) $line->unit_cost)->multipliedBy($costQty);
+                    $cost = $cost->plus($lineCost);
+                }
             }
 
-            if ($line->unit_cost === null) {
-                $missing[] = "cost:{$line->id}";
-            } elseif (strtoupper((string) $line->cost_currency) !== $currency) {
-                $missing[] = "cost_currency:{$line->id}";
-            } else {
-                $cost = $cost->plus(Money::decimal((string) $line->unit_cost)->multipliedBy($costQty));
-            }
+            $lines[] = [
+                'line_id' => (string) $line->id,
+                'variant_id' => $line->variant_id === null ? null : (string) $line->variant_id,
+                'gross' => $line->net_line_total === null ? null : (string) Money::decimal((string) $line->net_line_total)->toScale(2, RoundingMode::HALF_UP),
+                'revenue' => $lineRevenue === null ? null : (string) $lineRevenue->toScale(2, RoundingMode::HALF_UP),
+                'cost' => $lineCost === null ? null : (string) $lineCost->toScale(2, RoundingMode::HALF_UP),
+            ];
         }
 
         $refunds = BigDecimal::zero();
@@ -156,6 +173,7 @@ final class OrderContribution
             cost: (string) $cost->toScale(2, RoundingMode::HALF_UP),
             contribution: (string) $contribution->toScale(2, RoundingMode::HALF_UP),
             missing: $missing,
+            lines: $lines,
         );
     }
 }
