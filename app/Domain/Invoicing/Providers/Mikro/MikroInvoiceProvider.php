@@ -15,6 +15,7 @@ use App\Domain\Invoicing\Support\IssueOutcome;
 use App\Domain\Invoicing\Support\ReturnDraft;
 use App\Domain\Invoicing\Support\SubmitOptions;
 use App\Domain\Sync\Enums\ErrorClass;
+use Carbon\CarbonImmutable;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Http\Client\Response;
@@ -218,7 +219,7 @@ final class MikroInvoiceProvider implements InvoiceProvider
     /** Belge: MD5("Gününtarihi Boşluk Şifre"), ör. MD5("2023-03-09 123asd"); İstanbul saatiyle. */
     public static function hashPassword(string $password, ?DateTimeImmutable $now = null): string
     {
-        $today = ($now ?? \Carbon\CarbonImmutable::now()->toDateTimeImmutable())->setTimezone(new DateTimeZone(self::TIMEZONE))->format('Y-m-d');
+        $today = ($now ?? CarbonImmutable::now()->toDateTimeImmutable())->setTimezone(new DateTimeZone(self::TIMEZONE))->format('Y-m-d');
 
         return md5($today.' '.$password);
     }
