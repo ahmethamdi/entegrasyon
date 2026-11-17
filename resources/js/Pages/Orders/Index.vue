@@ -209,28 +209,28 @@ function rowTone(row) {
             <!-- toplu işlem şeridi -->
             <div
                 v-if="selected.length && can('orders.work')"
-                class="flex flex-wrap items-center gap-2 bg-stone-900 px-4 py-2 text-white"
+                class="flex flex-wrap items-center gap-2 border-b border-brand-200 bg-brand-50 px-4 py-2 text-stone-900"
                 role="region"
                 :aria-label="t('Toplu işlem')"
             >
                 <strong class="text-sm">{{ t(':count sipariş seçildi', { count: selected.length }) }}</strong>
-                <span class="text-sm text-stone-300">· {{ selectedTotal }}</span>
+                <span class="text-sm text-stone-600">· {{ selectedTotal }}</span>
                 <span class="flex-1" />
                 <button
                     v-for="([action, label], index) in bulkActions"
                     :key="action"
                     type="button"
                     class="h-8 rounded-lg px-3 text-sm transition disabled:opacity-50"
-                    :class="index === 0 ? 'bg-brand-600 font-semibold text-white hover:bg-brand-500' : 'border border-stone-600 text-white hover:bg-stone-800'"
+                    :class="index === 0 ? 'bg-brand-600 font-semibold text-white hover:bg-brand-700' : 'border border-stone-300 bg-white text-stone-800 hover:bg-stone-100'"
                     :disabled="bulk.processing"
                     @click="runBulk(action)"
                 >
                     {{ t(label) }}
                 </button>
-                <button type="button" class="h-8 rounded-lg px-2 text-sm text-stone-300 hover:text-white" @click="selected = []">
+                <button type="button" class="h-8 rounded-lg px-2 text-sm text-stone-600 hover:text-stone-900" @click="selected = []">
                     {{ t('Seçimi kaldır') }}
                 </button>
-                <p v-if="bulk.errors.bulk || bulk.errors.order_ids" class="w-full text-sm text-red-300">
+                <p v-if="bulk.errors.bulk || bulk.errors.order_ids" class="w-full text-sm text-red-700">
                     {{ bulk.errors.bulk ?? bulk.errors.order_ids }}
                 </p>
             </div>

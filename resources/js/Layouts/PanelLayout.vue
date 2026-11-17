@@ -340,6 +340,31 @@ const flyoutGroups = computed(() => navGroups.slice(1).filter((g) => visibleItem
 const openFlyout = ref(null);
 const rail = ref(null);
 
+/*
+ * DARALTILABİLİR MENÜ (17 Kas 2026 kullanıcı kararı: "açılır kapanır
+ * olsun, siyah olmasın"). Varsayılan TAM menü; daraltınca 60px'lik
+ * beyaz ikon ray. Tercih tarayıcıda saklanır (görünüm tercihi).
+ */
+const collapsed = ref(false);
+
+onMounted(() => {
+    try {
+        collapsed.value = window.localStorage.getItem('34p:menu-dar') === '1';
+    } catch {
+        collapsed.value = false;
+    }
+});
+
+function toggleCollapsed() {
+    collapsed.value = !collapsed.value;
+    openFlyout.value = null;
+    try {
+        window.localStorage.setItem('34p:menu-dar', collapsed.value ? '1' : '0');
+    } catch {
+        /* Gizli pencere: tercih yalnız bu sayfada geçerli. */
+    }
+}
+
 function toggleFlyout(key) {
     openFlyout.value = openFlyout.value === key ? null : key;
 }
@@ -402,8 +427,8 @@ function logout() {
         -->
         <aside
             id="panel-sidebar"
-            class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-stone-200 bg-white transition-transform duration-200 ease-out lg:hidden"
-            :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
+            class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-stone-200 bg-white transition-transform duration-200 ease-out"
+            :class="[mobileMenuOpen ? 'translate-x-0' : '-translate-x-full', collapsed ? 'lg:hidden' : 'lg:z-40 lg:translate-x-0']"
         >
             <div class="flex items-start justify-between gap-2 border-b border-stone-200 px-5 py-4">
                 <div class="min-w-0">
@@ -423,6 +448,18 @@ function logout() {
                         {{ tenantName }}
                     </p>
                 </div>
+
+                <button
+                    type="button"
+                    class="-mr-1 hidden shrink-0 rounded-lg p-1.5 text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:block"
+                    :aria-label="t('Menüyü daralt')"
+                    :title="t('Menüyü daralt')"
+                    @click="toggleCollapsed"
+                >
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 3v18 M16 10l-2 2 2 2" />
+                    </svg>
+                </button>
 
                 <!--
                     Çekmeceyi kapatan düğme — yalnızca dar ekranda. Örtüye
@@ -573,14 +610,14 @@ function logout() {
             açılır panel. Etiket fareyle/klavyeyle odakta görünür; ikonun
             yanında her zaman `aria-label` vardır (ekran okuyucu etiketi okur).
         -->
-        <div ref="rail" class="hidden lg:block">
+        <div v-if="collapsed" ref="rail" class="hidden lg:block">
             <nav
-                class="fixed inset-y-0 left-0 z-40 flex w-[60px] flex-col items-center gap-1 bg-stone-900 py-3"
+                class="fixed inset-y-0 left-0 z-40 flex w-[60px] flex-col items-center gap-1 border-r border-stone-200 bg-white py-3"
                 :aria-label="t('Ana menü')"
             >
                 <Link
                     href="/panel"
-                    class="mb-3 flex size-9 items-center justify-center rounded-[10px] bg-brand-600 text-sm font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    class="mb-3 flex size-9 items-center justify-center rounded-[10px] bg-brand-600 text-sm font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                     :aria-label="t('Ana sayfa')"
                 >34</Link>
 
@@ -590,8 +627,8 @@ function logout() {
                     :href="item.href"
                     :aria-label="t(item.label)"
                     :aria-current="isActive(item.href) ? 'page' : undefined"
-                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                    :class="isActive(item.href) ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-white'"
+                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    :class="isActive(item.href) ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'"
                 >
                     <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path :d="item.icon" />
@@ -605,7 +642,7 @@ function logout() {
                     <span class="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 text-xs font-medium text-white group-hover:block group-focus-visible:block" aria-hidden="true">{{ t(item.label) }}</span>
                 </Link>
 
-                <span class="my-2 h-px w-8 bg-stone-700" aria-hidden="true" />
+                <span class="my-2 h-px w-8 bg-stone-200" aria-hidden="true" />
 
                 <button
                     v-for="group in flyoutGroups"
@@ -614,8 +651,8 @@ function logout() {
                     :aria-label="t(group.heading)"
                     :aria-expanded="openFlyout === group.heading"
                     aria-controls="panel-flyout"
-                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                    :class="openFlyout === group.heading || groupActive(group) ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-white'"
+                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    :class="openFlyout === group.heading || groupActive(group) ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'"
                     @click="toggleFlyout(group.heading)"
                 >
                     <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -628,11 +665,23 @@ function logout() {
 
                 <button
                     type="button"
+                    :aria-label="t('Menüyü genişlet')"
+                    :title="t('Menüyü genişlet')"
+                    class="flex size-11 items-center justify-center rounded-[10px] text-stone-500 transition hover:bg-stone-100 hover:text-stone-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    @click="toggleCollapsed"
+                >
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M3 5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 3v18 M14 10l2 2-2 2" />
+                    </svg>
+                </button>
+
+                <button
+                    type="button"
                     :aria-label="t('Hesap')"
                     :aria-expanded="openFlyout === 'account'"
                     aria-controls="panel-flyout"
-                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-                    :class="openFlyout === 'account' || accountNav.some((i) => isActive(i.href)) ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-white'"
+                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    :class="openFlyout === 'account' || accountNav.some((i) => isActive(i.href)) ? 'bg-stone-100 text-stone-900' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'"
                     @click="toggleFlyout('account')"
                 >
                     <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -645,7 +694,7 @@ function logout() {
             <div
                 v-if="openFlyout"
                 id="panel-flyout"
-                class="fixed inset-y-0 left-[60px] z-40 flex w-64 flex-col border-r border-stone-200 bg-white"
+                class="fixed inset-y-0 left-[60px] z-40 flex w-64 flex-col border-r border-stone-200 bg-white shadow-[8px_0_24px_-12px_rgba(28,25,23,0.12)]"
             >
                 <template v-for="group in flyoutGroups" :key="group.heading">
                     <div v-if="openFlyout === group.heading" class="flex-1 overflow-y-auto px-3 py-4">
@@ -717,7 +766,7 @@ function logout() {
             </div>
         </div>
 
-        <div class="lg:pl-[60px]">
+        <div :class="collapsed ? 'lg:pl-[60px]' : 'lg:pl-64'">
             <!-- Dar ekranda çekmeceyi açan başlık. `lg` ve üstünde YOKTUR. -->
             <header
                 class="sticky top-0 z-30 flex items-center gap-3 border-b border-stone-200 bg-white px-4 py-3 lg:hidden"

@@ -2225,5 +2225,7 @@
     "Kargo / takip": "Carrier / tracking",
     "+:count kalem": "+:count items",
     ":count sipariş gösteriliyor (en yeni 50)": "Showing :count orders (latest 50)",
-    "Görünen toplam": "Visible total"
+    "Görünen toplam": "Visible total",
+    "Menüyü daralt": "Collapse menu",
+    "Menüyü genişlet": "Expand menu"
 }
