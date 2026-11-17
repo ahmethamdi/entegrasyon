@@ -86,6 +86,8 @@ const navGroups = [
             { href: '/campaigns', label: k('Kampanyalar'), perm: 'catalog.view' },
             // Satıcının kendi kargo sözleşmesi; acil kapatma anahtarıyla gizlenir.
             { href: '/settings/shipping', label: k('Kargo'), feature: 'carrierShipping', perm: 'settings.view' },
+            // Satıcının kendi Netgsm hesabıyla bildirim SMS'leri.
+            { href: '/settings/sms', label: k('SMS bildirimleri'), feature: 'sms', perm: 'settings.view' },
         ],
     },
     {

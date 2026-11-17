@@ -42,6 +42,7 @@ final class TenantScopeContractTest extends TestCase
     private const UNSCOPED_TABLES = [
         'tenant_users' => 'üyelik tablosu; kiracı seçiminden ÖNCE okunur (EstablishTenantContext), kapsam yapılamaz',
         'alert_deliveries' => 'sistem işi (alerts:dispatch) bütün kiracılar için yazar; satıcıya hiçbir ekranda dönmez',
+        'sms_event_keys' => 'SMS tekrar çıpası; yalnız SendSms/RunSmsNotifications yazar/okur ve her sorgu tenant_id ile AÇIKÇA süzülür; satıcıya hiçbir ekranda dönmez',
         'api_calls' => 'kanal HTTP günlüğü, ChannelHttpClient sistem olarak yazar; okuma yalnız admin/metrik',
         'price_campaign_variants' => 'ara tablo; yalnız kapsamlı PriceCampaign kimliğiyle okunur (ActiveCampaigns, PushCampaignPrices)',
         'price_campaign_connections' => 'ara tablo; yalnız kapsamlı PriceCampaign kimliğiyle okunur',

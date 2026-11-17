@@ -1,0 +1,1 @@
+{"count":2,"senders":[{"name":"TESTHEADER","type":"ALPHANUMERIC","brandCode":0,"usable":true,"reason":null},{"name":"8500000000","type":"SUBSCRIBER_NUMBER","brandCode":0,"usable":false,"reason":"SUBSCRIBER_NUMBER_RESTRICTED"}]}

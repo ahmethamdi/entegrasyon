@@ -227,6 +227,14 @@ Schedule::command('shipping:track')
     ->onOneServer()
     ->withoutOverlapping();
 
+// SMS bildirimleri — satıcının kendi Netgsm hesabıyla (yeni sipariş, stok
+// tükendi, kanal sorunu; Shopify/Woo alıcısına kargo). Tarama yalnız okur;
+// olay anahtarı ikinci SMS'i engeller. Acil kapatma: SMS_ENABLED=false.
+Schedule::command('sms:notify')
+    ->everyMinute()
+    ->onOneServer()
+    ->withoutOverlapping();
+
 // A12 · EŞLEŞMEMİŞ SİPARİŞ SATIRLARI — SKU sonradan kataloğa girince stok
 // düşülür. Zamanlanmazsa satır sonsuza kadar PENDING kalır, bakiye satılmış
 // adet kadar fazla görünür ve kanallara FAZLA STOK gider.

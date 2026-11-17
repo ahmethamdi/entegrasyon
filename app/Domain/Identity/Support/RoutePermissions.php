@@ -155,6 +155,7 @@ final class RoutePermissions
         // Ayarlar (fatura, kargo hesabı).
         'settings.invoicing' => P::SETTINGS_VIEW,
         'settings.shipping' => P::SETTINGS_VIEW,
+        'settings.sms' => P::SETTINGS_VIEW,
         'settings.invoicing.update' => P::SETTINGS_MANAGE,
         'settings.invoicing.destroy' => P::SETTINGS_MANAGE,
         'settings.invoicing.parasut.authorize' => P::SETTINGS_MANAGE,
@@ -163,6 +164,10 @@ final class RoutePermissions
         'settings.invoicing.parasut.callback' => P::SETTINGS_MANAGE,
         'settings.shipping.store' => P::SETTINGS_MANAGE,
         'settings.shipping.destroy' => P::SETTINGS_MANAGE,
+        'settings.sms.connect' => P::SETTINGS_MANAGE,
+        'settings.sms.update' => P::SETTINGS_MANAGE,
+        'settings.sms.test' => P::SETTINGS_MANAGE,
+        'settings.sms.destroy' => P::SETTINGS_MANAGE,
 
         // Abonelik — yalnız sahip.
         'billing.index' => P::BILLING_MANAGE,

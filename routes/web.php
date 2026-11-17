@@ -49,6 +49,7 @@ use App\Http\Controllers\ShippingSettingsController;
 use App\Http\Controllers\ShopifyInstallController;
 use App\Http\Controllers\ShopifyOAuthController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\SmsSettingsController;
 use App\Http\Controllers\SupplierSourceController;
 use App\Http\Controllers\SyncFailureController;
 use App\Http\Controllers\TeamController;
@@ -56,6 +57,7 @@ use App\Http\Controllers\TenantSwitchController;
 use App\Http\Controllers\VariantCostController;
 use App\Http\Controllers\WooAuthController;
 use App\Http\Middleware\EnsureCarrierShippingEnabled;
+use App\Http\Middleware\EnsureSmsEnabled;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Route;
 
@@ -487,6 +489,20 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
         ->name('settings.invoicing.parasut.authorize');
     Route::get('/settings/invoicing/parasut/callback', [InvoiceSettingsController::class, 'callback'])
         ->name('settings.invoicing.parasut.callback');
+
+    // SMS bildirimleri — satıcının kendi Netgsm hesabı. Acil kapatma:
+    // SMS_ENABLED=false → hepsi 404 (zamanlanmış tarama da durur).
+    Route::middleware(EnsureSmsEnabled::class)->group(function (): void {
+        Route::get('/settings/sms', [SmsSettingsController::class, 'index'])->name('settings.sms');
+        Route::post('/settings/sms', [SmsSettingsController::class, 'connect'])
+            ->middleware('throttle:10,1')
+            ->name('settings.sms.connect');
+        Route::put('/settings/sms', [SmsSettingsController::class, 'update'])->name('settings.sms.update');
+        Route::post('/settings/sms/test', [SmsSettingsController::class, 'test'])
+            ->middleware('throttle:5,1')
+            ->name('settings.sms.test');
+        Route::delete('/settings/sms', [SmsSettingsController::class, 'destroy'])->name('settings.sms.destroy');
+    });
 
     // Kâr paneli B — kanal kesinti varsayılanları (komisyon/kargo/paketleme).
     Route::get('/settings/charge-rules', [ChargeRuleController::class, 'index'])->name('settings.charge-rules');

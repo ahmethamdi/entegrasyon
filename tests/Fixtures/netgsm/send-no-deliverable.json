@@ -1,0 +1,1 @@
+{"code":"NO_DELIVERABLE_MESSAGES","message":"all 1 messages rejected","requestId":"1d7ccb0288e2495ea899b92d44d752a7","timestamp":"2026-11-17T12:19:07.686851756+03:00","violations":null,"rejectedItems":[{"index":0,"recipient":"9012","reason":"INVALID_RECIPIENT"}],"rejectedItemsTruncated":false}

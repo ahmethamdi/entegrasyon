@@ -121,6 +121,7 @@ class HandleInertiaRequests extends Middleware
             // Açılıp kapanabilen modüller (acil kapatma anahtarları).
             'features' => [
                 'carrierShipping' => (bool) config('shipping.enabled'),
+                'sms' => (bool) config('sms.enabled'),
             ],
 
             // Tek seferlik bildirimler. `warning` sessiz başarısızlığın

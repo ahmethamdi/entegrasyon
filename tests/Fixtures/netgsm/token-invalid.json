@@ -1,0 +1,1 @@
+{"type":"urn:problem-type:identity:invalid-credentials","title":"Kimlik doğrulanamadı","status":401,"detail":"Kullanıcı adı veya şifre hatalı.","instance":"/auth/v3/token","code":"invalid_credentials","error":"invalid_grant","error_description":"Username or password is incorrect.","request_id":"499251c1-f31f-47cb-9d3d-2b998580c2e5"}
