@@ -108,6 +108,32 @@ final class OrderScreenTest extends TestCase
     }
 
     /**
+     * ERP liste sütunları (17 Kas 2026): ilk kalemin adı, son kargonun takip
+     * numarası, satış faturasının durumu ve "kargo bekleyen" sekme sayacı.
+     */
+    #[Test]
+    public function list_carries_product_summary_tracking_and_invoice_status(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+
+        $this->placeOrder($tenant, $warehouseId, sku: 'KHV-1', onHand: 10, quantity: 1, externalNumber: 'WC-700');
+        $order = $this->asTenant($tenant, fn () => Order::query()->sole());
+        $this->asTenant($tenant, fn () => DB::table('fulfillments')->insert([
+            'id' => (string) new UuidV7, 'tenant_id' => $tenant->id, 'order_id' => $order->id,
+            'carrier' => 'Yurtiçi Kargo', 'tracking_number' => 'YK123', 'status' => 'shipped',
+            'source' => 'panel', 'created_at' => now(), 'updated_at' => now(),
+        ]));
+
+        $response = $this->actingAs($user)->get('/orders');
+        $rows = $this->rows($response);
+
+        $this->assertSame('KHV-1 ürünü', $rows[0]['firstTitle']);
+        $this->assertSame(['carrier' => 'Yurtiçi Kargo', 'number' => 'YK123'], $rows[0]['tracking']);
+        $this->assertNull($rows[0]['invoiceStatus'], 'Fatura kesilmemiş.');
+        $this->assertArrayHasKey('awaitingCount', $this->summary($response));
+    }
+
+    /**
      * INERTIA'YA MODEL GÖNDERİLMEZ.
      *
      * `customer_ref` maskelenmiş olsa bile ekranın işi değil; bağlantı

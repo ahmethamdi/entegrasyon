@@ -2217,5 +2217,13 @@
     "Netgsm test ortamı mesajı kabul etti (test ortamında gerçek SMS gitmez).": "The Netgsm test environment accepted the message (no real SMS is sent in the test environment).",
     "Deneme SMS'i gönderildi.": "Test SMS sent.",
     "Deneme SMS'i gönderilemedi.": "The test SMS could not be sent.",
-    "Netgsm hesabı kaldırıldı; SMS gönderimi durdu.": "Netgsm account removed; SMS sending stopped."
+    "Netgsm hesabı kaldırıldı; SMS gönderimi durdu.": "Netgsm account removed; SMS sending stopped.",
+    "Kesildi": "Issued",
+    "Yoğunluk: Sıkı": "Density: Compact",
+    "Yoğunluk: Rahat": "Density: Comfortable",
+    "Seçimi kaldır": "Clear selection",
+    "Kargo / takip": "Carrier / tracking",
+    "+:count kalem": "+:count items",
+    ":count sipariş gösteriliyor (en yeni 50)": "Showing :count orders (latest 50)",
+    "Görünen toplam": "Visible total"
 }

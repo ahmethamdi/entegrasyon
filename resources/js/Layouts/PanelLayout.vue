@@ -4,6 +4,15 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { k, switchLocale, useI18n } from '../lib/i18n';
 
+const props = defineProps({
+    /*
+     * Geniş içerik (ERP liste görünümü, 17 Kas 2026 kullanıcı kararı):
+     * yoğun tablolar (Siparişler, Ürünler) ekranın tamamını kullanır;
+     * diğer ekranlar okunaklı genişlikte (max-w-6xl) kalır.
+     */
+    wide: { type: Boolean, default: false },
+});
+
 const page = usePage();
 const { t, locale } = useI18n();
 
@@ -49,6 +58,10 @@ const ICONS = {
     channels: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1 M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
     returns: 'M9 14L4 9l5-5 M4 9h11a5 5 0 0 1 0 10h-3',
     questions: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z',
+    catalog: 'M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z M7.5 7.5h.01',
+    finance: 'M4 19V9 M10 19V5 M16 19v-7 M22 19H2',
+    advanced: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',
+    account: 'M20 21a8 8 0 0 0-16 0 M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z',
 };
 
 /*
@@ -78,6 +91,7 @@ const navGroups = [
     },
     {
         heading: k('Katalog'),
+        icon: ICONS.catalog,
         items: [
             { href: '/suppliers', label: k('Tedarikçi XML'), perm: 'catalog.view' },
             // Onaylar günlük işe yakın: Trendyol'un red sebebi burada.
@@ -92,6 +106,7 @@ const navGroups = [
     },
     {
         heading: k('Finans'),
+        icon: ICONS.finance,
         items: [
             // Mutabakat: kanaldaki fiyat/stok bizimkiyle aynı mı.
             { href: '/reconciliation', label: k('Fiyat ve stok kontrolü'), perm: 'catalog.view' },
@@ -111,6 +126,7 @@ const navGroups = [
          * oraya bağlantı verir.
          */
         heading: k('Gelişmiş'),
+        icon: ICONS.advanced,
         collapsible: true,
         items: [
             { href: '/mappings', label: k('Kategori eşleştirme'), perm: 'catalog.view' },
@@ -194,6 +210,10 @@ watch(mobileMenuOpen, (open) => {
 function onKeydown(event) {
     if (event.key === 'Escape' && mobileMenuOpen.value) {
         mobileMenuOpen.value = false;
+    }
+
+    if (event.key === 'Escape' && openFlyout.value) {
+        openFlyout.value = null;
     }
 }
 
@@ -306,6 +326,41 @@ const doneCount = computed(() => steps.value.filter((s) => s.isDone).length);
 /* Sıradaki adım — şeridin çağrı düğmesi ondan gelir. */
 const nextStep = computed(() => steps.value.find((s) => s.isNext) ?? null);
 
+/*
+ * MASAÜSTÜ İKON RAYI (ERP görünümü, 17 Kas 2026 kullanıcı kararı).
+ *
+ * Günlük ekranlar tek tık ikondur; seyrek gruplar (Katalog, Finans,
+ * Gelişmiş, Hesap) ikonla AÇILIR PANEL olarak gelir. Panel gezinmede,
+ * ESC'de ve dışarı tıklanınca kapanır. Telefon çekmecesi ve alt menü
+ * DEĞİŞMEDİ: dar ekranda 60px'lik ray içerikten yer çalardı.
+ */
+const visibleItems = (group) => group.items.filter((i) => (!i.feature || page.props.features?.[i.feature]) && allowed(i));
+const dailyGroup = computed(() => navGroups[0]);
+const flyoutGroups = computed(() => navGroups.slice(1).filter((g) => visibleItems(g).length > 0));
+const openFlyout = ref(null);
+const rail = ref(null);
+
+function toggleFlyout(key) {
+    openFlyout.value = openFlyout.value === key ? null : key;
+}
+
+function groupActive(group) {
+    return visibleItems(group).some((i) => i.href && isActive(i.href));
+}
+
+function onDocumentClick(event) {
+    if (openFlyout.value && rail.value && !rail.value.contains(event.target)) {
+        openFlyout.value = null;
+    }
+}
+
+watch(currentPath, () => {
+    openFlyout.value = null;
+});
+
+onMounted(() => document.addEventListener('click', onDocumentClick));
+onBeforeUnmount(() => document.removeEventListener('click', onDocumentClick));
+
 function isActive(href) {
     return href === '/panel' ? currentPath.value === '/panel' : currentPath.value.startsWith(href);
 }
@@ -347,7 +402,7 @@ function logout() {
         -->
         <aside
             id="panel-sidebar"
-            class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-stone-200 bg-white transition-transform duration-200 ease-out lg:z-40 lg:translate-x-0"
+            class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-stone-200 bg-white transition-transform duration-200 ease-out lg:hidden"
             :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'"
         >
             <div class="flex items-start justify-between gap-2 border-b border-stone-200 px-5 py-4">
@@ -512,7 +567,157 @@ function logout() {
             </div>
         </aside>
 
-        <div class="lg:pl-64">
+
+        <!--
+            MASAÜSTÜ İKON RAYI — 60px, koyu. Günlük ekranlar tek tık; gruplar
+            açılır panel. Etiket fareyle/klavyeyle odakta görünür; ikonun
+            yanında her zaman `aria-label` vardır (ekran okuyucu etiketi okur).
+        -->
+        <div ref="rail" class="hidden lg:block">
+            <nav
+                class="fixed inset-y-0 left-0 z-40 flex w-[60px] flex-col items-center gap-1 bg-stone-900 py-3"
+                :aria-label="t('Ana menü')"
+            >
+                <Link
+                    href="/panel"
+                    class="mb-3 flex size-9 items-center justify-center rounded-[10px] bg-brand-600 text-sm font-extrabold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    :aria-label="t('Ana sayfa')"
+                >34</Link>
+
+                <Link
+                    v-for="item in visibleItems(dailyGroup)"
+                    :key="item.href"
+                    :href="item.href"
+                    :aria-label="t(item.label)"
+                    :aria-current="isActive(item.href) ? 'page' : undefined"
+                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    :class="isActive(item.href) ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-white'"
+                >
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path :d="item.icon" />
+                    </svg>
+                    <span
+                        v-if="badgeCount(item) > 0"
+                        class="absolute -right-0.5 -top-0.5 min-w-[18px] rounded-full px-1 text-center text-[10px] font-bold leading-[18px] tabular-nums"
+                        :class="item.badge === 'brand' ? 'bg-brand-600 text-white' : 'bg-stone-600 text-white'"
+                        aria-hidden="true"
+                    >{{ badgeCount(item) > 99 ? '99+' : badgeCount(item) }}</span>
+                    <span class="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 text-xs font-medium text-white group-hover:block group-focus-visible:block" aria-hidden="true">{{ t(item.label) }}</span>
+                </Link>
+
+                <span class="my-2 h-px w-8 bg-stone-700" aria-hidden="true" />
+
+                <button
+                    v-for="group in flyoutGroups"
+                    :key="group.heading"
+                    type="button"
+                    :aria-label="t(group.heading)"
+                    :aria-expanded="openFlyout === group.heading"
+                    aria-controls="panel-flyout"
+                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    :class="openFlyout === group.heading || groupActive(group) ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-white'"
+                    @click="toggleFlyout(group.heading)"
+                >
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path :d="group.icon" />
+                    </svg>
+                    <span v-if="openFlyout !== group.heading" class="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-md bg-stone-900 px-2 py-1 text-xs font-medium text-white group-hover:block group-focus-visible:block" aria-hidden="true">{{ t(group.heading) }}</span>
+                </button>
+
+                <span class="flex-1" />
+
+                <button
+                    type="button"
+                    :aria-label="t('Hesap')"
+                    :aria-expanded="openFlyout === 'account'"
+                    aria-controls="panel-flyout"
+                    class="group relative flex size-11 items-center justify-center rounded-[10px] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    :class="openFlyout === 'account' || accountNav.some((i) => isActive(i.href)) ? 'bg-stone-700 text-white' : 'text-stone-400 hover:bg-stone-800 hover:text-white'"
+                    @click="toggleFlyout('account')"
+                >
+                    <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path :d="ICONS.account" />
+                    </svg>
+                </button>
+            </nav>
+
+            <!-- Açılır panel: grubun ekranları ya da hesap öğeleri. -->
+            <div
+                v-if="openFlyout"
+                id="panel-flyout"
+                class="fixed inset-y-0 left-[60px] z-40 flex w-64 flex-col border-r border-stone-200 bg-white"
+            >
+                <template v-for="group in flyoutGroups" :key="group.heading">
+                    <div v-if="openFlyout === group.heading" class="flex-1 overflow-y-auto px-3 py-4">
+                        <p class="px-2.5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-stone-600">{{ t(group.heading) }}</p>
+                        <ul class="space-y-0.5">
+                            <li v-for="item in visibleItems(group)" :key="item.href">
+                                <Link
+                                    :href="item.href"
+                                    :aria-current="isActive(item.href) ? 'page' : undefined"
+                                    class="flex items-center rounded-lg px-2.5 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                                    :class="isActive(item.href) ? 'bg-stone-100 font-semibold text-stone-900' : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900'"
+                                >
+                                    {{ t(item.label) }}
+                                </Link>
+                            </li>
+                        </ul>
+                    </div>
+                </template>
+
+                <div v-if="openFlyout === 'account'" class="flex flex-1 flex-col px-3 py-4">
+                    <div class="px-2.5 pb-3">
+                        <BrandMark size="md" />
+                        <select
+                            v-if="memberships.length > 1"
+                            :value="page.props.tenant?.id"
+                            :aria-label="t('Firma')"
+                            class="mt-1 w-full truncate rounded-[14px] border border-stone-200 bg-white px-1.5 py-0.5 text-xs font-medium text-stone-600"
+                            @change="switchTenant"
+                        >
+                            <option v-for="m in memberships" :key="m.id" :value="m.id">{{ m.name }}</option>
+                        </select>
+                        <p v-else class="mt-0.5 truncate text-xs font-medium text-stone-500">{{ tenantName }}</p>
+                    </div>
+                    <ul class="space-y-0.5 border-t border-stone-200 pt-2">
+                        <li v-for="item in accountNav" :key="item.href">
+                            <Link
+                                :href="item.href"
+                                :aria-current="isActive(item.href) ? 'page' : undefined"
+                                class="flex items-center rounded-lg px-2.5 py-2 text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                                :class="isActive(item.href) ? 'bg-stone-100 font-semibold text-stone-900' : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900'"
+                            >
+                                {{ t(item.label) }}
+                            </Link>
+                        </li>
+                    </ul>
+                    <div v-if="page.props.localeSwitch" class="mt-2 flex items-center gap-1 px-2.5 py-1.5" role="group" :aria-label="t('Panel dili')">
+                        <button
+                            v-for="option in languages"
+                            :key="option.code"
+                            type="button"
+                            class="rounded px-2 py-0.5 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                            :class="locale() === option.code ? 'bg-stone-900 text-white' : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'"
+                            :aria-pressed="locale() === option.code"
+                            :lang="option.code"
+                            @click="locale() !== option.code && switchLocale(option.code)"
+                        >
+                            {{ option.label }}
+                        </button>
+                    </div>
+                    <span class="flex-1" />
+                    <button
+                        type="button"
+                        class="w-full rounded px-2.5 py-2 text-left text-sm text-stone-500 transition hover:bg-stone-100 hover:text-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                        @click="logout"
+                    >
+                        {{ t('Çıkış') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:pl-[60px]">
             <!-- Dar ekranda çekmeceyi açan başlık. `lg` ve üstünde YOKTUR. -->
             <header
                 class="sticky top-0 z-30 flex items-center gap-3 border-b border-stone-200 bg-white px-4 py-3 lg:hidden"
@@ -553,7 +758,7 @@ function logout() {
                 class="border-b border-amber-200 bg-amber-50"
                 :aria-label="t('Kurulum adımları')"
             >
-                <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-10" :class="onboardingCollapsed ? 'py-3' : 'py-5'">
+                <div class="mx-auto px-4 sm:px-6" :class="[onboardingCollapsed ? 'py-3' : 'py-5', props.wide ? 'max-w-none lg:px-6' : 'max-w-6xl lg:px-10']">
                     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                         <h2 class="text-sm font-semibold text-amber-900">
                             {{ t('Kurulumu tamamla') }}
@@ -654,7 +859,12 @@ function logout() {
             </div>
 
             <!-- Alt menü yüksekliği kadar boşluk: son satır menünün altında kalmasın. -->
-            <main id="main" tabindex="-1" class="mx-auto max-w-6xl px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-8">
+            <main
+                id="main"
+                tabindex="-1"
+                class="mx-auto px-4 pb-28 pt-6 sm:px-6 lg:pb-12"
+                :class="props.wide ? 'max-w-none lg:px-6 lg:pt-5' : 'max-w-6xl lg:px-10 lg:pt-8'"
+            >
                 <slot />
             </main>
 

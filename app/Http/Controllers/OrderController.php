@@ -74,6 +74,8 @@ final class OrderController extends Controller
             // satırlık listede 50 ek sorgu olurdu (lazy loading kapalı,
             // istisna fırlatır — bu ekran her gün açılıyor).
             ->with('connection:id,channel_type_code,label')
+            // Fatura sütunu (ERP liste görünümü): satış faturasının durumu.
+            ->with('invoice:id,order_id,kind,status')
             // Kargo durumu rozeti için: kanal durumu henüz "processing"
             // derken panelden kargo girilmiş olabilir.
             ->withCount('fulfillments')
@@ -85,10 +87,14 @@ final class OrderController extends Controller
             ->get();
 
         $lineStats = $this->lineStatsFor($orders->pluck('id')->all());
+        $tracking = $this->trackingFor($orders->pluck('id')->all());
 
         return Inertia::render('Orders/Index', [
             'rows' => $orders->map(
-                fn (Order $order): array => $this->presentRow($order, $lineStats),
+                fn (Order $order): array => $this->presentRow($order, $lineStats) + [
+                    'tracking' => $tracking[$order->id] ?? null,
+                    'invoiceStatus' => $order->invoice?->status,
+                ],
             )->all(),
             'summary' => $this->summary(),
             'filters' => ['filter' => $filter, 'search' => $search],
@@ -641,7 +647,7 @@ final class OrderController extends Controller
      * köşesinden delinir.
      *
      * @param  list<string>  $orderIds
-     * @return array<string, array{lines: int, items: int, oversold: int, unmatched: int}>
+     * @return array<string, array{lines: int, items: int, oversold: int, unmatched: int, firstTitle?: string|null}>
      */
     private function lineStatsFor(array $orderIds): array
     {
@@ -658,6 +664,8 @@ final class OrderController extends Controller
             ->selectRaw('coalesce(sum(quantity), 0) AS item_count')
             ->selectRaw("count(*) FILTER (WHERE stock_status = 'OVERSOLD') AS oversold")
             ->selectRaw('count(*) FILTER (WHERE variant_id IS NULL) AS unmatched')
+            // Listede "Ürünler" sütunu: ilk kalemin adı + kaç kalem daha.
+            ->selectRaw('(array_agg(title ORDER BY created_at))[1] AS first_title')
             ->get();
 
         $stats = [];
@@ -668,10 +676,39 @@ final class OrderController extends Controller
                 'items' => (int) $row->item_count,
                 'oversold' => (int) $row->oversold,
                 'unmatched' => (int) $row->unmatched,
+                'firstTitle' => $row->first_title !== null ? (string) $row->first_title : null,
             ];
         }
 
         return $stats;
+    }
+
+    /**
+     * Sipariş başına SON kargonun firma + takip numarası — TEK sorgu.
+     * Kiracı filtresi `lineStatsFor` ile aynı gerekçeyle açıkça yazılır.
+     *
+     * @param  list<string>  $orderIds
+     * @return array<string, array{carrier: string|null, number: string}>
+     */
+    private function trackingFor(array $orderIds): array
+    {
+        if ($orderIds === []) {
+            return [];
+        }
+
+        $tracking = [];
+
+        DB::table('fulfillments')
+            ->whereIn('order_id', $orderIds)
+            ->where('tenant_id', TenantContext::idOrFail())
+            ->whereNotNull('tracking_number')
+            ->orderBy('created_at')
+            ->get(['order_id', 'carrier', 'tracking_number'])
+            ->each(function (object $row) use (&$tracking): void {
+                $tracking[$row->order_id] = ['carrier' => $row->carrier, 'number' => (string) $row->tracking_number];
+            });
+
+        return $tracking;
     }
 
     /**
@@ -713,6 +750,8 @@ final class OrderController extends Controller
 
         return [
             'orderCount' => (int) ($row?->order_count ?? 0),
+            // Sekme sayacı: listedeki filtreyle AYNI tanım (`awaitingShipment`).
+            'awaitingCount' => Order::query()->awaitingShipment()->count(),
             'oversoldOrderCount' => (int) ($row?->oversold_order_count ?? 0),
             'unmatchedOrderCount' => (int) ($row?->unmatched_order_count ?? 0),
         ];
@@ -721,7 +760,7 @@ final class OrderController extends Controller
     // ─────────────────────────────────────────────────── sunum
 
     /**
-     * @param  array<string, array{lines: int, items: int, oversold: int, unmatched: int}>  $lineStats
+     * @param  array<string, array{lines: int, items: int, oversold: int, unmatched: int, firstTitle?: string|null}>  $lineStats
      * @return array<string, mixed>
      */
     private function presentRow(Order $order, array $lineStats): array
@@ -743,6 +782,7 @@ final class OrderController extends Controller
             'hasShipment' => ($order->fulfillments_count ?? 0) > 0,
 
             'lineCount' => $stats['lines'],
+            'firstTitle' => $stats['firstTitle'] ?? null,
             'itemCount' => $stats['items'],
 
             // FAZLA SATIŞ GİZLENMEZ.
