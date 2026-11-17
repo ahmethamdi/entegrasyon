@@ -41,6 +41,7 @@ use App\Http\Controllers\PricingReportController;
 use App\Http\Controllers\ProductChannelController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\ProductImportController;
+use App\Http\Controllers\ProductInlineController;
 use App\Http\Controllers\ProfitReportController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\ReconciliationController;
@@ -409,6 +410,10 @@ Route::middleware(['auth', 'verified', 'tenant', 'tenant.can'])->group(function 
     // ledger'a yazar: fazla satışın "düzeltme yolu" (§17 · P0).
     Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory.index');
     Route::post('/inventory/adjust', [InventoryController::class, 'adjust'])->name('inventory.adjust');
+    // ERP liste görünümü: satır içi fiyat / alış / sayım — mevcut action'larla.
+    Route::post('/products/inline', [ProductInlineController::class, 'store'])
+        ->middleware('throttle:30,1')
+        ->name('products.inline');
 
     // Sipariş listesi (§13 · faz 1.6 · "panelde sipariş listesi ve fazla
     // satış uyarısı"). Salt okunur: sipariş kanaldan gelir ve panelden

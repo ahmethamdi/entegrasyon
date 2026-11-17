@@ -89,7 +89,7 @@ final class ProductController extends Controller
                 'imageUrl' => $images[$p->id] ?? null,
                 'channels' => $channels[$p->id] ?? [],
                 'groupKey' => $groups[$p->id] ?? null,
-                ...($counts[$p->id] ?? ['countVariantId' => null, 'countOnHand' => null]),
+                ...($counts[$p->id] ?? ['countVariantId' => null, 'countOnHand' => null, 'countCost' => null]),
             ])->all(),
             'filters' => ['search' => $search, 'filter' => $filter],
             'tabCounts' => $this->tabCounts($search),
@@ -505,7 +505,7 @@ final class ProductController extends Controller
      * depolu satıcıda yanlış farkı kaydettirirdi.
      *
      * @param  list<string>  $productIds
-     * @return array<string, array{countVariantId: string, countOnHand: int}>
+     * @return array<string, array{countVariantId: string, countOnHand: int, countCost: string|null}>
      */
     private function countTargetsFor(array $productIds, string $warehouseId): array
     {
@@ -523,7 +523,7 @@ final class ProductController extends Controller
             ->where('variants.kind', Variant::KIND_STANDARD)
             ->groupBy('variants.product_id')
             ->havingRaw('count(DISTINCT variants.id) = 1')
-            ->selectRaw('variants.product_id, min(variants.id::text) AS variant_id, coalesce(sum(inventory_levels.on_hand), 0) AS on_hand')
+            ->selectRaw('variants.product_id, min(variants.id::text) AS variant_id, coalesce(sum(inventory_levels.on_hand), 0) AS on_hand, min(variants.cost_price) AS cost_price')
             ->get();
 
         $targets = [];
@@ -532,6 +532,8 @@ final class ProductController extends Controller
             $targets[$row->product_id] = [
                 'countVariantId' => $row->variant_id,
                 'countOnHand' => (int) $row->on_hand,
+                // ERP liste görünümü: alış maliyeti satır içinde düzenlenir.
+                'countCost' => $row->cost_price !== null ? (string) $row->cost_price : null,
             ];
         }
 

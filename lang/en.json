@@ -2227,5 +2227,22 @@
     ":count sipariş gösteriliyor (en yeni 50)": "Showing :count orders (latest 50)",
     "Görünen toplam": "Visible total",
     "Menüyü daralt": "Collapse menu",
-    "Menüyü genişlet": "Expand menu"
+    "Menüyü genişlet": "Expand menu",
+    "Kaydedilmemiş değişiklikler": "Unsaved changes",
+    ":count hücre değişti": ":count cells changed",
+    "kaydedince stok ve fiyat gönderimi açık kanallara gider": "on save, stock and prices go to channels with sync enabled",
+    "Kaydet ve gönder": "Save and send",
+    "Stok kodu": "SKU",
+    "Alış": "Cost",
+    "Marj": "Margin",
+    "Rafta": "On shelf",
+    "Satılabilir": "Available",
+    ":sku satış fiyatı": ":sku sale price",
+    "gir": "enter",
+    "Rafta kaç adet var? (varsayılan depo)": "How many are on the shelf? (default warehouse)",
+    "stok gönderimi kapalı": "stock sync off",
+    ":total ürün": ":total products",
+    "Fiyat, alış ve rafta hücrelerine tıklayıp yazın; yalnız tek seçenekli ürünlerde.": "Click the price, cost and on-shelf cells to type; single-option products only.",
+    "Yalnız tek seçenekli ürünlerin fiyatı ve stoğu listeden düzenlenir; diğerlerini ürün ekranından düzenleyin.": "Only single-option products can be edited from the list; edit the others on the product screen.",
+    ":count değişiklik kaydedildi; fiyat ve stok bağlı kanallara gönderiliyor.": ":count changes saved; prices and stock are being sent to connected channels."
 }

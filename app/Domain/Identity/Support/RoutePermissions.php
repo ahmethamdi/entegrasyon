@@ -109,6 +109,7 @@ final class RoutePermissions
         'products.bulk-edit.store' => P::CATALOG_MANAGE,
         'products.bulk-edit.apply' => P::CATALOG_MANAGE,
         'inventory.adjust' => P::CATALOG_MANAGE,
+        'products.inline' => P::CATALOG_MANAGE,
         'suppliers.create' => P::CATALOG_MANAGE,
         'suppliers.store' => P::CATALOG_MANAGE,
         'suppliers.update' => P::CATALOG_MANAGE,

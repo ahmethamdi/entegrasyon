@@ -310,6 +310,57 @@ final class ProductStockScreenTest extends TestCase
     }
 
     /**
+     * SATIR İÇİ DÜZENLEME (ERP liste görünümü, 17 Kas 2026): fiyat, alış ve
+     * rafta sayım tek istekle; her biri ürün ekranının action'ından geçer
+     * (fiyat değişince fiyat olayı yazılır → kanala gider).
+     */
+    #[Test]
+    public function inline_edit_saves_price_cost_and_count_with_the_existing_actions(): void
+    {
+        [$tenant, $user, $warehouseId] = $this->makeTenant();
+        $variant = $this->stockedVariant($tenant, $warehouseId, sku: 'SATIR-1', onHand: 10, price: '100.00');
+
+        $row = $this->rows($this->actingAs($user)->get('/products'))[0];
+        $this->assertNull($row['countCost']);
+
+        $this->actingAs($user)->from('/products')->post('/products/inline', ['changes' => [
+            ['variant_id' => $variant->id, 'price' => 119.9, 'cost' => 60, 'stock' => 7],
+        ]])->assertRedirect('/products')->assertSessionHasNoErrors()->assertSessionHas('success');
+
+        $fresh = $this->asTenant($tenant, fn () => Variant::query()->findOrFail($variant->id));
+        $this->assertSame('119.90', (string) $fresh->price);
+        $this->assertSame('60.00', (string) $fresh->cost_price);
+        $this->assertSame(1, $this->asTenant($tenant, fn () => DB::table('outbox_events')
+            ->where('aggregate_id', $variant->id)->where('event_type', 'VariantPriceChanged')->count()), 'Fiyat olayı yazılmalı.');
+
+        $row = $this->rows($this->actingAs($user)->get('/products'))[0];
+        $this->assertSame(7, $row['available']);
+        $this->assertSame('60.00', $row['countCost']);
+        $this->assertLedgerMatchesProjection($tenant->id, $warehouseId, $variant->id);
+    }
+
+    /** Başka kiracının varyantı ve çok seçenekli ürün listeden düzenlenmez. */
+    #[Test]
+    public function inline_edit_refuses_foreign_and_multi_option_variants(): void
+    {
+        [$tenantA, $userA, $warehouseA] = $this->makeTenant('A');
+        [$tenantB, , $warehouseB] = $this->makeTenant('B');
+        $foreign = $this->stockedVariant($tenantB, $warehouseB, sku: 'B-1', onHand: 3);
+
+        $this->actingAs($userA)->from('/products')->post('/products/inline', ['changes' => [
+            ['variant_id' => $foreign->id, 'price' => 1],
+        ]])->assertSessionHasErrors('changes');
+        $this->assertSame('10.00', (string) $this->asTenant($tenantB, fn () => Variant::query()->findOrFail($foreign->id)->price));
+
+        $first = $this->stockedVariant($tenantA, $warehouseA, sku: 'COK-1', onHand: 3);
+        $this->asTenant($tenantA, fn () => Variant::factory()->create(['product_id' => $first->product_id, 'sku' => 'COK-2']));
+
+        $this->actingAs($userA)->from('/products')->post('/products/inline', ['changes' => [
+            ['variant_id' => $first->id, 'stock' => 0],
+        ]])->assertSessionHasErrors('changes');
+    }
+
+    /**
      * Sayım kutusu "kanala gönderilir" sözünü yalnız stok izni AÇIK kanal
      * için verir (App Store 2.1.4 reddi, 16 Eki 2026): liste kanal başına
      * izni taşır.
